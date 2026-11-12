@@ -227,6 +227,12 @@ path = "tests/interpreter_packed_vec_test.rs"
 name = "jit_loops"
 path = "tests/interpreter_jit_loops_test.rs"
 
+# Mutation checks of the shared builtin classes (drift gate step `builtin-mutants`; the mutants are debug-build only):
+#   cargo test --test builtin_mutants
+[[test]]
+name = "builtin_mutants"
+path = "tests/interpreter_builtin_mutants_test.rs"
+
 # Backend conformance (Rust/Go/JS) also runs standalone for fast iteration and CI sharding:
 #   cargo test --release --test backend_conformance
 [[test]]
@@ -403,6 +409,11 @@ name = "docs_truth"
 path = "tests/docs_truth_test.rs"
 required-features = ["cli"]
 
+# Build-script rerun stability (no recompile from test output files or `git status`): cargo test --release --test build_rerun_stability
+[[test]]
+name = "build_rerun_stability"
+path = "tests/build_rerun_stability_test.rs"
+
 # Every example under examples/ is run or checked (examples/EXAMPLES.toml): cargo test --release --test examples_gate
 [[test]]
 name = "examples_gate"
@@ -413,6 +424,10 @@ required-features = ["cli"]
 [[test]]
 name = "interpreter_features"
 path = "tests/interpreter_features_test.rs"
+
+[[test]]
+name = "interpreter_one_thread_tasks"
+path = "tests/interpreter_one_thread_tasks_test.rs"
 
 [[test]]
 name = "interpreter_projects"
@@ -563,3 +578,18 @@ path = "tests/try_binding_method_args_test.rs"
 [[test]]
 name = "lint_clone_need"
 path = "tests/lint_clone_need_test.rs"
+
+# Checkout name / parent dir must not change layout or codegen: cargo test --test portability_checkout_layout_gate
+[[test]]
+name = "portability_checkout_layout_gate"
+path = "tests/portability_checkout_layout_gate.rs"
+
+# Recorded corpora hold no absolute paths: cargo test --test recorded_corpus_location_free_gate
+[[test]]
+name = "recorded_corpus_location_free_gate"
+path = "tests/recorded_corpus_location_free_gate.rs"
+
+# No untracked files after the suite (run last): cargo test --test untracked_files_gate
+[[test]]
+name = "untracked_files_gate"
+path = "tests/untracked_files_gate.rs"

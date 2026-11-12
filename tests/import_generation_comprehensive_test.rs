@@ -32,7 +32,9 @@ pub struct Camera {
 }
 "#;
 
-    let input_dir = "tests/generated/math_import_test";
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let input_dir_buf = scratch.path().join("math_import_test").to_string_lossy().into_owned();
+    let input_dir = input_dir_buf.as_str();
     fs::create_dir_all(input_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test_math.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
@@ -87,7 +89,9 @@ pub struct Camera {
 }
 "#;
 
-    let input_dir = "tests/generated/super_super_flatten_test";
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let input_dir_buf = scratch.path().join("super_super_flatten_test").to_string_lossy().into_owned();
+    let input_dir = input_dir_buf.as_str();
     fs::create_dir_all(input_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test_flatten.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
@@ -149,7 +153,9 @@ impl Add for Vec2 {
 }
 "#;
 
-    let input_dir = "tests/generated/std_ops_test";
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let input_dir_buf = scratch.path().join("std_ops_test").to_string_lossy().into_owned();
+    let input_dir = input_dir_buf.as_str();
     fs::create_dir_all(input_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test_ops.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
@@ -207,7 +213,9 @@ pub struct MyStruct {
 }
 "#;
 
-    let input_dir = "tests/generated/non_sibling_test";
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let input_dir_buf = scratch.path().join("non_sibling_test").to_string_lossy().into_owned();
+    let input_dir = input_dir_buf.as_str();
     fs::create_dir_all(input_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test_non_sibling.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");

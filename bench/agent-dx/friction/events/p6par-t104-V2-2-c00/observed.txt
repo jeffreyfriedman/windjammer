@@ -1,0 +1,12 @@
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:55:1
+   |
+55 |             x.cmp(y)
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:57:1
+   |
+57 |     })
+wj verify: the interpreter ran the program, but the compiled build failed (see the errors above): rustc is stricter than the interpreter here, so `wj build` would fail too
+ann 3 47 edit
+bob 2 4 login
+malformed: 2

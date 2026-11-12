@@ -1,0 +1,12 @@
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:17:37
+   |
+17 |             k = line.trim().parse::<int>().unwrap_or(0)
+error[WJ0003]: mismatched types: expected an owned `int`, found an owned `int`
+  --> main.wj:17:37
+   |
+17 |             k = line.trim().parse::<int>().unwrap_or(0)
+error[WJ0003]: mismatched types: expected `&i64`, found `int`
+  --> main.wj:17:37
+   |
+17 |             k = line.trim().parse::<int>().unwrap_or(0)

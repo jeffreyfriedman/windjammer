@@ -1,0 +1,11 @@
+error: explicit .unwrap() call [W0002]
+  --> <ws>/main.wj:41:30
+  = note: .unwrap() is a Rust-specific panic convention
+  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`
+  = suggestion: prefer explicit error handling in Windjammer
+
+error: explicit .unwrap() call [W0002]
+  --> <ws>/main.wj:42:30
+error: explicit .unwrap() call [W0002]
+  --> <ws>/main.wj:42:30
+  = note: .unwrap() i

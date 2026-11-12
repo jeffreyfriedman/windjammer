@@ -69,7 +69,7 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
                 parts.push(format!("features = [{}]", feat_str.join(", ")));
             }
             if let Some(p) = path {
-                let resolved = windjammer_package_build_dir(resolve_dep_path_for_gen_manifest(p, base_dir));
+                let resolved = windjammer_package_build_dir(resolve_dep_path_for_gen_manifest(&crate::package::graph::expand_path_vars(p).unwrap_or_else(|_| p.clone()), base_dir));
                 parts.push(format!("path = \"{}\"", resolved));
             }
             if let Some(g) = git {

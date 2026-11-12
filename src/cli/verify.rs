@@ -1,8 +1,8 @@
 //! `wj run --verify` (ADR-0033 option b): interpret the program, then build it compiled and, when that is safe,
 //! run the compiled program a second time and compare.
 //!
-//! - The interpreted run is the normal one (`wj run --interpret` in a child process), its stdout captured and
-//!   printed once. Stdin is read once and given to both runs (it is never read twice from the terminal).
+//! - The interpreted run is the normal one (`wj run --interpret` in a child process), its stdout streamed to ours
+//!   as the program prints and kept for the comparison (once, and while the program runs). Stdin is read once and given to both runs (it is never read twice from the terminal).
 //! - The build is the same as `wj run --compiled`'s (`run::build_native`) and records the compiled verdict.
 //! - The compiled program runs again only when the effect analysis (ADR-0021) finds that `main` reaches nothing
 //!   beyond the console and a read of `/dev/stdin`, and stdin was captured: running it again then repeats no effect,
@@ -53,7 +53,7 @@ fn say(msg: &str) {
     eprintln!("wj verify: {msg}");
 }
 
-pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint: bool) -> i32 {
+pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint: bool, out: crate::cli::run::Output) -> i32 {
     let cwd = std::env::current_dir().unwrap_or_default();
     let target = match crate::module_system::project::resolve_run_target(path, &cwd, bin) {
         Ok(t) => t,
@@ -64,29 +64,25 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     };
     let entry = target.entry.clone();
     // stdin once, for both runs; a terminal is left to the interpreted run and the compiled run is not repeated
-    let stdin: Option<Vec<u8>> = if std::io::stdin().is_terminal() {
-        None
-    } else {
-        let mut buf = Vec::new();
-        let _ = std::io::stdin().read_to_end(&mut buf);
-        Some(buf)
-    };
+    let stdin: Option<Vec<u8>> = if std::io::stdin().is_terminal() { None } else { Some(capture_stdin(STDIN_FIRST_BYTE_WAIT)) };
     let Ok(exe) = std::env::current_exe() else { return 1 };
     let mut interp = Command::new(&exe);
     interp.args(["run", "--interpret"]);
     if no_lint {
         interp.arg("--no-lint");
     }
+    if out.format == crate::diagnostics::render::Format::Agent {
+        interp.args(["--error-format", "agent"]);
+    }
     interp.arg(&entry).args(args).stdout(Stdio::piped()).stderr(Stdio::inherit());
-    let interp_out = match run_with_stdin(interp, stdin.as_deref()) {
+    // the interpreted stdout is written as it arrives (and kept for the comparison), not at the end
+    let interp_out = match run_streaming(interp, stdin.as_deref(), &mut std::io::stdout()) {
         Ok(o) => o,
         Err(e) => {
             eprintln!("error: cannot run the interpreter: {e}");
             return 1;
         }
     };
-    let _ = std::io::stdout().write_all(&interp_out.stdout);
-    let _ = std::io::stdout().flush();
     let interp_code = interp_out.status.code().unwrap_or(1);
     // the interpreter refused the program (a `wj check` error): the build refuses it too, nothing more to say
     if interp_code != 0 && refused(&entry, no_lint) {
@@ -101,7 +97,7 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
             return if interp_code != 0 { interp_code } else { 1 };
         }
     };
-    let (workdir, failed) = match crate::cli::run::build_native(&input, "rust", false) {
+    let (workdir, failed) = match crate::cli::run::build_native(&input, "rust", false, out) {
         Ok(r) => r,
         Err(e) => {
             say(&format!("the compiled build could not run: {e:#}"));
@@ -160,6 +156,48 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     }
 }
 
+/// How long `--verify` waits for the first byte of a non-terminal stdin before treating it as empty.
+pub const STDIN_FIRST_BYTE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Stdin for both runs. The rule: read to end of input once data arrives; if neither data nor the end of input
+/// arrives within `wait` (an open pipe nobody writes to, as when an agent harness starts `wj` without redirecting
+/// input), both runs get empty stdin and a note says so. Redirect input (`< file`, `< /dev/null`) to be explicit.
+pub fn capture_stdin(wait: std::time::Duration) -> Vec<u8> {
+    capture_from(std::io::stdin(), wait)
+}
+
+/// `capture_stdin` over any reader (tests drive it with a pipe).
+pub fn capture_from<R: Read + Send + 'static>(mut input: R, wait: std::time::Duration) -> Vec<u8> {
+    enum Msg {
+        /// The first bytes arrived; the rest follows as `Done`.
+        Started,
+        Done(Vec<u8>),
+    }
+    let (tx, rx) = std::sync::mpsc::channel::<Msg>();
+    std::thread::spawn(move || {
+        let mut first = [0u8; 8192];
+        let mut buf = Vec::new();
+        if let Ok(n @ 1..) = input.read(&mut first) {
+            let _ = tx.send(Msg::Started);
+            buf.extend_from_slice(&first[..n]);
+            let _ = input.read_to_end(&mut buf);
+        }
+        let _ = tx.send(Msg::Done(buf));
+    });
+    match rx.recv_timeout(wait) {
+        Ok(Msg::Done(buf)) => buf,
+        // data is arriving: read to the end of input, however long it takes
+        Ok(Msg::Started) => match rx.recv() {
+            Ok(Msg::Done(buf)) => buf,
+            _ => Vec::new(),
+        },
+        Err(_) => {
+            say(&format!("no input arrived on stdin within {} s; both runs get empty stdin (redirect it: `< file` or `< /dev/null`)", wait.as_secs()));
+            Vec::new()
+        }
+    }
+}
+
 /// `wj check` reports an error that stops an interpreted run (what the child printed as "not running ...").
 fn refused(entry: &Path, no_lint: bool) -> bool {
     let use_cache = crate::check::effects::manifest_path(entry).is_some();
@@ -168,9 +206,33 @@ fn refused(entry: &Path, no_lint: bool) -> bool {
     c.report.diagnostics.iter().any(|d| d.is_error() && (!no_lint || !is_lint(&d.code)))
 }
 
-fn run_with_stdin(mut cmd: Command, stdin: Option<&[u8]>) -> std::io::Result<std::process::Output> {
+/// Run `cmd` with `stdin` given as in `run_with_stdin`, writing its stdout to `sink` as it arrives (flushed per
+/// chunk) and returning it too, with the exit status. Its stderr is whatever `cmd` was configured with.
+pub fn run_streaming(mut cmd: Command, stdin: Option<&[u8]>, sink: &mut dyn Write) -> std::io::Result<std::process::Output> {
+    cmd.stdout(Stdio::piped());
     cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::inherit() });
     let mut child = cmd.spawn()?;
+    feed_stdin(&mut child, stdin);
+    let mut pipe = child.stdout.take().expect("stdout was piped");
+    let mut kept = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        match pipe.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                kept.extend_from_slice(&chunk[..n]);
+                let _ = sink.write_all(&chunk[..n]);
+                let _ = sink.flush();
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => break,
+        }
+    }
+    let status = child.wait()?;
+    Ok(std::process::Output { status, stdout: kept, stderr: Vec::new() })
+}
+
+fn feed_stdin(child: &mut std::process::Child, stdin: Option<&[u8]>) {
     if let (Some(data), Some(mut pipe)) = (stdin, child.stdin.take()) {
         let data = data.to_vec();
         // a writer thread, so a program that prints before reading all its input cannot deadlock on a full pipe
@@ -178,5 +240,11 @@ fn run_with_stdin(mut cmd: Command, stdin: Option<&[u8]>) -> std::io::Result<std
             let _ = pipe.write_all(&data);
         });
     }
+}
+
+fn run_with_stdin(mut cmd: Command, stdin: Option<&[u8]>) -> std::io::Result<std::process::Output> {
+    cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::inherit() });
+    let mut child = cmd.spawn()?;
+    feed_stdin(&mut child, stdin);
     child.wait_with_output()
 }

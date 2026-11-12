@@ -1,0 +1,14 @@
+fn square(x: int) -> int {
+    let y = x * x
+    y
+}
+
+fn main() {
+    let mut acc = 0
+    let mut i = 1
+    while i <= 3 {
+        acc = acc + square(i)
+        i = i + 1
+    }
+    println("acc ${acc}")
+}

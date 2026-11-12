@@ -5,7 +5,7 @@
  "arm_name": "compiled-first",
  "capability_denials": 0,
  "diag_samples": [
-  "Building Windjammer project from \"<ws>\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/run/9204507b99da240a\"\n\nSuccess! Transpilation complete!\n\nwarning: unused import: `windjammer_runtime::fs::Metadata`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::Metadata;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:3:5\n  |\n3 | use windjammer_runtime::fs::DirEntry;\n  |",
+  "Building Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{CACHE}/run/9204507b99da240a\"\n\nSuccess! Transpilation complete!\n\nwarning: unused import: `windjammer_runtime::fs::Metadata`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::Metadata;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:3:5\n  |\n3 | use windjammer_runtime::fs::DirEntry;\n  |",
   "error: bad width",
   "error: bad width"
  ],

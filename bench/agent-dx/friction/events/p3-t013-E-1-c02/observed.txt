@@ -1,0 +1,4 @@
+thread 'main' (37594601) panicked at main.rs:157:24:
+index out of bounds: the len is 0 but the index is 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+ok

@@ -1,0 +1,1 @@
+user-error: WJ0002: cannot find module `crc32fast` in this scope (in `crc32fast::hash`)

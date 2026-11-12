@@ -1,0 +1,14 @@
+error[E0308]: mismatched types
+   --> main.rs:162:28
+    |
+162 |                     report(&Box::new(Rect { w: n[0], h: n[1] }))
+error[E0308]: mismatched types
+   --> main.rs:165:32
+    |
+165 |                         report(&Box::new(Rtri { a: n[0], b: n[1] }))
+error[E0308]: mismatched types
+   --> main.rs:167:32
+    |
+167 |                         report(&Box::new(Trap { a: n[0], b: n[1], h: n[2] }))
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `ws` (bin "ws") due to 4 previous errors; 1 warning emitted

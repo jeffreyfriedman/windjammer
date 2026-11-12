@@ -576,6 +576,19 @@ impl<'ast> RustLeakageLinter<'ast> {
         for diag in super::surface_syntax::diagnostics(&self.default_file, source) {
             self.collector.add(diag);
         }
+        for off in super::dollar_escape::find(source) {
+            let (line, column) = super::redundant_as_str::line_col(source, off);
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0017".to_string(),
+                category: LintCategory::Correctness,
+                level: LintLevel::Warning,
+                message: super::dollar_escape::MESSAGE.to_string(),
+                location: SourceLocation { file: self.default_file.clone(), line, column },
+                help: Some(super::dollar_escape::HELP.to_string()),
+                note: None,
+                suggestion: Some(super::dollar_escape::REPLACEMENT.to_string()),
+            });
+        }
         for off in super::redundant_as_str::find(source) {
             let (line, column) = super::redundant_as_str::line_col(source, off);
             self.collector.add(LintDiagnostic {

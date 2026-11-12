@@ -592,7 +592,7 @@
   "cost_usd": 0.1369364,
   "denied_commands": [
    "cat $(wj docs std_env_args 2>&1 | grep -o 'examples/verified/[a-z_]*.wj' | head -1) 2>&1 | head -30; wj docs stdin 2>&1|head; wj docs read_all 2>&1 | head -20",
-   "head -80 /private/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/wj-embedded/windjammer-runtime-0.50.0-1672ae1a53d33ac4/src/io.rs",
+   "head -80 {TMP}/wj-embedded/windjammer-runtime-0.50.0-1672ae1a53d33ac4/src/io.rs",
    "printf 'one\\ntwo\\n' > a; printf 'three\\n\\nfive' > b; wj run --compiled main.wj -n a zz b 2>&1 | grep -v warning | tail -20; echo \"rc=$?\"; printf 'x\\ny' | wj run --compiled main.wj -n 2>&1 | tail -4; w"
   ],
   "is_error": true,

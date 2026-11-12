@@ -1,0 +1,16 @@
+{
+  "id": "p5-t107-U-1-c03",
+  "pilot": "pilot5",
+  "task": "t107_text_wrap",
+  "arm": "U",
+  "arm_name": "compiled-first",
+  "trial": 1,
+  "call": 3,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "compiler-bug",
+  "reason": "rustc rejection translated to WJ0003-style; message shape of a known drift class"
+}

@@ -8,7 +8,7 @@ on:
     branches: [main]
     paths: ['docs/book/**', 'crates/windjammer-playground/**', 'docs/promises.toml', 'docs/spec/grammar.ebnf', 'std/**', 'src/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
   pull_request:
-    paths: ['docs/book/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
+    paths: ['docs/book/**', 'crates/windjammer-playground/**', 'src/interpreter/**', 'std/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
   workflow_dispatch:
 
 permissions:
@@ -45,6 +45,20 @@ jobs:
         run: |
           cargo test --release --features cli --test book
           cargo test --release --features cli --test docs_truth
+
+      # ADR-0034: the interpreter compiled to wasm32 must print what the native interpreter prints on every sample of the
+      # book (single files and multi-file projects), exit status included, and the TypeScript sandbox must match node.
+      # scripts/book/playground_check.wj builds the wasm, extracts the samples and runs both interpreters on each.
+      - name: Set up Node (the playground hosts and TypeScript type stripping need Node 22.6 or later)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Playground parity (wasm interpreter against the native interpreter on every book sample)
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo build --release --features cli --bin wj --bin wj-docs
+          ./target/release/wj run --interpret scripts/book/playground_check.wj -- ./target/release/wj ./target/release/wj-docs "$RUNNER_TEMP/playground-check"
 
       - name: Build the book
         run: mdbook build docs/book

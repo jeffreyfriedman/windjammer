@@ -1,0 +1,16 @@
+{
+  "id": "p3-t018-F-0-c00",
+  "pilot": "pilot3",
+  "task": "t018_word_freq",
+  "arm": "F",
+  "arm_name": "tiny-pack+wj-docs",
+  "trial": 0,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "compiler-bug",
+  "reason": "raw rustc error on the generated Rust; message shape of a known drift class"
+}

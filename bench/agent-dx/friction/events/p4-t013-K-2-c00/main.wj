@@ -1,0 +1,186 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut keys: Vec<int> = []
+    let mut left: Vec<int> = []
+    let mut right: Vec<int> = []
+    let mut root: int = -1
+    for line in text.lines() {
+        let parts: Vec<string> = line.trim().split_whitespace().collect()
+        if parts.len() == 0 {
+            continue
+        }
+        let cmd = parts[0]
+        let mut x: int = 0
+        if parts.len() > 1 {
+            x = parts[1].parse::<int>().unwrap_or(0)
+        }
+        if cmd == "insert" {
+            let mut cur = root
+            let mut par: int = -1
+            let mut goleft = false
+            let mut found = false
+            while cur != -1 {
+                if keys[cur as usize] == x {
+                    found = true
+                    break
+                }
+                par = cur
+                if x < keys[cur as usize] {
+                    goleft = true
+                    cur = left[cur as usize]
+                } else {
+                    goleft = false
+                    cur = right[cur as usize]
+                }
+            }
+            if found {
+                println("dup")
+            } else {
+                let id: int = keys.len() as int
+                keys.push(x)
+                left.push(-1)
+                right.push(-1)
+                if par == -1 {
+                    root = id
+                } else if goleft {
+                    left[par as usize] = id
+                } else {
+                    right[par as usize] = id
+                }
+                println("ok")
+            }
+        } else if cmd == "contains" {
+            let mut cur = root
+            let mut found = false
+            while cur != -1 {
+                if keys[cur as usize] == x {
+                    found = true
+                    break
+                }
+                if x < keys[cur as usize] {
+                    cur = left[cur as usize]
+                } else {
+                    cur = right[cur as usize]
+                }
+            }
+            if found {
+                println("yes")
+            } else {
+                println("no")
+            }
+        } else if cmd == "delete" {
+            let mut cur = root
+            let mut par: int = -1
+            let mut goleft = false
+            let mut found = false
+            while cur != -1 {
+                if keys[cur as usize] == x {
+                    found = true
+                    break
+                }
+                par = cur
+                if x < keys[cur as usize] {
+                    goleft = true
+                    cur = left[cur as usize]
+                } else {
+                    goleft = false
+                    cur = right[cur as usize]
+                }
+            }
+            if !found {
+                println("missing")
+            } else {
+                let c = cur as usize
+                if left[c] != -1 && right[c] != -1 {
+                    let mut sp = cur
+                    let mut s = right[c]
+                    while left[s as usize] != -1 {
+                        sp = s
+                        s = left[s as usize]
+                    }
+                    keys[c] = keys[s as usize]
+                    if sp == cur {
+                        right[c] = right[s as usize]
+                    } else {
+                        left[sp as usize] = right[s as usize]
+                    }
+                } else {
+                    let mut child = left[c]
+                    if child == -1 {
+                        child = right[c]
+                    }
+                    if par == -1 {
+                        root = child
+                    } else if goleft {
+                        left[par as usize] = child
+                    } else {
+                        right[par as usize] = child
+                    }
+                }
+                println("ok")
+            }
+        } else if cmd == "inorder" {
+            if root == -1 {
+                println("<empty>")
+            } else {
+                let mut stack: Vec<int> = []
+                let mut out: Vec<string> = []
+                let mut cur = root
+                while cur != -1 || stack.len() > 0 {
+                    while cur != -1 {
+                        stack.push(cur)
+                        cur = left[cur as usize]
+                    }
+                    let n = stack.pop().unwrap_or(-1)
+                    out.push("${keys[n as usize]}")
+                    cur = right[n as usize]
+                }
+                println(out.join(" "))
+            }
+        } else if cmd == "height" {
+            let mut best: int = 0
+            if root != -1 {
+                let mut ns: Vec<int> = [root]
+                let mut ds: Vec<int> = [1]
+                while ns.len() > 0 {
+                    let n = ns.pop().unwrap_or(-1)
+                    let d = ds.pop().unwrap_or(0)
+                    if d > best {
+                        best = d
+                    }
+                    if left[n as usize] != -1 {
+                        ns.push(left[n as usize])
+                        ds.push(d + 1)
+                    }
+                    if right[n as usize] != -1 {
+                        ns.push(right[n as usize])
+                        ds.push(d + 1)
+                    }
+                }
+            }
+            println("${best}")
+        } else if cmd == "min" {
+            if root == -1 {
+                println("empty")
+            } else {
+                let mut cur = root
+                while left[cur as usize] != -1 {
+                    cur = left[cur as usize]
+                }
+                println("${keys[cur as usize]}")
+            }
+        } else if cmd == "max" {
+            if root == -1 {
+                println("empty")
+            } else {
+                let mut cur = root
+                while right[cur as usize] != -1 {
+                    cur = right[cur as usize]
+                }
+                println("${keys[cur as usize]}")
+            }
+        }
+    }
+}

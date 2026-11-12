@@ -315,3 +315,32 @@ fn applying_any_corpus_fix_never_produces_a_new_diagnostic() {
     assert!(new.is_empty(), "NEW fix regressions (fix the fix; do not add to the ratchet): {new:#?}");
     assert!(stale.is_empty(), "STALE entries (delete them): {stale:#?}");
 }
+
+/// `wj run --error-format json` (ADR-0036) is a report of the same schema: validated by the same independent
+/// validator, for a panic and for `main` returning `Err`.
+#[test]
+fn runtime_error_reports_validate_against_the_schema() {
+    let dir = std::env::temp_dir().join(format!("wj-rt-schema-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let programs = [
+        ("p.wj", "fn pick(v: Vec<int>, i: int) -> int {\n    v[i]\n}\n\nfn main() {\n    println(\"${pick([1, 2], 9)}\")\n}\n"),
+        ("e.wj", "fn main() -> Result<(), string> {\n    Err(\"nope\")\n}\n"),
+    ];
+    let schema = schema();
+    for (name, src) in programs {
+        fs::write(dir.join(name), src).unwrap();
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+            .current_dir(&dir)
+            .args(["run", "--interpret", "--no-lint", "--error-format", "json", name])
+            .output()
+            .unwrap();
+        let err = String::from_utf8_lossy(&out.stderr).to_string();
+        let line = err.lines().last().unwrap_or_default();
+        let report: Value = serde_json::from_str(line).unwrap_or_else(|e| panic!("{name}: not JSON ({e}): {err}"));
+        let mut errs = Vec::new();
+        validate(&schema, &schema, &report, "$", &mut errs);
+        assert!(errs.is_empty(), "{name}: {errs:?}");
+        assert_eq!(report["command"], "run");
+    }
+    let _ = fs::remove_dir_all(&dir);
+}

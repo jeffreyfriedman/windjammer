@@ -153,3 +153,11 @@ checker that reports nothing.
 |--|--|
 | check that only parses, lints and transpiles (the previous `wj check`) | 169 (93.9%) |
 | `wj check` now | 3 (1.7%): two borrow conflicts and one use-after-move |
+
+## Runtime failures (`wj run --error-format json`)
+
+A failed interpreted run can print one line in this same schema (`command: "run"`, `exit_code` on the report). The
+diagnostic carries the failing expression as `primary_span`, plus two members that compile-time diagnostics do not have:
+`stack` (`[{function, span}]`, innermost first) and `locals` (`[{name, value, redacted}]`, at most 8, values truncated,
+credentials and environment values redacted; `--no-locals` leaves them out). Codes: `WJ0170` panic, `WJ0171` `main`
+returned `Err`, `WJ0172` other runtime failure. See ADR-0036.

@@ -1,0 +1,43 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    let dchars = digits.chars().collect::<Vec<char>>()
+    for line in text.lines() {
+        let parts = line.split_whitespace().collect::<Vec<string>>()
+        if parts.len() < 3 {
+            continue
+        }
+        let from: int = parts[1].parse::<int>().unwrap_or(10)
+        let to: int = parts[2].parse::<int>().unwrap_or(10)
+        let mut n: int = 0
+        for c in parts[0].chars() {
+            let mut d: int = 0
+            let mut i: int = 0
+            while i < 36 {
+                if dchars[i as usize] == c {
+                    d = i
+                }
+                i += 1
+            }
+            n = n * from + d
+        }
+        if n == 0 {
+            println("0")
+            continue
+        }
+        let mut out: Vec<char> = []
+        while n > 0 {
+            out.push(dchars[(n % to) as usize])
+            n = n / to
+        }
+        let mut s = ""
+        let mut k: int = out.len() as int - 1
+        while k >= 0 {
+            s = s + out[k as usize].to_string()
+            k -= 1
+        }
+        println("${s}")
+    }
+}

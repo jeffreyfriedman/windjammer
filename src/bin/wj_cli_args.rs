@@ -160,9 +160,17 @@ pub enum Commands {
         watch: bool,
 
         /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
-        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr
+        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read
+        /// once for both runs; when no input arrives within 2 s it is taken as empty
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
+
+        /// How diagnostics and failed runs report on stderr: `human` (default); `agent`, one compact line per diagnostic
+        /// (location, code, message, first help, fixes) for tools and coding agents; or `json` (interpreted runs: one
+        /// last line in the diagnostics schema with `stack` and `locals`, ADR-0036). Program stdout and the exit status
+        /// do not change. `WJ_ERROR_FORMAT` sets the default for every command
+        #[arg(long, value_name = "FORMAT", value_parser = ["human", "agent", "json"])]
+        error_format: Option<String>,
 
         /// Interpreted runs: also start a compiled build of the same content in the background (lowest priority,
         /// offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033)
@@ -214,6 +222,11 @@ pub enum Commands {
         /// compile errors still refuse it
         #[arg(long)]
         no_lint: bool,
+
+        /// Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when
+        /// they look like secrets, and this drops them altogether)
+        #[arg(long)]
+        no_locals: bool,
 
         /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
         #[arg(long)]
@@ -298,10 +311,10 @@ pub enum Commands {
         defer_drop_threshold: Option<usize>,
     },
 
-    /// Start the Windjammerscript REPL (interactive interpreter)
+    /// Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway
     Repl {},
 
-    /// Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`.
+    /// Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input.
     /// The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted.
     Eval {
         /// An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed
@@ -405,6 +418,39 @@ pub enum Commands {
         /// Also build and run each doctest through the Rust backend (default: interpreter only)
         #[arg(long)]
         compiled: bool,
+    },
+
+    /// Step through a recorded (`wj run --record LOG`) or simulated run deterministically: breakpoints, stepping,
+    /// going back, and the values of bindings at any step, from a script of commands (ADR-0035)
+    Replay {
+        /// `LOG PROGRAM`: an effect log written by `wj run --record` and the program it recorded; with --simulate, only `PROGRAM`
+        #[arg(value_name = "LOG PROGRAM", num_args = 1..=2, required = true)]
+        paths: Vec<PathBuf>,
+
+        /// Debugger commands, one per line (`break LINE`, `continue`, `step [N]`, `back [N]`, `print NAME`, `locals`,
+        /// `where`); `-` or no script reads them from standard input
+        #[arg(long, value_name = "FILE")]
+        script: Option<PathBuf>,
+
+        /// Print the events as JSON Lines, one object per line (for agents and scripts)
+        #[arg(long)]
+        json: bool,
+
+        /// Debug the run of the deterministic simulated world instead of a recorded one (as `wj run --simulate`)
+        #[arg(long)]
+        simulate: bool,
+
+        /// With --simulate: the seed of the world
+        #[arg(long, value_name = "N", default_value = "1", requires = "simulate")]
+        seed: u64,
+
+        /// With --simulate: probability (0 to 1) that a file or network call fails
+        #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
+        faults: f64,
+
+        /// Grant a capability as the recording did, `EFFECT[=RESOURCE]` (repeatable); nothing is performed either way
+        #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
+        allow: Vec<String>,
     },
 
     /// Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
@@ -512,6 +558,11 @@ pub enum Commands {
         /// Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...)
         #[arg(long)]
         fix: bool,
+
+        /// Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message,
+        /// first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command
+        #[arg(long, value_name = "FORMAT", value_parser = ["human", "agent"])]
+        error_format: Option<String>,
     },
 
     /// Add a dependency to wj.toml

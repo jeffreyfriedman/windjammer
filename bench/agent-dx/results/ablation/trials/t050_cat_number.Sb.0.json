@@ -5,7 +5,7 @@
  "arm_name": "sheet-minus-ownership",
  "capability_denials": 0,
  "diag_samples": [
-  "warning: explicit .clone() call [W0005]\n  --> <ws>/main.wj:37:40\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .clone() and let the compiler handle it\n\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpHB7KDy\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)"
+  "warning: explicit .clone() call [W0005]\n  --> <ws>/main.wj:37:40\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .clone() and let the compiler handle it\n\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmpHB7KDy\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)"
  ],
  "diagnostic_categories": {
   "lint-style": 1

@@ -1,0 +1,39 @@
+use std::fs
+
+fn main() {
+    let mut number = false
+    let mut names: Vec<string> = []
+    for a in std::env::args().skip(1) {
+        if a == "-n" {
+            number = true
+        } else {
+            names.push(a)
+        }
+    }
+    let mut failed = false
+    let mut counter: int = 0
+    if names.len() == 0 {
+        names.push("/dev/stdin")
+    }
+    for name in names {
+        match fs::read_to_string(name) {
+            Ok(text) => {
+                if number {
+                    for line in text.lines() {
+                        counter += 1
+                        println("${counter:>6}\t${line}")
+                    }
+                } else {
+                    print(text)
+                }
+            }
+            Err(_) => {
+                println("cat: ${name}: No such file")
+                failed = true
+            }
+        }
+    }
+    if failed {
+        std::process::exit(1)
+    }
+}

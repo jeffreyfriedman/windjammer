@@ -2027,7 +2027,7 @@
    "fix_location": "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md",
    "wasted_calls": 32,
    "est_tokens": 264107,
-   "example": "error: explicit .iter() call [W0003]\n  --> <ws>/main.wj:35:29\n  = note: Windjammer supports direct iteration\n  = help: use direct iteration: `for x in collection`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpTp086n\"\nRust leakage errors in /p",
+   "example": "error: explicit .iter() call [W0003]\n  --> <ws>/main.wj:35:29\n  = note: Windjammer supports direct iteration\n  = help: use direct iteration: `for x in collection`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmpTp086n\"\nRust leakage errors in /p",
    "arms": [
     "S",
     "Sa",

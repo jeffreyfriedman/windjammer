@@ -130,6 +130,21 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     for f in crate::intrinsics::surface_fix::lint_source(&p.text) {
         out.push(convert::finding(&f, &ix));
     }
+    for off in crate::linter::dollar_escape::find(&p.text) {
+        use crate::linter::dollar_escape as de;
+        let span = ix.span(off, off + de::PATTERN.len());
+        out.push(
+            Diagnostic::warning("W0017", de::MESSAGE)
+                .at(span.clone())
+                .with_help(de::HELP)
+                .with_fix(crate::diagnostics::Fix {
+                    description: format!("replace `{}` with `{}`", de::PATTERN, de::REPLACEMENT),
+                    // `$${` can be meant literally, so the rewrite is offered, never applied by `wj check --fix`
+                    applicability: crate::diagnostics::Applicability::MaybeIncorrect,
+                    edits: vec![crate::diagnostics::Edit { span, replacement: de::REPLACEMENT.to_string() }],
+                }),
+        );
+    }
     if let Err(msg) = crate::analyzer::Analyzer::new().check_forbidden_rust_patterns(&p.program) {
         out.push(forbidden(&msg, &ix));
     }

@@ -1,0 +1,14 @@
+error[E0605]: non-primitive cast: `()` as `u8`
+  --> main.rs:39:30
+   |
+39 |               let _ = out.push({
+For more information about this error, try `rustc --explain E0605`.
+warning: `windjammer` (bin "windjammer") generated 2 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 2 warnings emitted
+Error: Cargo build failed
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 2 warnings emitted
+Error: Cargo build failed
+Building Windjammer project from "main.wj" (target: rust)
+Output: "./build"
+Error: Cargo build failed
+Buil

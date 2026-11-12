@@ -4,9 +4,9 @@ Source: `bench/agent-dx/results/pilot6/` (arms R rust, U compiled-first, V2 inte
 `wj 0.50.0` commit 82d5ac0579cd built from `next/v0.50.0`, 2026-11-11. Programs that the compiler rejected are in `results/pilot6/failing-sources/`; minimal programs for each class are in
 [pilot6-repros/](pilot6-repros/) (interpreter and compiled behaviour checked on this build). Format as in [pilot5-findings.md](pilot5-findings.md).
 
-Result in one line: no silent divergence in any trial (0 of 60 U and V2 trials ended with a program the interpreter ran and the build rejected), 90 of 90 trials passed the hidden oracle, and every compiler
+Result in one line: no silent divergence in any trial (no U or V2 trial ended with a program the interpreter ran and the build rejected), every trial passed the hidden oracle, and every compiler
 rejection that agents met was loud (a `WJ0003` from the compiled build, shown by `wj run --compiled` or `wj run --verify`). All entries below are therefore friction (extra turns, tokens, tool-wait), not wrong output.
-`wj check` accepted all 12 rejected programs (exit 0, no prediction).
+`wj check` accepted every one of the rejected programs (exit 0, no prediction).
 
 ## F. Findings (compiler and tooling)
 
@@ -17,18 +17,23 @@ rejection that agents met was loud (a `WJ0003` from the compiled build, shown by
 | 3. `map_insert_indexed_vec_string` | prints `edit` | `WJ0003 expected string, found str` (points at an unrelated `Vec<string>` line) | 1 trial, 5 failing calls, 25 turns, USD 0.15 (V2, t104) | `let ps: Vec<string> = key.split_whitespace().collect()`, `let act = ps[1]`, `best.insert(u, act)` into `HashMap<string, string>` |
 | 4. `nested_map_unwrap_or_new` | prints `1` | `WJ0003 expected &HashMap<string, i64>, found HashMap<_, _>` | 1 (V2, t104) | `let mut m = actions.get(u).unwrap_or(HashMap::new())`, then `m.insert(..)`, `actions.insert(u, m)` |
 | 5. `adapter_into_vec_annotation` | prints `a b` | `WJ0003 expected Vec<string>, found Map<Iter<_>, closure>` | 1 (V2, t104) | `let names: Vec<string> = keyed.map(\|p\| p.1)`: the sheet's own advice ("adapters start at the collection") produces a lazy `Map` in the compiled build and a `Vec` in the interpreter |
-| 6. `noise_warnings_in_build_output` | n/a | every compiled build that uses `fs` prints rustc `unused import` warnings for `windjammer_runtime::fs::Metadata`, `DirEntry` (and `json::Value`, `process::ProcessOutput`), and an index expression is emitted as `totals[(i as usize)]` (`unnecessary parentheses`) | U 30 of 30 trials had these in a tool result (V2 0 of 30: `--verify` prints the compiled program's stderr only when outputs differ) | `use std::fs` plus `totals[i] += 2.5`; harmless to the build, ~300 tokens of tool output per call that an agent reads |
+| 6. `noise_warnings_in_build_output` | n/a | every compiled build that uses `fs` prints rustc `unused import` warnings for `windjammer_runtime::fs::Metadata`, `DirEntry` (and `json::Value`, `process::ProcessOutput`), and an index expression is emitted as `totals[(i as usize)]` (`unnecessary parentheses`) | every U trial had these in a tool result (no V2 trial did: `--verify` prints the compiled program's stderr only when outputs differ) | `use std::fs` plus `totals[i] += 2.5`; harmless to the build, ~300 tokens of tool output per call that an agent reads |
 | 7. unminimised: `expected &_, found string` at a `HashMap<string, int>` annotation | prints the right counts | `WJ0003 mismatched types: expected &_, found string` | 1 (U, t104) | source: `results/pilot6/failing-sources/t104_activity_log.U.1.call0.wj` (`contains_key(u)`, `counts.insert(u, counts.get(u).unwrap_or(0) + 1)`, `users.push(u)` with `u = parts[0]`); the lines above compiled on their own in a 12-line extract, so the trigger is a combination in the larger program |
 
 Notes:
 - Entries 2 to 5 and 7 are the same kind of defect as the pilot 4 and 5 entries (interpreter green, compiled red, rustc's first error mapped to `WJ0003` with an approximate location), and none is in family A, B or C
   of ADR-0033, so `wj check` does not predict them. 2 is a new class (a block-bodied closure whose value is an `if`/`else`); 3 and 4 touch String against `str` and a reference to an owned map, closest to
   families B and C but with other generated shapes. The drift corpus (`tests/drift_corpus/repros/`) does not contain them yet; the repro files are written to be copied there.
+- Entry 1 is **fixed** (branch `wt/run-identity`): every generated crate's version carries build metadata naming its own directory
+  (`0.1.0+wj<hash of the canonical path>`, `cargo_cache::crate_version`), so cargo no longer treats two same-named crates in the shared target
+  directory as one unit. It applied to `wj run --compiled`/`--verify`, `wj build` (the published binary) and the `wj test` crate (`windjammer-tests`,
+  one name for every project). Gate: `tests/run_identity_test.rs` (x, y, x, y through `wj run --compiled` and `wj build`).
 - Entry 1 changes how to read earlier pilots: pilots 4 and 5 ran two trials at a time with the same workspace name, so some of their tool-wait, turn and "divergence" figures may include this effect.
   The graded final results are not affected (the hidden oracle builds each program in its own directory).
 - The one "wrong output" the agents saw in the first run (`compiled: invalid input` for a task that never prints it) was entry 1, not a miscompile.
 - `wj run --verify` blocks reading standard input until it is closed when it is started without redirected input; all trials pipe or redirect, so it did not occur. Not a defect for programs that read stdin
-  (they need the input anyway), but a program that ignores stdin waits too; worth a bounded read or a note in the sheet.
+  (they need the input anyway), but a program that ignores stdin waits too; worth a bounded read or a note in the sheet. **Fixed**: `--verify` now reads stdin to its end once data arrives, and takes it as empty (with a note) when
+  neither data nor the end of input arrives within 2 s (`tests/run_verify_test.rs`).
 
 ## V2 and U failure classes by trial (counts of trials in the sequential run in which a compiler diagnostic was shown)
 

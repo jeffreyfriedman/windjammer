@@ -1,0 +1,81 @@
+use std::fs
+
+fn prec(o: string) -> int {
+    if o == "^" { return 3 }
+    if o == "*" || o == "/" { return 2 }
+    if o == "+" || o == "-" { return 1 }
+    0
+}
+
+fn convert(line: string) -> string {
+    let mut out: Vec<string> = []
+    let mut ops: Vec<string> = []
+    let mut expect = true
+    let mut num = ""
+    let text = line + " "
+    for c in text.chars() {
+        let s = "${c}"
+        if c >= '0' && c <= '9' {
+            num = num + s
+            continue
+        }
+        if num != "" {
+            if !expect { return "error" }
+            out.push(num)
+            num = ""
+            expect = false
+        }
+        if c == ' ' || c == '\t' || c == '\r' {
+            continue
+        }
+        if c == '(' {
+            if !expect { return "error" }
+            ops.push(s)
+        } else if c == ')' {
+            if expect { return "error" }
+            let mut found = false
+            while ops.len() > 0 {
+                let t = ops.pop().unwrap_or("")
+                if t == "(" {
+                    found = true
+                    break
+                }
+                out.push(t)
+            }
+            if !found { return "error" }
+        } else if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' {
+            if expect { return "error" }
+            while ops.len() > 0 {
+                let top = ops[ops.len() - 1]
+                if top == "(" { break }
+                let pt = prec(top)
+                let pc = prec(s)
+                if pt > pc || (pt == pc && c != '^') {
+                    out.push(top)
+                    ops.pop()
+                } else {
+                    break
+                }
+            }
+            ops.push(s)
+            expect = true
+        } else {
+            return "error"
+        }
+    }
+    if expect { return "error" }
+    while ops.len() > 0 {
+        let t = ops.pop().unwrap_or("")
+        if t == "(" { return "error" }
+        out.push(t)
+    }
+    out.join(" ")
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim() == "" { continue }
+        println(convert(line))
+    }
+}

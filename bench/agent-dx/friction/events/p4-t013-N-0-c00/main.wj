@@ -1,0 +1,189 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut keys: Vec<int> = []
+    let mut lefts: Vec<int> = []
+    let mut rights: Vec<int> = []
+    let mut root: int = -1
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if parts.len() == 0 {
+            continue
+        }
+        let cmd = parts[0].clone()
+        let mut x: int = 0
+        if parts.len() > 1 {
+            x = parts[1].parse::<int>().unwrap_or(0)
+        }
+        if cmd == "insert" {
+            let mut cur = root
+            let mut parent: int = -1
+            let mut goleft = false
+            let mut found = false
+            while cur != -1 {
+                let k = keys[cur as usize]
+                if k == x {
+                    found = true
+                    break
+                }
+                parent = cur
+                if x < k {
+                    goleft = true
+                    cur = lefts[cur as usize]
+                } else {
+                    goleft = false
+                    cur = rights[cur as usize]
+                }
+            }
+            if found {
+                println("dup")
+            } else {
+                let idx: int = keys.len() as int
+                keys.push(x)
+                lefts.push(-1)
+                rights.push(-1)
+                if parent == -1 {
+                    root = idx
+                } else if goleft {
+                    lefts[parent as usize] = idx
+                } else {
+                    rights[parent as usize] = idx
+                }
+                println("ok")
+            }
+        } else if cmd == "contains" {
+            let mut cur = root
+            let mut found = false
+            while cur != -1 {
+                let k = keys[cur as usize]
+                if k == x {
+                    found = true
+                    break
+                }
+                if x < k {
+                    cur = lefts[cur as usize]
+                } else {
+                    cur = rights[cur as usize]
+                }
+            }
+            if found {
+                println("yes")
+            } else {
+                println("no")
+            }
+        } else if cmd == "delete" {
+            let mut cur = root
+            let mut parent: int = -1
+            let mut goleft = false
+            let mut found = false
+            while cur != -1 {
+                let k = keys[cur as usize]
+                if k == x {
+                    found = true
+                    break
+                }
+                parent = cur
+                if x < k {
+                    goleft = true
+                    cur = lefts[cur as usize]
+                } else {
+                    goleft = false
+                    cur = rights[cur as usize]
+                }
+            }
+            if !found {
+                println("missing")
+            } else {
+                let l = lefts[cur as usize]
+                let r = rights[cur as usize]
+                if l != -1 && r != -1 {
+                    let mut sp = cur
+                    let mut s = r
+                    while lefts[s as usize] != -1 {
+                        sp = s
+                        s = lefts[s as usize]
+                    }
+                    keys[cur as usize] = keys[s as usize]
+                    let sr = rights[s as usize]
+                    if sp == cur {
+                        rights[sp as usize] = sr
+                    } else {
+                        lefts[sp as usize] = sr
+                    }
+                } else {
+                    let mut child = l
+                    if l == -1 {
+                        child = r
+                    }
+                    if parent == -1 {
+                        root = child
+                    } else if goleft {
+                        lefts[parent as usize] = child
+                    } else {
+                        rights[parent as usize] = child
+                    }
+                }
+                println("ok")
+            }
+        } else if cmd == "inorder" {
+            let mut out: Vec<string> = []
+            let mut stack: Vec<int> = []
+            let mut cur = root
+            while cur != -1 || stack.len() > 0 {
+                while cur != -1 {
+                    stack.push(cur)
+                    cur = lefts[cur as usize]
+                }
+                let n = stack.pop().unwrap()
+                out.push(keys[n as usize].to_string())
+                cur = rights[n as usize]
+            }
+            if out.len() == 0 {
+                println("<empty>")
+            } else {
+                println(out.join(" "))
+            }
+        } else if cmd == "height" {
+            let mut best: int = 0
+            let mut ns: Vec<int> = []
+            let mut ds: Vec<int> = []
+            if root != -1 {
+                ns.push(root)
+                ds.push(1)
+            }
+            while ns.len() > 0 {
+                let n = ns.pop().unwrap()
+                let d = ds.pop().unwrap()
+                if d > best {
+                    best = d
+                }
+                if lefts[n as usize] != -1 {
+                    ns.push(lefts[n as usize])
+                    ds.push(d + 1)
+                }
+                if rights[n as usize] != -1 {
+                    ns.push(rights[n as usize])
+                    ds.push(d + 1)
+                }
+            }
+            println(best.to_string())
+        } else if cmd == "min" || cmd == "max" {
+            if root == -1 {
+                println("empty")
+            } else {
+                let mut cur = root
+                if cmd == "min" {
+                    while lefts[cur as usize] != -1 {
+                        cur = lefts[cur as usize]
+                    }
+                } else {
+                    while rights[cur as usize] != -1 {
+                        cur = rights[cur as usize]
+                    }
+                }
+                println(keys[cur as usize].to_string())
+            }
+        }
+    }
+}

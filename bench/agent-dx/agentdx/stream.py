@@ -31,15 +31,26 @@ def parse(text):
             m = ev.get("message") or {}
             mid = m.get("id") or f"anon{len(order)}"
             if mid not in turns:
-                turns[mid] = {"calls": [], "result_chars": 0}
+                turns[mid] = {"calls": [], "result_chars": 0, "text_chars": 0, "thinking_chars": 0, "tool_input_chars": 0, "write_chars": 0}
                 order.append(mid)
             rec = turns[mid]
             u = m.get("usage") or {}
             if u:
                 rec["usage"] = u
             for c in m.get("content") or []:
-                if isinstance(c, dict) and c.get("type") == "tool_use":
+                if not isinstance(c, dict):
+                    continue
+                if c.get("type") == "tool_use":
                     rec["calls"].append(c.get("name", "?"))
+                    inp = c.get("input") or {}
+                    n = len(json.dumps(inp))
+                    rec["tool_input_chars"] += n
+                    if c.get("name") in ("Write", "Edit", "MultiEdit"):   # the program text the agent wrote
+                        rec["write_chars"] += len(str(inp.get("content") or inp.get("new_string") or ""))
+                elif c.get("type") == "text":
+                    rec["text_chars"] += len(c.get("text") or "")
+                elif c.get("type") == "thinking":
+                    rec["thinking_chars"] += len(c.get("thinking") or "")
             pending = mid
         elif t == "user" and pending:
             for c in (ev.get("message") or {}).get("content") or []:
@@ -50,7 +61,8 @@ def parse(text):
         u = turns[mid].get("usage") or {}
         fresh, cw, cr = u.get("input_tokens", 0) or 0, u.get("cache_creation_input_tokens", 0) or 0, u.get("cache_read_input_tokens", 0) or 0
         log.append({"turn": i, "input_total": fresh + cw + cr, "fresh": fresh, "cache_write": cw, "cache_read": cr,
-                    "output": u.get("output_tokens", 0) or 0, "calls": turns[mid]["calls"], "result_chars": turns[mid]["result_chars"]})
+                    "output": u.get("output_tokens", 0) or 0, "calls": turns[mid]["calls"], "result_chars": turns[mid]["result_chars"],
+                    **{k: turns[mid][k] for k in ("text_chars", "thinking_chars", "tool_input_chars", "write_chars")}})
     return result, log, tools
 
 

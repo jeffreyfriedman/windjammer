@@ -1,0 +1,1 @@
+error: could not find `wj.toml` in {REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.U.0/ws or any parent directory (pass a .wj file or a directory with main.wj)

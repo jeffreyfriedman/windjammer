@@ -61,6 +61,17 @@ pub(crate) fn stmt_loc(s: &'static Statement<'static>) -> Option<&'static Locati
     }
 }
 
+/// Where a runtime error of an operator or an index is reported. The parser locates an expression at the token
+/// after it, which for an expression ending a line is the first token of the next line; the first operand's
+/// location is on the expression's own line, so `a / b` and `v[i]` report where the program wrote them.
+pub(crate) fn lead_loc(e: &'static Expression<'static>) -> Option<&'static Location> {
+    match e {
+        Expression::Binary { left, location, .. } => lead_loc(left).or(location.as_ref()),
+        Expression::Index { object, location, .. } => lead_loc(object).or(location.as_ref()),
+        _ => expr_loc(e),
+    }
+}
+
 impl Interpreter {
     pub(crate) fn panic_at(&mut self, e: &'static Expression<'static>, msg: String) -> Ctl {
         self.mark(expr_loc(e));
@@ -129,7 +140,7 @@ impl Interpreter {
                 self.eval_path_value(name)
             }
 
-            Expression::Binary { left, op, right, location } => {
+            Expression::Binary { left, op, right, .. } => {
                 match op {
                     BinaryOp::And => {
                         let l = self.eval(left)?;
@@ -151,7 +162,7 @@ impl Interpreter {
                 }
                 let l = self.eval(left)?;
                 let r = self.eval(right)?;
-                self.mark(location.as_ref());
+                self.mark(lead_loc(e));
                 self.binary(*op, l, r)
             }
 
@@ -273,10 +284,10 @@ impl Interpreter {
                 self.cast(v, type_)
             }
 
-            Expression::Index { object, index, location } => {
+            Expression::Index { object, index, .. } => {
                 let obj = self.eval(object)?;
                 let idx = self.eval(index)?;
-                self.mark(location.as_ref());
+                self.mark(lead_loc(e));
                 self.index_value(&obj, &idx)
             }
 

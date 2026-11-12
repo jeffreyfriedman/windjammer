@@ -1,0 +1,16 @@
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:47:1
+   |
+47 |         } else {
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:49:1
+   |
+49 |         }
+error[WJ0003]: mismatched types: expected `&_`, found `string`
+  --> main.wj:19:29
+   |
+19 |     let mut counts: HashMap<string, int> = HashMap::new()
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:19:29
+   |
+19 |     let mut counts: HashMap<string, int> = HashMap::new()

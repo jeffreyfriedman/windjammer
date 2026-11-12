@@ -44,6 +44,9 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0032](0032-raw-sockets.md) | Raw TCP and UDP sockets in `std::net` | Proposed |
 | [0033](0033-interpreted-first-cost.md) | Interpreted-first iteration without the final-build penalty | Proposed |
 | [0034](0034-book-playground.md) | A live playground in the Windjammer Book, running in the reader's browser | Proposed |
+| [0035](0035-time-travel-debugging.md) | Time-travel debugging from the effect journal | Proposed |
+| [0036](0036-runtime-errors.md) | Runtime errors that explain themselves | Proposed |
+| [0037](0037-agent-cost-levers.md) | Agent-cost levers, measured offline | Proposed |
 <!-- wj:end -->
 
 ## Template

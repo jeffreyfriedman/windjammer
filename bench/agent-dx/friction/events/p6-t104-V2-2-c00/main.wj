@@ -1,0 +1,66 @@
+use std::fs
+use std::collections::HashMap
+
+fn all_digits(s: string) -> bool {
+    if s.len() == 0 {
+        return false
+    }
+    for c in s.chars() {
+        if c < '0' || c > '9' {
+            return false
+        }
+    }
+    true
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut counts: HashMap<string, int> = HashMap::new()
+    let mut totals: HashMap<string, int> = HashMap::new()
+    let mut actions: HashMap<string, HashMap<string, int>> = HashMap::new()
+    let mut bad = 0
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().collect()
+        if parts.len() != 3 || !all_digits(parts[2]) {
+            bad += 1
+            continue
+        }
+        let u = parts[0]
+        let secs: int = parts[2].parse::<int>().unwrap_or(0)
+        let c = counts.get(u).unwrap_or(0)
+        counts.insert(u, c + 1)
+        let t = totals.get(u).unwrap_or(0)
+        totals.insert(u, t + secs)
+        let mut m = actions.get(u).unwrap_or(HashMap::new())
+        let a = m.get(parts[1]).unwrap_or(0)
+        m.insert(parts[1], a + 1)
+        actions.insert(u, m)
+    }
+    let mut users: Vec<string> = []
+    for k in counts.keys() {
+        users.push(k)
+    }
+    users.sort_by(|a, b| {
+        let ta = totals.get(a).unwrap_or(0)
+        let tb = totals.get(b).unwrap_or(0)
+        if ta != tb {
+            tb.cmp(ta)
+        } else {
+            a.cmp(b)
+        }
+    })
+    for u in users {
+        let m = actions.get(u).unwrap_or(HashMap::new())
+        let mut best = ""
+        let mut bc = 0
+        for k in m.keys() {
+            let v = m.get(k).unwrap_or(0)
+            if v > bc || (v == bc && k < best) {
+                best = k
+                bc = v
+            }
+        }
+        println("${u} ${counts.get(u).unwrap_or(0)} ${totals.get(u).unwrap_or(0)} ${best}")
+    }
+    println("malformed: ${bad}")
+}

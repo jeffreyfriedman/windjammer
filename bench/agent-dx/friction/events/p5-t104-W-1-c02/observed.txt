@@ -1,0 +1,16 @@
+error[E0308]: mismatched types
+  --> main.rs:54:31
+   |
+54 |           if x.total != y.total {
+error[E0308]: mismatched types
+  --> main.rs:56:16
+   |
+56 |           } else {
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:69:20
+   |
+69 |                 if *c > bc || *c == bc && a < best {
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:69:31
+   |
+69 |                 if *c > bc || *c == bc && a < best {

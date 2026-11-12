@@ -5,7 +5,8 @@ must say the same thing about every program. `scripts/wj/drift_gate.wj` is the o
 
 ```
 wj run scripts/wj/drift_gate.wj                      # on the integrated head, from the repository root
-wj run scripts/wj/drift_gate.wj --fast               # selftest + differential corpus only (no cargo)
+wj run scripts/wj/drift_gate.wj --fast               # selftest + seeded fuzz + corpus + spec only (no cargo)
+wj run scripts/wj/drift_gate.wj --fast --fuzz-long   # the same with the wide fuzz seed range (opt-in, minutes)
 wj run scripts/wj/drift_gate.wj --compiled live      # re-run the compiled side now instead of the recorded baseline
 ```
 
@@ -20,7 +21,9 @@ shared machine).
 | fast-paths | each fast path fires on its programs (a silent fallback keeps output right and hides the regression) | `tests/interpreter_fast_paths_test.rs` |
 | jit-loops | generated loop programs: walker == resolved == no-jit | `tests/interpreter_jit_loops_test.rs` |
 | packed-vec | packed vectors == boxed vectors | `tests/interpreter_packed_vec_test.rs` |
+| builtin-mutants | each shared builtin class, deliberately broken in a debug build, changes a program whose output the compiled build fixes (below) | `tests/interpreter_builtin_mutants_test.rs`, `tests/drift_corpus/mutants/` |
 | crate-host | calls into Rust crates (ADR-0031): interpreted == compiled on the interop projects (strsim, shlex, crc32fast, a path crate with every surface shape), panics, replay, grants, simulate | `tests/interpreter_rust_crates_test.rs` |
+| fuzz | generated programs on a fixed seed set the engines were not tuned to: walker == resolved, every divergence ledgered with an owner or the step fails (below) | `scripts/wj/drift_gate.wj`, `tests/drift_corpus/fuzz_divergences.txt` |
 | corpus | walker, resolved and compiled on every test of the ecosystem snapshot plus the value-position programs | `scripts/wj/drift_corpus.wj`, `tests/drift_corpus/` |
 
 A cargo step that runs zero tests fails (a gate that compared nothing proves nothing); the corpus step fails below a
@@ -38,6 +41,17 @@ The compiled side is expensive (each package is a cargo build), so by default th
 interpreted runs with `tests/drift_corpus/compiled_baseline.tsv`, recorded with
 `wj run scripts/wj/drift_corpus.wj BIN OUT --compiled live --record` (and re-checked in CI with `--compiled live`).
 A test missing from the baseline is `absent` and therefore a divergence: record the baseline when the corpus changes.
+
+## The seeded fuzz run
+
+The `fuzz` step runs the two generators on seeds 9001..9024 (`drift_gen.wj`, value kind x position) and 9001..9003
+(`drift_probes.wj`, 19 semantic families), without rustc or cargo, and compares the walker with the resolved engine.
+It runs in `--fast` too and takes about 15 seconds. The seeds are fixed, so a failure reproduces: the failing row's id
+carries its seed, and `wj run scripts/wj/drift_gen.wj BIN DIR OUT.tsv --seeds N..N --no-rustc` regenerates the program.
+A divergent row (or a generated program that does not run, `#runs`) must be listed in
+`tests/drift_corpus/fuzz_divergences.txt`, a shrink-only ledger judged by `drift_ledger.wj` like the corpus one, or the
+gate fails; the file is empty today. `--fuzz-long` widens the range to 9001..9400 and 9001..9040 (minutes; the short set
+is its prefix, so one ledger serves both). `scripts/wj/drift_fuzz.wj` is the open-ended version for nightly jobs.
 
 ## The generated programs
 
@@ -111,10 +125,30 @@ the time of writing; the ledger is the source of truth.
 
 Mutation checks: the evaluation-order class is a real bug (the gate diverged from the compiled baseline until fixed).
 The value-position classes have three engine mutants (`docs/drift/generator-audit.md`). The shared-builtin classes
-(integer, float, string, format) have no mutant of their own: the walker and resolved engine share those builtins, so
-only the compiled baseline can see a change in them, and the baseline is recorded from the compiled backend.
+(integer, float, format, string, sequence, map, option, iterator, JSON) cannot be seen by walker-vs-resolved: both engines
+share those builtins, so only the compiled output can see a change in them. Each therefore has a program in
+`tests/drift_corpus/mutants/<class>.wj` with the output the compiled program prints (`<class>.expected`), and a mutant:
+in debug builds `WJ_JIT_MUTANT=<class>` deliberately breaks that builtin (`Interpreter::mutant`). The `builtin-mutants`
+step (`tests/interpreter_builtin_mutants_test.rs`, run as `cargo test --test builtin_mutants`, a dev-profile build because
+release builds ignore the switch) shows the program prints the expected output restored, a different one under both
+engines when broken, and the same again under another class's mutant.
 
 ## The drift budget
+
+Every ledger line names an owner stream: `case | walker=A resolved=B compiled=C | reason | owner: STREAM`. The comparer
+(`drift_ledger.wj`) and `tests/drift_contract_test.rs` fail on a line without one or with a stream outside this list:
+
+| Stream | Responsible for |
+|---|---|
+| `numeric-width` | integer literal and width typing in the generated Rust (`i32` against `i64`, `usize` against `int`; findings A and C) |
+| `codegen-refs` | borrow and value adaptation at call boundaries in the generated Rust (`&T` against `T`, `String` against `&str`, index by value) |
+| `codegen-types` | other generated-Rust type shapes (closure types, `collect` element types, trait items, `clone` bounds, renamed parameters) |
+| `codegen-ownership` | `mut` and borrow inference in the generated Rust (rustc E0596, E0506, E0507) |
+| `runtime-surface` | a standard-library item or runtime feature the compiled side lacks or does not link |
+| `parser-lexer` | a source form the parser or lexer reads differently from the language |
+| `language-decision` | needs a ruling in the spec before either side is called wrong |
+| `gate-harness` | the gate's own recording, not behaviour |
+| `interp-literal-typing` | the interpreter types a computed literal later than the compiler does |
 
 `tests/drift_corpus/known_divergences.txt` lists the divergences we know about: `case | walker=A resolved=B
 compiled=C | reason`. The ledger is shrink-only:

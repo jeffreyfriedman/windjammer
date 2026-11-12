@@ -642,6 +642,21 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// An argument at a `usize` formal (`substring(s, start, end)`) is an index use: its class keeps its own width and,
     /// when that width is another integer type, the argument is converted where it is passed (NUM-USIZE-TO-INT).
+    /// NUM-USIZE-TO-INT at the index: `v[k]` on a sequence (a `Vec`, `VecDeque`, list or text) whose index `k` is in a
+    /// class of another width is converted where it indexes (`v[(k as usize)]`), as an argument at a `usize` formal is.
+    /// Map lookups and slice bounds are not positions.
+    pub(super) fn index_conversion_site(&mut self, object: &Expression<'ast>, index: &Expression<'ast>, idx_var: ConstraintVar) {
+        if matches!(index, Expression::Range { .. }) {
+            return;
+        }
+        let positional = self.surface_shape(object).as_ref().and_then(crate::typing::core_surface::surface_type_name).is_some_and(|n| {
+            matches!(n, "String") || (crate::typing::core_surface::is_element_container(n) && !matches!(n, "HashSet" | "BTreeSet" | "Iterator"))
+        });
+        if let (true, Some(key)) = (positional, crate::ir::numeric_facts::conversion_key(index)) {
+            self.index_use_keys.push((key, idx_var));
+        }
+    }
+
     pub(super) fn index_slot_argument(&mut self, arg: ConstraintVar, arg_expr: Option<&Expression<'ast>>) {
         self.cs.add_because(Constraint::IsNumeric(arg), tagged("NUM-INDEX"));
         self.index_uses.push(arg);

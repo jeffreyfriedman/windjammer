@@ -1,0 +1,10 @@
+fn pick(scores: Vec<int>, which: int) -> int {
+    let total = scores.len()
+    scores[which]
+}
+
+fn main() {
+    let scores = [90, 85, 70]
+    println("picking")
+    println("${pick(scores, 5)}")
+}

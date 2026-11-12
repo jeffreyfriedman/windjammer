@@ -9,6 +9,7 @@
 
 pub mod clone_use;
 pub mod codes;
+pub mod dollar_escape;
 pub mod rust_leakage;
 pub mod surface_syntax;
 pub mod missing_value;

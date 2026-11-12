@@ -1,0 +1,50 @@
+use std::fs
+use std::process
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut first = true
+    let mut width = 0
+    let mut ok = false
+    let mut line = ""
+    let mut have = false
+    for l in text.lines() {
+        if first {
+            first = false
+            let t = l.trim()
+            match t.parse::<int>() {
+                Ok(n) => {
+                    if n > 0 {
+                        width = n
+                        ok = true
+                    }
+                }
+                Err(_) => {}
+            }
+            if !ok {
+                println("error: bad width")
+                process::exit(1)
+            }
+        } else {
+            for w in l.split_whitespace() {
+                let wl: int = w.len() as int
+                if !have {
+                    line = w
+                    have = true
+                } else if (line.len() as int) + 1 + wl <= width {
+                    line = "${line} ${w}"
+                } else {
+                    println("${line}")
+                    line = w
+                }
+            }
+        }
+    }
+    if first {
+        println("error: bad width")
+        process::exit(1)
+    }
+    if have {
+        println("${line}")
+    }
+}

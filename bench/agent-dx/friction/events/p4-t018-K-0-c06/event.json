@@ -1,0 +1,16 @@
+{
+  "id": "p4-t018-K-0-c06",
+  "pilot": "pilot4",
+  "task": "t018_word_freq",
+  "arm": "K",
+  "arm_name": "compiled-first+sheet",
+  "trial": 0,
+  "call": 6,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "compiler-bug",
+  "reason": "rustc rejection translated to WJ0003-style; message shape of a known drift class"
+}

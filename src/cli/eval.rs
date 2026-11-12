@@ -85,15 +85,16 @@ pub fn run(code: &str) -> std::io::Result<i32> {
         lint: None,
         speculate: false,
         no_lint: true,
+        output: Default::default(),
     });
     remove(&file);
     Ok(status)
 }
 
 /// The program `wj eval` runs for `text`: the prelude, then `text` in `main`. Statements may be separated by
-/// newlines or `;`. A final expression is printed (`${..}`); a final statement is not.
+/// newlines or `;` outside strings and brackets (a `;` inside a string or a block stays where it is). A final expression is printed (`${..}`); a final statement is not.
 pub fn program(text: &str) -> String {
-    let parts: Vec<&str> = text.split(['\n', ';']).map(str::trim).filter(|s| !s.is_empty()).collect();
+    let parts = crate::interpreter::source_scan::split_statements(text);
     let mut body = String::new();
     for (i, p) in parts.iter().enumerate() {
         let last = i + 1 == parts.len();
@@ -106,6 +107,17 @@ pub fn program(text: &str) -> String {
         }
     }
     format!("{}\n\nfn main() {{\n{body}}}\n", PRELUDE.join("\n"))
+}
+
+/// The REPL's [`Predictor`](crate::interpreter::repl::Predictor): the compiled build's verdict on the session so far,
+/// as one message per predicted rejection (the width, reference and `String`/`&str` predictions of `wj check`).
+/// Only a message is returned; the REPL warns and carries on.
+pub fn predict_session(items: &str, body: &str) -> Vec<String> {
+    let source = format!("{}\n\n{items}\n\nfn main() {{\n{body}\n}}\n", PRELUDE.join("\n"));
+    let Ok(file) = write_script(&std::env::current_dir().unwrap_or_default(), &source) else { return Vec::new() };
+    let found = super::widths_gate::predicted_widths(&file);
+    remove(&file);
+    found.into_iter().map(|d| format!("{}: {}", d.code, d.message)).collect()
 }
 
 /// A line that yields a value to print (not a binding, a loop, an assignment or a print).
@@ -130,5 +142,13 @@ mod tests {
         assert!(program("x == 3").contains("let __wj_eval_value = x == 3\n"));
         // a string literal with `${..}` is bound as written, not spliced into another interpolation
         assert!(program("\"${6 * 7} ok\"").contains("let __wj_eval_value = \"${6 * 7} ok\"\n"));
+    }
+
+    #[test]
+    fn a_semicolon_or_newline_inside_a_string_or_block_does_not_split_the_input() {
+        let p = program("let s = \"a;b\"; s");
+        assert!(p.contains("    let s = \"a;b\"\n    let __wj_eval_value = s\n"), "{p}");
+        let b = program("for i in 0..2 {\n    println(\"${i};\")\n}");
+        assert!(b.contains("    for i in 0..2 {\n    println(\"${i};\")\n}\n"), "{b}");
     }
 }

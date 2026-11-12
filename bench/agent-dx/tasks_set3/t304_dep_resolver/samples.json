@@ -1,0 +1,15 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg app 1\npkg lib 3\npkg core 2\ndep app lib >= 2\ndep app core = 2\ndep lib core < 5\ninstall app\n",
+  "stdout": "install core 2\ninstall lib 3\ninstall app 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg a 1\npkg b 2\npkg c 3\ndep a b >= 3\ndep b c = 3\ndep c a > 0\ndep c d = 1\ninstall a\n",
+  "stdout": "error: a needs b >= 3 but found 2\nerror: cycle a -> b -> c -> a\nerror: missing dependency d of c\n"
+ }
+]

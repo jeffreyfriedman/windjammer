@@ -1,0 +1,16 @@
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:46:12
+   |
+46 |         if *ta != *tb {
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:46:19
+   |
+46 |         if *ta != *tb {
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:47:21
+   |
+47 |             tb.cmp(&*ta);
+error[E0308]: mismatched types
+  --> main.rs:46:23
+   |
+46 |           if *ta != *tb {

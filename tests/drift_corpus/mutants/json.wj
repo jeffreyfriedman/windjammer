@@ -1,0 +1,14 @@
+use std::json
+
+fn main() {
+    let text = "{\"a\":1}"
+    match json::parse(text) {
+        Ok(v) => {
+            match json::stringify(v) {
+                Ok(s) => println("${s.contains("\n")} ${s.len()}"),
+                Err(e) => println("err ${e}"),
+            }
+        },
+        Err(e) => println("err ${e}"),
+    }
+}

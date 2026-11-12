@@ -14,7 +14,7 @@ const OUTPUT_COPY: string = "/tmp/test-ratchet-output.txt"
 // run `cargo test ARGS` with stderr folded into stdout; the output reaches the terminal as it is produced and a copy lands in
 // OUTPUT_COPY. Returns cargo's exit status (not tee's).
 fn cargo_test_tee(args: Vec<string>) -> int {
-    let mut argv = ["-c", "cargo test \"$@\" 2>&1 | tee " + OUTPUT_COPY + "; exit $${PIPESTATUS[0]}", "bash"]
+    let mut argv = ["-c", "cargo test \"$@\" 2>&1 | tee " + OUTPUT_COPY + "; exit " + "$" + "{PIPESTATUS[0]}", "bash"]
     for a in args {
         argv.push(a)
     }

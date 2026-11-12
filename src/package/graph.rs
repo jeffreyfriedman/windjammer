@@ -165,6 +165,69 @@ fn package_of_build_output(dir: PathBuf) -> PathBuf {
     dir
 }
 
+/// Expand `${NAME}` and `${NAME:-default}` in a manifest `path`, so a location (a sibling checkout, the
+/// ecosystem) is configurable per machine instead of baked into the manifest as `../name`.
+pub fn expand_path_vars(raw: &str) -> Result<String, String> {
+    expand_path_vars_with(raw, |k| crate::toolchain::env::get(k).filter(|v| !v.is_empty()))
+}
+
+pub fn expand_path_vars_with(raw: &str, get: impl Fn(&str) -> Option<String>) -> Result<String, String> {
+    let mut out = String::new();
+    let mut rest = raw;
+    while let Some(i) = rest.find("${") {
+        out.push_str(&rest[..i]);
+        let Some(j) = rest[i..].find('}') else { return Err(format!("unterminated `${{` in path `{raw}`")) };
+        let inner = &rest[i + 2..i + j];
+        let (name, default) = match inner.split_once(":-") {
+            Some((n, d)) => (n, Some(d)),
+            None => (inner, None),
+        };
+        match get(name).or_else(|| default.map(str::to_string)) {
+            Some(v) => out.push_str(&v),
+            None => return Err(format!("path `{raw}` needs the environment variable {name}, which is not set")),
+        }
+        rest = &rest[i + j + 1..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// A manifest `path` resolved against `base`: variables expanded (left as written when they cannot be).
+pub fn dep_path(base: &Path, raw: &str) -> PathBuf {
+    let p = expand_path_vars(raw).unwrap_or_else(|_| raw.to_string());
+    if Path::new(&p).is_absolute() { PathBuf::from(p) } else { base.join(p) }
+}
+
+/// One message per `${VAR}`-parameterised path dependency whose directory is missing, naming the variable to set.
+pub fn missing_configurable_deps(root: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(root.join("wj.toml")) else { return Vec::new() };
+    let Ok(v) = text.parse::<toml::Value>() else { return Vec::new() };
+    let Some(deps) = v.get("dependencies").and_then(|d| d.as_table()) else { return Vec::new() };
+    let mut out = Vec::new();
+    for (name, spec) in deps {
+        let Some(raw) = spec.get("path").and_then(|x| x.as_str()) else { continue };
+        if !raw.contains("${") {
+            continue;
+        }
+        let vars: Vec<&str> = raw.split("${").skip(1).filter_map(|s| s.split(['}', ':']).next()).collect();
+        let why = match expand_path_vars(raw) {
+            Err(e) => e,
+            Ok(p) => {
+                let dir = if Path::new(&p).is_absolute() { PathBuf::from(&p) } else { root.join(&p) };
+                if dir.exists() {
+                    continue;
+                }
+                format!("`{}` does not exist", dir.display())
+            }
+        };
+        out.push(format!(
+            "dependency `{name}`: {why}; set {} to the checkout that provides it (manifest path `{raw}`)",
+            vars.join(" / ")
+        ));
+    }
+    out
+}
+
 /// Direct dependencies of the project at `root` (`[dependencies]`), git ones fetched and locked.
 /// The lockfile is (re)written only when a git dependency was resolved without a pin.
 pub fn resolve(root: &Path) -> Result<Vec<DepNode>, String> {
@@ -178,6 +241,10 @@ pub fn resolve(root: &Path) -> Result<Vec<DepNode>, String> {
     for (name, spec) in deps {
         let s = |k: &str| spec.get(k).and_then(|x| x.as_str()).map(str::to_string);
         if let Some(p) = s("path") {
+            if let Some(msg) = missing_configurable_deps(root).into_iter().find(|m| m.starts_with(&format!("dependency `{name}`:"))) {
+                return Err(msg);
+            }
+            let p = expand_path_vars(&p).map_err(|e| format!("dependency `{name}`: {e}"))?;
             let dir = if Path::new(&p).is_absolute() { PathBuf::from(&p) } else { root.join(&p) };
             let dir = package_of_build_output(dir);
             out.push(DepNode { name: name.clone(), kind: classify(&dir), root: Some(dir), rev: None, source: format!("path+{p}") });
@@ -243,6 +310,30 @@ mod tests {
         assert!(kinds.contains(&("serde".into(), DepKind::Rust)));
         let tk = g.iter().find(|n| n.name == "text-kit").unwrap();
         assert_eq!(tk.lib_entry().unwrap(), r.join("app/../text_kit/src/lib.wj"));
+    }
+
+    #[test]
+    fn path_variables_expand_with_defaults_and_report_what_is_missing() {
+        let env = |k: &str| if k == "WJ_ECOSYSTEM" { Some("/opt/eco".to_string()) } else { None };
+        assert_eq!(expand_path_vars_with("${WJ_ECOSYSTEM:-../../eco}/packages/x", env).unwrap(), "/opt/eco/packages/x");
+        assert_eq!(expand_path_vars_with("${NOPE:-../../eco}/packages/x", env).unwrap(), "../../eco/packages/x");
+        assert_eq!(expand_path_vars_with("../plain", env).unwrap(), "../plain");
+        let e = expand_path_vars_with("${NOPE}/x", env).unwrap_err();
+        assert!(e.contains("NOPE") && e.contains("not set"), "{e}");
+    }
+
+    #[test]
+    fn missing_configurable_dependency_names_the_variable_to_set() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(
+            d.path().join("wj.toml"),
+            "[package]\nname = \"p\"\n\n[dependencies]\neco = { path = \"${WJ_TEST_UNSET_ECO:-nowhere}/packages/eco\" }\nplain = { path = \"../elsewhere\" }\n",
+        )
+        .unwrap();
+        let msgs = missing_configurable_deps(d.path());
+        assert_eq!(msgs.len(), 1, "{msgs:?}");
+        assert!(msgs[0].contains("WJ_TEST_UNSET_ECO") && msgs[0].contains("`eco`"), "{msgs:?}");
+        assert!(resolve(d.path()).unwrap_err().contains("WJ_TEST_UNSET_ECO"));
     }
 
     #[test]

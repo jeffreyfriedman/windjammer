@@ -1,0 +1,5 @@
+# seed 6
+{"column":21,"event":"stopped","file":"main.wj","function":"main","line":8,"reason":"start","step":1,"task":0}
+{"event":"output","stream":"stdout","text":"roll 0: 3\nroll 1: 5\nroll 2: 6\n"}
+{"column":13,"event":"stopped","file":"main.wj","function":"main","line":14,"message":"rolled a six","reason":"failure","step":18,"task":0}
+{"event":"value","name":"total","value":"14"}

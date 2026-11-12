@@ -1,0 +1,84 @@
+{
+  "_doc": "Pilot 7 matrix (ADR-0037). Read by agentdx/pilot7.py; `python3 -m agentdx pilot7 --dry-run` validates it without any LLM call.",
+  "models": {
+    "haiku": {
+      "per_trial_usd_cap": 0.1,
+      "expected_usd_per_trial": 0.015
+    },
+    "sonnet": {
+      "per_trial_usd_cap": 0.6,
+      "expected_usd_per_trial": 0.25
+    },
+    "opus": {
+      "per_trial_usd_cap": 1.5,
+      "expected_usd_per_trial": 0.45,
+      "trials_per_cell": 1
+    }
+  },
+  "prices": {
+    "_date": "2026-10-06",
+    "_source": "Anthropic first-party API list prices, USD per million tokens, as cached in the Claude API reference on that date. cache_write is the 5-minute write (1.25 x input) and cache_read 0.1 x input where the table gives no explicit figure (marked derived). The CLI aliases are assumed to resolve to the current generation; the harness records the resolved model id when Claude Code reports it and checks every trial's computed cost against Claude Code's own total_cost_usd. cache_write_1h (2 x input) is used for the 1-hour cache writes Claude Code reports in modelUsage; the 2026-11-11 haiku validation smoke reproduced Claude Code's own costUSD with it.",
+    "opus": {
+      "model": "claude-opus-5-5",
+      "input": 4.0,
+      "cache_write": 5.0,
+      "cache_read": 0.2,
+      "output": 20.0,
+      "derived": [
+        "cache_write",
+        "cache_write_1h"
+      ],
+      "cache_write_1h": 8.0
+    },
+    "sonnet": {
+      "model": "claude-sonnet-5-5",
+      "input": 2.0,
+      "cache_write": 2.5,
+      "cache_read": 0.2,
+      "output": 10.0,
+      "derived": [
+        "cache_write",
+        "cache_write_1h"
+      ],
+      "cache_write_1h": 4.0
+    },
+    "haiku": {
+      "model": "claude-haiku-5-5",
+      "input": 0.1,
+      "cache_write": 0.125,
+      "cache_read": 0.01,
+      "output": 0.5,
+      "derived": [
+        "cache_read",
+        "cache_write",
+        "cache_write_1h"
+      ],
+      "cache_write_1h": 0.2
+    }
+  },
+  "arms": [
+    "R",
+    "U7",
+    "V3"
+  ],
+  "trials_per_cell": 2,
+  "max_turns": 25,
+  "hard_cap_usd": 35.0,
+  "check_after_trials_per_model": 6,
+  "validation_smoke_cap_usd": 1.5,
+  "tasks_dir": "tasks_set3",
+  "tasks": [
+    "t103_trait_pricing",
+    "t104_activity_log",
+    "t302_undo_editor",
+    "t303_rule_engine",
+    "t304_dep_resolver",
+    "t305_bank_ledger_graph",
+    "t306_spreadsheet",
+    "t307_mini_scheme",
+    "t308_text_world",
+    "t309_order_book"
+  ],
+  "_validation": "2026-11-11 haiku arm-R smoke, USD 0.30 of the 1.50 validation budget, records in results/pilot7-validation/. Round 1 (14 candidates, 1 trial): 14 of 14 passed, 12 in 3 turns, no rustc error. Round 2 (t306-t309, 2 trials): 5 of 8 passed; t309 failed 2 of 2 and t306 1 of 2 on hidden edge cases (no rustc error in any trial), t307 took 13 turns once. Chosen: the four round-2 tasks, the two pilot-6 friction tasks (t103, t104) and the four largest round-1 tasks.",
+  "_expected_basis": "Expected cost per trial = the validation smoke's token counts priced per model (dry-run decomposition: arm R on the chosen tasks is USD 0.011 haiku, 0.21 sonnet, 0.42 opus at equal tokens), raised for the Windjammer arms' extra turns. At 2 trials per cell opus alone would project about USD 27, so opus runs 1 trial per cell (30 trials) to keep the expected total under the hard cap; the owner may raise it."
+}

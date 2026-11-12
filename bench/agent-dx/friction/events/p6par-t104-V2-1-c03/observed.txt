@@ -1,0 +1,16 @@
+Building Windjammer project from "{REPO}/bench/agent-dx/results/pilot6/work/t104_activity_log.V2.1/ws" (target: rust)
+Output: "{CACHE}/run/de1878c1eb9389a7"
+
+Success! Transpilation complete!
+
+wj verify: stdout differs at line 1:
+  interpreted: ann 3 47 edit
+  compiled:    invalid
+wj verify: the compiled run's stderr:
+warning: unused import: `windjammer_runtime::fs::Metadata`
+ --> main.rs:2:5
+  |
+2 | use windjammer_runtime::fs::Metadata;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (par

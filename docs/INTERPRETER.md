@@ -26,15 +26,37 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 | `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client and server calls from canned responses (no network capability needed) / allow network access, plain `http://` (default: denied with exit status 126). |
 | `wj run --sandbox` / `--allow EFFECT[=RESOURCE]` / `--caps enforce\|warn\|off` | Capabilities (ADR-0021): with no `[capabilities]` in `wj.toml` a run may use files inside the project directory, time, random and console, and nothing else (tests and the REPL also get a private scratch directory at `env::temp_dir()`); a denied call stops with exit status 126 and a message that contains the `--allow` flag and the `[capabilities]` block to add. Writing `wj.toml` or a `.wj` source needs a grant that says so: the exact path, or a pattern whose last segment ends in the file's own suffix (`fs.write = ["./gen/*.wj"]`, `["./tmp/**/wj.toml"]`); `./**` alone never reaches them. `WJ_CAPS=warn` (run, warn once) and `WJ_CAPS=off` are explicit opt-outs. |
 | `wj run --record LOG` / `--replay LOG` | Effect log (ADR-0021 E3): `--record` runs live and writes every effect (file, env, process and network results, stdin, real-clock readings) to a JSON Lines log; `--replay` re-runs the program answering every effect from the log and performing none; seeds, arguments and time mode come from the log. A request that differs from the log is `WJ0049`. Live-handle effects (`subprocess::spawn`, `http::serve`, `db::connect`) are refused by name. |
+| `wj replay LOG PROGRAM` / `wj replay --simulate [--seed N] PROGRAM` `[--script FILE] [--json]` | Time-travel debugger (ADR-0035): re-runs a recorded or simulated run in the tree walker and answers a script of commands (`break LINE`, `continue`, `step [N]`, `back [N]`, `print NAME`, `locals`, `where`); stops at a failure before the stack unwinds; `back` re-executes the deterministic run from its start to the earlier step. `--json` prints one event per line for agents. |
 | `wj run --simulate [--seed N] [--faults RATE]` / `wj test --interpret --simulate [--seed N \| --seeds A..B] [--faults RATE]` | Deterministic simulation (ADR-0021 E3): virtual clock from Unix time 1700000000, random numbers, scheduler and hash order from the seed, in-memory files (a `fixtures/` directory next to the project is preloaded), no network or programs, and with `--faults` seeded I/O failures (a failed write keeps a prefix). `--seeds` tries every seed and names the first that fails with the command that reproduces it. The capability gate still applies. |
 | `wj run --interpret --journal DIR [--crash-after N[:mid]]` | `durable fn` (ADR-0021 E4): every effectful call in its body is a journaled step; with `--journal` a crashed run resumes where it stopped, `--crash-after N` exits (status 137) after the N-th step (`N:mid`: after performing it, before journaling it). Without `--journal` the journal is in memory. Compiled builds refuse a `durable fn`. |
 | `wj run --interpret --sandbox --bind NAME=ENDPOINT --limits SPEC --result-json FILE` / `wj mcp bind SERVER --tools FILE` | Code mode (ADR-0021 E5): `mcp::call` reaches MCP servers bound as `mock:FILE` or `stdio:COMMAND` (the child keeps the credentials); each tool is the effect `mcp.SERVER.TOOL`; `--limits fuel=N,wall=SECS,output=BYTES,calls=N,mem=MB` stops a run with exit status 124 (limits force the tree walker); `wj mcp bind` writes typed bindings. Compiled builds refuse `std::mcp`. |
-| `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
+| `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. An input continues on the next line until it is complete (an open bracket or string, or an unfinished expression such as `1 +`; a blank line ends one that never completes). `:history` lists the session's inputs, `!N` and `!!` evaluate one again. When the compiled build would reject an input (the `wj check` width, reference and `String`/`&str` predictions, ADR-0033) the REPL warns once and runs it anyway; predictions never refuse an input. `:reset`, `:help`, `exit`. `wj eval` splits its code at `;` and newlines outside strings and brackets, so a `;` inside a string stays. `wj run --verify` writes the interpreted output as the program prints it. |
 
 Exit status: 0 ok; 101 panic (Rust's code; message `panicked at file:line:col`, backtrace of Windjammer frames);
 N for `std::process::exit(N)`; 2 for "unsupported in the interpreter" (names the feature, suggests `wj run --compiled`); 1 other.
 Arguments pass through (`std::env::args`), stdin is inherited. A test asserts the interpreter never spawns `cargo`/`rustc`
 (shims on `PATH` that leave a marker file); the one exception is the host bridge build below, done once per Rust change.
+
+## Runtime errors
+
+A failed interpreted run explains itself (ADR-0036). After the Rust-shaped head (`thread 'main' panicked at file:line:col:`
+and the message), stderr shows, under `stack backtrace:`, the failing source line with a caret, the Windjammer frames
+(`0: `pick` at p.wj:3:5`, innermost first; every other frame at the call it is executing) and `locals in `pick`:`, the
+bindings of the innermost frame (the newest 8, values in Debug style, at most 80 characters, no user code run to print
+them). `assert_eq` shows both sides; `unwrap`, `expect`, indexing, division by zero, overflow and `panic` all take this
+path.
+
+- `wj run --error-format json` replaces the text with one line in the diagnostics schema family (`docs/diagnostics-schema.json`):
+  `command: "run"`, one diagnostic (`WJ0170` panic, `WJ0171` `main` returned `Err`, `WJ0172` other) with `primary_span`,
+  `stack` and `locals`, and `exit_code` on the report.
+- `--no-locals` drops the bindings. A binding or field named like a credential (`password`, `passwd`, `secret`, `token`,
+  `api_key`, `apikey`, `credential`, `private_key`, `auth`), a string equal to an environment variable's value (8+
+  characters) and a `Secret*` type show `<redacted>`.
+- The detail is stderr only. stdout and the exit status are those of a run without it, and everything before
+  `stack backtrace:` is unchanged, so the interpreted-versus-compiled comparison (INTERPRETER_CONTRACT.md) is untouched;
+  `tests/runtime_error_report_test.rs` checks it for every failure kind. Compiled programs print Rust's panic message
+  and keep the same exit statuses; run the program with `wj run --interpret` to get the stack and locals.
+- Capture happens only when an error leaves a frame; the happy path has no extra work.
 
 ## Projects
 

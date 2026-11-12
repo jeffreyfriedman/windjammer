@@ -1,0 +1,9 @@
+insert 5
+insert 3
+insert 8
+insert 3
+inorder
+height
+contains 8
+min
+max

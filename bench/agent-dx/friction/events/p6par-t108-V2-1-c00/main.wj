@@ -1,0 +1,105 @@
+use std::fs
+
+struct Parser {
+    toks: Vec<string>,
+    pos: int,
+    out: Vec<string>,
+    ok: bool,
+}
+
+impl Parser {
+    fn peek(self) -> string {
+        if self.pos < self.toks.len() as int {
+            self.toks[self.pos as usize]
+        } else {
+            ""
+        }
+    }
+
+    fn expr(self) {
+        self.term()
+        while self.ok && (self.peek() == "+" || self.peek() == "-") {
+            let op = self.peek()
+            self.pos += 1
+            self.term()
+            self.out.push(op)
+        }
+    }
+
+    fn term(self) {
+        self.power()
+        while self.ok && (self.peek() == "*" || self.peek() == "/") {
+            let op = self.peek()
+            self.pos += 1
+            self.power()
+            self.out.push(op)
+        }
+    }
+
+    fn power(self) {
+        self.atom()
+        if self.ok && self.peek() == "^" {
+            self.pos += 1
+            self.power()
+            self.out.push("^")
+        }
+    }
+
+    fn atom(self) {
+        let t = self.peek()
+        if t == "(" {
+            self.pos += 1
+            self.expr()
+            if self.ok && self.peek() == ")" {
+                self.pos += 1
+            } else {
+                self.ok = false
+            }
+        } else if t.len() > 0 && t[0..1] >= "0" && t[0..1] <= "9" {
+            self.out.push(t)
+            self.pos += 1
+        } else {
+            self.ok = false
+        }
+    }
+}
+
+fn convert(line: string) -> string {
+    let mut toks: Vec<string> = []
+    let mut cur = ""
+    for c in line.chars() {
+        if c >= '0' && c <= '9' {
+            cur = cur + "${c}"
+        } else {
+            if cur.len() > 0 {
+                toks.push(cur)
+                cur = ""
+            }
+            if c == ' ' || c == '\t' || c == '\r' {
+            } else if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '(' || c == ')' {
+                toks.push("${c}")
+            } else {
+                return "error"
+            }
+        }
+    }
+    if cur.len() > 0 {
+        toks.push(cur)
+    }
+    let mut p = Parser { toks: toks, pos: 0, out: [], ok: true }
+    p.expr()
+    if !p.ok || p.pos != p.toks.len() as int {
+        return "error"
+    }
+    p.out.join(" ")
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim().len() == 0 {
+            continue
+        }
+        println(convert(line))
+    }
+}

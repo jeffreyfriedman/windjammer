@@ -1,0 +1,7 @@
+Building Windjammer project from "{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.1/ws" (target: rust)
+Output: "{CACHE}/pilot6-root/run/46e593856ec6af44"
+
+Success! Transpilation complete!
+
+wj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)
+invalid input

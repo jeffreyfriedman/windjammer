@@ -1,0 +1,7 @@
+{"column":16,"effect":0,"event":"stopped","file":"main.wj","function":"main","line":13,"reason":"start","step":1,"task":0}
+{"event":"output","stream":"stdout","text":"read 8 bytes\n"}
+{"column":17,"effect":1,"event":"stopped","file":"main.wj","function":"total","line":6,"message":"called `Result::unwrap()` on an `Err` value: \"invalid digit found in string\"","reason":"failure","step":10,"task":0}
+{"event":"value","name":"line","value":"\"x\""}
+{"event":"value","name":"sum","value":"30"}
+{"event":"stack","frames":[{"column":17,"file":"main.wj","function":"total","line":6},{"column":20,"file":"main.wj","function":"main","line":15}]}
+{"code":101,"event":"exited","message":"thread 'main' panicked at main.wj:6:44:\ncalled `Result::unwrap()` on an `Err` value: \"invalid digit found in string\"\nstack backtrace:\n  --> main.wj:6:44\n 6 |         let n = line.trim().parse::<int>().unwrap()\n   |                                            ^\n  0: `total` at main.wj:6:44\n  1: `main` at main.wj:15:20\nlocals in `total`:\n  text = \"10\\n20\\nx\\n\"\n  sum = 30","steps":10}

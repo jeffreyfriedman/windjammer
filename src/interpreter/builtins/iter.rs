@@ -94,7 +94,12 @@ fn register_adaptors(r: &mut Registry) {
         Ok(new_iter(items))
     });
     r.pure(Kind::Iter, "take", |it, v, a| Ok(adapt(IterSrc::Take(it_of(it, v)?, Cell::new(arg_usize(&a, 0, "take")?)))));
-    r.pure(Kind::Iter, "skip", |it, v, a| Ok(adapt(IterSrc::Skip(it_of(it, v)?, Cell::new(arg_usize(&a, 0, "skip")?)))));
+    // test-only mutant `iter` (debug builds): `skip(n)` skips one element too few
+    r.pure(Kind::Iter, "skip", |it, v, a| {
+        let n = arg_usize(&a, 0, "skip")?;
+        let n = if it.mutant("iter") { n.saturating_sub(1) } else { n };
+        Ok(adapt(IterSrc::Skip(it_of(it, v)?, Cell::new(n))))
+    });
     r.pure(Kind::Iter, "step_by", |it, v, a| {
         let n = arg_usize(&a, 0, "step_by")?;
         if n == 0 {

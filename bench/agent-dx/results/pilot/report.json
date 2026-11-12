@@ -296,7 +296,7 @@
    "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
    "wasted_calls": 14,
    "est_tokens": 143801,
-   "example": "from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nw",
+   "example": "from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmpPyuvN7\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"{TMP}/.tmpPyuvN7\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nw",
    "arms": [
     "A",
     "B"

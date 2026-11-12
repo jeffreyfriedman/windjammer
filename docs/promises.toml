@@ -368,6 +368,34 @@ id = "wj fix --docs"
 statement = "Also migrate ```windjammer / ```wj code fences in .md files"
 
 [[promise]]
+id = "wj replay"
+statement = "Step through a recorded or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035)"
+
+[[promise]]
+id = "wj replay --script"
+statement = "Debugger commands, one per line; `-` or no script reads them from standard input"
+
+[[promise]]
+id = "wj replay --json"
+statement = "Print the debugger events as JSON Lines, one object per line"
+
+[[promise]]
+id = "wj replay --simulate"
+statement = "Debug the run of the deterministic simulated world instead of a recorded one"
+
+[[promise]]
+id = "wj replay --seed"
+statement = "With --simulate: the seed of the world"
+
+[[promise]]
+id = "wj replay --faults"
+statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
+
+[[promise]]
+id = "wj replay --allow"
+statement = "Grant a capability as the recording did; nothing is performed either way"
+
+[[promise]]
 id = "wj reduce"
 statement = "Shrink a failing project to a minimal, anonymized reproduction (delta debugging)"
 
@@ -445,11 +473,11 @@ statement = "Remove a dependency from wj.toml"
 
 [[promise]]
 id = "wj repl"
-statement = "Start the Windjammerscript REPL (interactive interpreter)"
+statement = "Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway"
 
 [[promise]]
 id = "wj eval"
-statement = "Evaluate Windjammer and print the result: `wj eval 'strings.to_upper(\"hi\")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted"
+statement = "Evaluate Windjammer and print the result: `wj eval 'strings.to_upper(\"hi\")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted"
 
 [[promise]]
 id = "wj run"
@@ -469,7 +497,7 @@ statement = "Interpreted runs: also start a compiled build of the same content i
 
 [[promise]]
 id = "wj run --verify"
-statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr"
+statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints"
 
 [[promise]]
 id = "wj run --interpret"
@@ -760,6 +788,14 @@ id = "wj run --hash-seed"
 statement = "Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)"
 
 [[promise]]
+id = "wj run --error-format"
+statement = "Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036)"
+
+[[promise]]
+id = "wj run --no-locals"
+statement = "Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether)"
+
+[[promise]]
 id = "wj run --hot"
 statement = "Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)"
 pending = "no acceptance cases yet"
@@ -908,3 +944,11 @@ statement = "Project directory (default: the current directory)"
 [[promise]]
 id = "wj rust-surface --write"
 statement = "Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one)"
+
+[[promise]]
+id = "wj check --error-format"
+statement = "Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command"
+
+[[promise]]
+id = "wj run --error-format"
+statement = "Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command"

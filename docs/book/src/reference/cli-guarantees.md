@@ -64,6 +64,13 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms | tested |
 | `wj fix --check` | Do not write; exit non-zero if any file would change | tested |
 | `wj fix --docs` | Also migrate ```windjammer / ```wj code fences in .md files | tested |
+| `wj replay` | Step through a recorded or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035) | tested |
+| `wj replay --script` | Debugger commands, one per line; `-` or no script reads them from standard input | tested |
+| `wj replay --json` | Print the debugger events as JSON Lines, one object per line | tested |
+| `wj replay --simulate` | Debug the run of the deterministic simulated world instead of a recorded one | tested |
+| `wj replay --seed` | With --simulate: the seed of the world | tested |
+| `wj replay --faults` | With --simulate: probability that a file or network call fails, drawn from the seed | tested |
+| `wj replay --allow` | Grant a capability as the recording did; nothing is performed either way | tested |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) | tested |
 | `wj reduce --oracle` | Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present) | tested |
 | `wj reduce --output` | Output directory for the minimal project and repro.md | tested |
@@ -83,13 +90,13 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj new` | Create a new Windjammer project | tested |
 | `wj new --template` | Project template (cli, web, lib, wasm) | tested |
 | `wj remove` | Remove a dependency from wj.toml | tested |
-| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) | tested |
-| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted | tested |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway | tested |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted | tested |
 | `wj run` | Compile and run a Windjammer file | tested |
 | `wj run --defer-drop` | Defer drop optimization mode (auto, always, never) | tested |
 | `wj run --defer-drop-threshold` | Defer drop threshold in bytes (default: 102400 = 100KB) | tested |
 | `wj run --speculate` | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) | tested |
-| `wj run --verify` | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr | tested |
+| `wj run --verify` | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints | tested |
 | `wj run --interpret` | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release | tested |
 | `wj run --target` | Target platform (rust, javascript, wasm) | tested |
 | `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH | tested |
@@ -159,6 +166,8 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj run --jit-mutant` | Interpreted runs (internal, hidden from help; env WJ_JIT_MUTANT): in debug builds, leave one machine-code check out for the mutation gate; release builds ignore it | tested |
 | `wj run --engine` | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) | tested |
 | `wj run --hash-seed` | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) | tested |
+| `wj run --error-format` | Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036) | tested |
+| `wj run --no-locals` | Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether) | tested |
 | `wj run --hot` | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) | preview |
 | `wj run --release` | Like --compiled, with optimizations | preview |
 | `wj run --watch` | Re-run on every source change (restarts long-running programs) | preview |
@@ -194,3 +203,5 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj rust-surface --fn` | Only these functions (repeatable); the cache copy always has every function | tested |
 | `wj rust-surface --path` | Project directory (default: the current directory) | tested |
 | `wj rust-surface --write` | Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one) | tested |
+| `wj check --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |
+| `wj run --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |

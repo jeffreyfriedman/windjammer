@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 10\nset A2 =A1*3\nset B1 =SUM(A1:A2)+MAX(1,A2)\nset A3 =B1\nget B1\nset A1 =A3\nset C1 =10/(A1-A1)\ndump\n",
+  "stdout": "B1 = 70\nerror: cycle A1 -> A3 -> B1 -> A1\nA1 = 10\nA2 = 30\nA3 = 70\nB1 = 70\nC1 = #DIV0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 5\nset B2 hello\nset C3 =A1+B2\nget C3\nset B2 7\nget C3\nclear A1\nget C3\nget A1\nget Z9\nset A1\nbogus\n",
+  "stdout": "C3 = #VALUE\nC3 = 12\nC3 = 7\nA1 = (empty)\nerror: bad command\nerror: bad command\nerror: bad command\n"
+ }
+]

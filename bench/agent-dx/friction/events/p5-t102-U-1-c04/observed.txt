@@ -1,0 +1,18 @@
+Building Windjammer project from "<ws>" (target: rust)
+Output: "{CACHE}/run/258ed87360b1fa43"
+
+Success! Transpilation complete!
+
+warning: unused import: `windjammer_runtime::fs::Metadata`
+ --> main.rs:2:5
+  |
+2 | use windjammer_runtime::fs::Metadata;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `windjammer_runtime::fs::DirEntry`
+ --> main.rs:3:5
+  |
+3 | use windjammer_runtime::fs::DirEntry;
+  |

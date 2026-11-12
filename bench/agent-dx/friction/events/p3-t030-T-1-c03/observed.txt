@@ -1,0 +1,16 @@
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:46:55
+   |
+46 | ...                   acc.insert(n.clone(), *b + a);
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:49:36
+   |
+49 | ...                   if *b < a {
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:52:51
+   |
+52 | ...                   acc.insert(n, *b - a);
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:76:44
+   |
+76 | ...                   if *fb < a {

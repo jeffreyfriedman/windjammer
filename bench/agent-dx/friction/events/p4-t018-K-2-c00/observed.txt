@@ -1,0 +1,16 @@
+error[WJ0003]: mismatched types: expected an owned `int`, found an owned `int`
+  --> main.wj:8:37
+  |
+8 |     let mut counts: HashMap<string, int> = HashMap::new()
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:8:37
+  |
+8 |     let mut counts: HashMap<string, int> = HashMap::new()
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:8:37
+  |
+8 |     let mut counts: HashMap<string, int> = HashMap::new()
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:38:1
+   |
+38 |             b.1.cmp(a.1)

@@ -1,0 +1,18 @@
+use std::random
+
+fn roll() -> int {
+    random::range(1, 7)
+}
+
+fn main() {
+    let mut total = 0
+    for i in 0..5 {
+        let r = roll()
+        total = total + r
+        println("roll ${i}: ${r}")
+        if r == 6 {
+            panic("rolled a six")
+        }
+    }
+    println("total ${total}")
+}

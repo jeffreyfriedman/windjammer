@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:44:1
+   |
+44 |                 }
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:52:1
+   |
+52 | }

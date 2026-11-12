@@ -1,0 +1,62 @@
+use std::fs
+
+fn best(prios: Vec<int>) -> int {
+    let mut bi = 0
+    let n: int = prios.len() as int
+    let mut i = 1
+    while i < n {
+        if prios[i as usize] > prios[bi as usize] {
+            bi = i
+        }
+        i += 1
+    }
+    bi
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut names: Vec<string> = []
+    let mut prios: Vec<int> = []
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        let n: int = parts.len() as int
+        if n == 0 {
+            println("error")
+        } else if parts[0] == "add" && n == 3 {
+            match parts[2].parse::<int>() {
+                Ok(p) => {
+                    names.push(parts[1])
+                    prios.push(p)
+                }
+                Err(_) => println("error"),
+            }
+        } else if parts[0] == "pop" && n == 1 {
+            if names.len() == 0 {
+                println("empty")
+            } else {
+                let b = best(prios)
+                println(names[b as usize])
+                names.remove(b as usize)
+                prios.remove(b as usize)
+            }
+        } else if parts[0] == "peek" && n == 1 {
+            if names.len() == 0 {
+                println("empty")
+            } else {
+                let b = best(prios)
+                println(names[b as usize])
+            }
+        } else if parts[0] == "size" && n == 1 {
+            println("${names.len()}")
+        } else {
+            println("error")
+        }
+    }
+    println("left:")
+    while names.len() > 0 {
+        let b = best(prios)
+        println("${names[b as usize]} ${prios[b as usize]}")
+        names.remove(b as usize)
+        prios.remove(b as usize)
+    }
+}
