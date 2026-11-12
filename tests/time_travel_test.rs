@@ -254,6 +254,21 @@ fn back_then_forward_holds(dir: &Path, source: &[&str]) {
         let want = original.get(&key(g)).unwrap_or_else(|| panic!("state {:?} never seen in the uninterrupted pass", key(g)));
         assert_eq!(g, want, "the state at step {:?} differs after going back", key(g));
     }
+    // `back` lands exactly one step before where the session was (the end counts as one step after the last statement)
+    let mut was: Option<u64> = None;
+    for e in &ev {
+        match e["event"].as_str() {
+            Some("stopped") => {
+                let step = e["step"].as_u64().unwrap();
+                if e["reason"] == "back" {
+                    assert_eq!(Some(step + 1), was, "`back` from {was:?} went to step {step}");
+                }
+                was = Some(step);
+            }
+            Some("exited") => was = Some(e["steps"].as_u64().unwrap() + 1),
+            _ => {}
+        }
+    }
     let backs = of_kind(&ev, "stopped").iter().filter(|e| e["reason"] == "back").count();
     assert!(backs >= total - 1, "{backs} back stops for {total} steps");
     assert_eq!(stdout_of(&ev), stdout_of(&pass), "each byte of output is reported once, however often `back` re-runs it");
