@@ -175,6 +175,8 @@ polarity = "positive"
 files = { "m.wj" = "fn main() {\n    let mut v = Vec::new()\n    v.push(1)\n    println(\"${v.len()} WJ0051-free\")\n}\n" }
 args = ["check", "{w}/m.wj"]
 output_has = ["0 error(s)"]
+
+[[case]]
 name = "check --error-format agent prints one line per diagnostic with its fix"
 polarity = "negative"
 files = { "m.wj" = "fn main() {\n    let v = vec![1, 2]\n    println(\"${v.len()} ${missing}\")\n}\n" }

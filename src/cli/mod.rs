@@ -25,6 +25,7 @@ pub mod eject;
 pub mod new;
 mod new_templates;
 pub mod reduce;
+pub mod replay;
 pub mod remove;
 pub mod run;
 pub mod rust_surface;

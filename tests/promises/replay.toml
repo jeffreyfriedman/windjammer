@@ -1,0 +1,80 @@
+# Acceptance cases for `wj replay`, the time-travel debugger (ADR-0035; tests/promise_registry_test.rs). `{w}` is the scratch dir.
+
+[[case]]
+name = "replay a recorded file read and print a binding as JSON, from a script"
+polarity = "positive"
+files = { "p/main.wj" = "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"data.txt\").unwrap()\n    let words = text.trim()\n    println(words)\n}\n", "data.txt" = "hello journal\n", "p/cmds.txt" = "break 6\ncontinue\nprint words\ncontinue\n" }
+setup = [["run", "--interpret", "--no-lint", "--allow", "fs.read", "--record", "{w}/p/run.wjlog", "{w}/p/main.wj"]]
+args = ["replay", "--json", "--allow", "fs.read", "--script", "{w}/p/cmds.txt", "{w}/p/run.wjlog", "{w}/p/main.wj"]
+stdout_has = ["\"reason\":\"breakpoint\"", "\"name\":\"words\"", "\"value\":\"\\\"hello journal\\\"\"", "\"event\":\"exited\""]
+
+[[case]]
+name = "replay a simulated run from commands on standard input"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n    let x = 6 * 7\n    println(\"${x}\")\n}\n" }
+args = ["replay", "--simulate", "--seed", "3", "--faults", "0", "{w}/p/main.wj"]
+stdin = "break 3\ncontinue\nprint x\ncontinue\n"
+stdout_has = ["x = 42", "[exited] status 0"]
+
+[[case]]
+name = "replay takes the grants the recording had"
+polarity = "positive"
+files = { "p/main.wj" = "use std::env\n\nfn main() {\n    let v = env::var(\"WJ_PROMISE_REPLAY\").unwrap_or(\"none\")\n    println(v)\n}\n", "p/cmds.txt" = "break 5\ncontinue\nprint v\n" }
+env = { "WJ_PROMISE_REPLAY" = "from-the-journal" }
+setup = [["run", "--interpret", "--no-lint", "--allow", "env.read=WJ_PROMISE_REPLAY", "--record", "{w}/p/run.wjlog", "{w}/p/main.wj"]]
+args = ["replay", "--allow", "env.read=WJ_PROMISE_REPLAY", "--script", "{w}/p/cmds.txt", "{w}/p/run.wjlog", "{w}/p/main.wj"]
+stdout_has = ["v = \"from-the-journal\""]
+
+[[case]]
+name = "replay refuses a script with an unknown command"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n", "p/cmds.txt" = "step\nrewind everything\n" }
+args = ["replay", "--json", "--simulate", "--script", "{w}/p/cmds.txt", "{w}/p/main.wj"]
+exit = 1
+output_has = ["script line 2: unknown command `rewind`"]
+
+[[case]]
+name = "replay of a missing log fails and says how to record one"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["replay", "--json", "--script", "{w}/p/none.txt", "{w}/p/missing.wjlog", "{w}/p/main.wj"]
+exit = 1
+output_has = ["no effect log at", "wj run --record"]
+
+[[case]]
+name = "replay with --simulate takes one program, not a log"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["replay", "--simulate", "{w}/p/run.wjlog", "{w}/p/main.wj"]
+exit = 1
+output_has = ["takes one program"]
+
+[[case]]
+name = "replay --seed needs --simulate"
+polarity = "negative"
+args = ["replay", "--seed", "4", "{w}/p/run.wjlog", "{w}/p/main.wj"]
+exit = 2
+output_has = ["--simulate"]
+
+[[case]]
+name = "replay --faults rejects a non-number"
+polarity = "negative"
+args = ["replay", "--simulate", "--faults", "often", "{w}/p/main.wj"]
+exit = 2
+output_has = ["invalid value"]
+
+[[case]]
+name = "replay --allow rejects an unknown effect"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n", "p/cmds.txt" = "continue\n" }
+args = ["replay", "--simulate", "--allow", "telepathy", "--script", "{w}/p/cmds.txt", "{w}/p/main.wj"]
+exit = 1
+output_has = ["unknown effect `telepathy`"]
+
+[[case]]
+name = "replay --script of a missing file fails"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["replay", "--simulate", "--script", "{w}/p/nope.txt", "{w}/p/main.wj"]
+exit = 1
+output_has = ["cannot read the script"]
