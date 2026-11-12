@@ -1,0 +1,13 @@
+// expect: WJ0003
+// `env::var` returns a Result: a `match` with `Some` / `None` arms never matches (the build rejects it, the interpreter panics).
+// oracle: check
+use std::env
+
+fn main() {
+    match env::var("HOME") {
+        Some(v) => println("${v}"),
+//~@9+4 ERROR WJ0003 expected `Result`, found `Option` pattern `Some(..)`
+        None => {},
+//~@9+4 ERROR WJ0003 expected `Result`, found `Option` pattern `None`
+    }
+}

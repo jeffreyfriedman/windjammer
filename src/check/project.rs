@@ -54,6 +54,8 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     super::rust_calls::run(&crates, &idx, parsed, out);
     // a call to a function a std module does not provide (`strings.index_of`)
     super::std_calls::run(parsed, out);
+    // a `match` whose arms name the other wrapper's variants (`Some` against a `Result`)
+    super::match_variants::run(parsed, &idx, out);
     if let Some(dir) = &manifest_dir {
         super::rust_surface_health::run(dir, &crates, out);
     }

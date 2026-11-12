@@ -19,9 +19,36 @@ pub fn exists(module_name: &str, name: &str) -> Option<bool> {
     module(module_name).map(|fs| fs.contains(&name))
 }
 
+/// The wrapper type a std function returns, for the functions whose result is a `Result` or an `Option`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wrapper {
+    Option,
+    Result,
+}
+
+/// Declared return wrappers: `std/env/mod.wj` declares `get -> Option<string>`; `var` and `current_dir` return a
+/// `Result` (the interpreter builtins in `interpreter/builtins/std_fns.rs` and the runtime agree).
+const RETURNS: &[(&str, &str, Wrapper)] =
+    &[("env", "current_dir", Wrapper::Result), ("env", "get", Wrapper::Option), ("env", "var", Wrapper::Result)];
+
+/// The wrapper `std::<module>::<name>` returns, if the table knows it.
+pub fn returns(module_name: &str, name: &str) -> Option<Wrapper> {
+    RETURNS.iter().find(|(m, f, _)| *m == module_name && *f == name).map(|(_, _, w)| *w)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn return_wrappers_name_functions_the_table_has() {
+        assert_eq!(returns("env", "var"), Some(Wrapper::Result));
+        assert_eq!(returns("env", "get"), Some(Wrapper::Option));
+        assert_eq!(returns("env", "args"), None);
+        for (m, f, _) in RETURNS {
+            assert_eq!(exists(m, f), Some(true), "{m}::{f} is a std function");
+        }
+    }
 
     #[test]
     fn lookups() {
