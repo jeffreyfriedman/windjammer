@@ -35,6 +35,21 @@ pub(crate) struct Ctx {
     pub(crate) views: [View; VIEWS],
     /// Stores machine code made through a view (added to `FastHits::packedstore` when the unit leaves).
     pub(crate) view_stores: i64,
+    /// Vectors of structs whose fields machine code reads and writes in place (`rows.rs`), by `slot % ROWS`.
+    pub(crate) rows: [super::rows::RowView; super::rows::ROWS],
+    /// The element tables the row views point into.
+    pub(crate) row_tbls: [Vec<i64>; super::rows::ROWS],
+    /// Elements a row view build may still scan (`rows.rs`).
+    pub(crate) row_credit: i64,
+    /// Field accesses machine code made through a row view (added to `FastHits::rowview`).
+    pub(crate) row_hits: i64,
+}
+
+impl Ctx {
+    pub(crate) fn new(it: *mut Interpreter, base: usize, plan: *const super::lower::Plan, reg: *const crate::interpreter::resolved::osr::Reg) -> Ctx {
+        let (rows, row_tbls) = (Default::default(), Default::default());
+        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0 }
+    }
 }
 
 /// The storage of a packed vector a store reached (`index_set`): machine code checks `key` and `len`
@@ -53,6 +68,8 @@ pub(crate) const VIEWS: usize = 4;
 pub(crate) const FAIL: i32 = std::mem::offset_of!(Ctx, fail) as i32;
 pub(crate) const VIEW_AT: i32 = std::mem::offset_of!(Ctx, views) as i32;
 pub(crate) const VIEW_STORES: i32 = std::mem::offset_of!(Ctx, view_stores) as i32;
+pub(crate) const ROW_AT: i32 = std::mem::offset_of!(Ctx, rows) as i32;
+pub(crate) const ROW_HITS: i32 = std::mem::offset_of!(Ctx, row_hits) as i32;
 
 /// The key of a view: the local's slot and the stored element type (never 0).
 pub(crate) fn view_key(slot: usize, t: Ty) -> i64 {
@@ -238,6 +255,8 @@ pub(crate) unsafe extern "C" fn field_get(c: *mut Ctx, slot: i64, fp: i64, fl: i
 /// `v[i] = x`.
 pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i64, x: i64, xt: i64) -> i64 {
     // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
+    // an element replaced through the helper may not be the struct a row view points into
+    unsafe { (*c).clear_rows() };
     let (direct_off, view_off) = unsafe { ((*(*c).it).fast_off("packedidx"), (*(*c).it).fast_off("packedstore")) };
     let mut direct = None;
     let r = unsafe {
@@ -281,6 +300,8 @@ pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i6
 
 /// `v[i].f = x`.
 pub(crate) unsafe extern "C" fn index_field_set(c: *mut Ctx, slot: i64, i: i64, it: i64, fp: i64, fl: i64, hint: i64, id: i64, x: i64, xt: i64) -> i64 {
+    // the store may retag the field (or copy what a view points into)
+    unsafe { (*c).clear_rows() };
     unsafe {
         with_cell_mut(c, slot, |v| {
             let (k, f) = (index(i, it)?, FieldRef::new(fp, fl, hint, id));
@@ -295,6 +316,8 @@ pub(crate) unsafe extern "C" fn index_field_set(c: *mut Ctx, slot: i64, i: i64, 
 
 /// `s.f = x`.
 pub(crate) unsafe extern "C" fn field_set(c: *mut Ctx, slot: i64, fp: i64, fl: i64, hint: i64, id: i64, x: i64, xt: i64) -> i64 {
+    // the struct may be an element a row view points into (through a reference)
+    unsafe { (*c).clear_rows() };
     unsafe {
         with_slot(c, slot, |v| {
             let f = FieldRef::new(fp, fl, hint, id);
@@ -310,7 +333,10 @@ pub(crate) unsafe extern "C" fn field_set(c: *mut Ctx, slot: i64, fp: i64, fl: i
 pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) -> i64 {
     // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
     // a push may move a packed vector's storage
-    unsafe { (*c).views = Default::default() };
+    unsafe {
+        (*c).views = Default::default();
+        (*c).clear_rows();
+    }
     let off = unsafe { (*(*c).it).fast_off("packed") };
     let mut packed = false;
     let r = unsafe {
@@ -381,6 +407,7 @@ pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
         ctx.cells.clear();
     }
     ctx.views = Default::default();
+    ctx.clear_rows();
     let (it, plan, reg, b) = unsafe { (&mut *ctx.it, &*ctx.plan, &*ctx.reg, ctx.base) };
     let buf = buf as *mut i64;
     let st = &plan.stmts[k as usize];
@@ -528,6 +555,21 @@ unsafe fn with_cell(c: *mut Ctx, slot: i64, f: impl FnOnce(&Value) -> Option<i64
         }
         None => unsafe { with_slot(c, slot, |v| peek(v, f)) },
     }
+}
+
+/// `with_cell_mut` that never fails the unit: `f`'s answer, `false` when the local cannot be reached.
+pub(super) unsafe fn with_value_mut(c: *mut Ctx, slot: i64, f: impl FnOnce(&mut Value) -> bool) -> bool {
+    let mut r = false;
+    // SAFETY: as in `with_slot`.
+    let fail = unsafe { (*c).fail };
+    unsafe {
+        with_cell_mut(c, slot, |v| {
+            r = f(v);
+            Some(0)
+        });
+        (*c).fail = fail;
+    }
+    r
 }
 
 /// `with_slot` for a write through a local that may sit behind references (see `with_cell`).

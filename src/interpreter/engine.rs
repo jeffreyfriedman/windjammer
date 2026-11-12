@@ -637,6 +637,8 @@ pub(crate) struct FastHits {
     pub(crate) pushfmt: u64,
     /// Machine-code stores written straight into a packed vector's storage (a `View`).
     pub(crate) packedstore: u64,
+    /// Machine-code field reads and writes straight on a vector of structs (a row view, `jit/rows.rs`).
+    pub(crate) rowview: u64,
     /// Lowered `match` values known never to be references (a `let` of one gets a plain slot).
     pub(crate) matchval: u64,
     /// Walker fallbacks of a method call given copies of the locals its other arguments only read.

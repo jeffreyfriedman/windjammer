@@ -24,8 +24,10 @@ use std::rc::Rc;
 mod lower;
 mod lower_expr;
 mod lower_struct;
+mod lower_rows;
 pub(crate) mod osr;
 mod rt;
+mod rows;
 mod kinds;
 
 type E = &'static Expression<'static>;
