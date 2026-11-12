@@ -175,8 +175,10 @@ pub fn meta_cache_root(source_root: &Path) -> PathBuf {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrateMetadata {
     /// All structs: struct_name → field_name → serialized Type
+    #[serde(serialize_with = "super::sorted_serde::sorted_nested_map")]
     pub structs: HashMap<String, HashMap<String, String>>,
     /// All function signatures: name → signature
+    #[serde(serialize_with = "super::sorted_serde::sorted_map")]
     pub functions: HashMap<String, FunctionSignature>,
     /// Structs that implement Copy (enables cross-crate Copy detection)
     #[serde(default)]

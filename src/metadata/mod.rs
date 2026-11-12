@@ -201,21 +201,23 @@ pub fn merge_wj_meta_signatures_and_copy_structs_multi(
     let mut copy_structs = Vec::new();
     let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
     for root in roots {
-        let cache_root = crate_metadata::meta_cache_root(root);
-        if cache_root.exists() {
+        with_declared_filter(root, || {
+            let cache_root = crate_metadata::meta_cache_root(root);
+            if cache_root.exists() {
+                merge_wj_meta_signatures_from_dir_inner(
+                    &cache_root,
+                    registry,
+                    &mut copy_structs,
+                    &mut all_struct_fields,
+                );
+            }
             merge_wj_meta_signatures_from_dir_inner(
-                &cache_root,
+                root,
                 registry,
                 &mut copy_structs,
                 &mut all_struct_fields,
             );
-        }
-        merge_wj_meta_signatures_from_dir_inner(
-            root,
-            registry,
-            &mut copy_structs,
-            &mut all_struct_fields,
-        );
+        });
     }
     // Project-root metadata.json is the authoritative source (full multi-pass
     // analysis). Load it last so it overrides stale per-file .wj.meta entries.
@@ -258,16 +260,18 @@ pub fn merge_wj_meta_signatures_from_dir_inner_pub(
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
-    let cache_root = crate_metadata::meta_cache_root(root);
-    if cache_root.exists() {
-        merge_wj_meta_signatures_from_dir_inner(
-            &cache_root,
-            registry,
-            copy_structs,
-            all_struct_fields,
-        );
-    }
-    merge_wj_meta_signatures_from_dir_inner(root, registry, copy_structs, all_struct_fields);
+    with_declared_filter(root, || {
+        let cache_root = crate_metadata::meta_cache_root(root);
+        if cache_root.exists() {
+            merge_wj_meta_signatures_from_dir_inner(
+                &cache_root,
+                registry,
+                copy_structs,
+                all_struct_fields,
+            );
+        }
+        merge_wj_meta_signatures_from_dir_inner(root, registry, copy_structs, all_struct_fields);
+    });
     load_project_root_metadata(root, registry, copy_structs, all_struct_fields);
 }
 
@@ -367,11 +371,29 @@ fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
     if fp.compiler_version != crate::compiler::incremental::compiler_build_identity() {
         return false;
     }
-    let source_path = path.with_extension("");
-    match std::fs::read_to_string(&source_path) {
-        Ok(source) => fp.content_hash == crate::compiler::incremental::hash_source(&source),
-        Err(_) => true,
+    match sidecar_source(path) {
+        Some(source_path) => match std::fs::read_to_string(&source_path) {
+            Ok(source) => fp.content_hash == crate::compiler::incremental::hash_source(&source),
+            Err(_) => true,
+        },
+        // the source is not on disk beside the cache (a shipped dependency): nothing to compare against
+        None => true,
     }
+}
+
+/// The `.wj` source a `.wj.meta` was written for: `<project>/.wj-cache/foo/bar.wj.meta` is `<project>/src/foo/bar.wj`
+/// (or `<project>/foo/bar.wj`); a legacy `bar.wj.meta` beside its source is `bar.wj`.
+fn sidecar_source(meta: &Path) -> Option<PathBuf> {
+    let beside = meta.with_extension("");
+    if beside.is_file() {
+        return Some(beside);
+    }
+    let comps: Vec<_> = meta.components().collect();
+    let at = comps.iter().position(|c| c.as_os_str() == ".wj-cache")?;
+    let project: PathBuf = comps[..at].iter().collect();
+    let rel: PathBuf = comps[at + 1..].iter().collect();
+    let rel = rel.with_extension("");
+    [project.join("src").join(&rel), project.join(&rel)].into_iter().find(|p| p.is_file())
 }
 
 thread_local! {
@@ -381,6 +403,38 @@ thread_local! {
     /// output of that file; reading it back as an input makes the result depend on whether an
     /// earlier build left a cache behind (cold and warm builds must emit identical code).
     static OWN_META_PATHS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Function and struct names a crate's own `metadata.json` declares. While a root with such a file is merged, per-file
+/// `.wj-cache` sidecars of that root may only add what the crate metadata does not declare: declared sources and fresh
+/// crate metadata win over a cached sidecar (a sidecar is an analysis cache, never the authority).
+#[derive(Default, Clone)]
+struct Declared {
+    functions: HashSet<String>,
+    structs: HashSet<String>,
+}
+
+thread_local! {
+    static DECLARED: std::cell::RefCell<Option<Declared>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The crate metadata `root` is described by: `root` itself or its project's `metadata.json`.
+fn declared_by_crate_metadata(root: &Path) -> Option<Declared> {
+    let path = crate_metadata::resolve_metadata_json_path(root).or_else(|| {
+        let p = crate_metadata::find_project_root(root)?.join("metadata.json");
+        p.is_file().then_some(p)
+    })?;
+    let meta: crate_metadata::CrateMetadata = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    Some(Declared { functions: meta.functions.into_keys().collect(), structs: meta.structs.into_keys().collect() })
+}
+
+/// Run `f` with the sidecars merged under `root` restricted to what `root`'s crate metadata does not declare.
+fn with_declared_filter<R>(root: &Path, f: impl FnOnce() -> R) -> R {
+    let declared = declared_by_crate_metadata(root);
+    let prev = DECLARED.with(|c| c.replace(declared));
+    let out = f();
+    DECLARED.with(|c| *c.borrow_mut() = prev);
+    out
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -422,6 +476,13 @@ fn merge_single_wj_meta_file(
     if !wj_meta_is_current(path, &mod_meta) {
         return;
     }
+    let mut mod_meta = mod_meta;
+    DECLARED.with(|c| {
+        if let Some(d) = &*c.borrow() {
+            mod_meta.functions.retain(|k, _| !d.functions.contains(k));
+            mod_meta.structs.retain(|k, _| !d.structs.contains(k));
+        }
+    });
     merge_module_metadata(&mod_meta, registry, copy_structs, all_struct_fields);
 }
 

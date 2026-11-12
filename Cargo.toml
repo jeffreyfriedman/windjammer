@@ -608,3 +608,8 @@ path = "tests/check_cache_location_free_test.rs"
 [[test]]
 name = "match_variant_pattern_test"
 path = "tests/match_variant_pattern_test.rs"
+
+# Output is a pure function of sources + compiler: same project in two locations, cold/warm/with sidecars: cargo test --test location_cache_differential
+[[test]]
+name = "location_cache_differential"
+path = "tests/location_cache_differential_test.rs"
