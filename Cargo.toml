@@ -280,6 +280,11 @@ path = "tests/stdlib_tables_test.rs"
 name = "check_cache_differential"
 path = "tests/check_cache_differential_test.rs"
 
+# Cross-checkout content-keyed analysis cache: cargo test --release --test shared_analysis_cache
+[[test]]
+name = "shared_analysis_cache"
+path = "tests/shared_analysis_cache_test.rs"
+
 # Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
 [[test]]
 name = "meta_sidecar_consistency"

@@ -30,6 +30,8 @@ Diagnostic wording for rustc errors (see `diagnostics/rustc_text.rs`); codegen.
 ## Allowed imports
 Layer `tooling`. Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
+- `shared_cache`: per-file analysis results keyed on content (file text, compiler build key from build.rs `WJ_BUILD_KEY`, `.wj.meta` sidecars by relative name), never on a path, so worktrees share them; the store is injected by `cli::check` (`<cache root>/analysis`). A hit restores the file's own name in its diagnostics. Gate: tests/shared_analysis_cache_test.rs (cached == uncached over the inference corpus and examples; compiler change invalidates).
+
 ## Entry points
 `check_path`, `check_sources`, `apply_fixes`, `watch::{snapshot, wait_for_change}`; CLI in src/cli/check.rs.
 
