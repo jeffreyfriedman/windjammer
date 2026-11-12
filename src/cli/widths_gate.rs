@@ -3,7 +3,8 @@
 //! Two readings with one walker (`check::widths::clashes`). The cheap one reads the Rust the checker generates
 //! in-process for each file (milliseconds). It is only a trigger: that generator does not run the build's
 //! multi-pass width inference, so its widths can differ from the build's. When it flags a file, the program is
-//! generated exactly as `wj build --no-cargo --no-lint` does, and only clashes in that output are reported.
+//! generated exactly as `wj build --no-cargo --no-lint` does (the same pipeline and configuration, in this process),
+//! and only clashes in that output are reported.
 //! A clean program pays for the trigger alone; a flagged one pays one transpile (about a second).
 
 use crate::check::{widths, Checked};
@@ -30,49 +31,88 @@ pub fn add_to(mut checked: Checked, path: &Path) -> Checked {
     checked
 }
 
+/// How the build's Rust was produced for a prediction (gate: the in-process path must be the one taken).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// Generated in this process by the build's own pipeline (`compiler::build_project_with_config`).
+    InProcess,
+    /// A `wj build --no-cargo` child process (platforms that cannot silence the pipeline, or an in-process failure).
+    ChildProcess,
+}
+
 /// WJ0003 width predictions for the program at `path` (a file or a project directory).
 pub fn predicted_widths(path: &Path) -> Vec<Diagnostic> {
-    let Ok(files) = crate::check::files::collect(path) else { return Vec::new() };
+    predicted_widths_via(path, false).0
+}
+
+/// As `predicted_widths`; `child_only` forces the child-process generator (the differential gate compares both).
+/// The second value is how the build's Rust was produced, `None` when no file was suspect (the trigger only).
+pub fn predicted_widths_via(path: &Path, child_only: bool) -> (Vec<Diagnostic>, Option<Source>) {
+    let Ok(files) = crate::check::files::collect(path) else { return (Vec::new(), None) };
     let suspects: Vec<&PathBuf> =
         files.iter().filter(|f| widths::generated_rust(f).is_some_and(|r| !widths::clashes(&r).is_empty())).collect();
     if suspects.is_empty() {
-        return Vec::new();
+        return (Vec::new(), None);
     }
-    let Ok(out) = tempfile::tempdir() else { return Vec::new() };
-    if !emit(path, out.path()) {
-        return Vec::new();
-    }
-    let mut emitted = Vec::new();
-    rust_files(out.path(), &mut emitted);
+    let Ok(out) = tempfile::tempdir() else { return (Vec::new(), None) };
+    let (built, how) = match (!child_only).then(|| built_in_process(path, out.path())).flatten() {
+        Some(b) => (b, Source::InProcess),
+        None => match built_via_child(path, out.path(), None) {
+            Some(b) => (b, Source::ChildProcess),
+            None => return (Vec::new(), None),
+        },
+    };
     let mut found = Vec::new();
     for src in suspects {
         let stem = src.file_stem().map(|s| s.to_string_lossy().to_string());
-        let Some(rs) = emitted.iter().find(|r| r.file_stem().map(|s| s.to_string_lossy().to_string()) == stem) else { continue };
-        let (Ok(rust), Ok(text)) = (std::fs::read_to_string(rs), std::fs::read_to_string(src)) else { continue };
-        found.extend(widths::predict(&rust, &text, &src.display().to_string()));
+        let Some((_, rust)) = built.iter().find(|(r, _)| r.file_stem().map(|s| s.to_string_lossy().to_string()) == stem) else { continue };
+        let Ok(text) = std::fs::read_to_string(src) else { continue };
+        found.extend(widths::predict(rust, &text, &src.display().to_string()));
     }
-    found
+    (found, Some(how))
 }
 
-/// Generate the program as `wj build --no-cargo` does. Inside the `wj` binary in a child process (the build
-/// prints progress on stdout, which belongs to the program in an interpreted run); elsewhere in-process.
-fn emit(path: &Path, out: &Path) -> bool {
-    // a crate root `main.wj` is built as its source root, as `wj run --compiled` does (building the file alone drops
-    // its sibling modules: docs/known-gaps.md, `tests/book_repros/lone_script_mod/`)
+/// What `wj build --no-cargo` is given for `path`: a crate root `main.wj` is built as its source root, as
+/// `wj run --compiled` does (building the file alone drops its sibling modules: docs/known-gaps.md,
+/// `tests/book_repros/lone_script_mod/`).
+fn build_input(path: &Path) -> PathBuf {
     let root_dir = (path.is_file() && path.file_name().is_some_and(|n| n == "main.wj")).then(|| {
         use crate::module_system::project;
         project::source_root_for(path, project::find_manifest_dir(path).as_deref())
     });
     let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-    let path = match &root_dir {
-        Some(r) if path.parent().is_some_and(|d| canon(d) == canon(r)) => r.as_path(),
-        _ => path,
-    };
-    let exe = std::env::current_exe().ok().filter(|e| e.file_stem().is_some_and(|s| s == "wj"));
-    match exe {
+    match &root_dir {
+        Some(r) if path.parent().is_some_and(|d| canon(d) == canon(r)) => r.clone(),
+        _ => path.to_path_buf(),
+    }
+}
+
+/// The program generated by the build's own pipeline (`compiler::build_project_with_config`, the one `wj build` runs)
+/// inside this process, configured as `wj build` configures it, with the pipeline's narration silenced. `None`
+/// when the build would stop before generating (the checker reports why), when the platform cannot silence
+/// the pipeline, or when it fails: the caller then asks a child process, so a prediction is never lost to this path.
+pub fn built_in_process(path: &Path, scratch: &Path) -> Option<Vec<(PathBuf, String)>> {
+    let input = build_input(path);
+    super::silenced::silenced(|| {
+        let config = super::build::with_project_facts(crate::compiler_config::CompilerConfig::from_env(), &input, false).ok()?;
+        crate::compiler::build_project_with_config(&input, scratch, crate::CompilationTarget::Rust, false, false, &[], &config).ok()
+    })??;
+    let mut emitted = Vec::new();
+    rust_files(scratch, &mut emitted);
+    Some(emitted.into_iter().filter_map(|p| std::fs::read_to_string(&p).ok().map(|t| (p, t))).collect())
+}
+
+/// The program generated by a child `wj build --no-cargo --no-lint` (the build prints progress on stdout, which
+/// belongs to the program in an interpreted run).
+///
+/// `exe` names the `wj` binary to run (tests pass the one they were built with); `None` uses the current one.
+pub fn built_via_child(path: &Path, out: &Path, exe: Option<&Path>) -> Option<Vec<(PathBuf, String)>> {
+    let input = build_input(path);
+    let exe = exe.map(Path::to_path_buf).or_else(|| std::env::current_exe().ok().filter(|e| e.file_stem().is_some_and(|s| s == "wj")));
+    let ok = match exe {
         Some(exe) => std::process::Command::new(exe)
             .arg("build")
-            .arg(path)
+            .arg(&input)
             .arg("--output")
             .arg(out)
             .args(["--no-cargo", "--no-lint"])
@@ -80,8 +120,14 @@ fn emit(path: &Path, out: &Path) -> bool {
             .stderr(std::process::Stdio::null())
             .status()
             .is_ok_and(|s| s.success()),
-        None => crate::build_project(path, out, crate::CompilationTarget::Rust, false).is_ok(),
+        None => super::silenced::silenced(|| crate::build_project(&input, out, crate::CompilationTarget::Rust, false).is_ok()).unwrap_or(false),
+    };
+    if !ok {
+        return None;
     }
+    let mut emitted = Vec::new();
+    rust_files(out, &mut emitted);
+    Some(emitted.into_iter().filter_map(|p| std::fs::read_to_string(&p).ok().map(|t| (p, t))).collect())
 }
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
