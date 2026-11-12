@@ -32,10 +32,10 @@ fn tracked_wj_files() -> Option<Vec<PathBuf>> {
     (!files.is_empty()).then_some(files)
 }
 
-/// Recorded replay fixtures and the multi-file drift corpus are not part of the single-file span corpus.
+/// Recorded replay fixtures, the recorded agent-friction programs (they fail on purpose) and the multi-file drift corpus are not part of the single-file span corpus.
 fn excluded(p: &Path) -> bool {
     let r = rel(p);
-    r.starts_with("tests/drift_corpus/") || (r.starts_with("tests/py_ports/") && p.components().any(|c| c.as_os_str() == "tree"))
+    r.starts_with("tests/drift_corpus/") || r.starts_with("bench/agent-dx/friction/events/") || (r.starts_with("tests/py_ports/") && p.components().any(|c| c.as_os_str() == "tree"))
 }
 
 fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
