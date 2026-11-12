@@ -396,6 +396,10 @@ id = "wj replay --allow"
 statement = "Grant a capability as the recording did; nothing is performed either way"
 
 [[promise]]
+id = "wj replay --at-effect"
+statement = "Start stopped at the statement that answers the K-th event of the journal (K counts from 1; a recorded run only)"
+
+[[promise]]
 id = "wj reduce"
 statement = "Shrink a failing project to a minimal, anonymized reproduction (delta debugging)"
 
