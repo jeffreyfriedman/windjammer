@@ -125,7 +125,7 @@ pub(super) fn path_for(root: &Path, kind: &str) -> PathBuf {
 
 /// Write through a temporary file and a rename, so a concurrent reader never sees half a file.
 pub(super) fn write_atomically(path: &Path, text: &str) {
-    let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+    let tmp = path.with_extension(format!("tmp{}", super::shared_cache::unique_suffix()));
     if std::fs::write(&tmp, text).is_ok() && std::fs::rename(&tmp, path).is_err() {
         let _ = std::fs::remove_file(&tmp);
     }

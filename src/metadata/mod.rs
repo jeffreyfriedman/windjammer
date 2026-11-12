@@ -422,7 +422,26 @@ fn merge_single_wj_meta_file(
     if !wj_meta_is_current(path, &mod_meta) {
         return;
     }
-    function_metadata::merge_module_metadata_signatures(&mod_meta, registry);
+    merge_module_metadata(&mod_meta, registry, copy_structs, all_struct_fields);
+}
+
+/// Merge one hand-authored `*.wj.meta` sidecar given as bytes (the `stdlib_meta/` files baked into the binary, read from
+/// memory by `SignatureRegistry::load_stdlib_meta`). False when the bytes are not a sidecar.
+pub fn merge_wj_meta_bytes(bytes: &[u8], registry: &mut crate::analyzer::SignatureRegistry) -> bool {
+    let Ok(mod_meta) = serde_json::from_slice::<ModuleMetadata>(bytes) else {
+        return false;
+    };
+    merge_module_metadata(&mod_meta, registry, &mut Vec::new(), &mut HashMap::new());
+    true
+}
+
+fn merge_module_metadata(
+    mod_meta: &ModuleMetadata,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    copy_structs: &mut Vec<String>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
+) {
+    function_metadata::merge_module_metadata_signatures(mod_meta, registry);
     let meta_copy_set: HashSet<&str> = mod_meta.copy_structs.iter().map(|s| s.as_str()).collect();
     copy_structs.extend(mod_meta.copy_structs.iter().cloned());
     for (struct_name, fields) in &mod_meta.structs {

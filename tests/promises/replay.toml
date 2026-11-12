@@ -78,3 +78,105 @@ files = { "p/main.wj" = "fn main() {\n}\n" }
 args = ["replay", "--simulate", "--script", "{w}/p/nope.txt", "{w}/p/main.wj"]
 exit = 1
 output_has = ["cannot read the script"]
+
+[[case]]
+name = "replay prints a read-only expression in the stopped frame"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n    let xs = [3, 1, 4]\n    let total = xs[0] + xs[2]\n    println(\"${total}\")\n}\n" }
+args = ["replay", "--simulate", "--seed", "3", "{w}/p/main.wj"]
+stdin = "break 4\ncontinue\nprint xs.len() * 10\nprint total - xs[1]\n"
+stdout_has = ["xs.len() * 10 = 30", "total - xs[1] = 6"]
+
+[[case]]
+name = "replay print refuses an expression with side effects and says so"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n    let mut xs = [3, 1, 4]\n    xs.push(1)\n    println(\"${xs.len()}\")\n}\n" }
+args = ["replay", "--simulate", "--seed", "3", "{w}/p/main.wj"]
+stdin = "break 4\ncontinue\nprint xs.push(9)\nprint xs.len()\n"
+exit = 0
+stdout_has = ["read-only expressions with no side effects", "xs.len() = 4"]
+
+[[case]]
+name = "replay next steps over a call and finish reports the return value"
+polarity = "positive"
+files = { "p/main.wj" = "fn double(x: int) -> int {\n    let y = x * 2\n    y\n}\n\nfn main() {\n    let a = double(4)\n    println(\"${a}\")\n}\n" }
+args = ["replay", "--simulate", "--seed", "3", "{w}/p/main.wj"]
+stdin = "next\nprint a\nback 3\nstep\nfinish\n"
+stdout_has = ["[step 4] next in main", "a = 8", "double returned 8", "[step 4] finish in main"]
+
+[[case]]
+name = "replay next and finish after the program ended are reported"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n    println(\"done\")\n}\n" }
+args = ["replay", "--simulate", "--seed", "3", "{w}/p/main.wj"]
+stdin = "continue\nnext\nfinish\n"
+exit = 0
+stdout_has = ["next: the program has exited", "finish: the program has exited"]
+
+[[case]]
+name = "replay watch stops when a local changes"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n    let mut n = 0\n    while n < 3 {\n        n = n + 1\n    }\n    println(\"${n}\")\n}\n" }
+args = ["replay", "--simulate", "--seed", "3", "{w}/p/main.wj"]
+stdin = "watch n\ncontinue\ncontinue\n"
+stdout_has = ["watching n in main", "watch in main", "n: <unset> -> 0", "n: 0 -> 1"]
+
+[[case]]
+name = "replay break LINE if EXPR stops only when the condition holds"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n    let mut n = 0\n    while n < 3 {\n        n = n + 1\n    }\n    println(\"${n}\")\n}\n" }
+args = ["replay", "--simulate", "--seed", "3", "{w}/p/main.wj"]
+stdin = "break 4 if n == 2\ncontinue\nprint n\n"
+stdout_has = ["[step 5] breakpoint in main", "if n == 2", "n = 2"]
+
+[[case]]
+name = "replay watch needs the name of a local and a condition must be an expression"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n", "p/cmds.txt" = "watch a.b\n" }
+args = ["replay", "--simulate", "--script", "{w}/p/cmds.txt", "{w}/p/main.wj"]
+exit = 1
+output_has = ["script line 1: `watch` takes the name of a local"]
+
+[[case]]
+name = "replay --at-effect starts at the statement that answers a journal event"
+polarity = "positive"
+files = { "p/main.wj" = "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"data.txt\").unwrap()\n    println(text.trim())\n}\n", "data.txt" = "hello journal\n", "p/cmds.txt" = "step\nprint text\n" }
+setup = [["run", "--interpret", "--no-lint", "--allow", "fs.read", "--record", "{w}/p/run.wjlog", "{w}/p/main.wj"]]
+args = ["replay", "--json", "--at-effect", "1", "--script", "{w}/p/cmds.txt", "{w}/p/run.wjlog", "{w}/p/main.wj"]
+stdout_has = ["\"reason\":\"effect\"", "\"step\":1", "\"line\":4", "\"value\":\"\\\"hello journal\\\\n\\\"\""]
+
+[[case]]
+name = "replay --at-effect beyond the journal fails and counts the events"
+polarity = "negative"
+files = { "p/main.wj" = "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"data.txt\").unwrap()\n    println(text.trim())\n}\n", "data.txt" = "hello journal\n", "p/cmds.txt" = "continue\n" }
+setup = [["run", "--interpret", "--no-lint", "--allow", "fs.read", "--record", "{w}/p/run.wjlog", "{w}/p/main.wj"]]
+args = ["replay", "--at-effect", "5", "--script", "{w}/p/cmds.txt", "{w}/p/run.wjlog", "{w}/p/main.wj"]
+exit = 1
+output_has = ["--at-effect 5", "holds only 1 event"]
+
+[[case]]
+name = "replay --at-effect cannot be combined with --simulate"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["replay", "--simulate", "--at-effect", "1", "{w}/p/main.wj"]
+exit = 2
+output_has = ["--simulate"]
+
+[[case]]
+name = "replay re-applies the grants written in the log header without --allow"
+polarity = "positive"
+files = { "p/main.wj" = "use std::env\n\nfn main() {\n    let v = env::var(\"WJ_PROMISE_REPLAY\").unwrap_or(\"none\")\n    println(v)\n}\n", "p/cmds.txt" = "break 5\ncontinue\nprint v\n" }
+env = { "WJ_PROMISE_REPLAY" = "from-the-header" }
+setup = [["run", "--interpret", "--no-lint", "--allow", "env.read=WJ_PROMISE_REPLAY", "--record", "{w}/p/run.wjlog", "{w}/p/main.wj"]]
+args = ["replay", "--script", "{w}/p/cmds.txt", "{w}/p/run.wjlog", "{w}/p/main.wj"]
+file_has = { "p/run.wjlog" = "\"grants\":[\"env.read=WJ_PROMISE_REPLAY\"]" }
+stdout_has = ["v = \"from-the-header\""]
+
+[[case]]
+name = "replay refuses a log from the old header format and says how to record again"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n", "p/old.wjlog" = "{\"args\":[],\"compiler\":\"0.50.0\",\"det_time\":false,\"hash_seed\":0,\"program\":\"x\",\"rng_seed\":1,\"sched_seed\":0,\"sim_seed\":null,\"wj_effect_log\":1}\n", "p/cmds.txt" = "continue\n" }
+args = ["replay", "--script", "{w}/p/cmds.txt", "{w}/p/old.wjlog", "{w}/p/main.wj"]
+exit = 1
+output_has = ["effect log of format 1", "wj run --record"]
+

@@ -737,7 +737,7 @@ write failed: No space left on device (os error 28)
 read back: abcd
 ```
 
-**SPEC-EFF-046** An effect log is JSON Lines: a header line (`wj_effect_log`, `program`, `compiler`, `sched_seed`, `hash_seed`, `rng_seed`, `det_time`, `args`) and one event per effect in program order (`seq`, `task`, `effect`, `op`, `args`, `result`, `vt_ns`), with sorted keys. Random numbers and task interleavings are not events: the header's seeds determine them. (untestable: a file format; acceptance test `tests/effect_replay_test.rs`)
+**SPEC-EFF-046** An effect log is JSON Lines: a header line (`wj_effect_log`, the format version, now 2; `program`, `compiler`, `sched_seed`, `hash_seed`, `rng_seed`, `det_time`, `args`, `grants`: the `--allow` grants the recorded run had, which `wj replay` re-applies; a log of another format is refused with the format number) and one event per effect in program order (`seq`, `task`, `effect`, `op`, `args`, `result`, `vt_ns`), with sorted keys. Random numbers and task interleavings are not events: the header's seeds determine them. (untestable: a file format; acceptance test `tests/effect_replay_test.rs`)
 
 **SPEC-EFF-047** An effect that returns a live handle (`subprocess::spawn`, `http::serve`, `db::connect`) cannot be recorded, replayed or simulated; the run stops at the call with an error that names it. (untestable: needs a process or a socket; acceptance test `tests/effect_replay_test.rs`)
 

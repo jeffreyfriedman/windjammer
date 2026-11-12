@@ -155,7 +155,8 @@ fn the_log_has_a_header_and_one_event_per_effect() {
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 3, "{text}");
     let head: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-    assert_eq!(head["wj_effect_log"], 1);
+    assert_eq!(head["wj_effect_log"], 2);
+    assert_eq!(head["grants"], serde_json::json!([]));
     assert_eq!(head["sched_seed"], 3);
     assert_eq!(head["compiler"], env!("CARGO_PKG_VERSION"));
     let ops: Vec<String> = lines[1..].iter().map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap()["op"].as_str().unwrap().to_string()).collect();

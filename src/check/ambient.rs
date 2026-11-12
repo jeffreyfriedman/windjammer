@@ -25,8 +25,11 @@ pub fn use_depth<'a>(programs: impl IntoIterator<Item = &'a crate::parser::Progr
     depth
 }
 
-/// Digest of the working directory and every `*.wj.meta` within `depth` levels of it and of its `.wj-cache/`.
-/// `None` when the working directory is unknown or the walk exceeds its budget: the caller must not cache.
+/// Digest of every `*.wj.meta` sidecar within `depth` levels of the working directory and of its `.wj-cache/`,
+/// independent of where the working directory is: sidecars are named relative to it, so the same sidecar contents
+/// give the same digest in any checkout. It keys the whole-run cache, the per-project memo and the shared analysis
+/// cache alike. `None` when the working directory is unknown, the walk exceeds its budget, or a sidecar lies outside
+/// the working directory (a path that cannot be named portably): the caller must not cache.
 pub fn fingerprint(depth: usize) -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let mut files = Vec::new();
@@ -37,10 +40,9 @@ pub fn fingerprint(depth: usize) -> Option<String> {
     files.sort();
     files.dedup();
     let mut h = Sha256::new();
-    // Paths under the working directory are hashed relative to it (the working directory itself is not an input
-    // beyond the sidecars it holds), so a copied or moved checkout keeps its cache entries.
     for f in &files {
-        part(&mut h, f.strip_prefix(&cwd).unwrap_or(f).display().to_string().as_bytes());
+        let rel = f.strip_prefix(&cwd).ok()?;
+        part(&mut h, rel.to_string_lossy().replace('\\', "/").as_bytes());
         part(&mut h, &std::fs::read(f).unwrap_or_default());
     }
     Some(format!("{:x}", h.finalize()))

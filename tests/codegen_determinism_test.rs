@@ -38,6 +38,27 @@ fn corpus() -> Vec<PathBuf> {
     v
 }
 
+/// A generated crate's version carries `+wj<16 hex digits>`, a hash of its own canonical output directory (so two
+/// same-named projects never share a cargo build, see `cargo_cache::crate_version`). It differs between the fresh
+/// temp dirs of two builds by design, so it is masked like the temp path itself.
+fn mask_crate_identity(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("+wj") {
+        let (head, tail) = rest.split_at(i + 3);
+        out.push_str(head);
+        let hex = tail.bytes().take_while(|b| b.is_ascii_hexdigit()).count();
+        if hex == 16 {
+            out.push_str("<ID>");
+            rest = &tail[16..];
+        } else {
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn hash_tree(dir: &Path, base: &Path, scratch: &str, out: &mut BTreeMap<String, u64>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
@@ -48,6 +69,7 @@ fn hash_tree(dir: &Path, base: &Path, scratch: &str, out: &mut BTreeMap<String, 
             let text = std::fs::read(&p).unwrap_or_default();
             // Normalize the per-run temp dir so only real content differences count.
             let text = String::from_utf8_lossy(&text).replace(base.to_str().unwrap(), "<OUT>").replace(scratch, "<TMP>");
+            let text = mask_crate_identity(&text);
             let h = text.bytes().fold(1469598103934665603u64, |h, b| (h ^ b as u64).wrapping_mul(1099511628211));
             out.insert(p.strip_prefix(base).unwrap().to_string_lossy().into_owned(), h);
         }

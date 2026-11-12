@@ -3,78 +3,38 @@
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
-use std::{fs, path::Path};
 mod clone_impls;
 mod generic_returns;
 
-/// Resolve `windjammer-runtime/src` for signature scanning.
-///
-/// Must not depend on process CWD: `wj build` / `wj test` run from user packages
-/// (ecosystem seeds, apps). CWD-relative `crates/windjammer-runtime/src` only works
-/// inside the compiler repo and silently falls back to incomplete signatures otherwise
-/// (e.g. `strings::join` → spurious `parts.clone()` into `&[String]`).
-pub(crate) fn resolve_runtime_src_for_scan() -> Option<std::path::PathBuf> {
-    // none on disk in the browser playground (ADR-0034): no file system to materialize the runtime crate into
-    let from_finder = (!cfg!(target_arch = "wasm32")).then(crate::cargo_toml::find_windjammer_runtime_path)?.join("src");
-    from_finder.is_dir().then_some(from_finder)
+/// The runtime crate's Rust sources as `(module path relative to src/, text)`, read from the copy baked into the
+/// binary (`embedded_assets`): no directory is materialized or consulted, so the scan is the same on every target,
+/// from every working directory, and in the browser playground (ADR-0034).
+/// `…/src/http.rs` -> `http`; `…/src/platform/native/net.rs` -> `platform::native::net`.
+fn embedded_runtime_sources() -> impl Iterator<Item = (String, &'static str)> {
+    crate::embedded_assets::files(crate::embedded_assets::Asset::RuntimeCrate)
+        .iter()
+        .filter_map(|(rel, bytes)| {
+            let inner = rel.strip_prefix("src/")?.strip_suffix(".rs")?;
+            Some((inner.replace('/', "::"), std::str::from_utf8(bytes).ok()?))
+        })
 }
 
 /// Scan windjammer-runtime source files and populate the registry
 pub fn populate_runtime_signatures(registry: &mut SignatureRegistry) -> Result<(), String> {
-    let Some(runtime_path) = resolve_runtime_src_for_scan() else {
-        // If runtime source isn't available (e.g., incomplete install),
-        // fall back to hardcoded signatures
-        return populate_fallback_signatures(registry);
-    };
-
     // WJ std stems first so nested platform leaves (`net`) can alias onto them.
     register_wj_std_module_names(registry);
     // Scan all .rs files in runtime (including platform/native/…).
-    scan_directory_recursive(&runtime_path, &runtime_path, registry)?;
+    // Deepest modules first, so a crate-root module wins over a platform leaf that defines the same type
+    // (`http.rs` and `platform/native/net.rs` both define `ServerRequest`); within a depth, path order.
+    let mut sources: Vec<(String, &str)> = embedded_runtime_sources().collect();
+    sources.sort_by_key(|(m, _)| std::cmp::Reverse(m.matches("::").count()));
+    for (module_name, content) in sources {
+        scan_rust_file(&module_name, content, registry)?;
+    }
     register_runtime_modules_from_signature_keys(registry);
     register_rust_std_boundary_signatures(registry);
 
     Ok(())
-}
-
-/// Recursive scan so nested runtime modules (`platform/native/net.rs`) register under
-/// `platform::native::net` and alias WJ `std::net`.
-fn scan_directory_recursive(
-    root: &Path,
-    path: &Path,
-    registry: &mut SignatureRegistry,
-) -> Result<(), String> {
-    if !path.is_dir() {
-        return Ok(());
-    }
-
-    for entry in fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))? {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let child = entry.path();
-
-        if child.is_dir() {
-            scan_directory_recursive(root, &child, registry)?;
-        } else if child.is_file() && child.extension().and_then(|s| s.to_str()) == Some("rs") {
-            let module_name = rust_module_stem_from_runtime_path(root, &child);
-            scan_rust_file(&child, &module_name, registry)?;
-        }
-    }
-
-    Ok(())
-}
-
-/// `…/src/http.rs` → `http`; `…/src/platform/native/net.rs` → `platform::native::net`.
-fn rust_module_stem_from_runtime_path(root: &Path, file: &Path) -> String {
-    let rel = file.strip_prefix(root).unwrap_or(file);
-    let without_ext = rel.with_extension("");
-    without_ext
-        .components()
-        .filter_map(|c| match c {
-            std::path::Component::Normal(s) => s.to_str(),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("::")
 }
 
 /// Leaf of `platform::native::{leaf}` (path shape only).
@@ -97,9 +57,7 @@ fn platform_native_leaf_for_wj_alias(rust_stem: &str) -> Option<&str> {
 }
 
 fn crate_root_runtime_module_exists(leaf: &str) -> bool {
-    resolve_runtime_src_for_scan()
-        .map(|root| root.join(format!("{leaf}.rs")).is_file())
-        .unwrap_or(false)
+    crate::embedded_assets::text(crate::embedded_assets::Asset::RuntimeCrate, &format!("src/{leaf}.rs")).is_some()
 }
 
 /// `platform::native::{leaf}` → WJ leaf alias when crate-root does not define `{leaf}.rs`.
@@ -110,25 +68,19 @@ fn maybe_register_platform_leaf_alias(registry: &mut SignatureRegistry, rust_ste
 }
 
 fn scan_rust_file(
-    path: &Path,
     module_name: &str,
+    content: &str,
     registry: &mut SignatureRegistry,
 ) -> Result<(), String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-
     // Skip lib.rs / mod.rs (re-exports / module trees only).
-    let file_stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown");
+    let file_stem = module_name.rsplit("::").next().unwrap_or("unknown");
     if file_stem == "lib" || file_stem == "mod" {
         return Ok(());
     }
 
     registry.register_runtime_file_stem(module_name);
     maybe_register_platform_leaf_alias(registry, module_name);
-
+    let generics = generic_returns::FileGenerics::new(&content);
     // Track `impl Type { ... }` so methods register as `Type::fn` (free functions
     // keep exclusive claim on `module::fn` — see `register_scanned_runtime_signature`).
     let mut current_impl: Option<String> = None;
@@ -152,7 +104,7 @@ fn scan_rust_file(
             }
             let header_done = header.contains('{') || trimmed.ends_with(';');
             if header_done {
-                if let Some(sig) = generic_returns::parse_sig(&header, module_name, &content) {
+                if let Some(sig) = generic_returns::parse_sig(&header, module_name, &generics) {
                     let mark_sanitizer = pending_sanitizer;
                     pending_sanitizer = false;
                     register_scanned_runtime_signature(
@@ -250,7 +202,7 @@ fn scan_rust_file(
 
         // Single-line `pub fn … {` (multi-line headers registered via pending_fn_header).
         if pending_fn_header.is_none() {
-            if let Some(sig) = generic_returns::parse_sig(trimmed, module_name, &content) {
+            if let Some(sig) = generic_returns::parse_sig(trimmed, module_name, &generics) {
                 let mark_sanitizer = pending_sanitizer;
                 pending_sanitizer = false;
                 register_scanned_runtime_signature(
@@ -569,36 +521,16 @@ fn register_runtime_modules_from_signature_keys(registry: &mut SignatureRegistry
 /// WJ `std/*.wj` and `std/*/mod.wj` stems (`async`, `process`, …) so aliases that
 /// have no matching runtime file stem still classify as runtime std modules.
 fn register_wj_std_module_names(registry: &mut SignatureRegistry) {
-    let candidates: Vec<std::path::PathBuf> =
-        crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdWj)
-            .into_iter()
-            .collect();
-    for dir in &candidates {
-        if !dir.is_dir() {
-            continue;
-        }
-        let Ok(entries) = fs::read_dir(dir) else {
-            continue;
+    for (rel, _) in crate::embedded_assets::files(crate::embedded_assets::Asset::StdWj) {
+        // `std/<stem>.wj` or `std/<stem>/mod.wj`, from the copy baked into the binary
+        let stem = match rel.split_once('/') {
+            None => rel.strip_suffix(".wj"),
+            Some((dir, "mod.wj")) => Some(dir),
+            Some(_) => None,
         };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if path.join("mod.wj").is_file() {
-                    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                        if is_wj_std_module_stem(name) {
-                            registry.register_runtime_std_module(name);
-                        }
-                    }
-                }
-            } else if path.extension().and_then(|s| s.to_str()) == Some("wj") {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if is_wj_std_module_stem(stem) {
-                        registry.register_runtime_std_module(stem);
-                    }
-                }
-            }
+        if let Some(stem) = stem.filter(|s| is_wj_std_module_stem(s)) {
+            registry.register_runtime_std_module(stem);
         }
-        return;
     }
 }
 
@@ -685,6 +617,7 @@ fn parse_impl_type_name(trimmed: &str) -> Option<String> {
 }
 
 fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignature> {
+    if !line.contains("pub fn ") { return None; } // most lines: reject before the allocating collapse below
     // Collapse multi-line headers (`where F: Fn(...)`) so scanners can pass
     // accumulated `pub fn … {` spans (P3.580b Server::serve).
     let line = line
@@ -694,7 +627,6 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         .collect::<Vec<_>>()
         .join(" ");
     let line = line.trim();
-
     // Must start with "pub fn"
     if !line.starts_with("pub fn ") {
         return None;
@@ -1587,12 +1519,10 @@ mod tests {
     }
 
     #[test]
-    fn resolve_runtime_src_finds_compiler_runtime_not_cwd() {
-        let resolved = resolve_runtime_src_for_scan();
-        assert!(
-            resolved.as_ref().is_some_and(|p| p.join("strings.rs").exists()),
-            "must locate windjammer-runtime/src/strings.rs via compiler install path, got {resolved:?}"
-        );
+    fn runtime_sources_come_from_the_binary_not_the_cwd() {
+        let modules: Vec<String> = embedded_runtime_sources().map(|(m, _)| m).collect();
+        assert!(modules.iter().any(|m| m == "strings"), "windjammer-runtime/src/strings.rs must be embedded: {modules:?}");
+        assert!(modules.iter().any(|m| m == "platform::native::net"), "nested modules keep their path: {modules:?}");
     }
 
     #[test]

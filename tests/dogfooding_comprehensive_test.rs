@@ -40,7 +40,7 @@ struct Enemy {
 }
 
 fn update_enemies(enemies: Vec<Enemy>, dt: f32) {
-    for enemy in enemies {
+    for mut enemy in enemies {
         enemy.x += dt * 10.0;
         if enemy.health <= 0 {
             // Remove dead enemies

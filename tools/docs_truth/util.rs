@@ -5,11 +5,65 @@ use std::path::{Path, PathBuf};
 const SKIP_DIRS: &[&str] = &["target", "node_modules", "build", "dist", "vendor"];
 
 /// All files under `root` (repo-relative, `/`-separated, sorted), skipping VCS/build dirs.
+///
+/// Inside a git checkout the list comes from `git ls-files` (tracked files only), so untracked
+/// leftovers on one machine cannot change a counted metric. A filesystem walk is the fallback for
+/// trees that are not git checkouts. Gate: `tests/docs_truth_test.rs` (untracked-file determinism).
 pub fn walk(root: &Path) -> Vec<String> {
+    if let Some(files) = tracked_files(root) {
+        return files;
+    }
+    walk_fs(root)
+}
+
+/// Filesystem-only walk (the non-git fallback).
+pub fn walk_fs(root: &Path) -> Vec<String> {
     let mut out = Vec::new();
     walk_into(root, root, &mut out);
     out.sort();
     out
+}
+
+/// Tracked files under `root` (paths relative to `root`), or `None` when `root` is not in a git work tree.
+pub fn tracked_files(root: &Path) -> Option<Vec<String>> {
+    let out = std::process::Command::new("git")
+        .arg("--no-optional-locks")
+        .arg("-C")
+        .arg(root)
+        .args(["ls-files", "-z", "--full-name", "--", "."])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let top = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "--show-prefix"])
+        .output()
+        .ok()?;
+    if !top.status.success() {
+        return None;
+    }
+    let prefix = String::from_utf8_lossy(&top.stdout).trim().to_string();
+    let mut files: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .split('\0')
+        .filter(|f| !f.is_empty())
+        .filter_map(|f| f.strip_prefix(prefix.as_str()))
+        .filter(|rel| {
+            // Same directory skips as the filesystem walk; the file must still exist (deleted-but-tracked is not countable).
+            let mut parts = rel.split('/').peekable();
+            while let Some(c) = parts.next() {
+                if parts.peek().is_some() && (c.starts_with('.') && c != ".github" || SKIP_DIRS.contains(&c)) {
+                    return false;
+                }
+            }
+            root.join(rel).is_file()
+        })
+        .map(str::to_string)
+        .collect();
+    files.sort();
+    Some(files)
 }
 
 fn walk_into(root: &Path, dir: &Path, out: &mut Vec<String>) {

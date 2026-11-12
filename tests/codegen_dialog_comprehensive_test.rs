@@ -168,7 +168,7 @@ pub struct Inventory {
 
 impl Inventory {
     pub fn add_item(self, item_id: string, quantity: i32) {
-        for (id, qty) in self.items {
+        for (id, mut qty) in self.items {
             if id == item_id {
                 qty = qty + quantity  // Should infer &mut qty
                 return
@@ -214,7 +214,7 @@ impl Player {
     }
     
     pub fn set_attribute(self, name: string, value: i32) {
-        for (attr, val) in self.attributes {
+        for (attr, mut val) in self.attributes {
             if attr == name {
                 val = value
                 return

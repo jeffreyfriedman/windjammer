@@ -10,8 +10,9 @@ use windjammer::linter::codes::LINT_CODES;
 pub fn computed(ctx: &Ctx) -> BTreeMap<String, u64> {
     let mut m = BTreeMap::new();
     let tests = util::walk(&ctx.root.join("tests"));
-    m.insert("tests.rust_files".into(), tests.iter().filter(|f| !f.contains('/') && f.ends_with(".rs")).count() as u64);
-    m.insert("tests.wj_programs".into(), tests.iter().filter(|f| f.ends_with(".wj")).count() as u64);
+    let (rust_files, wj_programs) = test_file_counts(&tests);
+    m.insert("tests.rust_files".into(), rust_files);
+    m.insert("tests.wj_programs".into(), wj_programs);
     m.insert("conformance.programs".into(), gen_targets::programs(ctx).len() as u64);
     m.insert("conformance.backends".into(), gen_targets::backends(ctx).len() as u64);
     m.insert("conformance.unsupported_pairs".into(), gen_targets::unsupported(ctx).len() as u64);
@@ -39,6 +40,13 @@ pub fn computed(ctx: &Ctx) -> BTreeMap<String, u64> {
         m.insert("book.features_uncovered".into(), super::book_features::uncovered(ctx).len() as u64);
     }
     m
+}
+
+/// `(top-level tests/*.rs, tests/**/*.wj)` from a file list produced by `util::walk` (git-tracked files in a checkout).
+pub fn test_file_counts(tests: &[String]) -> (u64, u64) {
+    let rust = tests.iter().filter(|f| !f.contains('/') && f.ends_with(".rs")).count() as u64;
+    let wj = tests.iter().filter(|f| f.ends_with(".wj")).count() as u64;
+    (rust, wj)
 }
 
 pub fn metrics_json(ctx: &Ctx) -> String {

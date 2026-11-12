@@ -71,6 +71,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj replay --seed` | With --simulate: the seed of the world | tested |
 | `wj replay --faults` | With --simulate: probability that a file or network call fails, drawn from the seed | tested |
 | `wj replay --allow` | Grant a capability as the recording did; nothing is performed either way | tested |
+| `wj replay --at-effect` | Start stopped at the statement that answers the K-th event of the journal (K counts from 1; a recorded run only) | tested |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) | tested |
 | `wj reduce --oracle` | Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present) | tested |
 | `wj reduce --output` | Output directory for the minimal project and repro.md | tested |

@@ -16,6 +16,16 @@
 //! program waiting on the outside world sees it move; the virtual clock still orders the events. If nothing can run and nothing is waiting on the clock the program
 //! has deadlocked, which is reported as an error (real Rust would hang).
 //!
+//! One-thread mode (`Sched::one_thread`, the default on wasm32, where there are no OS threads; ADR-0034): a task is
+//! not a thread but a nested call. When the running task blocks, the scheduler picks the next task exactly as above
+//! and, if that task has not started, runs it to completion on top of the blocked task's stack (its context swapped
+//! in the same way), then re-checks. A task that has started is always a caller further down the same stack, so it
+//! cannot be resumed until the tasks above it finish: when the schedule would resume one, the run stops with an
+//! `Unsupported` error that says so, never with a different interleaving. Programs whose tasks run to completion or
+//! wait only on tasks that start later (every `spawn`/`join`/`scope` sample in the book) print exactly what the
+//! thread mode prints; `tests/interpreter_one_thread_tasks_test.rs` holds the two modes together on the
+//! concurrency corpus.
+//!
 //! The interpreter is not `Send`; handing `*mut Interpreter` between the task threads is sound
 //! because the baton guarantees exactly one thread touches it at a time (the mutex hand-off orders
 //! the memory accesses).
@@ -84,6 +94,10 @@ pub(crate) struct Task {
     pub done: bool,
     wait: Wait,
     ctx: Option<Ctx>,
+    /// One-thread mode: the closure of a task that has not started yet.
+    start: Option<Value>,
+    /// One-thread mode: the task is running or blocked somewhere on the current stack.
+    started: bool,
     /// `Ok(value)` or `Err(panic message)`.
     pub result: Option<Result<Value, String>>,
 }
@@ -126,12 +140,14 @@ pub(crate) struct Sched {
     pub slept_ns: u64,
     /// Tasks started inside each open `scope { }` (innermost last).
     pub scopes: Vec<Vec<usize>>,
+    /// Tasks are nested calls on one thread instead of OS threads (the default where there are no threads).
+    pub one_thread: bool,
 }
 
 impl Sched {
     pub fn new() -> Sched {
         Sched {
-            tasks: vec![Task { name: Some("main".into()), done: false, wait: Wait::Ready, ctx: None, result: None }],
+            tasks: vec![Task { name: Some("main".into()), done: false, wait: Wait::Ready, ctx: None, start: None, started: true, result: None }],
             current: 0,
             seed: 0,
             rng: 0,
@@ -142,6 +158,7 @@ impl Sched {
             real_sleep: false,
             slept_ns: 0,
             scopes: Vec::new(),
+            one_thread: cfg!(target_arch = "wasm32"),
         }
     }
 
@@ -243,6 +260,9 @@ impl Sched {
             if let Some(Ok(v)) = &t.result {
                 vals.push(v);
             }
+            if let Some(v) = &t.start {
+                vals.push(v);
+            }
         }
         (scopes, vals)
     }
@@ -305,6 +325,9 @@ impl Interpreter {
 
     /// Block the current task until `w` holds, running other tasks meanwhile.
     pub(crate) fn block_on(&mut self, w: Wait) -> R<()> {
+        if self.sched.one_thread {
+            return self.block_on_nested(w);
+        }
         loop {
             if self.sched.ready(&w) {
                 return Ok(());
@@ -330,6 +353,14 @@ impl Interpreter {
         if self.sched.seed == 0 || self.sched.tasks.len() < 2 {
             return Ok(());
         }
+        if self.sched.one_thread {
+            // exploring other interleavings means suspending the running task at any synchronisation point
+            return Err(RuntimeError::new(
+                ErrorKind::Unsupported,
+                "a non-zero schedule seed would have to resume a task at a synchronisation point, but tasks run as nested calls on one thread here (the browser playground)",
+            )
+            .into());
+        }
         let me = self.sched.current;
         if self.sched.next_rand() % 2 == 0 {
             return Ok(());
@@ -347,6 +378,13 @@ impl Interpreter {
     pub(crate) fn yield_now(&mut self) -> R<()> {
         let me = self.sched.current;
         let cands = self.sched.runnable(me);
+        if self.sched.one_thread {
+            return match cands.first() {
+                Some(&t) if !self.sched.tasks[t].started => self.run_chain(t, me),
+                Some(&t) => Err(self.needs_suspension(t)),
+                None => Ok(()),
+            };
+        }
         if let Some(&t) = cands.first() {
             self.sched.tasks[me].wait = Wait::Ready;
             self.switch_to(t)?;
@@ -365,7 +403,11 @@ impl Interpreter {
     pub(crate) fn spawn_task(&mut self, f: Value, name: Option<String>) -> R<usize> {
         self.preempt()?;
         let id = self.sched.tasks.len();
-        self.sched.tasks.push(Task { name, done: false, wait: Wait::Ready, ctx: Some(Ctx::fresh()), result: None });
+        if self.sched.one_thread {
+            self.sched.tasks.push(Task { name, done: false, wait: Wait::Ready, ctx: None, start: Some(f), started: false, result: None });
+            return Ok(id);
+        }
+        self.sched.tasks.push(Task { name, done: false, wait: Wait::Ready, ctx: Some(Ctx::fresh()), start: None, started: true, result: None });
         let baton = self.sched.baton.clone();
         let ptr = SendPtr(self as *mut Interpreter);
         let fv = SendVal(f);
@@ -388,6 +430,25 @@ impl Interpreter {
 
     /// Record the outcome of task `id` (running on its own thread) and pass the baton on.
     fn finish_task(&mut self, id: usize, r: R) {
+        self.record_outcome(id, r);
+        let next = if self.sched.fatal.is_some() { Some(0) } else { self.sched.pick(id, false) };
+        let target = match next {
+            Some(t) => t,
+            None => {
+                self.sched.fatal = Some(RuntimeError::new(ErrorKind::Semantic, "deadlock: every thread is blocked"));
+                0
+            }
+        };
+        let theirs = self.sched.tasks[target].ctx.take().unwrap_or_else(Ctx::fresh);
+        let _discard = self.take_ctx();
+        self.put_ctx(theirs);
+        self.sched.current = target;
+        let baton = self.sched.baton.clone();
+        baton.set(target);
+    }
+
+    /// Store the outcome of task `id` and mark it done; a panic is reported on stderr, any other error ends the program.
+    fn record_outcome(&mut self, id: usize, r: R) {
         let outcome = match r {
             Ok(v) => Ok(v),
             Err(super::error::Ctl::Return(v)) => Ok(v),
@@ -405,20 +466,81 @@ impl Interpreter {
         };
         self.sched.tasks[id].result = Some(outcome);
         self.sched.tasks[id].done = true;
-        let next = if self.sched.fatal.is_some() { Some(0) } else { self.sched.pick(id, false) };
-        let target = match next {
-            Some(t) => t,
-            None => {
-                self.sched.fatal = Some(RuntimeError::new(ErrorKind::Semantic, "deadlock: every thread is blocked"));
-                0
+    }
+
+    /// One-thread mode of `block_on`: while `w` does not hold, run the task the schedule picks as a nested call.
+    fn block_on_nested(&mut self, w: Wait) -> R<()> {
+        loop {
+            if self.sched.ready(&w) {
+                return Ok(());
+            }
+            let me = self.sched.current;
+            self.sched.tasks[me].wait = w.clone();
+            let r = match self.sched.pick(me, false) {
+                Some(t) if t == me => Ok(()),
+                Some(t) if !self.sched.tasks[t].started => self.run_chain(t, me),
+                Some(t) => Err(self.needs_suspension(t)),
+                None => Err(RuntimeError::new(
+                    ErrorKind::Semantic,
+                    "deadlock: every thread is blocked and none is waiting for a timer (a compiled program would hang here)",
+                )
+                .into()),
+            };
+            self.sched.tasks[me].wait = Wait::Ready;
+            r?;
+        }
+    }
+
+    /// One-thread mode: run `first` (a task that has not started) on top of the current stack, then whichever task the
+    /// schedule picks after each one that finishes, until the pick is `parent`, the task whose stack this is.
+    fn run_chain(&mut self, first: usize, parent: usize) -> R<()> {
+        let mine = self.take_ctx();
+        let (guard, depth) = (mine.stack_guard, mine.depth);
+        self.sched.tasks[parent].ctx = Some(mine);
+        let mut t = first;
+        let outcome: R<()> = loop {
+            let mut fresh = Ctx::fresh();
+            fresh.stack_guard = guard; // same stack, same budget
+            fresh.depth = depth;
+            let _previous = self.take_ctx();
+            self.put_ctx(fresh);
+            self.sched.current = t;
+            self.sched.tasks[t].started = true;
+            let f = self.sched.tasks[t].start.take().unwrap_or(Value::Unit);
+            let r = self.call_value(&f, vec![]);
+            drop(f);
+            self.record_outcome(t, r);
+            if let Some(e) = self.sched.fatal.clone() {
+                break Err(e.into());
+            }
+            match self.sched.pick(t, false) {
+                Some(p) if p == parent => break Ok(()),
+                Some(x) if !self.sched.tasks[x].started => t = x,
+                Some(x) => break Err(self.needs_suspension(x)),
+                None => {
+                    break Err(RuntimeError::new(ErrorKind::Semantic, "deadlock: every thread is blocked").into());
+                }
             }
         };
-        let theirs = self.sched.tasks[target].ctx.take().unwrap_or_else(Ctx::fresh);
-        let _discard = self.take_ctx();
-        self.put_ctx(theirs);
-        self.sched.current = target;
-        let baton = self.sched.baton.clone();
-        baton.set(target);
+        let _finished = self.take_ctx();
+        if let Some(mine) = self.sched.tasks[parent].ctx.take() {
+            self.put_ctx(mine);
+        }
+        self.sched.current = parent;
+        outcome
+    }
+
+    /// One-thread mode: the schedule would resume task `t`, which is blocked further down this stack.
+    fn needs_suspension(&self, t: usize) -> super::error::Ctl {
+        let name = self.sched.tasks[t].name.clone().unwrap_or_else(|| format!("#{t}"));
+        RuntimeError::new(
+            ErrorKind::Unsupported,
+            format!(
+                "task '{name}' would have to resume now, but tasks run as nested calls on one thread here (the browser playground); \
+                 `wj run` runs this program with the schedule it asks for"
+            ),
+        )
+        .into()
     }
 
     pub(crate) fn task_result(&mut self, id: usize) -> Result<Value, String> {

@@ -21,6 +21,8 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 - `crate_version`: the `version` of every generated crate is `0.1.0+wj<hash of its directory>`; cargo identifies a root package in the shared target by name and version only, so same-named crates (directories with one name, every test crate) must differ there (pilot 6 finding 1). Gate: tests/run_identity_test.rs.
 
+- `entries`: directories of content-addressed `<key>.json` entries shared by checkouts (`analysis/`, `verdicts/`). Writers hold the directory's shared lock; `wj cache prune` skips a held directory and drops entries older than 30 days. Gate: tests/shared_analysis_cache_test.rs.
+
 ## Entry points
 `cache_root`, `target_dir(kind)`, `configure_cargo_command`, `apply_lean_build_env` (src/cargo_cache/mod.rs); `build_profile::{apply_fast_dev_env, executables_from_cargo_json, publish_executables}` (the dev profile and documented-binary-location step shared by `wj build` and `wj run --compiled`).
 

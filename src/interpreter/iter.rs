@@ -127,14 +127,14 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             }
         }
         IterSrc::Map(inner, f) => match next(it, inner)? {
-            Some(x) => Ok(Some(it.call_value(f, vec![x])?)),
+            Some(x) => Ok(Some(it.call_value1(f, x)?)),
             None => Ok(None),
         },
         IterSrc::Filter(inner, f) => loop {
             match next(it, inner)? {
                 None => return Ok(None),
                 Some(x) => {
-                    if truthy(&it.call_value(f, vec![x.clone()])?) {
+                    if truthy(&it.call_value1(f, x.clone())?) {
                         return Ok(Some(x));
                     }
                 }
@@ -144,7 +144,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             match next(it, inner)? {
                 None => return Ok(None),
                 Some(x) => {
-                    if let Some(Some(y)) = it.call_value(f, vec![x])?.as_option() {
+                    if let Some(Some(y)) = it.call_value1(f, x)?.as_option() {
                         return Ok(Some(y.clone()));
                     }
                 }
@@ -162,7 +162,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
                 None => return Ok(None),
                 Some(x) => {
                     let produced = match f {
-                        Some(f) => it.call_value(f, vec![x])?,
+                        Some(f) => it.call_value1(f, x)?,
                         None => x,
                     };
                     *cur.borrow_mut() = Some(as_iter(it, produced)?);
@@ -227,7 +227,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             match next(it, inner)? {
                 None => Ok(None),
                 Some(x) => {
-                    if truthy(&it.call_value(f, vec![x.clone()])?) {
+                    if truthy(&it.call_value1(f, x.clone())?) {
                         Ok(Some(x))
                     } else {
                         done.set(true);
@@ -240,7 +240,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             match next(it, inner)? {
                 None => return Ok(None),
                 Some(x) => {
-                    if skipping.get() && truthy(&it.call_value(f, vec![x.clone()])?) {
+                    if skipping.get() && truthy(&it.call_value1(f, x.clone())?) {
                         continue;
                     }
                     skipping.set(false);
@@ -250,7 +250,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
         },
         IterSrc::Inspect(inner, f) => match next(it, inner)? {
             Some(x) => {
-                it.call_value(f, vec![x.clone()])?;
+                it.call_value1(f, x.clone())?;
                 Ok(Some(x))
             }
             None => Ok(None),
@@ -307,7 +307,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             match cur {
                 None => Ok(None),
                 Some(v) => {
-                    if let Some(Some(n)) = it.call_value(f, vec![v.clone()])?.as_option() {
+                    if let Some(Some(n)) = it.call_value1(f, v.clone())?.as_option() {
                         *slot.borrow_mut() = Some(n.clone());
                     }
                     Ok(Some(v))
@@ -346,14 +346,14 @@ pub fn next_back(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             }
         }
         IterSrc::Map(inner, f) => match next_back(it, inner)? {
-            Some(x) => Ok(Some(it.call_value(f, vec![x])?)),
+            Some(x) => Ok(Some(it.call_value1(f, x)?)),
             None => Ok(None),
         },
         IterSrc::Filter(inner, f) => loop {
             match next_back(it, inner)? {
                 None => return Ok(None),
                 Some(x) => {
-                    if truthy(&it.call_value(f, vec![x.clone()])?) {
+                    if truthy(&it.call_value1(f, x.clone())?) {
                         return Ok(Some(x));
                     }
                 }
@@ -361,7 +361,7 @@ pub fn next_back(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
         },
         IterSrc::Inspect(inner, f) => match next_back(it, inner)? {
             Some(x) => {
-                it.call_value(f, vec![x.clone()])?;
+                it.call_value1(f, x.clone())?;
                 Ok(Some(x))
             }
             None => Ok(None),
