@@ -91,6 +91,10 @@ pub struct Parser {
     #[allow(dead_code)]
     pub(crate) source: String,
     pub(crate) warnings: Vec<ParseWarning>,
+    /// ADR-0002: names a `for` pattern declares `mut` (`for mut x in`, `for (k, mut v) in`), by the location the
+    /// `for` statement records (line, column). The pattern itself carries plain names: how a loop binds its variable
+    /// is inferred, `mut` is the source's visible sign that the loop writes to it (read by `wj check`, WJ0051).
+    pub(crate) loop_mut_bindings: Vec<(usize, usize, String)>,
     /// True when parsing inside an `extern fn` declaration (FFI boundary).
     /// Suppresses W0010 warnings since FFI signatures must match Rust types exactly.
     pub(crate) in_extern_fn: bool,
@@ -164,6 +168,7 @@ impl Parser {
             filename: String::new(),
             source: String::new(),
             warnings: Vec::new(),
+            loop_mut_bindings: Vec::new(),
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
@@ -191,6 +196,7 @@ impl Parser {
             filename,
             source,
             warnings: Vec::new(),
+            loop_mut_bindings: Vec::new(),
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
@@ -332,6 +338,11 @@ impl Parser {
 
     pub fn warnings(&self) -> &[ParseWarning] {
         &self.warnings
+    }
+
+    /// Names declared `mut` in `for` patterns, by the `for` statement's recorded (line, column).
+    pub fn loop_mut_bindings(&self) -> &[(usize, usize, String)] {
+        &self.loop_mut_bindings
     }
 
     pub(crate) fn emit_warning(

@@ -161,8 +161,8 @@ digraph deps {
   "check" -> "source_map" [label="5"];
   "check" -> "stdlib_surface" [label="3"];
   "check" -> "test_module_gate" [label="1"];
-  "check" -> "type_classification" [label="12"];
-  "check" -> "typing" [label="4"];
+  "check" -> "type_classification" [label="13"];
+  "check" -> "typing" [label="6"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="31"];

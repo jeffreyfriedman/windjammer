@@ -155,3 +155,40 @@ fn generated_rust_declares_mut_only_where_the_source_does() {
     let rust = std::fs::read_to_string(dir.path().join("out/m.rs")).unwrap();
     assert!(rust.contains("let mut v") && rust.contains("mut a") && !rust.contains("mut w") && !rust.contains("mut b"), "{rust}");
 }
+
+/// ADR-0002 addendum: a loop variable assigned or changed through is declared `mut`, over a collection as over a range;
+/// the fix puts the `mut` at its place in the pattern.
+#[test]
+fn loop_variables_changed_through_are_reported_with_the_mut_in_the_pattern() {
+    let src = "struct P {\n    x: int,\n}\nstruct Inv {\n    items: Vec<(string, int)>,\n}\nimpl Inv {\n    fn add(self, n: int) {\n        for (id, qty) in self.items {\n            qty = qty + n\n        }\n    }\n}\nfn main() {\n    let mut ps = [P { x: 1 }]\n    for p in ps {\n        p.x = p.x + 10\n    }\n    for q in ps {\n        println(\"${q.x}\")\n    }\n    let mut inv = Inv { items: [(\"a\", 1)] }\n    inv.add(2)\n}\n";
+    assert_eq!(names(src), ["qty", "p"]);
+    let out = fixed(src);
+    assert!(out.contains("for (id, mut qty) in self.items") && out.contains("for mut p in ps") && out.contains("for q in ps"), "{out}");
+}
+
+/// The generated Rust of loops whose variables are declared `mut` writes through (the borrow is inferred from the body)
+/// and type-checks; the by-value variable of a range loop is bound `mut` once.
+#[test]
+fn mut_loop_variables_write_through_in_the_generated_rust() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let src = "struct P {\n    x: int,\n}\nstruct Inv {\n    items: Vec<(int, int)>,\n}\nimpl Inv {\n    fn add(self, n: int) {\n        for (id, mut qty) in self.items {\n            qty = qty + n\n        }\n    }\n}\nfn main() {\n    let mut ps = [P { x: 1 }, P { x: 2 }]\n    for mut p in ps {\n        p.x = p.x + 10\n    }\n    let mut inv = Inv { items: [(7, 1)] }\n    inv.add(2)\n    let mut total = 0\n    for mut i in 0..3 {\n        i = i * 2\n        total += i\n    }\n    println(\"${ps[0].x} ${ps[1].x} ${inv.items[0].1} ${total}\")\n}\n";
+    std::fs::write(dir.path().join("m.wj"), src).unwrap();
+    let build = wj(&["build", "--no-cargo", "-o", "out", "m.wj"], dir.path());
+    assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
+    let rust = std::fs::read_to_string(dir.path().join("out/m.rs")).unwrap();
+    assert!(!rust.contains("for mut p") && !rust.contains("mut qty)"), "a loop over a collection is generated without `mut` on the variable:\n{rust}");
+    assert!(rust.contains("for mut i in"), "the by-value range variable is bound `mut` once:\n{rust}");
+    let r = Command::new("rustc")
+        .args(["--crate-type", "bin", "--edition", "2021", "--emit", "metadata", "-A", "warnings", "--out-dir"])
+        .arg(dir.path())
+        .arg(dir.path().join("out/m.rs"))
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}\n{rust}", String::from_utf8_lossy(&r.stderr));
+    let compiled = Command::new("rustc").args(["--edition", "2021", "-A", "warnings", "-o"]).arg(dir.path().join("m.bin")).arg(dir.path().join("out/m.rs")).output().unwrap();
+    assert!(compiled.status.success());
+    let native = Command::new(dir.path().join("m.bin")).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&native.stdout), "11 12 3 6\n", "the compiled loops write through");
+    // The interpreter does not write a loop variable back to its element yet (docs/known-issues/
+    // interpreter-loop-variable-write-through.md); the drift gate ledgers it.
+}
