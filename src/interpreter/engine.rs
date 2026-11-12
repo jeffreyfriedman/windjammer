@@ -397,6 +397,11 @@ impl Interpreter {
         self.sched.set_seed(seed);
     }
 
+    /// Run tasks as nested calls on this thread instead of OS threads (always so on wasm32; see `sched.rs`).
+    pub fn set_one_thread_tasks(&mut self, on: bool) {
+        self.sched.one_thread = on;
+    }
+
     /// Deterministic time: no real clock is read; time advances only through `sleep`.
     pub fn set_deterministic_time(&mut self, on: bool) {
         self.sched.deterministic = on;
