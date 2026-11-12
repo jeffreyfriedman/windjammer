@@ -140,3 +140,57 @@ fn verify_with_an_open_unwritten_stdin_finishes() {
     assert!(err.contains("no input arrived on stdin within 2 s"), "{err}");
     assert_eq!(o.status.code(), Some(0), "{err}");
 }
+
+/// The interpreted run's stdout reaches ours while the program runs, not when it ends.
+#[test]
+fn interpreted_stdout_streams_while_the_program_runs() {
+    use std::time::{Duration, Instant};
+    struct Stamped(Vec<(Instant, Vec<u8>)>);
+    impl Write for Stamped {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.push((Instant::now(), b.to_vec()));
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let d = tempfile::tempdir().unwrap();
+    let f = program(
+        d.path(),
+        "slow.wj",
+        "use std::thread\nuse std::time::Duration\n\nfn main() {\n    println(\"first\")\n    thread::sleep(Duration::from_millis(1500))\n    println(\"second\")\n}\n",
+    );
+    let mut cmd = Command::new(WJ);
+    cmd.args(["run", "--interpret"]).arg(&f).current_dir(d.path()).stderr(Stdio::piped());
+    let mut sink = Stamped(Vec::new());
+    let started = Instant::now();
+    let o = windjammer::cli::verify::run_streaming(cmd, Some(b""), &mut sink).unwrap();
+    let done = Instant::now();
+    assert!(o.status.success());
+    assert_eq!(String::from_utf8_lossy(&o.stdout), "first\nsecond\n", "the kept copy is the whole stdout");
+    let at = |needle: &str| sink.0.iter().find(|(_, b)| String::from_utf8_lossy(b).contains(needle)).map(|(t, _)| *t).expect(needle);
+    let (first, second) = (at("first"), at("second"));
+    assert!(first < second, "order of arrival");
+    assert!(second.duration_since(first) >= Duration::from_millis(1000), "`first` arrived {:?} before `second`", second.duration_since(first));
+    assert!(done.duration_since(first) >= Duration::from_millis(1000), "`first` was in hand long before the run ended");
+    assert!(first.duration_since(started) < done.duration_since(started), "sanity");
+}
+
+/// Output printed before a panic arrives, in order, and the panic keeps its exit status and message.
+#[test]
+fn a_program_that_prints_then_panics_streams_its_output_and_keeps_the_contract() {
+    let d = tempfile::tempdir().unwrap();
+    let f = program(d.path(), "boom.wj", "fn main() {\n    println(\"before\")\n    panic(\"boom now\")\n}\n");
+    let mut cmd = Command::new(WJ);
+    cmd.args(["run", "--interpret"]).arg(&f).current_dir(d.path()).stderr(Stdio::piped());
+    let mut sink: Vec<u8> = Vec::new();
+    let o = windjammer::cli::verify::run_streaming(cmd, Some(b""), &mut sink).unwrap();
+    assert_eq!(String::from_utf8_lossy(&sink), "before\n");
+    assert_eq!(o.status.code(), Some(101));
+    // and through `wj run --verify`: stdout once, the interpreted status, the panic on stderr
+    let (out, err, code) = verify(&f, "");
+    assert_eq!(out, "before\n", "{err}");
+    assert_eq!(code, Some(101), "{err}");
+    assert!(err.contains("boom now"), "{err}");
+}

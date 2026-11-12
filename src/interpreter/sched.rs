@@ -355,6 +355,8 @@ impl Interpreter {
     }
 
     pub(crate) fn sleep_ns(&mut self, ns: u64) -> R<()> {
+        // output printed before a wait is visible during it
+        self.flush();
         let until = self.sched.clock.saturating_add(ns);
         self.block_on(Wait::Sleep(until))
     }

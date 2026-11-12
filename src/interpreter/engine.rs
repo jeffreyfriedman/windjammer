@@ -233,6 +233,8 @@ pub struct Interpreter {
     /// Standard error captured too (`set_capture_stderr`): hosts without a process stderr, such as the browser playground.
     pub(crate) err_output: Option<Vec<String>>,
     pub(crate) out: std::io::BufWriter<std::io::Stdout>,
+    /// When buffered output was last pushed to the process stdout (see `write_out`).
+    pub(crate) last_out_flush: std::time::Instant,
     pub(crate) builtins: Registry,
     pub(crate) depth: usize,
     pub(crate) max_depth: usize,
@@ -278,6 +280,9 @@ impl Default for Interpreter {
         Self::new()
     }
 }
+
+/// The longest buffered program output waits before it is written on (checked at each print and before a sleep).
+const OUT_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
 
 impl Interpreter {
     pub fn new() -> Self {
@@ -341,6 +346,7 @@ impl Interpreter {
             capture_output: false,
             err_output: None,
             out: std::io::BufWriter::new(std::io::stdout()),
+            last_out_flush: std::time::Instant::now(),
             builtins: Registry::standard(),
             depth: 0,
             max_depth: 10_000,
@@ -443,6 +449,7 @@ impl Interpreter {
 
     pub fn flush(&mut self) {
         let _ = self.out.flush();
+        self.last_out_flush = std::time::Instant::now();
     }
 
     pub(crate) fn write_out(&mut self, s: &str) {
@@ -453,6 +460,11 @@ impl Interpreter {
             self.output.push(s.to_string());
         } else {
             let _ = self.out.write_all(s.as_bytes());
+            // a reader of a pipe (`wj run --verify`, an agent) sees output while the program runs: buffered output
+            // is pushed on at most every `OUT_FLUSH_INTERVAL`, so a print-heavy loop is not a syscall per line
+            if self.last_out_flush.elapsed() >= OUT_FLUSH_INTERVAL {
+                self.flush();
+            }
         }
     }
 

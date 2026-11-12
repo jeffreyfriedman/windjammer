@@ -160,7 +160,7 @@ pub enum Commands {
         watch: bool,
 
         /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
-        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. Stdin is read
+        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read
         /// once for both runs; when no input arrives within 2 s it is taken as empty
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
@@ -311,10 +311,10 @@ pub enum Commands {
         defer_drop_threshold: Option<usize>,
     },
 
-    /// Start the Windjammerscript REPL (interactive interpreter)
+    /// Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway
     Repl {},
 
-    /// Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`.
+    /// Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input.
     /// The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted.
     Eval {
         /// An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed
