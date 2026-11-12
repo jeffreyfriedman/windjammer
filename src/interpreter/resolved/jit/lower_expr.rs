@@ -4,6 +4,7 @@
 //! calls the walker's routine (`rt::int_op`) or refuses the loop.
 
 use super::lower::{Bind, Lo, Val, E};
+use super::lower_rows::Row;
 use super::rt;
 use super::kinds::{code, full_i64, int_ok, mutant, unsigned_repr, Class, Elem, Shape, Ty};
 use crate::interpreter::int::IntTy;
@@ -518,7 +519,9 @@ impl Lo<'_, '_> {
                 let (hint, ty) = shape.field(f)?;
                 let id = shape.fields[hint].0.as_ptr() as i64;
                 let a = [*slot as i64, code(i.ty), f.as_ptr() as i64, f.len() as i64, hint as i64, id, code(ty)].map(|c| self.k(c));
-                (self.call("index_field_get", rt::index_field_get as *const () as usize, &[a[0], i.v, a[1], a[2], a[3], a[4], a[5], a[6]], false, true), ty)
+                let helper = |lo: &mut Self| Some(lo.call("index_field_get", rt::index_field_get as *const () as usize, &[a[0], i.v, a[1], a[2], a[3], a[4], a[5], a[6]], false, true));
+                let row = Row { slot: *slot, shape, hint, ty };
+                (if self.row_ok(&row) { self.row_load(&row, i, helper)? } else { helper(self)? }, ty)
             }
             Target::Field(slot, shape, f) => {
                 let (hint, ty) = shape.field(f)?;
@@ -547,7 +550,13 @@ impl Lo<'_, '_> {
                 let hint = shape.fields.iter().position(|(n, _)| &**n == *f)?;
                 let id = shape.fields[hint].0.as_ptr() as i64;
                 let a = [*slot as i64, code(i.ty), f.as_ptr() as i64, f.len() as i64, hint as i64, id].map(|c| self.k(c));
-                self.call("index_field_set", rt::index_field_set as *const () as usize, &[a[0], i.v, a[1], a[2], a[3], a[4], a[5], bits, xt], false, true);
+                let helper = |lo: &mut Self| {
+                    lo.call("index_field_set", rt::index_field_set as *const () as usize, &[a[0], i.v, a[1], a[2], a[3], a[4], a[5], bits, xt], false, true);
+                };
+                match shape.fields[hint].1.map(|ty| Row { slot: *slot, shape, hint, ty }) {
+                    Some(row) if self.row_store_ok(&row, x.ty) => self.row_store(&row, i, bits, helper)?,
+                    _ => helper(self),
+                }
             }
             Target::Field(slot, shape, f) => {
                 let hint = shape.fields.iter().position(|(n, _)| &**n == *f)?;
