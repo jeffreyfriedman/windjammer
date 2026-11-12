@@ -146,7 +146,7 @@ digraph deps {
   "cargo_toml" -> "embedded_assets" [label="2"];
   "check" -> "analyzer" [label="3"];
   "check" -> "codegen" [label="1"];
-  "check" -> "diagnostics" [label="27"];
+  "check" -> "diagnostics" [label="29"];
   "check" -> "fuzzy_matcher" [label="4"];
   "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="23"];
@@ -164,7 +164,7 @@ digraph deps {
   "check" -> "typing" [label="4"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="31"];
+  "cli" -> "cargo_cache" [label="36"];
   "cli" -> "cargo_toml" [label="5"];
   "cli" -> "check" [label="26"];
   "cli" -> "codegen" [label="7"];

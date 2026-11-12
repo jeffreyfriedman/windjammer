@@ -212,6 +212,8 @@ fn emit_toolchain_identity() {
             now
         }
     };
+    // content identity of the compiler source (no clock, no path): key of the cross-checkout analysis cache
+    println!("cargo:rustc-env=WJ_BUILD_KEY={key}");
     println!("cargo:rustc-env=WJ_GIT_HASH={hash}");
     println!("cargo:rustc-env=WJ_GIT_TS={commit_ts}");
     println!("cargo:rustc-env=WJ_GIT_DIRTY={dirty}");
