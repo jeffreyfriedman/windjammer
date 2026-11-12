@@ -410,3 +410,41 @@ fn tuple_literal_in_a_match_arm_takes_the_sibling_arms_text() {
 fn assert_eq_of_a_borrowed_and_an_owned_string_compiles() {
     typechecks("fn check(names: Vec<string>, wanted: string) {\n    let first = names.get(0).unwrap()\n    assert_eq(first, wanted)\n    let top = names.first().unwrap()\n    assert_ne(top, \"x\".to_string())\n}\n\nfn main() {\n    let mut names: Vec<string> = Vec::new()\n    names.push(\"bob\".to_string())\n    let wanted = \"bob\".to_string()\n    let first = names.get(0).unwrap()\n    assert_eq(first, wanted)\n    check(names, wanted)\n}\n");
 }
+
+// ---- pilot 6 findings (docs/drift/pilot6-findings.md): each repro is the pilot's minimal program ----
+
+/// A block-bodied closure whose tail is an `if`/`else`: the arms are the closure's value, not statements.
+#[test]
+fn closure_tail_if_else_yields_an_ordering() {
+    typechecks(include_str!("../docs/drift/pilot6-repros/closure_if_else_ordering.wj"));
+    typechecks(include_str!("../docs/drift/pilot6-repros/closure_map_get_if_else_ordering.wj"));
+}
+
+/// An element of a `Vec<string>` inserted into a `HashMap<string, string>`, compared with an owned `unwrap_or("")` lookup.
+#[test]
+fn indexed_vec_string_element_goes_into_a_string_map() {
+    typechecks(include_str!("../docs/drift/pilot6-repros/map_insert_indexed_vec_string.wj"));
+}
+
+/// `let names: Vec<string> = keyed.map(|p| p.1)`: the annotation materialises the adapter.
+#[test]
+fn adapter_result_bound_to_a_list_annotation_is_collected() {
+    typechecks(include_str!("../docs/drift/pilot6-repros/adapter_into_vec_annotation.wj"));
+    typechecks("fn main() {\n    let nums: Vec<int> = [3, 4, 5]\n    let doubled: Vec<int> = nums.map(|n| n * 2)\n    println(\"${doubled.len()}\")\n}\n");
+}
+
+/// `outer.get(k).unwrap_or(HashMap::new())` over a map of maps yields an owned map.
+#[test]
+fn nested_map_lookup_with_a_new_map_default_is_owned() {
+    typechecks(include_str!("../docs/drift/pilot6-repros/nested_map_unwrap_or_new.wj"));
+}
+
+/// Generated Rust is warning-clean for what the emitter controls: no unused runtime type imports, no parenthesised index casts.
+#[test]
+fn build_output_has_no_unused_runtime_imports_or_parenthesised_indexes() {
+    let (generated, _, _) = generate_and_typecheck(include_str!("../docs/drift/pilot6-repros/noise_warnings_in_build_output.wj"));
+    for unused in ["fs::Metadata", "fs::DirEntry"] {
+        assert!(!generated.contains(unused), "{unused} is imported but never named:\n{generated}");
+    }
+    assert!(!generated.contains("[(") , "an index expression is parenthesised:\n{generated}");
+}

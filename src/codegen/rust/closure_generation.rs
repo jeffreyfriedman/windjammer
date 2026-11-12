@@ -116,7 +116,20 @@ impl<'ast> CodeGenerator<'ast> {
         // A closure body is its own value context: its tail is the closure's result even when the
         // closure sits inside a unit-typed block (`hs.push(thread::spawn(move || { ..; s }))`).
         let was_void = std::mem::replace(&mut self.in_void_block, false);
-        let body_str = self.generate_expression(body);
+        // a block whose tail is an `if`/`else` or `match` yields that value: its arms are not statements (`y.cmp(x)`, not `y.cmp(x);`)
+        let tail_branches = matches!(body, Expression::Block { statements, .. }
+            if matches!(statements.last(), Some(crate::parser::Statement::If { else_block: Some(_), .. } | crate::parser::Statement::Match { .. })));
+        let was_expr = self.in_expression_context;
+        self.in_expression_context = was_expr || tail_branches;
+        let mut body_str = self.generate_expression(body);
+        // a closure returns an owned value: a non-Copy field read through a reference parameter is cloned (`|p| p.1`)
+        if let Expression::FieldAccess { object: Expression::Identifier { name, .. }, .. } = body {
+            let through_ref = matches!(self.local_var_types.get(name), Some(crate::parser::Type::Reference(_)));
+            if through_ref && !body_str.ends_with(".clone()") && self.infer_expression_type(body).is_some_and(|t| !self.is_type_copy(&t)) {
+                body_str.push_str(".clone()");
+            }
+        }
+        self.in_expression_context = was_expr;
         self.in_void_block = was_void;
         self.assignment_int_target_type = prev_int_target;
 

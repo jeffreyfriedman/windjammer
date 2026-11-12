@@ -1,5 +1,4 @@
 use windjammer_runtime::subprocess;
-use windjammer_runtime::subprocess::SubprocessHandle;
 #[inline]
 fn test_echo() {
     let args = vec!["hello".to_string()];

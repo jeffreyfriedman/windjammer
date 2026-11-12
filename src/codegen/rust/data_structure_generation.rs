@@ -1268,7 +1268,7 @@ impl<'ast> CodeGenerator<'ast> {
                 && !idx_str.contains(" as usize")
                 && !idx_str.ends_with("_usize")
             {
-                idx_str = format!("({} as usize)", idx_str);
+                idx_str = format!("{} as usize", idx_str);
             }
         }
         let final_idx = idx_str;

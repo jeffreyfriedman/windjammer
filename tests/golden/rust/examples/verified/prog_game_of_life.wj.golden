@@ -23,7 +23,7 @@ fn render(g: &Vec<Vec<bool>>) -> String {
         let mut s = String::new();
         for c in 0_usize..5_usize {
             s = s + &{
-                if g[(r as usize)][(c as usize)] {
+                if g[r as usize][c as usize] {
                     String::from("#")
                 } else {
                     String::from(".")
