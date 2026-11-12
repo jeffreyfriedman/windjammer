@@ -194,3 +194,14 @@ Fixed here (interpreter or checker side; compiled behaviour is the reference unl
 New in the gate: the seeded fuzz step (empty ledger `tests/drift_corpus/fuzz_divergences.txt`) and mutation checks for the
 integer, float, format, string, sequence, map, option, iterator and JSON builtin classes
 (`tests/interpreter_builtin_mutants_test.rs`).
+
+Baselines re-recorded and repros adopted (Linux run, values equal the Mac interpreter signatures):
+
+- Twelve recorded compiled baselines were stale: the compiled output of `literal_in_option_field_arm`, `shadow_match_binding_literal`,
+  `shadowed_option_literal_arms`, `map_get_in_sort_by_closure`, `map_get_unwrap_or_float`, `algo_matrix_multiply`,
+  `prog_game_of_life`, `result_and_option`, `closures_and_iteration`, `177_opt_chain`, `jit_packed_store` and `packed_vecs` now equals the
+  interpreter's, so their ledger lines are gone.
+- Six pilot-6 repros joined the corpus (`docs/drift/pilot6-repros/README.md` describes each). `noise_warnings_in_build_output` matches
+  and needs no ledger line. The other five are compile failures of the generated Rust (WJ0003) and are ledgered with owners:
+  `adapter_into_vec_annotation`, `closure_if_else_ordering` and `closure_map_get_if_else_ordering` (codegen-types); `map_insert_indexed_vec_string`
+  and `nested_map_unwrap_or_new` (codegen-refs).
