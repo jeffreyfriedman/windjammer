@@ -7,7 +7,10 @@
 //! field, a tuple or array element, a `let` or assignment value, a `return` or the function's value. The
 //! rule holds when there is at least one, none is inside a loop or closure, no field is moved twice or read
 //! after its move, and `self` is not used whole after the first move: after the last move `self` is dead
-//! except for reads of fields it did not move (a partly moved value, which Rust allows).
+//! except for reads of fields it did not move (a partly moved value, which Rust allows). A field that is
+//! itself the result (`fn name(self) -> string { self.title }`, or `return self.title`) keeps SELF-GETTER:
+//! callers keep using the object, so the field clone is cheaper than a clone of the whole object at their
+//! call sites (measured: the getter shape costs clones under this rule, the struct-building shapes save them).
 
 use std::collections::{HashMap, HashSet};
 
@@ -21,17 +24,41 @@ enum Use {
     Whole,
 }
 
+/// Where an expression's value goes: nowhere owned, into a binding or literal, or out as the method's result.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Pos {
+    Read,
+    Stored,
+    Result,
+}
+
 struct Walk<'f> {
     uses: Vec<Use>,
     depth: usize,
     unsupported: bool,
+    getter: bool,
     non_copy: &'f dyn Fn(&str) -> bool,
+    /// `(binding, method)` of every call whose receiver is a plain binding (`store.add(..)`).
+    calls: Vec<(String, String)>,
+}
+
+/// The `(binding, method)` pairs of method calls made directly on a binding, anywhere in `body`.
+/// Companion of the receiver rule: a by-value parameter that is the receiver of an owned-`self` method is an
+/// owned use, as an argument passed to an owned formal is (OWN-CALL-FORMAL).
+pub fn direct_method_calls(body: &[&Statement<'_>]) -> Vec<(String, String)> {
+    let none = |_: &str| false;
+    let mut w = Walk { uses: Vec::new(), depth: 0, unsupported: false, getter: false, non_copy: &none, calls: Vec::new() };
+    w.block(body, false);
+    w.calls
 }
 
 /// True when the rule makes `self` owned. `field_is_non_copy` answers from the declared field type.
 pub fn self_owned_after_last_field_move(body: &[&Statement<'_>], returns_value: bool, field_is_non_copy: &dyn Fn(&str) -> bool) -> bool {
-    let mut w = Walk { uses: Vec::new(), depth: 0, unsupported: false, non_copy: field_is_non_copy };
+    let mut w = Walk { uses: Vec::new(), depth: 0, unsupported: false, getter: false, non_copy: field_is_non_copy, calls: Vec::new() };
     w.block(body, returns_value);
+    if w.getter {
+        return false; // SELF-GETTER: a field returned as the result keeps `&self` and clones the field
+    }
     if w.unsupported {
         return false;
     }
@@ -75,6 +102,17 @@ impl Walk<'_> {
         }
     }
 
+    /// A block expression: its tail goes where the block's value goes.
+    fn block_at(&mut self, stmts: &[&Statement<'_>], pos: Pos) {
+        for (i, st) in stmts.iter().enumerate() {
+            let last = i + 1 == stmts.len();
+            match st {
+                Statement::Expression { expr, .. } if last => self.expr(expr, pos),
+                _ => self.stmt(st, false),
+            }
+        }
+    }
+
     fn looped(&mut self, f: impl FnOnce(&mut Self)) {
         self.depth += 1;
         f(self);
@@ -84,57 +122,58 @@ impl Walk<'_> {
     fn stmt(&mut self, s: &Statement<'_>, tail: bool) {
         match s {
             Statement::Let { value, else_block, .. } => {
-                self.expr(value, true);
+                self.expr(value, Pos::Stored);
                 if let Some(b) = else_block {
                     self.block(b, false);
                 }
             }
             Statement::Assignment { target, value, .. } => {
-                self.expr(value, true);
-                self.expr(target, false);
+                self.expr(value, Pos::Stored);
+                self.expr(target, Pos::Read);
             }
-            Statement::Return { value, .. } => value.iter().for_each(|v| self.expr(v, true)),
-            Statement::Expression { expr, .. } => self.expr(expr, tail),
+            Statement::Return { value, .. } => value.iter().for_each(|v| self.expr(v, Pos::Result)),
+            Statement::Expression { expr, .. } => self.expr(expr, if tail { Pos::Result } else { Pos::Read }),
             Statement::If { condition, then_block, else_block, .. } => {
-                self.expr(condition, false);
+                self.expr(condition, Pos::Read);
                 self.block(then_block, tail);
                 if let Some(b) = else_block {
                     self.block(b, tail);
                 }
             }
             Statement::Match { value, arms, .. } => {
-                self.expr(value, false);
+                self.expr(value, Pos::Read);
                 for a in arms {
-                    a.guard.iter().for_each(|g| self.expr(g, false));
-                    self.expr(a.body, tail);
+                    a.guard.iter().for_each(|g| self.expr(g, Pos::Read));
+                    self.expr(a.body, if tail { Pos::Result } else { Pos::Read });
                 }
             }
             Statement::For { iterable, body, .. } => {
-                self.expr(iterable, false);
+                self.expr(iterable, Pos::Read);
                 self.looped(|w| w.block(body, false));
             }
             Statement::While { condition, body, .. } => self.looped(|w| {
-                w.expr(condition, false);
+                w.expr(condition, Pos::Read);
                 w.block(body, false);
             }),
             Statement::Loop { body, .. } => self.looped(|w| w.block(body, false)),
-            Statement::Break { value, .. } => value.iter().for_each(|v| self.expr(v, true)),
+            Statement::Break { value, .. } => value.iter().for_each(|v| self.expr(v, Pos::Stored)),
             Statement::Continue { .. } | Statement::Use { .. } => {}
-            Statement::Const { value, .. } | Statement::Static { value, .. } => self.expr(value, false),
+            Statement::Const { value, .. } | Statement::Static { value, .. } => self.expr(value, Pos::Read),
             Statement::Thread { .. } | Statement::Async { .. } | Statement::Defer { .. } => self.unsupported = true,
         }
     }
 
-    fn expr(&mut self, e: &Expression<'_>, owned: bool) {
+    fn expr(&mut self, e: &Expression<'_>, pos: Pos) {
         match e {
             Expression::Identifier { name, .. } if name == "self" => self.uses.push(Use::Whole),
             Expression::Identifier { .. } | Expression::Literal { .. } => {}
             Expression::FieldAccess { object, field, .. } => match &**object {
                 Expression::Identifier { name, .. } if name == "self" => {
-                    if owned && (self.non_copy)(field) {
+                    if pos != Pos::Read && (self.non_copy)(field) {
                         if self.depth > 0 {
                             self.unsupported = true;
                         }
+                        self.getter |= pos == Pos::Result;
                         self.uses.push(Use::Move(field.clone()));
                     } else {
                         self.uses.push(Use::Read(field.clone()));
@@ -142,54 +181,57 @@ impl Walk<'_> {
                 }
                 _ => {
                     // A deeper path `self.a.b` in an owned position would partly move `self.a`.
-                    if owned && self_field_root(object).is_some() {
+                    if pos != Pos::Read && self_field_root(object).is_some() {
                         self.unsupported = true;
                     }
-                    self.expr(object, false)
+                    self.expr(object, Pos::Read)
                 }
             },
-            Expression::MethodCall { object, arguments, .. } => {
-                self.expr(object, false);
-                arguments.iter().for_each(|(_, a)| self.expr(a, false));
+            Expression::MethodCall { object, method, arguments, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    self.calls.push((name.clone(), method.clone()));
+                }
+                self.expr(object, Pos::Read);
+                arguments.iter().for_each(|(_, a)| self.expr(a, Pos::Read));
             }
             Expression::Call { function, arguments, .. } => {
-                self.expr(function, false);
-                arguments.iter().for_each(|(_, a)| self.expr(a, false));
+                self.expr(function, Pos::Read);
+                arguments.iter().for_each(|(_, a)| self.expr(a, Pos::Read));
             }
-            Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, f)| self.expr(f, true)),
+            Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, f)| self.expr(f, Pos::Stored)),
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
-                elements.iter().for_each(|x| self.expr(x, true))
+                elements.iter().for_each(|x| self.expr(x, Pos::Stored))
             }
-            Expression::Block { statements, .. } => self.block(statements, owned),
-            Expression::Closure { body, .. } => self.looped(|w| w.expr(body, false)),
+            Expression::Block { statements, .. } => self.block_at(statements, pos),
+            Expression::Closure { body, .. } => self.looped(|w| w.expr(body, Pos::Read)),
             Expression::Binary { left, right, .. } => {
-                self.expr(left, false);
-                self.expr(right, false);
+                self.expr(left, Pos::Read);
+                self.expr(right, Pos::Read);
             }
-            Expression::Unary { operand, .. } => self.expr(operand, false),
+            Expression::Unary { operand, .. } => self.expr(operand, Pos::Read),
             Expression::Range { start, end, .. } => {
-                self.expr(start, false);
-                self.expr(end, false);
+                self.expr(start, Pos::Read);
+                self.expr(end, Pos::Read);
             }
             Expression::Index { object, index, .. } => {
-                self.expr(object, false);
-                self.expr(index, false);
+                self.expr(object, Pos::Read);
+                self.expr(index, Pos::Read);
             }
             Expression::MapLiteral { pairs, .. } => pairs.iter().for_each(|(k, v)| {
-                self.expr(k, true);
-                self.expr(v, true);
+                self.expr(k, Pos::Stored);
+                self.expr(v, Pos::Stored);
             }),
-            Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| self.expr(x, false)),
+            Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| self.expr(x, Pos::Read)),
             Expression::Cast { expr, .. }
             | Expression::TryOp { expr, .. }
             | Expression::Await { expr, .. }
             | Expression::AsyncCall { expr, .. }
-            | Expression::SpawnCall { expr, .. } => self.expr(expr, false),
+            | Expression::SpawnCall { expr, .. } => self.expr(expr, Pos::Read),
             Expression::ChannelSend { channel, value, .. } => {
-                self.expr(channel, false);
-                self.expr(value, true);
+                self.expr(channel, Pos::Read);
+                self.expr(value, Pos::Stored);
             }
-            Expression::ChannelRecv { channel, .. } => self.expr(channel, false),
+            Expression::ChannelRecv { channel, .. } => self.expr(channel, Pos::Read),
         }
     }
 }
@@ -222,7 +264,7 @@ mod tests {
         self_owned_after_last_field_move(&decl.body, decl.return_type.is_some(), &nc)
     }
 
-    const SRC: &str = "struct B { items: Vec<int>, n: int }\nstruct O { items: Vec<int>, n: int }\nimpl B {\n fn wither(self) -> O { O { items: self.items, n: self.n } }\n fn read_after(self) -> O { let o = O { items: self.items, n: 1 }\n  let k = self\n  o }\n fn reread(self) -> int { let v = self.items\n  self.items.len() }\n fn looped(self) -> int { let mut t = 0\n  while t < 1 { let v = self.items\n   t = t + 1 }\n  t }\n fn only_copy(self) -> int { self.n }\n}\n";
+    const SRC: &str = "struct B { items: Vec<int>, n: int }\nstruct O { items: Vec<int>, n: int }\nimpl B {\n fn wither(self) -> O { O { items: self.items, n: self.n } }\n fn read_after(self) -> O { let o = O { items: self.items, n: 1 }\n  let k = self\n  o }\n fn reread(self) -> int { let v = self.items\n  self.items.len() }\n fn looped(self) -> int { let mut t = 0\n  while t < 1 { let v = self.items\n   t = t + 1 }\n  t }\n fn only_copy(self) -> int { self.n }\n fn getter(self) -> Vec<int> { self.items }\n}\n";
 
     #[test]
     fn a_wither_moving_its_fields_last_is_owned() {
@@ -239,5 +281,10 @@ mod tests {
     fn a_move_in_a_loop_or_of_copy_fields_only_keeps_the_borrow() {
         assert!(!decide(SRC, "looped", &["items"]));
         assert!(!decide(SRC, "only_copy", &["items"]));
+    }
+
+    #[test]
+    fn a_getter_returning_a_field_keeps_the_borrow() {
+        assert!(!decide(SRC, "getter", &["items"]));
     }
 }
