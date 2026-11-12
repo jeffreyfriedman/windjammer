@@ -1,0 +1,29 @@
+// expect: add
+// expect: 1
+struct Form {
+    s: string,
+}
+struct Interp {
+    forms: Vec<Form>,
+    errors: int,
+}
+impl Interp {
+    fn fail(self, msg: string) -> int {
+        self.errors += 1
+        msg.len() as int
+    }
+    fn special(self, op: string, n: int) -> int {
+        if n > 0 { return self.fail(op) }
+        println(op)
+        0
+    }
+    fn eval(self, h: int) -> int {
+        self.special(self.forms[h].s, 0)
+        self.special(self.forms[h].s, 1)
+        self.errors
+    }
+}
+fn main() {
+    let mut it = Interp { forms: [Form { s: "add" }], errors: 0 }
+    println("${it.eval(0)}")
+}
