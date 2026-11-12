@@ -111,12 +111,12 @@ digraph deps {
   "analyzer" -> "auto_clone" [label="2"];
   "analyzer" -> "codegen" [label="28",color=red,fontcolor=red];
   "analyzer" -> "debug_env" [label="4"];
-  "analyzer" -> "embedded_assets" [label="2"];
+  "analyzer" -> "embedded_assets" [label="3"];
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
   "analyzer" -> "parser" [label="134"];
-  "analyzer" -> "stdlib_scanner" [label="2"];
+  "analyzer" -> "stdlib_scanner" [label="3"];
   "analyzer" -> "stdlib_surface" [label="1"];
   "analyzer" -> "test_utils" [label="1"];
   "analyzer" -> "type_classification" [label="35"];
@@ -163,9 +163,10 @@ digraph deps {
   "check" -> "test_module_gate" [label="1"];
   "check" -> "type_classification" [label="13"];
   "check" -> "typing" [label="6"];
+  "cli" -> "analyzer" [label="2"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="36"];
+  "cli" -> "cargo_cache" [label="39"];
   "cli" -> "cargo_toml" [label="5"];
   "cli" -> "check" [label="26"];
   "cli" -> "codegen" [label="7"];

@@ -8,6 +8,8 @@ use crate::parser::Type;
 use super::OwnershipMode;
 
 mod identity;
+mod snapshot;
+pub use snapshot::{install_layer_store, LayerStore};
 
 /// True when `a` and `b` differ only by shared/mut ref wrapping of the same inner type
 /// (codegen ownership demotion of one function, not a cross-module overload).
@@ -24,7 +26,7 @@ fn param_types_are_ownership_refinement(a: &Type, b: &Type) -> bool {
     peel(a) == peel(b)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FunctionSignature {
     pub name: String,
     pub param_types: Vec<Type>,
@@ -197,12 +199,7 @@ impl SignatureRegistry {
             // WJ `.wj` / stdlib_meta stubs that declare owned `string` can shadow them
             // in `signatures` without erasing the borrow contract — call sites consult
             // `get_fallback_signature` via prefer_shared_ref.
-            let mut runtime = SignatureRegistry::empty();
-
-            if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut runtime) {
-                eprintln!("Warning: Failed to scan runtime signatures: {}", e);
-                eprintln!("Continuing with empty registry - may generate incorrect borrows");
-            }
+            let runtime = snapshot::scanned_runtime_layer();
 
             let mut registry = SignatureRegistry::layered(std::sync::Arc::new(runtime));
             Self::load_stdlib_meta(&mut registry);

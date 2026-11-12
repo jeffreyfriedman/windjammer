@@ -22,6 +22,11 @@ pub fn analysis_dir() -> PathBuf {
     super::cache_root().join("analysis")
 }
 
+/// The scanned runtime signature layer (`<cache root>/registry`, a handful of entries: one per compiler build).
+pub fn registry_dir() -> PathBuf {
+    super::cache_root().join("registry")
+}
+
 pub fn verdicts_dir() -> PathBuf {
     super::cache_root().join("verdicts")
 }
@@ -111,6 +116,24 @@ pub fn prune(dir: &Path, max: usize, force: bool, report: &mut super::PruneRepor
         }
     }
     freed
+}
+
+/// Entries kept in the registry directory (newest win).
+pub const REGISTRY_MAX_ENTRIES: usize = 16;
+
+/// The scanned runtime layer as a store for `analyzer::LayerStore`.
+pub struct RegistryStore {
+    pub dir: PathBuf,
+}
+
+impl RegistryStore {
+    pub fn get(&self, key: &str) -> Option<String> {
+        read(&self.dir, key)
+    }
+    pub fn put(&self, key: &str, text: &str) {
+        let _ = fs::create_dir_all(&self.dir);
+        write(&self.dir, key, text, REGISTRY_MAX_ENTRIES);
+    }
 }
 
 /// The analysis cache as a store for `check::shared_cache`.

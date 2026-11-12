@@ -17,7 +17,7 @@ pub type SourceLocation = Option<Location>;
 // TYPE SYSTEM
 // ============================================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Type {
     Int,
     Int32,
