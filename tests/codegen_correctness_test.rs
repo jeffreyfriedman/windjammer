@@ -134,6 +134,9 @@ corpus_tests!(
     text_slice_into_owned_string,
     generic_element_read_clone,
     nested_closure_typed_param,
+    collect_after_map_item_type,
+    substring_tail_value,
+    text_slice_in_every_position,
 );
 
 // ------------------------------------------------------------------ generated programs

@@ -458,6 +458,14 @@ impl CodeGenerator<'_> {
                     return Some(item);
                 }
 
+                // An adapter declared `-> Iterator<T>` that takes arguments (`filter(p)`, `take(n)`, `skip(n)`) passes its
+                // receiver's items through (`cloned()` / `copied()` take none: they are not this case).
+                if self.adapter_passes_items_through(method) {
+                    if let Some(item) = self.infer_iterator_item_type_at_expr(object) {
+                        return Some(item);
+                    }
+                }
+
                 if crate::codegen::rust::stdlib_method_traits::method_returns_iterator_qualified(
                     method,
                     self.mc_infer_method_receiver_type_name(object)
@@ -551,7 +559,9 @@ impl CodeGenerator<'_> {
                 let adapter = if declared { ".map(|s| s.to_string())" } else { "" };
                 (adapter.to_string(), "::<Vec<_>>".to_string())
             }
-            (Some(iter), Some(target)) if iterator_item_needs_owned_adapter(iter, target) => {
+            (Some(iter), Some(target))
+                if iterator_item_needs_owned_adapter(iter, target) && !self.items_are_closure_results(collect_receiver) =>
+            {
                 let adapter = if crate::codegen::rust::type_analysis_pure::is_copy_type(
                     peel_type_reference(iter),
                 ) {
@@ -1139,5 +1149,38 @@ pub fn bfs_distance(map: HashMap<i64, i64>, vertex: i64) -> i64 {
             !mods.contains("map"),
             "local HashMap param named map must not trigger windjammer_runtime::map import, got {mods:?}"
         );
+    }
+}
+
+impl CodeGenerator<'_> {
+    /// The items reaching `collect` are the results of a closure (`.map(|n| n * 2)`, possibly followed by adapters that
+    /// pass items through, such as `.filter(..)` or `.take(n)`): they are already values, so no `.copied()` /
+    /// `.cloned()` is added for them. Decided from the adapters' declared results.
+    pub(in crate::codegen::rust) fn items_are_closure_results(&self, expr: &Expression) -> bool {
+        let Expression::MethodCall { object, method, .. } = expr else { return false };
+        match self.adapter_keeps_item(method) {
+            Some(false) => true,
+            Some(true) => self.items_are_closure_results(object),
+            None => false,
+        }
+    }
+
+    /// An iterator adapter declared `-> Iterator<T>` over its receiver's items that takes arguments: its items are the
+    /// receiver's (`filter`, `take`, `skip`, `take_while`, `step_by`).
+    fn adapter_passes_items_through(&self, method: &str) -> bool {
+        self.adapter_keeps_item(method) == Some(true)
+            && self.core_surface().declared(crate::ir::stdlib_tables::ITERATOR, method).is_some_and(|(_, _, params, _)| !params.is_empty())
+    }
+
+    /// From `std/rust_core.wji`: `Some(true)` when the iterator adapter's result has the receiver's items
+    /// (`Iterator<T>`), `Some(false)` when they are something else (`map`'s `Iterator<U>`), `None` when the surface
+    /// declares no such adapter returning an iterator.
+    pub(in crate::codegen::rust) fn adapter_keeps_item(&self, method: &str) -> Option<bool> {
+        let (type_generics, _, _, ret) = self.core_surface().declared(crate::ir::stdlib_tables::ITERATOR, method)?;
+        let Some(Type::Parameterized(head, args)) = ret else { return None };
+        if head != crate::ir::stdlib_tables::ITERATOR {
+            return None;
+        }
+        Some(matches!(args.as_slice(), [Type::Custom(t) | Type::Generic(t)] if type_generics.first() == Some(t)))
     }
 }
