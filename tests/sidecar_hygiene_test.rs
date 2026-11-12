@@ -59,10 +59,26 @@ fn tracked_sidecar_detector_reports_a_planted_stray() {
 
 #[test]
 fn gitignore_covers_sidecars_except_stdlib_meta() {
-    let ignored = |p: &str| Command::new("git").args(["check-ignore", "-q", "--no-index", p]).current_dir(repo()).status().map(|s| s.success()).unwrap_or(false);
-    assert!(ignored("tests/fixtures/anything.wj.meta"), "*.wj.meta must be git-ignored");
-    assert!(ignored("examples/x/main.wj.meta"));
-    assert!(!ignored("stdlib_meta/vec.wj.meta"), "stdlib_meta is intentional and must stay trackable");
+    // `git check-ignore` reports negated patterns as ignored on old git (2.25), so ask the question the
+    // way a commit does: which files does a scratch repo with this .gitignore see as untracked?
+    let tmp = tempfile::tempdir().unwrap();
+    let r = tmp.path();
+    let git = |args: &[&str]| {
+        let o = Command::new("git").args(args).current_dir(r).output().unwrap();
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).into_owned()
+    };
+    git(&["init", "-q"]);
+    std::fs::copy(repo().join(".gitignore"), r.join(".gitignore")).unwrap();
+    for p in ["tests/fixtures/anything.wj.meta", "examples/x/main.wj.meta", "stdlib_meta/vec.wj.meta"] {
+        std::fs::create_dir_all(r.join(p).parent().unwrap()).unwrap();
+        std::fs::write(r.join(p), "").unwrap();
+    }
+    let visible = git(&["ls-files", "--others", "--exclude-standard"]);
+    let visible: Vec<&str> = visible.lines().collect();
+    assert!(!visible.contains(&"tests/fixtures/anything.wj.meta"), "*.wj.meta must be git-ignored");
+    assert!(!visible.contains(&"examples/x/main.wj.meta"), "*.wj.meta must be git-ignored");
+    assert!(visible.contains(&"stdlib_meta/vec.wj.meta"), "stdlib_meta is intentional and must stay trackable");
 }
 
 // ---- no stray files next to sources -------------------------------------------------------------------
