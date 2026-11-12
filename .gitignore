@@ -81,3 +81,6 @@ scripts/**/__pycache__/
 docs/book/playground/*.wasm
 docs/book/playground/tests/node_modules/
 crates/windjammer-playground/target/
+
+# release scorecard inputs written by the verification flow (contract: results/README.md)
+/results/*.json

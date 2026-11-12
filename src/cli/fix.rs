@@ -31,6 +31,51 @@ fn parses(path: &str, source: &str) -> bool {
     .unwrap_or(false)
 }
 
+fn parse_program(path: &str, source: &str) -> Option<crate::parser::Program<'static>> {
+    let (path, source) = (path.to_string(), source.to_string());
+    std::panic::catch_unwind(move || {
+        let tokens = crate::lexer::Lexer::new(&source).tokenize_with_locations();
+        let mut parser = crate::parser::Parser::new_with_source(tokens, path, source.clone());
+        parser.parse().ok()
+    })
+    .ok()
+    .flatten()
+}
+
+/// Declared-type verdicts for the `vec![..]` occurrences of every `.wj` file (see `intrinsics::vec_context`).
+/// The declaration index spans all scanned files, so calls across modules resolve.
+fn vec_verdicts(files: &[(PathBuf, String)]) -> Vec<crate::intrinsics::vec_context::Verdicts> {
+    use crate::intrinsics::vec_context::{verdicts, DeclIndex};
+    let programs: Vec<_> = files
+        .iter()
+        .map(|(p, src)| {
+            let wj = p.extension().is_some_and(|e| e == "wj");
+            if wj && src.contains("vec!") {
+                parse_program(&name_of(p), src)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let mut index = DeclIndex::default();
+    for (p, (path, src)) in programs.iter().zip(files) {
+        match p {
+            Some(prog) => index.add_program(prog),
+            // declarations of a file that only lacks `vec!` still count
+            None if path.extension().is_some_and(|e| e == "wj") => {
+                if let Some(prog) = parse_program(&name_of(path), src) {
+                    index.add_program(&prog);
+                }
+            }
+            None => {}
+        }
+    }
+    programs
+        .iter()
+        .map(|p| p.as_ref().map(|prog| verdicts(prog, &index)).unwrap_or_default())
+        .collect()
+}
+
 fn name_of(p: &Path) -> String {
     p.display().to_string()
 }
@@ -173,8 +218,13 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
     collect(path, &mut files, docs)?;
     files.sort();
     let mut summary = FixSummary::default();
-    for file in &files {
-        let source = fs::read_to_string(file)?;
+    let sources: Vec<(PathBuf, String)> = files
+        .iter()
+        .map(|f| Ok((f.clone(), fs::read_to_string(f)?)))
+        .collect::<Result<_>>()?;
+    let verdicts = vec_verdicts(&sources);
+    for (idx, (file, (_, source))) in files.iter().zip(sources).enumerate() {
+        let source = source;
         summary.files_scanned += 1;
         let is_md = file.extension().is_some_and(|e| e == "md");
         let out = if is_md {
@@ -184,13 +234,16 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
                 text,
             }
         } else {
-            let mut out = surface_fix::fix_source(&source);
+            let mut out = surface_fix::fix_source_with(&source, &verdicts[idx]);
             out.text = fix_trailing_returns(&name_of(file), out.text);
             out.text = surface_fix_options(out.text);
             out.text = crate::linter::redundant_as_str::fix(&out.text);
             out
         };
         summary.skipped += out.skipped_count();
+        for f in out.findings.iter().filter(|f| f.replacement.is_none() && f.original.starts_with("vec!")) {
+            println!("{}:{}:{}: {}", file.display(), f.line, f.col, f.message);
+        }
         if out.text == source {
             continue;
         }

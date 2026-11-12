@@ -14,7 +14,7 @@ fn main() {
     let mut clock = 1_i64;
     loop {
         if let Some(c) = q.pop_front() {
-            let _ = println!("t={} serve {} (waited {})", clock, c.id, clock - c.arrival);
+            println!("t={} serve {} (waited {})", clock, c.id, clock - c.arrival);
             clock += 2;
         } else {
             break;

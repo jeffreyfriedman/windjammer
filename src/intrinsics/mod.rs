@@ -20,6 +20,7 @@
 
 pub mod option_fix;
 pub mod surface_fix;
+pub mod vec_context;
 pub mod template;
 
 pub use template::split_interp_spec;
@@ -140,6 +141,11 @@ impl Intrinsic {
             self,
             Intrinsic::Panic | Intrinsic::Todo | Intrinsic::Unreachable
         )
+    }
+
+    /// Declared result is `()`: a statement-position call needs no `let _ =` discard.
+    pub fn returns_unit(self) -> bool {
+        self.is_print() || matches!(self, Intrinsic::Assert | Intrinsic::AssertEq | Intrinsic::AssertNe)
     }
 
     /// Index of the (optional) message / template argument.

@@ -315,6 +315,14 @@ impl Interpreter {
                     return self.call_named(path, arguments, &[], expected);
                 }
             }
+            // `(self.layers[i].before)(x)`: a parenthesised field is a call of the closure the field holds (Rust's
+            // reading); a field that is not a callable falls through to the method-call reading
+            if Self::is_place_expr(object) {
+                if let Ok(f @ Value::Func(_)) = self.eval(function) {
+                    let args = self.eval_args(arguments, None, false)?;
+                    return self.call_value(&f, args);
+                }
+            }
             return self.eval_method_call(function, object, field.as_str(), None, arguments, location.as_ref());
         }
         let f = self.eval(function)?;

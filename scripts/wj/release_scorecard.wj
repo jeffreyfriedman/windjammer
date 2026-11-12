@@ -1,0 +1,1015 @@
+// The release scorecard: one fixed definition of "ready", every criterion a number with a threshold.
+//
+//   wj run scripts/wj/release_scorecard.wj                 print the scorecard (text), no files written
+//   wj run scripts/wj/release_scorecard.wj -- --write      also rewrite docs/RELEASE_SCORECARD.md and docs/generated/release_scorecard.json
+//   wj run scripts/wj/release_scorecard.wj -- --check      the page and JSON on disk match the definition and each other (what CI runs)
+//   wj run scripts/wj/release_scorecard.wj -- --selftest   fixtures prove every criterion can turn RED, GREEN, STALE and MISSING
+//
+// Options: --root DIR (repository, default .), --results DIR (default <root>/results), --now EPOCH, --max-age DAYS (8).
+//
+// The script never builds or times anything. Cheap facts come from repository files; everything that needs a build or a
+// quiet machine is read from `results/*.json` (contract: results/README.md). A results file that is absent shows
+// MISSING, one older than --max-age days shows STALE; neither counts as green.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::items
+use wj_json_doc::members
+use wj_json_doc::as_str
+use wj_json_doc::as_i64
+use wj_json_doc::as_f64
+use wj_json_doc::object
+use wj_json_doc::with
+use wj_json_doc::from_str
+use wj_json_doc::from_int
+use wj_json_doc::from_float
+use wj_json_doc::array
+use wj_json_doc::push
+use wj_json_doc::dumps
+use wj_proc::sh
+use wj_proc::sh_in
+use wj_proc::quote
+
+const PAGE: string = "docs/RELEASE_SCORECARD.md"
+const JSON_OUT: string = "docs/generated/release_scorecard.json"
+const FIXTURES: string = "tests/fixtures/release_scorecard"
+
+@derive(Clone)
+struct Metric {
+    id: string,
+    crit: int,
+    title: string,
+    unit: string,
+    dir: string,
+    green: f64,
+    amber: f64,
+    source: string,
+    value: f64,
+    state: string,
+    note: string,
+}
+
+struct Ctx {
+    root: string,
+    results: string,
+    now: int,
+    max_age: f64,
+    eco: string,
+    siblings: Vec<string>,
+}
+
+fn crit_title(c: int) -> string {
+    match c {
+        1 => "Language and compiler correctness",
+        2 => "Interpreter",
+        3 => "Build cost",
+        4 => "Agent cost",
+        5 => "Targets and backends",
+        6 => "Ecosystem",
+        7 => "Docs",
+        8 => "Public readiness",
+        _ => "Verification freshness",
+    }
+}
+
+fn m(id: string, crit: int, title: string, unit: string, dir: string, green: f64, amber: f64, source: string) -> Metric {
+    Metric { id: id, crit: crit, title: title, unit: unit, dir: dir, green: green, amber: amber, source: source, value: 0.0, state: "unset", note: "" }
+}
+
+// The fixed definition. dir "max": lower is better (GREEN <= green, AMBER <= amber, else RED); "min": higher is better.
+// source: a repository file ("file ..."), or a results file ("results NAME.json").
+fn specs() -> Vec<Metric> {
+    let mut s: Vec<Metric> = Vec::new()
+    // 1 correctness
+    s.push(m("known_test_failures", 1, "Known failing tests (ledger lines)", "tests", "max", 0.0, 40.0, "file .config/known-test-failures.txt"))
+    s.push(m("drift_ledger", 1, "Interpreter/compiled drift ledger lines", "lines", "max", 0.0, 20.0, "file tests/drift_corpus/known_divergences.txt"))
+    s.push(m("rustc_rejects", 1, "Golden programs rustc rejects", "programs", "max", 0.0, 25.0, "file tests/golden/rustc_rejects.txt"))
+    s.push(m("friction_events_open", 1, "Open agent-friction events", "events", "max", 0.0, 5.0, "file docs/generated/measured.json"))
+    s.push(m("friction_over_ratchet", 1, "Agent-cost measures worse than their ratchet", "measures", "max", 0.0, 0.0, "file bench/agent-dx/friction/ratchet.json"))
+    s.push(m("width_owners", 1, "D-WIDTH-OWNERS findings (recorded baseline)", "findings", "max", 0.0, 20.0, "file tests/golden/explain_counts.txt"))
+    s.push(m("width_owners_over_ratchet", 1, "D-WIDTH-OWNERS live count above its ratchet", "findings", "max", 0.0, 0.0, "results explain-counts.json"))
+    s.push(m("heuristic_surface", 1, "Heuristic surface (name matches, arm names, fallback/legacy)", "sites", "max", 500.0, 1200.0, "file docs/heuristic-allowlist.toml"))
+    s.push(m("heuristic_published_gap", 1, "Heuristic total published in the burn-down differs from the allow-list", "sites", "max", 0.0, 0.0, "file docs/spec/convergence-burndown.md"))
+    s.push(m("ownership_conflicts", 1, "Ownership design-conflict tests ledgered (open)", "tests", "max", 0.0, 10.0, "file docs/spec/convergence-burndown.md"))
+    // 2 interpreter
+    s.push(m("interp_r2", 2, "R2 no silent divergence", "percent", "min", 100.0, 90.0, "file docs/generated/interp_readiness.json"))
+    s.push(m("interp_r4", 2, "R4 fast enough", "percent", "min", 100.0, 90.0, "file docs/generated/interp_readiness.json"))
+    s.push(m("interp_r5", 2, "R5 diagnostics agree", "percent", "min", 100.0, 90.0, "file docs/generated/interp_readiness.json"))
+    s.push(m("interp_r7", 2, "R7 stability over the last 20 commits", "percent", "min", 100.0, 90.0, "file docs/generated/interp_readiness.json"))
+    s.push(m("interp_startup_ms", 2, "Interpreter startup (CPU)", "ms", "max", 50.0, 200.0, "file docs/generated/measured.json"))
+    s.push(m("interp_kernels_slower", 2, "Kernels where the interpreter is slower than Python", "kernels", "max", 0.0, 3.0, "file bench/interp/compare.json"))
+    // 3 build cost
+    s.push(m("build_rss_growth", 3, "Library build peak memory growth, N=200 over N=50", "x", "max", 4.5, 8.0, "results build-meter.json"))
+    s.push(m("build_wall_growth", 3, "Library build wall-time growth, N=200 over N=50", "x", "max", 4.5, 8.0, "results build-meter.json"))
+    s.push(m("build_rss_n200_mb", 3, "Library build peak memory at N=200 (8 GB laptop budget)", "MB", "max", 4096.0, 6144.0, "results build-meter.json"))
+    s.push(m("build_wall_n200_s", 3, "Library build wall time at N=200 (4 cores)", "s", "max", 120.0, 600.0, "results build-meter.json"))
+    s.push(m("engine_rss_mb", 3, "Flagship engine library transpile peak memory", "MB", "max", 4096.0, 6144.0, "results engine-transpile.json"))
+    s.push(m("engine_wall_s", 3, "Flagship engine library transpile wall time", "s", "max", 300.0, 900.0, "results engine-transpile.json"))
+    // 4 agent cost
+    s.push(m("agent_cost_ratio", 4, "Pilot-7 cost per task, Windjammer over Rust", "x", "max", 1.0, 1.5, "results pilot7.json"))
+    s.push(m("agent_pass_rate", 4, "Pilot-7 Windjammer pass rate", "ratio", "min", 0.9, 0.7, "results pilot7.json"))
+    s.push(m("agent_token_ratio", 4, "Tokens to write a task, Windjammer over Rust (reference solutions)", "x", "max", 1.0, 1.3, "file docs/generated/measured.json"))
+    s.push(m("agent_fix_coverage", 4, "Error codes seen with a machine fix", "ratio", "min", 0.8, 0.4, "file docs/generated/measured.json"))
+    s.push(m("agent_ref_failing", 4, "Pilot-7 reference solutions failing `wj run --verify`", "solutions", "max", 0.0, 2.0, "results pilot7.json"))
+    // 5 targets
+    s.push(m("engine_native_errors", 5, "Flagship engine library native build errors", "errors", "max", 0.0, 50.0, "results targets.json"))
+    s.push(m("web_stage", 5, "Flagship engine web target stage reached (0a=0, 1, 2, ...)", "stage", "min", 2.0, 1.0, "results targets.json"))
+    s.push(m("playground_parity_failures", 5, "Playground samples that differ from the compiled run", "samples", "max", 0.0, 3.0, "results targets.json"))
+    // 6 ecosystem
+    s.push(m("eco_packages", 6, "Ecosystem packages", "packages", "min", 60.0, 40.0, "file ecosystem packages/ (or results ecosystem.json)"))
+    s.push(m("eco_without_tests", 6, "Ecosystem packages without tests", "packages", "max", 0.0, 5.0, "file ecosystem packages/ (or results ecosystem.json)"))
+    s.push(m("eco_sweep_failing", 6, "Ecosystem sweep failures", "tests", "max", 0.0, 3.0, "results ecosystem.json"))
+    s.push(m("orphan_tests", 6, "Orphan tests (no runner reaches them)", "tests", "max", 0.0, 3.0, "results docs.json"))
+    // 7 docs
+    s.push(m("book_pages", 7, "Book pages", "pages", "min", 60.0, 40.0, "file docs/generated/metrics.json"))
+    s.push(m("features_uncovered", 7, "Registry features without a book page", "features", "max", 0.0, 3.0, "file docs/generated/metrics.json"))
+    s.push(m("docs_stale_numbers", 7, "Stale or hand-typed numbers (docs-truth claims)", "claims", "max", 0.0, 5.0, "results docs.json"))
+    s.push(m("roadmap_open_gaps", 7, "Open or partial gaps in the ranked known-gaps table", "gaps", "max", 0.0, 10.0, "file docs/known-gaps.md"))
+    // 8 public readiness
+    s.push(m("fmt_failing_files", 8, "Files failing cargo fmt --check", "files", "max", 0.0, 20.0, "results fmt.json"))
+    s.push(m("hygiene_allowlist", 8, "Public hygiene allowlist entries", "entries", "max", 0.0, 10.0, "file docs/public-hygiene-allowlist.txt"))
+    s.push(m("trailer_commits", 8, "Commits carrying a session trailer in history", "commits", "max", 0.0, 10.0, "git log"))
+    s.push(m("governance_missing", 8, "Governance files missing across the public repos", "files", "max", 0.0, 0.0, "file README LICENSE CODE_OF_CONDUCT CONTRIBUTING SECURITY"))
+    s.push(m("large_files", 8, "Tracked files over 1 MB", "files", "max", 0.0, 20.0, "git ls-tree"))
+    // 9 verification freshness
+    s.push(m("suite_age_days", 9, "Age of the last full-suite result", "days", "max", 7.0, 14.0, "results suite.json"))
+    s.push(m("suite_commits_behind", 9, "Commits on the head since the full-suite result", "commits", "max", 20.0, 100.0, "results suite.json"))
+    s.push(m("suite_new_failures", 9, "New failures (not in the known list) in the last full-suite result", "tests", "max", 0.0, 0.0, "results suite.json"))
+    s
+}
+
+// ---------------------------------------------------------------- small helpers
+
+fn fmt(v: f64) -> string {
+    let whole = v as int
+    if (whole as f64) == v {
+        return "${whole}"
+    }
+    let r = ((v * 100.0).round()) / 100.0
+    "${r}"
+}
+
+fn read(path: string) -> Option<string> {
+    if fs.is_file(path) {
+        return fs.read_to_string(path).ok()
+    }
+    None
+}
+
+fn is_entry(line: string) -> bool {
+    let t = strings.trim(line)
+    t.len() > 0 && !strings.starts_with(t, "#")
+}
+
+fn count_entries(text: string) -> f64 {
+    let mut n = 0
+    for line in strings.split_lines(text) {
+        if is_entry(line) {
+            n = n + 1
+        }
+    }
+    n as f64
+}
+
+fn num(j: Json) -> Option<f64> {
+    match as_f64(j) {
+        Some(x) => Some(x),
+        None => match as_i64(j) {
+            Some(i) => Some(i as f64),
+            None => None,
+        },
+    }
+}
+
+fn find(ms: Vec<Metric>, id: string) -> int {
+    let mut i = 0
+    while i < ms.len() {
+        if ms[i].id == id {
+            return i as int
+        }
+        i = i + 1
+    }
+    -1
+}
+
+fn set(ms: Vec<Metric>, id: string, v: f64, note: string) -> Vec<Metric> {
+    let mut out = ms
+    let i = find(out, id)
+    if i >= 0 {
+        out[i as usize].value = v
+        out[i as usize].state = "ok"
+        out[i as usize].note = note
+    }
+    out
+}
+
+fn unavailable(ms: Vec<Metric>, id: string, state: string, note: string) -> Vec<Metric> {
+    let mut out = ms
+    let i = find(out, id)
+    if i >= 0 {
+        out[i as usize].state = state
+        out[i as usize].note = note
+    }
+    out
+}
+
+fn status(x: Metric) -> string {
+    if x.state != "ok" {
+        return match x.state { "stale" => "STALE", "missing" => "MISSING", _ => "UNSET" }
+    }
+    if x.dir == "max" {
+        if x.value <= x.green {
+            return "GREEN"
+        }
+        if x.value <= x.amber {
+            return "AMBER"
+        }
+        return "RED"
+    }
+    if x.value >= x.green {
+        return "GREEN"
+    }
+    if x.value >= x.amber {
+        return "AMBER"
+    }
+    "RED"
+}
+
+fn rule(x: Metric) -> string {
+    if x.dir == "max" {
+        "green <= ${fmt(x.green)}, amber <= ${fmt(x.amber)}"
+    } else {
+        "green >= ${fmt(x.green)}, amber >= ${fmt(x.amber)}"
+    }
+}
+
+// ---------------------------------------------------------------- results files
+
+struct RFile {
+    state: string,
+    note: string,
+    epoch: int,
+    commit: string,
+    values: Json,
+}
+
+fn load_rfile(c: Ctx, name: string, enforce_age: bool) -> RFile {
+    let path = c.results + "/" + name
+    let empty = RFile { state: "missing", note: "missing: results/${name} (written by the PC verification flow)", epoch: 0, commit: "", values: object() }
+    let text = match read(path) {
+        Some(t) => t,
+        None => return empty,
+    }
+    let doc = match parse(text) {
+        Ok(d) => d,
+        Err(e) => return RFile { state: "missing", note: "unreadable: results/${name}", epoch: 0, commit: "", values: object() },
+    }
+    let epoch = match get(doc, "generated_epoch") {
+        Some(j) => as_i64(j).unwrap_or(0) as int,
+        None => 0,
+    }
+    let commit = match get(doc, "commit") {
+        Some(j) => as_str(j).unwrap_or(""),
+        None => "",
+    }
+    let values = get(doc, "values").unwrap_or(object())
+    let age = ((c.now - epoch) as f64) / 86400.0
+    if epoch == 0 {
+        return RFile { state: "missing", note: "results/${name} has no generated_epoch", epoch: 0, commit: commit, values: values }
+    }
+    if enforce_age && age > c.max_age {
+        return RFile { state: "stale", note: "results/${name} is ${fmt(age)} days old (limit ${fmt(c.max_age)})", epoch: epoch, commit: commit, values: values }
+    }
+    RFile { state: "ok", note: "results/${name}, ${fmt(age)} days old", epoch: epoch, commit: commit, values: values }
+}
+
+fn rv(f: RFile, key: string) -> Option<f64> {
+    match get(f.values, key) {
+        Some(j) => num(j),
+        None => None,
+    }
+}
+
+// Fill `id` from one results key; the file's state decides MISSING/STALE.
+fn from_key(ms: Vec<Metric>, id: string, f: RFile, key: string) -> Vec<Metric> {
+    if f.state != "ok" {
+        return unavailable(ms, id, f.state, f.note)
+    }
+    match rv(f, key) {
+        Some(v) => set(ms, id, v, f.note),
+        None => unavailable(ms, id, "missing", "results key ${key} absent"),
+    }
+}
+
+fn ratio(ms: Vec<Metric>, id: string, f: RFile, num_key: string, den_key: string) -> Vec<Metric> {
+    if f.state != "ok" {
+        return unavailable(ms, id, f.state, f.note)
+    }
+    match (rv(f, num_key), rv(f, den_key)) {
+        (Some(a), Some(b)) => if b > 0.0 { set(ms, id, a / b, "${num_key}/${den_key}; ${f.note}") } else { unavailable(ms, id, "missing", "${den_key} is zero") },
+        _ => unavailable(ms, id, "missing", "results keys ${num_key}, ${den_key} absent"),
+    }
+}
+
+// ---------------------------------------------------------------- repository files
+
+fn file_count(ms: Vec<Metric>, c: Ctx, id: string, path: string) -> Vec<Metric> {
+    match read(c.root + "/" + path) {
+        Some(t) => set(ms, id, count_entries(t), path),
+        None => unavailable(ms, id, "missing", "missing file ${path}"),
+    }
+}
+
+fn json_file(c: Ctx, path: string) -> Option<Json> {
+    match read(c.root + "/" + path) {
+        Some(t) => parse(t).ok(),
+        None => None,
+    }
+}
+
+fn measured(c: Ctx, key: string) -> Option<f64> {
+    match json_file(c, "docs/generated/measured.json") {
+        Some(d) => match get(d, key) {
+            Some(e) => match get(e, "value") {
+                Some(v) => num(v),
+                None => None,
+            },
+            None => None,
+        },
+        None => None,
+    }
+}
+
+fn measured_into(ms: Vec<Metric>, c: Ctx, id: string, key: string) -> Vec<Metric> {
+    match measured(c, key) {
+        Some(v) => set(ms, id, v, "measured.json ${key}"),
+        None => unavailable(ms, id, "missing", "docs/generated/measured.json has no ${key}"),
+    }
+}
+
+fn trailing_number(line: string) -> f64 {
+    let parts = strings.split(strings.trim(line), " ")
+    let last = parts[parts.len() - 1]
+    strings.trim(last).parse::<f64>().unwrap_or(0.0)
+}
+
+fn heuristic_total(text: string) -> f64 {
+    let mut total = 0.0
+    let mut counted = false
+    for line in strings.split_lines(text) {
+        let t = strings.trim(line)
+        if strings.starts_with(t, "[") {
+            counted = t == "[name_matches]" || t == "[match_arm_names]" || t == "[fallback_legacy]"
+        } else if counted && strings.starts_with(t, "\"") && strings.contains(t, " = ") {
+            total = total + trailing_number(t)
+        }
+    }
+    total
+}
+
+fn section_after(text: string, header: string) -> string {
+    let mut out = ""
+    let mut inside = false
+    for line in strings.split_lines(text) {
+        if strings.starts_with(line, "#") && inside {
+            break
+        }
+        if strings.starts_with(line, header) {
+            inside = true
+            continue
+        }
+        if inside {
+            out = out + line + "\n"
+        }
+    }
+    out
+}
+
+fn collect_files(ms: Vec<Metric>, c: Ctx) -> Vec<Metric> {
+    let mut r = ms
+    r = file_count(r, c, "known_test_failures", ".config/known-test-failures.txt")
+    r = file_count(r, c, "drift_ledger", "tests/drift_corpus/known_divergences.txt")
+    r = file_count(r, c, "rustc_rejects", "tests/golden/rustc_rejects.txt")
+    r = file_count(r, c, "hygiene_allowlist", "docs/public-hygiene-allowlist.txt")
+    r = measured_into(r, c, "friction_events_open", "cost.friction.events_open")
+    r = measured_into(r, c, "interp_startup_ms", "book.startup.interpret_cpu_ms")
+    r = measured_into(r, c, "agent_token_ratio", "cost.write.ref_token_ratio_wj_over_rust")
+    r = measured_into(r, c, "agent_fix_coverage", "cost.diag.fix_coverage")
+
+    // measures worse than the ratchet (shrink: value above; grow: value below; zero: nonzero)
+    match (json_file(c, "bench/agent-dx/friction/ratchet.json"), json_file(c, "docs/generated/measured.json")) {
+        (Some(rat), Some(_)) => {
+            let mut worse = 0.0
+            for (kind, shape) in [("shrink", 1), ("grow", 2), ("zero", 3)] {
+                for mem in members(get(rat, kind).unwrap_or(object())) {
+                    let limit = num(mem.value).unwrap_or(0.0)
+                    match measured(c, mem.key) {
+                        Some(v) => {
+                            if shape == 1 && v > limit { worse = worse + 1.0 }
+                            if shape == 2 && v < limit { worse = worse + 1.0 }
+                            if shape == 3 && v != 0.0 { worse = worse + 1.0 }
+                        }
+                        None => {}
+                    }
+                }
+            }
+            r = set(r, "friction_over_ratchet", worse, "ratchet.json against measured.json")
+        }
+        _ => r = unavailable(r, "friction_over_ratchet", "missing", "ratchet.json or measured.json absent"),
+    }
+
+    match read(c.root + "/tests/golden/explain_counts.txt") {
+        Some(t) => {
+            let mut found = false
+            for line in strings.split_lines(t) {
+                if strings.starts_with(line, "D-WIDTH-OWNERS") {
+                    r = set(r, "width_owners", trailing_number(line), "tests/golden/explain_counts.txt")
+                    found = true
+                }
+            }
+            if !found {
+                r = unavailable(r, "width_owners", "missing", "no D-WIDTH-OWNERS line")
+            }
+        }
+        None => r = unavailable(r, "width_owners", "missing", "tests/golden/explain_counts.txt absent"),
+    }
+
+    let heur = match read(c.root + "/docs/heuristic-allowlist.toml") {
+        Some(t) => heuristic_total(t),
+        None => -1.0,
+    }
+    if heur < 0.0 {
+        r = unavailable(r, "heuristic_surface", "missing", "docs/heuristic-allowlist.toml absent")
+        r = unavailable(r, "heuristic_published_gap", "missing", "docs/heuristic-allowlist.toml absent")
+    } else {
+        r = set(r, "heuristic_surface", heur, "docs/heuristic-allowlist.toml")
+    }
+
+    match read(c.root + "/docs/spec/convergence-burndown.md") {
+        Some(t) => {
+            if heur >= 0.0 {
+                let mut published = -1.0
+                for line in strings.split_lines(t) {
+                    if strings.contains(line, "(total ") && strings.contains(line, "H-NAME-MATCHES") {
+                        let tail = strings.split(line, "(total ")[1]
+                        published = strings.split(tail, ")")[0].parse::<f64>().unwrap_or(-1.0)
+                    }
+                }
+                if published < 0.0 {
+                    r = unavailable(r, "heuristic_published_gap", "missing", "burn-down has no published total")
+                } else {
+                    let gap = if published > heur { published - heur } else { heur - published }
+                    r = set(r, "heuristic_published_gap", gap, "published ${fmt(published)} vs allow-list ${fmt(heur)}")
+                }
+            }
+            let sec = section_after(t, "### C5 receiver design conflict")
+            let parts = strings.split(sec, "`")
+            let mut n = 0
+            let mut i = 1
+            while i < parts.len() {
+                if strings.contains(parts[i], "_test") {
+                    n = n + 1
+                }
+                i = i + 2
+            }
+            r = set(r, "ownership_conflicts", n as f64, "named in the burn-down C5 design-conflict section")
+        }
+        None => {
+            r = unavailable(r, "heuristic_published_gap", "missing", "burn-down absent")
+            r = unavailable(r, "ownership_conflicts", "missing", "burn-down absent")
+        }
+    }
+
+    // interpreter readiness (committed results of scripts/interp_readiness.py)
+    match json_file(c, "docs/generated/interp_readiness.json") {
+        Some(d) => {
+            let age = file_age_days(c, "docs/generated/interp_readiness.json")
+            for (id, rid) in [("interp_r2", "R2"), ("interp_r4", "R4"), ("interp_r5", "R5"), ("interp_r7", "R7")] {
+                let mut hit = false
+                for cr in items(get(d, "criteria").unwrap_or(array())) {
+                    if as_str(get(cr, "id").unwrap_or(from_str(""))).unwrap_or("") == rid {
+                        hit = true
+                        let pct = num(get(cr, "percent").unwrap_or(from_int(0))).unwrap_or(0.0)
+                        if age > 14.0 {
+                            r = unavailable(r, id, "stale", "interp_readiness.json last committed ${fmt(age)} days ago (limit 14)")
+                        } else {
+                            r = set(r, id, pct, "interp_readiness.json, ${fmt(age)} days old")
+                        }
+                    }
+                }
+                if !hit {
+                    r = unavailable(r, id, "missing", "criterion ${rid} absent")
+                }
+            }
+        }
+        None => {
+            for id in ["interp_r2", "interp_r4", "interp_r5", "interp_r7"] {
+                r = unavailable(r, id, "missing", "docs/generated/interp_readiness.json absent")
+            }
+        }
+    }
+
+    match json_file(c, "bench/interp/compare.json") {
+        Some(d) => {
+            let mut slower = 0.0
+            for k in members(get(d, "kernels").unwrap_or(object())) {
+                let cpu = get(k.value, "cpu_s").unwrap_or(object())
+                let res = num(get(cpu, "resolved").unwrap_or(from_int(0))).unwrap_or(0.0)
+                let py = num(get(cpu, "python3").unwrap_or(from_int(0))).unwrap_or(0.0)
+                if py > 0.0 && res > py {
+                    slower = slower + 1.0
+                }
+            }
+            r = set(r, "interp_kernels_slower", slower, "resolved engine vs python3, bench/interp/compare.json")
+        }
+        None => r = unavailable(r, "interp_kernels_slower", "missing", "bench/interp/compare.json absent"),
+    }
+
+    match json_file(c, "docs/generated/metrics.json") {
+        Some(d) => {
+            let mm = get(d, "metrics").unwrap_or(object())
+            r = set(r, "book_pages", num(get(mm, "book.pages").unwrap_or(from_int(0))).unwrap_or(0.0), "metrics.json book.pages")
+            r = set(r, "features_uncovered", num(get(mm, "book.features_uncovered").unwrap_or(from_int(0))).unwrap_or(0.0), "metrics.json book.features_uncovered")
+        }
+        None => {
+            r = unavailable(r, "book_pages", "missing", "docs/generated/metrics.json absent")
+            r = unavailable(r, "features_uncovered", "missing", "docs/generated/metrics.json absent")
+        }
+    }
+
+    match read(c.root + "/docs/known-gaps.md") {
+        Some(t) => {
+            let mut open = 0
+            for line in strings.split_lines(t) {
+                if strings.starts_with(line, "| ") && (strings.contains(line, "| Open |") || strings.contains(line, "| Partial |") || strings.contains(line, "| Decision needed |") || strings.contains(line, "| Not started |")) {
+                    open = open + 1
+                }
+            }
+            r = set(r, "roadmap_open_gaps", open as f64, "docs/known-gaps.md ranked table")
+        }
+        None => r = unavailable(r, "roadmap_open_gaps", "missing", "docs/known-gaps.md absent"),
+    }
+    r
+}
+
+fn file_age_days(c: Ctx, path: string) -> f64 {
+    match sh_in(c.root, "git log -1 --format=%ct -- " + quote(path)) {
+        Ok(o) => {
+            let t = strings.trim(o.stdout).parse::<int>().unwrap_or(0)
+            if t == 0 { 0.0 } else { ((c.now - t) as f64) / 86400.0 }
+        }
+        Err(_) => 0.0,
+    }
+}
+
+// ---------------------------------------------------------------- git and sibling repos
+
+fn git_number(c: Ctx, cmd: string) -> Option<f64> {
+    match sh_in(c.root, cmd) {
+        Ok(o) => if o.status == 0 { strings.trim(o.stdout).parse::<f64>().ok() } else { None },
+        Err(_) => None,
+    }
+}
+
+fn governance_missing(root: string) -> f64 {
+    let mut missing = 0.0
+    if !fs.is_file(root + "/README.md") { missing = missing + 1.0 }
+    if !fs.is_file(root + "/CODE_OF_CONDUCT.md") { missing = missing + 1.0 }
+    if !fs.is_file(root + "/CONTRIBUTING.md") { missing = missing + 1.0 }
+    if !fs.is_file(root + "/SECURITY.md") { missing = missing + 1.0 }
+    if !(fs.is_file(root + "/LICENSE") || fs.is_file(root + "/LICENSE-MIT") || fs.is_file(root + "/LICENSE-APACHE")) {
+        missing = missing + 1.0
+    }
+    missing
+}
+
+fn collect_git(ms: Vec<Metric>, c: Ctx) -> Vec<Metric> {
+    let mut r = ms
+    match git_number(c, "git log -i --extended-regexp --grep='^(Claude-Session|Co-Authored-By|Generated with)' --format=%H | wc -l") {
+        Some(n) => r = set(r, "trailer_commits", n, "git log, session or attribution trailers"),
+        None => r = unavailable(r, "trailer_commits", "missing", "not a git checkout"),
+    }
+    match git_number(c, "git ls-tree -r -l HEAD | awk '$4 > 1048576' | wc -l") {
+        Some(n) => r = set(r, "large_files", n, "git ls-tree at HEAD"),
+        None => r = unavailable(r, "large_files", "missing", "not a git checkout"),
+    }
+    let mut missing = governance_missing(c.root)
+    let mut names = "compiler"
+    for s in c.siblings {
+        missing = missing + governance_missing(s)
+        names = names + ", " + fs.file_name(s).unwrap_or("repo")
+    }
+    r = set(r, "governance_missing", missing, "checked: ${names}")
+    r
+}
+
+fn collect_eco(ms: Vec<Metric>, c: Ctx) -> Vec<Metric> {
+    let mut r = ms
+    let f = load_rfile(c, "ecosystem.json", true)
+    let pk = c.eco + "/packages"
+    if c.eco != "" && fs.is_dir(pk) {
+        let mut n = 0
+        let mut untested = 0
+        for e in fs.read_dir(pk).unwrap_or(Vec::new()) {
+            let dir = e.path()
+            if fs.is_dir(dir) && fs.is_file(dir + "/wj.toml") {
+                n = n + 1
+                if !fs.is_dir(dir + "/tests") {
+                    untested = untested + 1
+                }
+            }
+        }
+        r = set(r, "eco_packages", n as f64, "live: ecosystem packages/")
+        r = set(r, "eco_without_tests", untested as f64, "live: ecosystem packages/")
+    } else {
+        r = from_key(r, "eco_packages", f, "packages")
+        r = from_key(r, "eco_without_tests", f, "packages_without_tests")
+    }
+    match (rv(f, "sweep_total"), rv(f, "sweep_pass")) {
+        (Some(t), Some(p)) if f.state == "ok" => r = set(r, "eco_sweep_failing", t - p, "${fmt(p)} of ${fmt(t)} pass; ${f.note}"),
+        _ => r = unavailable(r, "eco_sweep_failing", if f.state == "ok" { "missing" } else { f.state }, if f.state == "ok" { "sweep_total or sweep_pass absent" } else { f.note }),
+    }
+    r
+}
+
+fn collect_results(ms: Vec<Metric>, c: Ctx) -> Vec<Metric> {
+    let mut r = ms
+    let ex = load_rfile(c, "explain-counts.json", true)
+    if ex.state != "ok" {
+        r = unavailable(r, "width_owners_over_ratchet", ex.state, ex.note)
+    } else {
+        match (rv(ex, "d_width_owners"), find_baseline(r)) {
+            (Some(live), Some(base)) => r = set(r, "width_owners_over_ratchet", if live > base { live - base } else { 0.0 }, "live ${fmt(live)} vs ratchet ${fmt(base)}; ${ex.note}"),
+            _ => r = unavailable(r, "width_owners_over_ratchet", "missing", "d_width_owners or the recorded baseline absent"),
+        }
+    }
+    let bm = load_rfile(c, "build-meter.json", true)
+    r = ratio(r, "build_rss_growth", bm, "n200_rss_mb", "n50_rss_mb")
+    r = ratio(r, "build_wall_growth", bm, "n200_wall_s", "n50_wall_s")
+    r = from_key(r, "build_rss_n200_mb", bm, "n200_rss_mb")
+    r = from_key(r, "build_wall_n200_s", bm, "n200_wall_s")
+    let en = load_rfile(c, "engine-transpile.json", true)
+    r = from_key(r, "engine_rss_mb", en, "peak_rss_mb")
+    r = from_key(r, "engine_wall_s", en, "wall_s")
+    let p7 = load_rfile(c, "pilot7.json", true)
+    r = ratio(r, "agent_cost_ratio", p7, "wj_cost_per_task_usd", "rust_cost_per_task_usd")
+    r = from_key(r, "agent_pass_rate", p7, "wj_pass_rate")
+    match (rv(p7, "reference_total"), rv(p7, "reference_verified")) {
+        (Some(t), Some(v)) if p7.state == "ok" => r = set(r, "agent_ref_failing", t - v, "${fmt(v)} of ${fmt(t)} verify; ${p7.note}"),
+        _ => r = unavailable(r, "agent_ref_failing", if p7.state == "ok" { "missing" } else { p7.state }, if p7.state == "ok" { "reference_total or reference_verified absent" } else { p7.note }),
+    }
+    let tg = load_rfile(c, "targets.json", true)
+    r = from_key(r, "engine_native_errors", tg, "engine_native_build_errors")
+    r = from_key(r, "web_stage", tg, "web_stage")
+    r = from_key(r, "playground_parity_failures", tg, "playground_parity_failures")
+    let dc = load_rfile(c, "docs.json", true)
+    r = from_key(r, "docs_stale_numbers", dc, "stale_or_hand_typed_numbers")
+    r = from_key(r, "orphan_tests", dc, "orphan_tests")
+    let fm = load_rfile(c, "fmt.json", true)
+    r = from_key(r, "fmt_failing_files", fm, "failing_files")
+    // the suite result is judged on its age, so the age is the value (never "stale")
+    let su = load_rfile(c, "suite.json", false)
+    if su.state != "ok" {
+        for id in ["suite_age_days", "suite_commits_behind", "suite_new_failures"] {
+            r = unavailable(r, id, su.state, su.note)
+        }
+    } else {
+        r = set(r, "suite_age_days", ((c.now - su.epoch) as f64) / 86400.0, "full suite at ${su.commit}")
+        r = from_key(r, "suite_new_failures", su, "new_failures")
+        match git_number(c, "git rev-list --count " + quote(su.commit) + "..HEAD") {
+            Some(n) => r = set(r, "suite_commits_behind", n, "${su.commit} .. HEAD"),
+            None => r = unavailable(r, "suite_commits_behind", "missing", "suite commit ${su.commit} not in this checkout"),
+        }
+    }
+    r
+}
+
+fn find_baseline(ms: Vec<Metric>) -> Option<f64> {
+    let i = find(ms, "width_owners")
+    if i >= 0 && ms[i as usize].state == "ok" {
+        return Some(ms[i as usize].value)
+    }
+    None
+}
+
+fn collect(c: Ctx) -> Vec<Metric> {
+    let mut ms = specs()
+    ms = collect_files(ms, c)
+    ms = collect_git(ms, c)
+    ms = collect_eco(ms, c)
+    ms = collect_results(ms, c)
+    ms
+}
+
+// ---------------------------------------------------------------- rendering
+
+fn tally(ms: Vec<Metric>, s: string) -> int {
+    let mut n = 0
+    for x in ms {
+        if status(x) == s {
+            n = n + 1
+        }
+    }
+    n
+}
+
+fn definition_md(ms: Vec<Metric>) -> string {
+    let mut out = "| # | Criterion | Rule | Unit | Source |\n|---|---|---|---|---|\n"
+    for x in ms {
+        out = out + "| ${x.crit} | `${x.id}`: ${x.title} | ${rule(x)} | ${x.unit} | ${x.source} |\n"
+    }
+    out
+}
+
+fn run_md(ms: Vec<Metric>, c: Ctx, head: string) -> string {
+    let total = ms.len()
+    let mut out = "Head `${head}`, run at epoch ${c.now}, results older than ${fmt(c.max_age)} days count as stale.\n\n"
+    out = out + "**${tally(ms, "GREEN")} green, ${tally(ms, "AMBER")} amber, ${tally(ms, "RED")} red, ${tally(ms, "STALE")} stale, ${tally(ms, "MISSING")} missing** of ${total} criteria.\n"
+    let mut k = 1
+    while k <= 9 {
+        out = out + "\n### ${k}. ${crit_title(k as int)}\n\n| Status | Criterion | Now | Rule | Evidence |\n|---|---|---|---|---|\n"
+        for x in ms {
+            if x.crit == k as int {
+                let now_s = if x.state == "ok" { "${fmt(x.value)} ${x.unit}" } else { "n/a" }
+                out = out + "| ${status(x)} | `${x.id}`: ${x.title} | ${now_s} | ${rule(x)} | ${x.note} |\n"
+            }
+        }
+        k = k + 1
+    }
+    out
+}
+
+fn to_json(ms: Vec<Metric>, c: Ctx, head: string) -> Json {
+    let mut arr = array()
+    for x in ms {
+        let mut o = object()
+        o = with(o, "id", from_str(x.id))
+        o = with(o, "criterion", from_int(x.crit as i64))
+        o = with(o, "title", from_str(x.title))
+        o = with(o, "unit", from_str(x.unit))
+        o = with(o, "dir", from_str(x.dir))
+        o = with(o, "green", from_float(x.green))
+        o = with(o, "amber", from_float(x.amber))
+        o = with(o, "source", from_str(x.source))
+        o = with(o, "state", from_str(x.state))
+        o = with(o, "value", from_float(x.value))
+        o = with(o, "status", from_str(status(x)))
+        o = with(o, "note", from_str(x.note))
+        arr = push(arr, o)
+    }
+    let mut d = object()
+    d = with(d, "schema_version", from_int(1))
+    d = with(d, "commit", from_str(head))
+    d = with(d, "generated_epoch", from_int(c.now as i64))
+    d = with(d, "max_age_days", from_float(c.max_age))
+    d = with(d, "green", from_int(tally(ms, "GREEN") as i64))
+    d = with(d, "amber", from_int(tally(ms, "AMBER") as i64))
+    d = with(d, "red", from_int(tally(ms, "RED") as i64))
+    d = with(d, "stale", from_int(tally(ms, "STALE") as i64))
+    d = with(d, "missing", from_int(tally(ms, "MISSING") as i64))
+    d = with(d, "criteria", arr)
+    d
+}
+
+fn from_json(d: Json) -> Vec<Metric> {
+    let mut out = specs()
+    for o in items(get(d, "criteria").unwrap_or(array())) {
+        let id = as_str(get(o, "id").unwrap_or(from_str(""))).unwrap_or("")
+        let i = find(out, id)
+        if i >= 0 {
+            out[i as usize].state = as_str(get(o, "state").unwrap_or(from_str(""))).unwrap_or("")
+            out[i as usize].value = num(get(o, "value").unwrap_or(from_int(0))).unwrap_or(0.0)
+            out[i as usize].note = as_str(get(o, "note").unwrap_or(from_str(""))).unwrap_or("")
+        }
+    }
+    out
+}
+
+const BEGIN_DEF: string = "<!-- scorecard:begin definition -->"
+const END_DEF: string = "<!-- scorecard:end definition -->"
+const BEGIN_RUN: string = "<!-- scorecard:begin run -->"
+const END_RUN: string = "<!-- scorecard:end run -->"
+
+fn region(text: string, begin: string, end: string) -> Option<string> {
+    if !strings.contains(text, begin) || !strings.contains(text, end) {
+        return None
+    }
+    let after = strings.split(text, begin)[1]
+    Some(strings.split(after, end)[0])
+}
+
+fn replace_region(text: string, begin: string, end: string, body: string) -> string {
+    let before = strings.split(text, begin)[0]
+    let after = strings.split(strings.split(text, begin)[1], end)[1]
+    before + begin + "\n" + body + end + after
+}
+
+fn page_template() -> string {
+    "# Release scorecard\n\nThe answer to \"is it ready?\" is a table of numbers, each against a fixed threshold, produced by\n`scripts/wj/release_scorecard.wj`. Nothing on this page is typed by hand: the definition and the latest run are\ngenerated regions (`wj run scripts/wj/release_scorecard.wj -- --write`), and CI runs `-- --check` to prove the page\nmatches the script and `docs/generated/release_scorecard.json`.\n\nGREEN means the target is met, AMBER means within reach, RED means not yet. Criteria that need a build or a quiet machine\nread `results/*.json` files written by the verification flow (see `results/README.md`); an absent file shows MISSING and\na file older than the age limit shows STALE. Neither is green. The weekly routine is in `docs/ROUTINES.md`.\n\n## Definition\n\n" + BEGIN_DEF + "\n" + END_DEF + "\n\n## Latest run\n\n" + BEGIN_RUN + "\n" + END_RUN + "\n"
+}
+
+fn head_of(c: Ctx) -> string {
+    match sh_in(c.root, "git rev-parse --short=12 HEAD") {
+        Ok(o) => if o.status == 0 { strings.trim(o.stdout) } else { "unknown" },
+        Err(_) => "unknown",
+    }
+}
+
+fn text_report(ms: Vec<Metric>) -> string {
+    let mut out = ""
+    for x in ms {
+        let now_s = if x.state == "ok" { fmt(x.value) } else { "-" }
+        out = out + "${status(x)}\t${x.id}\t${now_s}\t${rule(x)}\t${x.note}\n"
+    }
+    out
+}
+
+// ---------------------------------------------------------------- self-test
+
+fn expect(cond: bool, what: string, fails: Vec<string>) -> Vec<string> {
+    let mut f = fails
+    if !cond {
+        f.push(what)
+    }
+    f
+}
+
+fn fixture_ctx(dir: string, now: int, eco: string) -> Ctx {
+    Ctx { root: dir, results: dir + "/results", now: now, max_age: 8.0, eco: eco, siblings: Vec::new() }
+}
+
+// Copies a fixture to scratch space, makes it a git repository (the RED one gets a trailer commit and a 2 MB file).
+fn stage(name: string, bad: bool, now: int) -> string {
+    let dir = "/tmp/wj-scorecard-selftest-" + name
+    let _ = sh("rm -rf " + quote(dir) + " && mkdir -p " + quote(dir) + " && cp -R " + quote(FIXTURES + "/" + name) + "/. " + quote(dir))
+    let commit = " && git add -A && git -c user.name=t -c user.email=t@t commit -q -m x"
+    let _ = sh_in(dir, "git init -q" + commit)
+    let first = match sh_in(dir, "git rev-list --max-parents=0 HEAD") {
+        Ok(o) => strings.trim(o.stdout),
+        Err(_) => "",
+    }
+    if bad {
+        // 21 large files and 110 commits, 11 of them with a session trailer
+        let _ = sh_in(dir, "i=0; while [ $i -lt 21 ]; do head -c 1100000 /dev/zero > big$i.bin; i=$((i+1)); done" + commit + " -m big")
+        let _ = sh_in(dir, "i=0; while [ $i -lt 110 ]; do if [ $i -lt 11 ]; then m='Claude-'Session': https://example.test/s'; else m=y; fi; git -c user.name=t -c user.email=t@t commit -q --allow-empty -m x -m \"$m\"; i=$((i+1)); done")
+    }
+    // results placeholders: "@NOW@" is the run time, "@OLD@" thirty days earlier, "@FIRST@" the first commit
+    for f in fs.read_dir(dir + "/results").unwrap_or(Vec::new()) {
+        let p = f.path()
+        let text = fs.read_to_string(p).unwrap_or("")
+        let fixed = strings.replace(strings.replace(strings.replace(text, "\"@NOW@\"", "${now}"), "\"@OLD@\"", "${now - 30 * 86400}"), "@FIRST@", first)
+        let _ = fs.write(p, fixed)
+    }
+    dir
+}
+
+fn selftest(base_now: int) -> bool {
+    let mut fails: Vec<string> = Vec::new()
+    let red_dir = stage("red", true, base_now)
+    let green_dir = stage("green", false, base_now)
+    let t = base_now
+    let red = collect(fixture_ctx(red_dir, t, red_dir + "/eco"))
+    let green = collect(fixture_ctx(green_dir, t, ""))
+    for x in specs() {
+        let rx = red[find(red, x.id) as usize]
+        let gx = green[find(green, x.id) as usize]
+        fails = expect(status(rx) == "RED", "${x.id}: RED fixture gave ${status(rx)} (${rx.note})", fails)
+        fails = expect(status(gx) == "GREEN", "${x.id}: GREEN fixture gave ${status(gx)} (${gx.note})", fails)
+    }
+    // MISSING: no results at all; STALE: the green fixture far in the future (files older than the limit)
+    let missing = collect(fixture_ctx(green_dir, t, ""))
+    let none_dir = green_dir + "-none"
+    let _ = sh("rm -rf " + quote(none_dir) + " && cp -R " + quote(green_dir) + " " + quote(none_dir) + " && rm -rf " + quote(none_dir + "/results"))
+    let gone = collect(fixture_ctx(none_dir, t, ""))
+    let late = collect(fixture_ctx(green_dir, t + 40 * 86400, ""))
+    let mut results_backed = 0
+    for x in specs() {
+        if strings.starts_with(x.source, "results ") {
+            results_backed = results_backed + 1
+            let g = gone[find(gone, x.id) as usize]
+            fails = expect(status(g) == "MISSING", "${x.id}: absent results gave ${status(g)}", fails)
+            let l = late[find(late, x.id) as usize]
+            let want = if x.id == "suite_age_days" { "RED" } else if strings.starts_with(x.id, "suite_") { "GREEN" } else { "STALE" }
+            let ok_late = status(l) == want
+            fails = expect(ok_late, "${x.id}: old results gave ${status(l)}", fails)
+        }
+    }
+    fails = expect(results_backed >= 20, "fewer than 20 results-backed criteria", fails)
+    // rendering round trip: the run region re-renders identically from the JSON form
+    let c = fixture_ctx(green_dir, t, "")
+    let head = "selftest"
+    let back = from_json(to_json(green, c, head))
+    fails = expect(run_md(back, c, head) == run_md(green, c, head), "JSON round trip changes the rendered run", fails)
+    let _ = sh("rm -rf " + quote(red_dir) + " " + quote(green_dir) + " " + quote(none_dir))
+    let _ = missing
+    for f in fails {
+        println("FAIL ${f}")
+    }
+    println("selftest: ${specs().len()} criteria, ${fails.len()} failures")
+    fails.len() == 0
+}
+
+// ---------------------------------------------------------------- main
+
+fn flag(args: Vec<string>, name: string, default: string) -> string {
+    let mut i = 0
+    while i < args.len() {
+        if args[i] == name && i + 1 < args.len() {
+            return args[i + 1]
+        }
+        i = i + 1
+    }
+    default
+}
+
+fn has(args: Vec<string>, name: string) -> bool {
+    for a in args {
+        if a == name {
+            return true
+        }
+    }
+    false
+}
+
+// Sibling public repos: WJ_ECOSYSTEM / WJ_UI name them (grant read access: `--allow fs.read=DIR`), or they are checked
+// out (or symlinked) at the repository root as windjammer-ecosystem/ and windjammer-ui/.
+fn discover_siblings(root: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let eco_env = env.get_or("WJ_ECOSYSTEM", "")
+    let ui_env = env.get_or("WJ_UI", "")
+    let eco = if eco_env != "" { eco_env } else { root + "/windjammer-ecosystem" }
+    let ui = if ui_env != "" { ui_env } else { root + "/windjammer-ui" }
+    if fs.is_dir(eco) {
+        out.push(eco)
+    }
+    if fs.is_dir(ui) {
+        out.push(ui)
+    }
+    out
+}
+
+fn main() {
+    let args = env.args()
+    let root = flag(args, "--root", ".")
+    let now_default = match sh("date +%s") {
+        Ok(o) => strings.trim(o.stdout).parse::<int>().unwrap_or(0),
+        Err(_) => 0,
+    }
+    let now = flag(args, "--now", "${now_default}").parse::<int>().unwrap_or(now_default)
+    if has(args, "--selftest") {
+        if !selftest(now) {
+            process.exit(1)
+        }
+        return
+    }
+    let siblings = discover_siblings(root)
+    let mut eco = ""
+    for s in siblings {
+        if strings.ends_with(s, "windjammer-ecosystem") {
+            eco = s
+        }
+    }
+    let c = Ctx { root: root, results: flag(args, "--results", root + "/results"), now: now, max_age: flag(args, "--max-age", "8").parse::<f64>().unwrap_or(8.0), eco: eco, siblings: siblings }
+    let ms = collect(c)
+    let head = head_of(c)
+    if has(args, "--check") {
+        let mut problems: Vec<string> = Vec::new()
+        let page = read(root + "/" + PAGE).unwrap_or("")
+        let def = region(page, BEGIN_DEF, END_DEF)
+        problems = expect(def.is_some() && def.unwrap_or("") == "\n" + definition_md(specs()), "${PAGE}: definition region missing or differs from the script (run --write)", problems)
+        match read(root + "/" + JSON_OUT) {
+            Some(t) => match parse(t) {
+                Ok(d) => {
+                    let stored = from_json(d)
+                    let run = region(page, BEGIN_RUN, END_RUN)
+                    let want = "\n" + run_md(stored, Ctx { root: root, results: c.results, now: as_i64(get(d, "generated_epoch").unwrap_or(from_int(0))).unwrap_or(0) as int, max_age: c.max_age, eco: "", siblings: Vec::new() }, as_str(get(d, "commit").unwrap_or(from_str(""))).unwrap_or(""))
+                    problems = expect(run.is_some() && run.unwrap_or("") == want, "${PAGE}: latest-run region differs from ${JSON_OUT} (run --write)", problems)
+                }
+                Err(_) => problems.push("${JSON_OUT} is not valid JSON"),
+            },
+            None => problems.push("${JSON_OUT} missing (run --write)"),
+        }
+        for p in problems {
+            println("FAIL ${p}")
+        }
+        println("release scorecard check: ${problems.len()} problems")
+        if problems.len() > 0 {
+            process.exit(1)
+        }
+        return
+    }
+    print(text_report(ms))
+    println("${tally(ms, "GREEN")} green, ${tally(ms, "AMBER")} amber, ${tally(ms, "RED")} red, ${tally(ms, "STALE")} stale, ${tally(ms, "MISSING")} missing of ${ms.len()}")
+    if has(args, "--write") {
+        let mut page = read(root + "/" + PAGE).unwrap_or(page_template())
+        page = replace_region(page, BEGIN_DEF, END_DEF, definition_md(specs()))
+        page = replace_region(page, BEGIN_RUN, END_RUN, run_md(ms, c, head))
+        let _ = fs.write(root + "/" + PAGE, page)
+        let _ = fs.write(root + "/" + JSON_OUT, dumps(to_json(ms, c, head), 1, false) + "\n")
+        println("wrote ${PAGE} and ${JSON_OUT}")
+    }
+}

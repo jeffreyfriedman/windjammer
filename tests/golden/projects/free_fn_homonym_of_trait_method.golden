@@ -70,7 +70,7 @@ fn list_items(&self, tenant_id: String) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for it in &self.items {
             if *it == tenant_id {
-                let _ = out.push(it.clone());
+                out.push(it.clone());
             }
         }
         out
