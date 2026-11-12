@@ -367,8 +367,11 @@ fn register_vec(r: &mut Registry) {
         vv.swap(i, j);
         Ok(Value::Unit)
     });
-    r.mutating(Kind::Vec, "reverse", |_, v, _| {
-        vec_mut(v).reverse();
+    r.mutating(Kind::Vec, "reverse", |it, v, _| {
+        // test-only mutant `seq` (debug builds): `reverse` leaves the vector as it is
+        if !it.mutant("seq") {
+            vec_mut(v).reverse();
+        }
         Ok(Value::Unit)
     });
     r.mutating(Kind::Vec, "resize", |_, v, a| {

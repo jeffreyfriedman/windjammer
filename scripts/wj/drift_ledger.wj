@@ -12,6 +12,8 @@
 //   stale     a listed case that no longer diverges (or is not in the corpus): remove its line
 //   grew      with --base-ledger, a ledger id the base ledger lacks (the ledger is shrink-only;
 //             DRIFT_ALLOW_GROWTH=1 permits it for the change that records a new finding)
+//   unowned   a ledger line without `owner: STREAM`, or with a stream that is not in OWNERS below: every known divergence
+//             has a stream that is responsible for closing it
 //   vacuous   fewer than --min-cases rows compared
 // `--adopt REASON` (with DRIFT_ALLOW_GROWTH=1) appends every `new` divergence to the ledger with that reason: the
 // way a re-recorded baseline introduces its findings in one deliberate step.
@@ -21,6 +23,9 @@ use std::env
 use std::fs
 use std::process
 use std::strings
+
+// The streams that own known divergences (docs/testing/DRIFT.md, section The drift budget).
+const OWNERS: string = "numeric-width codegen-refs codegen-types codegen-ownership runtime-surface parser-lexer language-decision gate-harness interp-literal-typing"
 
 struct Row {
     id: string,
@@ -66,6 +71,7 @@ fn signature(r: Row) -> string {
 struct Entry {
     id: string,
     sig: string,
+    owner: string,
 }
 
 fn parse_ledger(text: string) -> Vec<Entry> {
@@ -77,7 +83,16 @@ fn parse_ledger(text: string) -> Vec<Entry> {
         }
         let f = strings.split(t, " | ")
         let sig = if f.len() > 1 { strings.trim(f[1]) } else { "" }
-        out.push(Entry { id: strings.trim(f[0]), sig: sig })
+        let mut owner = ""
+        let mut k = 2
+        while k < f.len() {
+            let t = strings.trim(f[k])
+            if strings.starts_with(t, "owner: ") {
+                owner = strings.trim(strings.replace(t, "owner: ", ""))
+            }
+            k += 1
+        }
+        out.push(Entry { id: strings.trim(f[0]), sig: sig, owner: owner })
     }
     out
 }
@@ -156,7 +171,13 @@ fn main() {
             },
         }
     }
+    let owners = strings.split(OWNERS, " ")
     for e in ledger {
+        if e.owner == "" {
+            problems.push("unowned   ${e.id}  no `| owner: STREAM` (one of: ${OWNERS})")
+        } else if !owners.contains(e.owner) {
+            problems.push("unowned   ${e.id}  `${e.owner}` is not a known stream (one of: ${OWNERS})")
+        }
         match find_row(rows, e.id) {
             None => problems.push("stale     ${e.id}  not in the corpus: remove it from the ledger"),
             Some(r) => {

@@ -71,7 +71,11 @@ pub fn register(r: &mut Registry) {
         let x = arg(&a, 1, "insert")?;
         Ok(Value::option(map_mut(v).insert(Key(k), x)))
     });
-    r.mutating(Kind::Map, "remove", |_, v, a| Ok(Value::option(map_mut(v).remove(&Key(arg(&a, 0, "remove")?)))));
+    // test-only mutant `map` (debug builds): `remove` reports a miss for a key it did remove
+    r.mutating(Kind::Map, "remove", |it, v, a| {
+        let old = map_mut(v).remove(&Key(arg(&a, 0, "remove")?));
+        Ok(Value::option(if it.mutant("map") { None } else { old }))
+    });
     r.mutating(Kind::Map, "remove_entry", |_, v, a| {
         let k = Key(arg(&a, 0, "remove_entry")?);
         Ok(Value::option(map_mut(v).remove_entry(&k).map(|(k, x)| tup(&k, &x))))

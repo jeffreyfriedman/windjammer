@@ -46,7 +46,8 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Option, "expect", |_, v, a| {
         payload(v).filter(|_| is_some(v)).ok_or_else(|| panic_ctl(arg_str(&a, 0, "expect").map(|s| (*s).clone()).unwrap_or_default()))
     });
-    r.pure(Kind::Option, "unwrap_or", |_, v, a| if is_some(v) { Ok(payload(v).unwrap()) } else { arg(&a, 0, "unwrap_or") });
+    // test-only mutant `option` (debug builds): `unwrap_or` answers the default even for a `Some`
+    r.pure(Kind::Option, "unwrap_or", |it, v, a| if is_some(v) && !it.mutant("option") { Ok(payload(v).unwrap()) } else { arg(&a, 0, "unwrap_or") });
     r.pure(Kind::Option, "unwrap_or_else", |it, v, a| {
         if is_some(v) {
             Ok(payload(v).unwrap())
