@@ -8,6 +8,7 @@ runner reaches fails CI (`scripts/wj/check_orphan_tests.wj`).
 | File | Reached by |
 |------|-----------|
 | `tests/*.rs` | `build.rs` generates one `mod` per file into the single `all` binary (`tests/all.rs` `include!`s the list). |
+| `tests/<dir>/**` data files (`.wj`, `.rs`) | Reached when a runner names the directory in a quoted `"tests/<dir>"` literal (a walker; `"tests/<dir>/{name}.wj"` names `tests/<dir>`). Rust sub-modules are reached when their `mod.rs` is reached and declares them. Scripts (`.sh`) need a reference. |
 | `tests/<dir>/**/*.rs` containing `#[test]` | Same, module named by path: `a/b_test.rs` under `tests/` is `a__b_test`. |
 | `tests/common/`, `tests/fixtures/`, `*.expected.rs` | Never modules: shared helpers (`#[path = ...] mod ...;`) and data. |
 | `crates/*/tests/*.rs` | Cargo's normal integration-test discovery (`cargo test --workspace`). |
@@ -15,7 +16,7 @@ runner reaches fails CI (`scripts/wj/check_orphan_tests.wj`).
 | `tests/*.wj` etc. referenced by name from a runner | Reached by that reference. |
 | Anything else | Must be listed in `tests/ORPHAN_ALLOWLIST.txt` as `<glob> \| <reason>` (fixtures and helpers only), or deleted. |
 
-Disabled files (`*.skip`, `*.disabled`, `*.bak`) are never allowed: use `#[ignore = "reason"]`
+Disabled files (`*.skip`, `*.disabled`, `*.bak`) are never allowed (except inside an allow-listed fixture tree): use `#[ignore = "reason"]`
 or delete the test.
 
 ## Commands
