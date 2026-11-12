@@ -1,0 +1,15 @@
+// expect: a
+// expect: b
+// `let i = pos[0]` reads an `int` element; comparing it with `.len()` (uint) and using it as an index
+// gives the compiled build `i >= dn[u].len()` (i64 vs usize), `i + 1_usize` and `dn[u][i]` with an i64 index.
+fn main() {
+    let dn: Vec<Vec<string>> = [["a", "b"]]
+    let mut pos: Vec<int> = [0]
+    while true {
+        let u = 0
+        let i = pos[0]
+        if i >= dn[u].len() { break }
+        pos[0] = i + 1
+        println(dn[u][i])
+    }
+}

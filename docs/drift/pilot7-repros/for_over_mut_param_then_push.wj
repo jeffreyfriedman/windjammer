@@ -1,0 +1,16 @@
+// expect: true
+// expect: a b
+fn collect(names: Vec<string>, out: Vec<string>) -> bool {
+    for n in names {
+        for o in out {
+            if o == n { return false }
+        }
+        out.push(n)
+    }
+    true
+}
+fn main() {
+    let mut out: Vec<string> = []
+    println("${collect(["a", "b"], out)}")
+    println(out.join(" "))
+}

@@ -1,0 +1,14 @@
+// expect: 5
+// The class of `0 - net[d]` is `int` (i64); a read of an `int` struct field elsewhere in the
+// function makes the compiled build print `0_i32 - net[d]` (E0308/E0277).
+struct Iou {
+    amount: int,
+}
+fn main() {
+    let book: Vec<Iou> = [Iou { amount: 5 }]
+    let net: Vec<int> = [-5, 0]
+    let w = net[1] - book[0].amount
+    let d = 0
+    let debt = 0 - net[d]
+    println("${debt}")
+}
