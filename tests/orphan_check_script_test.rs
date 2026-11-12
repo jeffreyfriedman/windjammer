@@ -124,3 +124,65 @@ fn disabled_test_files_always_fail() {
         assert!(!ok && text.contains("disabled"), "{name}: {text}");
     }
 }
+
+#[test]
+fn directory_walked_by_a_runner_reaches_its_data_files_but_not_scripts_or_siblings() {
+    if !ecosystem_present() {
+        return;
+    }
+    let repo = repo_with(&[
+        ("tests/walker_test.rs", "fn f() { let _ = root().join(\"tests/corpus\"); let _ = format!(\"tests/fmt/{name}.wj\"); }\n// tests/commented\n"),
+        ("tests/corpus/a.wj", ""),
+        ("tests/corpus/deep/b.wj", ""),
+        ("tests/corpus/regen.sh", ""),
+        ("tests/fmt/x.wj", ""),
+        ("tests/commented/c.wj", ""),
+        ("tests/other/d.wj", ""),
+    ]);
+    let (ok, text) = run(repo.path());
+    assert!(!ok, "{text}");
+    for orphan in ["tests/corpus/regen.sh", "tests/commented/c.wj", "tests/other/d.wj"] {
+        assert!(text.contains(orphan), "{orphan} must stay an orphan: {text}");
+    }
+    for reached in ["corpus/a.wj", "corpus/deep/b.wj", "fmt/x.wj"] {
+        assert!(!text.contains(reached), "{reached} is walked by a runner: {text}");
+    }
+    assert!(text.contains("3 test file(s)"), "{text}");
+}
+
+#[test]
+fn rust_submodule_is_reached_through_a_declared_mod_of_a_reached_mod_rs() {
+    if !ecosystem_present() {
+        return;
+    }
+    let repo = repo_with(&[
+        ("tests/suite_test.rs", "#[path = \"common/m/mod.rs\"]\nmod m;\n"),
+        ("tests/common/m/mod.rs", "pub mod a;\n"),
+        ("tests/common/m/a.rs", ""),
+        ("tests/common/m/b.rs", ""),
+    ]);
+    let (ok, text) = run(repo.path());
+    assert!(!ok && text.contains("tests/common/m/b.rs") && !text.contains("m/a.rs"), "{text}");
+    assert!(text.contains("1 test file(s)"), "{text}");
+}
+
+#[test]
+fn allow_list_covers_disabled_files_in_a_fixture_tree_only() {
+    if !ecosystem_present() {
+        return;
+    }
+    let repo = repo_with(&[
+        ("tests/fixtures_tree/old.skip", ""),
+        ("tests/ORPHAN_ALLOWLIST.txt", "tests/fixtures_tree/** | recorded fixture tree for a gate\n"),
+    ]);
+    let (ok, text) = run(repo.path());
+    assert!(ok, "{text}");
+
+    let repo = repo_with(&[
+        ("tests/fixtures_tree/old.skip", ""),
+        ("tests/real_old.skip", ""),
+        ("tests/ORPHAN_ALLOWLIST.txt", "tests/fixtures_tree/** | recorded fixture tree for a gate\n"),
+    ]);
+    let (ok, text) = run(repo.path());
+    assert!(!ok && text.contains("tests/real_old.skip") && !text.contains("fixtures_tree"), "{text}");
+}
