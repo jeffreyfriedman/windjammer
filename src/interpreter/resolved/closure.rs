@@ -84,7 +84,7 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
 
 impl Interpreter {
     /// `call_callable` for a closure, compiled; `None` = run it in the walker.
-    pub(crate) fn call_compiled_closure(&mut self, c: &Rc<Callable>, args: &mut Vec<Value>) -> Option<R> {
+    pub(crate) fn call_compiled_closure(&mut self, c: &Rc<Callable>, args: &mut [Value]) -> Option<R> {
         let Callable::Closure { params, body, env, module, self_ty, tparams } = &**c else { return None };
         if !self.engine_resolved || !tparams.is_empty() || !self.drop_types.is_empty() || self.hot.is_some() {
             return None;
