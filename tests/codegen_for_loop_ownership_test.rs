@@ -140,7 +140,7 @@ impl Counter {
 }
 
 fn increment_all(counters: Vec<Counter>) {
-    for counter in counters {
+    for mut counter in counters {
         counter.increment()  // increment mutates self
     }
 }

@@ -9,8 +9,8 @@
 // stdout must equal the interpreted stdout, so a sample cannot mean one thing to `wj run` and another to `wj build`.
 // Multi-file projects under SAMPLES_DIR/projects run from their .root with `wj run`; output must equal their .expect lines.
 // A sample with NAME.interp (a fence marked `interpreter_only` in the book) is not compiled.
-// Playground pass (--wasm RUNNER, ADR-0034): every single-file program also runs through the browser playground's
-// WebAssembly interpreter (`node RUNNER FILE`, docs/book/playground/run-node.mjs), and its exit status and stdout must
+// Playground pass (--wasm RUNNER, ADR-0034): every program, single-file and multi-file project, also runs through the browser playground's
+// WebAssembly interpreter (`node RUNNER FILE_OR_PROJECT_DIR`, docs/book/playground/run-node.mjs), and its exit status and stdout must
 // equal the native `wj run --interpret` under the playground's own conditions: no grants (--sandbox), the seeded
 // world (--simulate --seed 0) and the same fuel and output limits. --wasm-known FILE lists sample ids (`ID  reason`) the
 // playground cannot run yet: they may differ, and a listed sample that agrees fails the run until its line is deleted.
@@ -178,6 +178,19 @@ fn playground(wj: string, runner: string, src: string, cwd: string, at: string, 
     ""
 }
 
+// Playground pass for a multi-file project: the same comparison, the project directory instead of one file.
+fn playground_project(wj: string, runner: string, proot: string, at: string, name: string) -> string {
+    let native = sh("cd " + quote(proot) + " && " + quote(wj) + " run --interpret --sandbox --simulate --seed 0 --limits " + playground_limits())
+    let wasm = sh("cd " + quote(proot) + " && node " + quote(runner) + " " + quote(proot))
+    if wasm.status != native.status {
+        return "${at} [${name}]: playground exit ${wasm.status}, native exit ${native.status}\n  playground: ${tail(wasm.stdout + wasm.stderr, 8)}\n  native:     ${tail(native.stdout + native.stderr, 8)}"
+    }
+    if lines_of(wasm.stdout) != lines_of(native.stdout) {
+        return "${at} [${name}]: playground output differs from native\n  native:     ${lines_of(native.stdout):?}\n  playground: ${lines_of(wasm.stdout):?}"
+    }
+    ""
+}
+
 fn main() {
     let args: Vec<string> = env::args().collect()
     if args.len() < 4 {
@@ -325,6 +338,19 @@ fn main() {
             failures.push("${at} [${pname}]: project output differs\n  expected: ${want:?}\n  got:      ${lines_of(r.stdout):?}")
         } else {
             project_passed += 1
+            if wasm_runner != "" {
+                let w = playground_project(wj, wasm_runner, proot, at, pname)
+                let gap = known_gap(wasm_known, pname)
+                if w == "" && gap == "" {
+                    wasm_checked += 1
+                } else if w == "" {
+                    failures.push("${at} [${pname}]: the playground now agrees with native: delete its line from the --wasm-known list (${gap})")
+                } else if gap == "" {
+                    failures.push(w)
+                } else {
+                    wasm_known_gaps += 1
+                }
+            }
             project_names.push(pname)
             project_roots.push(proot)
             project_out.push(r.stdout)

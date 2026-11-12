@@ -15,7 +15,7 @@ use crate::parser::{SourceLocation, Type, UnaryOp};
 pub enum Kind {
     /// `let` (also each name of a `let` pattern).
     Let,
-    /// A `for` loop variable over a range.
+    /// A `for` loop variable (each name of its pattern).
     For,
     /// Parameters, closure parameters, match arm and other pattern bindings: never reported.
     Other,
@@ -59,6 +59,8 @@ pub struct Walker<'f> {
     macro_locs: Vec<SourceLocation>,
     closure_depth: usize,
     self_type: Option<Type>,
+    /// Names declared `mut` in `for` patterns, by the `for` statement's (line, column) (the parser's side table).
+    loop_mut: std::collections::HashSet<(usize, usize, String)>,
 }
 
 impl Env for Walker<'_> {
@@ -91,7 +93,14 @@ impl<'f> Walker<'f> {
             macro_locs: Vec::new(),
             closure_depth: 0,
             self_type: None,
+            loop_mut: Default::default(),
         }
+    }
+
+    /// The `for` patterns' `mut` names recorded by the parser.
+    pub fn with_loop_mut(mut self, names: &[(usize, usize, String)]) -> Self {
+        self.loop_mut = names.iter().cloned().collect();
+        self
     }
 
     fn lookup(&self, name: &str) -> Option<usize> {
@@ -256,11 +265,19 @@ impl<'f> Walker<'f> {
             Statement::For { pattern, iterable, body, location, .. } => {
                 self.expr(iterable);
                 self.scopes.push(Vec::new());
-                // A loop over a range binds a fresh integer each iteration: assigning to it needs `for mut`. A loop
-                // over a collection binds its elements, and an assignment writes through to the element (the
-                // borrow is inferred, ADR-0002 keeps reference modes inferred): not a local to declare `mut`.
-                let kind = if matches!(iterable, Expression::Range { .. }) { Kind::For } else { Kind::Other };
-                self.bind_pattern(pattern, None, kind, false, location);
+                // ADR-0002 (owner decision): a loop variable that is assigned or changed through is declared `mut`
+                // (`for mut x in ..`, `for (k, mut v) in ..`), over a range or a collection alike. The iteration's
+                // borrow (iter / iter_mut / into_iter) stays inferred; `mut` is the visible sign the loop writes.
+                let elem = types::type_of(self.facts, self, iterable).and_then(|t| element_type(&t));
+                self.bind_pattern(pattern, elem, Kind::For, false, location);
+                if let Some(l) = location {
+                    let loop_scope = self.scopes.last().cloned().unwrap_or_default();
+                    for id in loop_scope {
+                        if self.loop_mut.contains(&(l.line, l.column, self.bindings[id].name.clone())) {
+                            self.bindings[id].declared_mut = true;
+                        }
+                    }
+                }
                 self.block(body);
                 self.scopes.pop();
             }
@@ -305,7 +322,9 @@ impl<'f> Walker<'f> {
             Expression::Identifier { name, location } => self.change(name, Change::Assign { compound }, location, false),
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
                 if let Some((root, loc)) = place_root(target) {
-                    if self.place_of_value(target) {
+                    // a loop variable is changed by an assignment through it whatever its element type
+                    let loop_var = self.lookup(root).is_some_and(|i| self.bindings[i].kind == Kind::For);
+                    if loop_var || self.place_of_value(target) {
                         let change = if matches!(target, Expression::Index { .. }) { Change::Element } else { Change::Field };
                         self.change(root, change, loc, true);
                     }
@@ -336,7 +355,12 @@ impl<'f> Walker<'f> {
         if b.declared_mut || self.reported[id] || b.kind == Kind::Other {
             return;
         }
-        if through && (b.kind != Kind::Let || b.ty.as_ref().is_none_or(is_reference)) {
+        let judged_through = match b.kind {
+            Kind::Let => b.ty.as_ref().is_some_and(|t| !is_reference(t)),
+            Kind::For => true,
+            Kind::Other => false,
+        };
+        if through && !judged_through {
             return;
         }
         let at = match (at, self.macro_locs.last()) {
@@ -485,5 +509,23 @@ impl<'f> Walker<'f> {
         if changes == Some(true) && !is_reference(&recv) {
             self.changed_through(object, Change::Method(method.to_string()));
         }
+    }
+}
+
+/// The type of one item of a loop over a value of type `t`: a sequence's element, a map's `(key, value)`.
+fn element_type(t: &Type) -> Option<Type> {
+    match strip_refs(t) {
+        Type::Vec(e) | Type::Array(e, _) => Some((**e).clone()),
+        Type::Parameterized(n, args) => {
+            let leaf = crate::type_classification::type_name_leaf(n);
+            if crate::typing::core_surface::is_map_container(leaf) && args.len() == 2 {
+                Some(Type::Tuple(args.clone()))
+            } else if crate::typing::core_surface::is_element_container(leaf) && args.len() == 1 {
+                Some(args[0].clone())
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }

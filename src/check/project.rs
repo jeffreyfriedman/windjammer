@@ -76,7 +76,7 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
             .iter()
             .any(|d| d.is_error() && d.primary_span.as_ref().is_some_and(|s| s.file == p.file));
         if !has_errors {
-            let reused = memo.as_ref().and_then(|m| m.get(&p.file, &p.text));
+            let reused = memo.as_mut().and_then(|m| m.get(&p.file, &p.text));
             let found = reused.unwrap_or_else(|| {
                 let d = analysis_phase(p, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::compute())).clone());
                 if let Some(m) = memo.as_mut() {

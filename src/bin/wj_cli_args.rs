@@ -427,8 +427,8 @@ pub enum Commands {
         #[arg(value_name = "LOG PROGRAM", num_args = 1..=2, required = true)]
         paths: Vec<PathBuf>,
 
-        /// Debugger commands, one per line (`break LINE`, `continue`, `step [N]`, `back [N]`, `print NAME`, `locals`,
-        /// `where`); `-` or no script reads them from standard input
+        /// Debugger commands, one per line (`break LINE [if EXPR]`, `continue`, `step [N]`, `next`, `finish`, `back [N]`,
+        /// `print EXPR`, `watch NAME`, `locals`, `where`); `-` or no script reads them from standard input
         #[arg(long, value_name = "FILE")]
         script: Option<PathBuf>,
 
@@ -451,6 +451,10 @@ pub enum Commands {
         /// Grant a capability as the recording did, `EFFECT[=RESOURCE]` (repeatable); nothing is performed either way
         #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
         allow: Vec<String>,
+
+        /// Start stopped at the statement that answers the K-th event of the journal (K counts from 1; a recorded run only)
+        #[arg(long = "at-effect", value_name = "K", conflicts_with = "simulate", value_parser = clap::value_parser!(u64).range(1..))]
+        at_effect: Option<u64>,
     },
 
     /// Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
