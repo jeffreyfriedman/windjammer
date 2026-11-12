@@ -629,6 +629,22 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // A borrowed `&str` value (a `text[a..b]` slice, or a local bound to one) into an owned `string`
+        // target: the target's declared type decides, the slice is copied.
+        // A loop binding over a map's keys or a list (`for k in m.keys()`) is a reference to the text, too.
+        let borrowed_text = self.is_text_slice_expr(value)
+            || matches!(value, Expression::Identifier { name, .. }
+                if self.infer_expression_type(value).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
+                    || (self.borrowed_iterator_vars.contains(name) && !self.match_arm_bindings.contains(name.as_str())));
+        if borrowed_text
+            && self.infer_expression_type(target).is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && crate::codegen::rust::types::is_windjammer_text_type(&t))
+            && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
+            && !value_str.ends_with(".to_string()")
+        {
+            // `&k[a..b]` -> `k[a..b].to_string()` (`.` binds tighter than `&`)
+            value_str = format!("{}.to_string()", value_str.strip_prefix('&').unwrap_or(&value_str));
+        }
+
         // Auto-clone when assigning one self field from another self field.
         // In Rust, `self.a = self.b` is E0507 when self is &mut self and b is non-Copy,
         // because you can't move out of a mutable reference. Clone solves this.

@@ -196,6 +196,9 @@ pub struct InferenceEngine {
     type_params: HashSet<String>,
     /// Map from variable names to their type parameters (e.g., "x" -> "T")
     var_to_type_param: HashMap<String, String>,
+    /// Parameters declared as a list of a type parameter (`v: Vec<T>` -> "T"): reading an element out of
+    /// one by value (`v[0]` returned or bound) copies it, which needs `T: Clone`.
+    list_to_type_param: HashMap<String, String>,
 }
 
 impl InferenceEngine {
@@ -203,6 +206,7 @@ impl InferenceEngine {
         InferenceEngine {
             type_params: HashSet::new(),
             var_to_type_param: HashMap::new(),
+            list_to_type_param: HashMap::new(),
         }
     }
 
@@ -239,6 +243,17 @@ impl InferenceEngine {
             }
         }
 
+        self.list_to_type_param.clear();
+        for param in &func.parameters {
+            if let crate::parser::Type::Vec(elem) = &param.type_ {
+                if let crate::parser::Type::Generic(name) | crate::parser::Type::Custom(name) = elem.as_ref() {
+                    if self.type_params.contains(name) {
+                        self.list_to_type_param.insert(param.name.clone(), name.clone());
+                    }
+                }
+            }
+        }
+
         let mut bounds = InferredBounds::new();
 
         // Analyze function body
@@ -262,14 +277,17 @@ impl InferenceEngine {
     fn collect_constraints_from_statement(&self, stmt: &Statement, bounds: &mut InferredBounds) {
         match stmt {
             Statement::Expression { expr, .. } => {
+                self.require_clone_for_element_read(expr, bounds);
                 self.collect_constraints_from_expression(expr, bounds);
             }
             Statement::Let { value, .. } => {
+                self.require_clone_for_element_read(value, bounds);
                 self.collect_constraints_from_expression(value, bounds);
             }
             Statement::Return {
                 value: Some(expr), ..
             } => {
+                self.require_clone_for_element_read(expr, bounds);
                 self.collect_constraints_from_expression(expr, bounds);
             }
             Statement::Return { value: None, .. } => {
@@ -315,6 +333,18 @@ impl InferenceEngine {
             }
             _ => {
                 // Other statement types don't contribute constraints yet
+            }
+        }
+    }
+
+    /// `v[i]` as a value (a returned, bound or tail element of `v: Vec<T>`): the element is copied out of the
+    /// list, so `T: Clone`.
+    fn require_clone_for_element_read(&self, expr: &Expression, bounds: &mut InferredBounds) {
+        if let Expression::Index { object, .. } = expr {
+            if let Expression::Identifier { name, .. } = &**object {
+                if let Some(tp) = self.list_to_type_param.get(name) {
+                    bounds.add_constraint(tp.clone(), "Clone".to_string());
+                }
             }
         }
     }

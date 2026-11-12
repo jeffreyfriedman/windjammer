@@ -283,6 +283,8 @@ pub struct CodeGenerator<'ast> {
     /// WJ `struct` names declared in this compilation unit. Shadows stdlib types
     /// of the same name (`use std::url` + local `struct Url`) so literals stay local.
     pub(crate) user_declared_struct_names: std::collections::HashSet<String>,
+    /// User structs declared with type parameters (`struct Stack<T>`): a literal alone does not fix their type.
+    pub(crate) generic_user_struct_names: std::collections::HashSet<String>,
     // TUPLE STRUCT NAMES (struct Point(i32, i32)): ownership conversion in constructor calls needs owned args
     pub(crate) tuple_struct_names: std::collections::HashSet<String>,
     // USER-DEFINED COPY TYPES (@derive(Copy)): lets is_copy_type recognize them, preventing unnecessary .clone()
@@ -718,6 +720,7 @@ impl<'ast> CodeGenerator<'ast> {
             explicit_ref_let_bindings: std::collections::HashSet::new(),
             struct_field_types: std::collections::HashMap::new(),
             user_declared_struct_names: std::collections::HashSet::new(),
+            generic_user_struct_names: std::collections::HashSet::new(),
             tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
             explicit_copy_types_registry: std::collections::HashSet::new(),
@@ -4597,6 +4600,11 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.current_function_params,
             );
             if !super::string_utilities::already_owned_string_expr(expr_str) {
+                // `text[a..b]` is a borrowed slice; the owned `string` result copies it.
+                if self.is_text_slice_expr(expr) {
+                    *expr_str = super::string_utilities::coerce_expr_to_owned_string(expr_str);
+                    return;
+                }
                 if let crate::parser::Expression::FieldAccess { field, .. } = expr {
                     if self.module_string_consts.contains(field) {
                         *expr_str = super::string_utilities::coerce_expr_to_owned_string(expr_str);

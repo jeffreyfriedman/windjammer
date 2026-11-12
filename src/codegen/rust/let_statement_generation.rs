@@ -13,7 +13,7 @@ use super::{string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// `text[a..b]`: a borrowed slice (`&str`) that an owned `string` binding must copy.
-    fn let_value_borrows_text(value: &Expression<'ast>) -> bool {
+    pub(in crate::codegen::rust) fn let_value_borrows_text(value: &Expression<'_>) -> bool {
         match value {
             Expression::Identifier { .. } => true,
             Expression::Index { index, .. } => matches!(index, Expression::Range { .. }),
@@ -1059,6 +1059,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
                     self.sync_i32_coord_binding_after_let(vn, &value_str);
                 }
+                self.note_text_slice_local(var_name, value, &value_str);
                 output.push_str(&value_str);
 
                 // Restore expression context
@@ -1239,6 +1240,7 @@ impl<'ast> CodeGenerator<'ast> {
                     &value_str,
                 );
                 self.note_owned_local_after_ref_clone(var_name, value, &value_str);
+                self.note_text_slice_local(var_name, value, &value_str);
 
                 output.push_str(&value_str);
 
@@ -1622,6 +1624,19 @@ impl<'ast> CodeGenerator<'ast> {
             *value_str = value_str.replacen(".clone()", ".to_string()", 1);
         } else if is_mut && value_str.as_str() == name.as_str() {
             *value_str = format!("{name}.to_string()");
+        }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `let act = text[a..b]` kept as the borrowed slice (not copied to an owned `String`): the local is a `&str`.
+    fn note_text_slice_local(&mut self, var_name: Option<&str>, value: &Expression<'ast>, value_str: &str) {
+        let Some(name) = var_name else { return };
+        if !self.local_var_types.contains_key(name)
+            && self.is_text_slice_expr(value)
+            && !string_utilities::already_owned_string_expr(value_str)
+        {
+            self.local_var_types.insert(name.to_string(), Type::Reference(Box::new(Type::Custom("str".to_string()))));
         }
     }
 }
