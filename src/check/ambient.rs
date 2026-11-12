@@ -28,6 +28,32 @@ pub fn use_depth<'a>(programs: impl IntoIterator<Item = &'a crate::parser::Progr
 /// Digest of the working directory and every `*.wj.meta` within `depth` levels of it and of its `.wj-cache/`.
 /// `None` when the working directory is unknown or the walk exceeds its budget: the caller must not cache.
 pub fn fingerprint(depth: usize) -> Option<String> {
+    let (cwd, files) = meta_files(depth)?;
+    let mut h = Sha256::new();
+    part(&mut h, cwd.display().to_string().as_bytes());
+    for f in &files {
+        part(&mut h, f.display().to_string().as_bytes());
+        part(&mut h, &std::fs::read(f).unwrap_or_default());
+    }
+    Some(format!("{:x}", h.finalize()))
+}
+
+/// Like [`fingerprint`] but independent of where the working directory is: sidecars are named relative to it, so
+/// the same sidecar contents give the same digest in any checkout (key of the shared analysis cache). A sidecar
+/// outside the working directory makes the run uncacheable (`None`).
+pub fn fingerprint_portable(depth: usize) -> Option<String> {
+    let (cwd, files) = meta_files(depth)?;
+    let mut h = Sha256::new();
+    for f in &files {
+        let rel = f.strip_prefix(&cwd).ok()?;
+        part(&mut h, rel.to_string_lossy().replace('\\', "/").as_bytes());
+        part(&mut h, &std::fs::read(f).unwrap_or_default());
+    }
+    Some(format!("{:x}", h.finalize()))
+}
+
+/// The working directory and the sorted `*.wj.meta` sidecars the inference may read.
+fn meta_files(depth: usize) -> Option<(std::path::PathBuf, Vec<std::path::PathBuf>)> {
     let cwd = std::env::current_dir().ok()?;
     let mut files = Vec::new();
     let mut budget = WALK_BUDGET;
@@ -36,13 +62,7 @@ pub fn fingerprint(depth: usize) -> Option<String> {
     walk(&crate::metadata::meta_cache_root(&cwd), depth + 1, &mut budget, &mut files)?;
     files.sort();
     files.dedup();
-    let mut h = Sha256::new();
-    part(&mut h, cwd.display().to_string().as_bytes());
-    for f in &files {
-        part(&mut h, f.display().to_string().as_bytes());
-        part(&mut h, &std::fs::read(f).unwrap_or_default());
-    }
-    Some(format!("{:x}", h.finalize()))
+    Some((cwd, files))
 }
 
 /// Length-prefixed, so adjacent parts cannot run together.

@@ -65,46 +65,17 @@ pub fn dir() -> PathBuf {
     crate::cargo_cache::cache_root().join("verdicts")
 }
 
-fn file_in(dir: &Path, key: &str) -> Option<PathBuf> {
-    // keys are hex digests; anything else never names a file
-    (key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit())).then(|| dir.join(format!("{key}.json")))
-}
-
 pub fn load_from(dir: &Path, key: &str) -> Option<Verdict> {
-    let text = std::fs::read_to_string(file_in(dir, key)?).ok()?;
+    let text = crate::cargo_cache::entries::read(dir, key)?;
     let v: Verdict = serde_json::from_str(&text).ok()?;
     (v.format == FORMAT && v.key == key).then_some(v)
 }
 
-/// Write through a temporary file and a rename (a concurrent reader never sees half a file), then keep the
-/// newest `max` entries.
+/// Write through a unique temporary file and a rename (a concurrent reader never sees half a file) under the
+/// directory's shared lock (a `wj cache prune` leaves it alone meanwhile), then keep the newest `max` entries.
 pub fn store_in(dir: &Path, v: &Verdict, max: usize) {
-    let Some(path) = file_in(dir, &v.key) else { return };
-    if std::fs::create_dir_all(dir).is_err() {
-        return;
-    }
-    let Ok(text) = serde_json::to_string(v) else { return };
-    let tmp = dir.join(format!(".{}.tmp{}", v.key, std::process::id()));
-    if std::fs::write(&tmp, text).is_ok() && std::fs::rename(&tmp, &path).is_err() {
-        let _ = std::fs::remove_file(&tmp);
-    }
-    evict(dir, max);
-}
-
-fn evict(dir: &Path, max: usize) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
-    let mut entries: Vec<(std::time::SystemTime, PathBuf)> = rd
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .filter_map(|p| Some((std::fs::metadata(&p).ok()?.modified().ok()?, p)))
-        .collect();
-    if entries.len() <= max {
-        return;
-    }
-    entries.sort();
-    for (_, p) in &entries[..entries.len() - max] {
-        let _ = std::fs::remove_file(p);
+    if let Ok(text) = serde_json::to_string(v) {
+        crate::cargo_cache::entries::write(dir, &v.key, &text, max);
     }
 }
 

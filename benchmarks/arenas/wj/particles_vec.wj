@@ -18,7 +18,7 @@ fn main() {
             pool.push(Particle { x: f * 0.01, y: f * 0.02, vx: (i % 5) as float - 2.0, vy: (i % 3) as float, life: 1.0 + (i % 4) as float })
         }
         for step in 0..4 {
-            for p in pool.iter_mut() {
+            for mut p in pool.iter_mut() {
                 p.vy = p.vy - 0.98
                 p.x = p.x + p.vx * 0.016
                 p.y = p.y + p.vy * 0.016

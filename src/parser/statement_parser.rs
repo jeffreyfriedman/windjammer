@@ -343,12 +343,19 @@ impl Parser {
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
 
+        // ADR-0002: `mut` on a loop variable is recorded for `wj check`; the pattern keeps plain names
+        let mut declared_mut = Vec::new();
+        let pattern = strip_loop_mut(pattern, &mut declared_mut);
+        let location = self.current_location();
+        if let Some(l) = &location {
+            self.loop_mut_bindings.extend(declared_mut.into_iter().map(|n| (l.line, l.column, n)));
+        }
         Ok(self.alloc_stmt(Statement::For {
             pattern,
             iterable,
             body,
             label,
-            location: self.current_location(),
+            location,
         }))
     }
 
@@ -776,5 +783,17 @@ impl Parser {
                 location: self.current_location(),
             }))
         }
+    }
+}
+
+/// A `for` pattern with its `mut` markers removed (`(k, mut v)` -> `(k, v)`), the removed names pushed to `declared`.
+fn strip_loop_mut<'a>(p: Pattern<'a>, declared: &mut Vec<String>) -> Pattern<'a> {
+    match p {
+        Pattern::MutBinding(n) => {
+            declared.push(n.clone());
+            Pattern::Identifier(n)
+        }
+        Pattern::Tuple(ps) => Pattern::Tuple(ps.into_iter().map(|q| strip_loop_mut(q, declared)).collect()),
+        other => other,
     }
 }

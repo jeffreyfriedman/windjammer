@@ -1,0 +1,17 @@
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn describe(p: Point) -> int {
+    let n = p.x + p.y
+    n
+}
+
+fn main() {
+    let xs = [3, 1, 4]
+    let p = Point { x: 2, y: 5 }
+    let name = "wj"
+    let total = describe(p)
+    println("${xs.len()} ${name} ${total}")
+}
