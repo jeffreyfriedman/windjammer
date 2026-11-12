@@ -1053,7 +1053,7 @@ impl<'ast> CodeGenerator<'ast> {
                     needs_mut_ref,
                     &value_str,
                 );
-                self.note_owned_local_after_ref_clone(var_name, value, &value_str);
+                self.own_mut_alias_of_borrowed_text(mutable, value, &mut value_str); self.note_owned_local_after_ref_clone(var_name, value, &value_str);
 
                 if let Some(vn) = var_name {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);

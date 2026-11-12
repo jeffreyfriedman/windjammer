@@ -138,6 +138,13 @@ corpus_tests!(
     field_iterated_inside_outer_loop,
     loop_mut_shadowed_after_write,
     element_read_then_collection_changed,
+    caller_param_name_suffix_of_field_arg,
+    element_read_borrowed_across_container_write,
+    for_over_mut_param_then_push,
+    rebound_name_other_type_in_sibling_scope,
+    self_field_arg_into_mut_self_method,
+    str_array_element_in_owned_branch,
+    borrowed_text_alias_reassigned_owned,
     nested_closure_typed_param,
 );
 

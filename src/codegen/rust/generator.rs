@@ -4622,6 +4622,7 @@ impl<'ast> CodeGenerator<'ast> {
                     });
                     let is_borrowed_string_param = self.inferred_borrowed_params.contains(name)
                         || self.str_ref_optimized_params.contains(name)
+                        || self.idiom.str_slice_loop_vars.contains(name) // `for d in ["n", "s"]` binds `&str`
                         || self.current_function_params.iter().any(|p| {
                             p.name == *name
                                 && matches!(

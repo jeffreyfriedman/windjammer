@@ -32,8 +32,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut all_pattern_bindings = std::collections::HashSet::new();
         self.extract_pattern_bindings(pattern, &mut all_pattern_bindings);
 
-        // OWN-LOOP-WRITE (IR): the binding is assigned or written through a field or element.
-        let ir_writes = self.current_ir_function.as_ref().is_some_and(|f| f.loop_writes_through(location));
+        let ir_writes = self.current_ir_function.as_ref().is_some_and(|f| f.loop_writes_through(location)); // OWN-LOOP-WRITE
         let needs_mut = ir_writes || if let Some(var) = loop_var.as_ref() {
             // Simple identifier pattern: check if it's mutated
             self.loop_body_modifies_variable(body, var)
@@ -198,7 +197,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // CLONE-USE-AFTER-MOVE (IR `field_copy_sites`): the owner of `t.out` is read after the loop, so borrow it.
+        // CLONE-USE-AFTER-MOVE (IR `field_copy_sites`): `t` is read after `for v in t.out`, so borrow the field.
         needs_borrow |= self.clone_facts.field_copy_sites.contains_key(&crate::ir::numeric_defaults::node_id(iterable));
         let needs_mut_borrow = needs_mut && needs_borrow;
 
@@ -319,6 +318,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_field_access_object = true;
         let mut iter_expr = self.generate_expression(iterable_to_generate);
         self.in_field_access_object = prev_field_access;
+        self.reborrow_mut_param_iterable(iterable, needs_mut, &mut iter_expr);
 
         // `for pass in self.field` on `&mut self` when the body calls `self.update_*()`:
         // cannot use `&self.field` (borrow conflict) or bare `self.field` (partial move).

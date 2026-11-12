@@ -517,3 +517,19 @@ mod tests {
 pub fn is_string_literal(e: &Expression) -> bool {
     matches!(e, Expression::Literal { value: crate::parser::Literal::String(_), .. })
 }
+
+/// Replace `from` (which starts with a binding name) only where the name is the whole binding, not the tail of
+/// a longer identifier or a field path (`self.rooms.clone()` for a parameter `s` stays as it is).
+pub fn replace_whole_binding(haystack: &str, from: &str, to: &str) -> String {
+    let mut out = String::with_capacity(haystack.len());
+    let mut rest = haystack;
+    while let Some(i) = rest.find(from) {
+        let prev = rest[..i].chars().last().or_else(|| out.chars().last());
+        let whole = !prev.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.');
+        out.push_str(&rest[..i]);
+        out.push_str(if whole { to } else { from });
+        rest = &rest[i + from.len()..];
+    }
+    out.push_str(rest);
+    out
+}

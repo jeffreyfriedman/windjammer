@@ -175,6 +175,15 @@ value-formal fixed point already publishes receiver modes, so the gate can be a 
   of `j` (`codegen/rust/element_borrow_conflict.rs`: an assignment into `v` or a call of a method whose declared
   receiver is `&mut self`); otherwise the element is copied (`let j = self.jobs[i]; self.jobs.remove(i); .. j ..` was
   rustc E0502).
+- `self.special(self.forms[h].s, ..)` into a `&mut self` method (IR receiver mode): an argument that borrows a path
+  of the same receiver is copied first (`&(..).clone()`), so the shared borrow ends before the call (was E0502).
+- `for o in out` over a `&mut Vec` parameter reborrows (`&*out`, `&mut *out` when the binding writes through)
+  instead of moving the reference (E0382 at a later `out.push`).
+- `for d in ["n", "s"]` binds `&str`; as an `if`/`else` value beside an owned `String` it is converted.
+- `let mut body = raw` of text the solver types as `string` that the backend does not know as an owned `String`
+  (`raw = s.trim()`) copies with `to_string()` (`raw.clone()` stayed `&str`, E0308 at `body = <String>`).
+- The demoted-text rewrite `{param}.clone()` -> `{param}.to_string()` matched any text ending in the parameter name
+  (`self.rooms.clone()` for a parameter `s` became `self.room` + `s.to_string()`); it now matches the whole binding.
 - A Copy struct named `Vec3` is not the `Vec` collection: two `starts_with("Vec")` guesses now compare the type's base
   name, so the bare-pass hint no longer borrows `Vec3` arguments into owned formals.
 
