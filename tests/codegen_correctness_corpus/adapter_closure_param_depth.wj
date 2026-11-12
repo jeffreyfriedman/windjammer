@@ -6,6 +6,7 @@
 // expect: [5, 3]
 // expect: true Some(2)
 // expect: 1 ["b"]
+// expect: 2 [8, 4]
 struct Item {
     name: string,
     qty: int,
@@ -26,4 +27,7 @@ fn main() {
     let stocked = items.filter(|it| it.qty > 0).count()
     let empty: Vec<string> = items.filter(|it| it.qty == 0).map(|it| it.name).collect()
     println("${stocked} ${empty:?}")
+    let typed = v.filter(|x: int| x > 4).count()
+    let even: Vec<int> = v.filter(|n: int| n % 2 == 0).collect()
+    println("${typed} ${even:?}")
 }
