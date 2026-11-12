@@ -1,0 +1,11 @@
+// A `substring` call as a function's tail value is already an owned `string`: its lowering
+// `(s[i..end]).to_string()` is kept as is (a second conversion garbled it into `s[i..end]).to_string(.to_string()`).
+// expect: e
+fn char_at(s: string, i: usize) -> string {
+    let end: usize = i + 1
+    s.substring(i, end)
+}
+
+fn main() {
+    println(char_at("hello", 1))
+}

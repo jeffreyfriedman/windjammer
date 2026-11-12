@@ -46,6 +46,28 @@ changes it (`push`, `insert`, or a method of your own that changes `self`). A lo
 `WJ0051` by `wj check`, `wj build` and `wj run` alike, with an automatic fix (`wj fix` adds every missing `mut`;
 `wj explain WJ0051` explains it).
 
+## Loop variables, too
+
+The rule is the same for the variable of a `for` loop. A loop over a collection reaches the elements themselves, so
+assigning to the variable changes the element, and the declaration says so: write `for mut x in ...`. The loop's borrow
+stays inferred; the `mut` is your signal, and the reader's, that the loop writes.
+
+```wj
+// expect: [10, 20, 30]
+fn main() {
+    let mut xs = [1, 2, 3]
+    for mut x in xs {
+        x = x * 10
+    }
+    println("${xs:?}")
+}
+```
+
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBbMTAsIDIwLCAzMF0KZm4gbWFpbigpIHsKICAgIGxldCBtdXQgeHMgPSBbMSwgMiwgM10KICAgIGZvciBtdXQgeCBpbiB4cyB7CiAgICAgICAgeCA9IHggKiAxMAogICAgfQogICAgcHJpbnRsbigiJHt4czo_fSIpCn0K)
+
+Patterns carry the marker where it applies: `for (id, mut qty) in items`. Leave it out and `WJ0051` points at the loop
+variable and offers the fix; `wj fix` writes it for you ([Tooling](tooling.md#fix-wj-fix)).
+
 ## The everyday types
 
 | Type | What it holds |

@@ -15,7 +15,7 @@
 //! to the closure engine, which runs the remaining iterations.
 
 use super::rt;
-use super::kinds::{int_ok, unsigned_repr, Class, Ty};
+use super::kinds::{int_ok, unsigned_repr, Class, Shape, Ty};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::engine::Interpreter;
 use crate::interpreter::resolved::osr::{loc, Reg};
@@ -106,6 +106,8 @@ pub(crate) struct Plan {
     pub(crate) exits: Vec<Exit>,
     pub(crate) stmts: Vec<StmtRun>,
     pub(crate) nbuf: usize,
+    /// The shapes row views are built for (`rows.rs`; machine code passes their addresses).
+    pub(crate) row_shapes: Vec<Box<Shape>>,
 }
 
 #[derive(Clone)]
@@ -167,6 +169,8 @@ pub(super) struct Lo<'a, 'i> {
     stmts: Vec<StmtRun>,
     /// `&&`/`||` blocks opened and not yet joined (a statement that fails inside one cannot fall back).
     pub(super) open_joins: usize,
+    /// Row view shapes (`Plan::row_shapes`) with the slot each is for.
+    pub(super) row_shapes: Vec<(usize, Box<Shape>)>,
 }
 
 /// A loop being lowered: where `continue` goes (the head, or a `for` loop's increment), where `break`
@@ -225,6 +229,7 @@ pub(crate) fn lower(
         frames: Vec::new(),
         inlines: false,
         open_joins: 0,
+        row_shapes: Vec::new(),
         unit_label: match stmt {
             Statement::While { label, .. } | Statement::For { label, .. } => label.as_deref(),
             _ => None,
@@ -275,7 +280,7 @@ pub(crate) fn lower(
     }
     lo.b.seal_all_blocks();
     lo.b.finalize();
-    Ok(Plan { live, live_structs, inlines: lo.inlines, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts })
+    Ok(Plan { live, live_structs, inlines: lo.inlines, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts, row_shapes: lo.row_shapes.into_iter().map(|(_, s)| s).collect() })
 }
 
 impl Lo<'_, '_> {

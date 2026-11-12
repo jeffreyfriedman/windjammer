@@ -139,6 +139,9 @@ corpus_tests!(
     struct_field_read_moves_literal_to_i32,
     assert_in_match_let_value_takes_field_width,
     sequence_adapters_take_usize_counts,
+    collect_after_map_item_type,
+    substring_tail_value,
+    text_slice_in_every_position,
 );
 
 // ------------------------------------------------------------------ generated programs
