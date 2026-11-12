@@ -14,7 +14,29 @@ pub use super::test_api::predicted_moves;
 
 /// WJ0007 diagnostics for one parsed file.
 pub fn predict(program: &crate::parser::Program<'_>, source: &str, file: &str) -> Vec<Diagnostic> {
-    generate(program).map_or_else(Vec::new, |rust| predict_from(&rust, source, file))
+    let rust = generate(program);
+    remember(file, source, &rust);
+    rust.map_or_else(Vec::new, |rust| predict_from(&rust, source, file))
+}
+
+/// The Rust generated for a file's text, kept for the width trigger of the same run (`widths::generated_rust`
+/// would generate it a second time from a fresh parse of the same text). Taken once, so nothing outlives its use;
+/// at most [`REMEMBERED_FILES`] are kept.
+static GENERATED: std::sync::Mutex<Vec<(String, String, Option<String>)>> = std::sync::Mutex::new(Vec::new());
+const REMEMBERED_FILES: usize = 512;
+
+fn remember(file: &str, source: &str, rust: &Option<String>) {
+    let mut kept = GENERATED.lock().unwrap_or_else(|e| e.into_inner());
+    if kept.len() < REMEMBERED_FILES {
+        kept.push((file.to_string(), source.to_string(), rust.clone()));
+    }
+}
+
+/// The Rust `predict` generated for exactly this file text, if this run did (`Some(None)`: it tried and failed).
+pub fn take_generated(file: &str, source: &str) -> Option<Option<String>> {
+    let mut kept = GENERATED.lock().unwrap_or_else(|e| e.into_inner());
+    let at = kept.iter().position(|(f, s, _)| f == file && s == source)?;
+    Some(kept.swap_remove(at).2)
 }
 
 /// The Rust the compiler generates for one parsed file, in-process; `None` when the generator fails.
