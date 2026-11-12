@@ -600,7 +600,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let by_identity = path.and_then(|p| {
             [format!("{p}::{member}"), format!("crate::{p}::{member}")].into_iter().find_map(|k| registry.get_signature(&k))
         });
-        by_identity.or_else(|| self.resolve_callee_signature(&format!("{leaf}::{member}"), arg_count))
+        let bare = self.resolve_callee_signature(&format!("{leaf}::{member}"), arg_count);
+        // The bare key is the converged view when it declares the same function; a homonym type's method is not.
+        match (by_identity, bare) {
+            (Some(id), Some(b)) if !b.declares_same_function(id) => Some(id),
+            (id, b) => b.or(id),
+        }
     }
 
     /// The declared return type of method `method` of a user type (a homonym with no unique signature: `None`).
