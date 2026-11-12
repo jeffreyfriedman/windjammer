@@ -227,6 +227,30 @@ $ printf 'break 5\ncontinue\nprint v\n' | wj replay run.wjlog greet.wj
 v = "hello"
 ```
 
+## The log is plain text
+
+An effect log is JSON Lines: a header line, then one line per effect, in the order the program performed them. The header
+names the log format (`wj_effect_log`, currently 2), the compiler, the seeds and the grants, and each effect line says
+which effect it was (`env.read`, `fs.read`, ...), its arguments and its result. You can read one with `grep`, check one
+into a bug report, or feed it to a script:
+
+```sh,verify
+$ cat > greet.wj <<'EOF'
+use std::env
+
+fn main() {
+    let v = env::var("WJ_GREETING").unwrap_or("none")
+    println("greeting: ${v}")
+}
+EOF
+$ WJ_GREETING=hello wj run --allow env.read=WJ_GREETING --record run.wjlog greet.wj
+greeting: hello
+$ grep -o '"wj_effect_log":[0-9]*' run.wjlog
+"wj_effect_log":2
+$ grep -o '"effect":"[a-z.]*"' run.wjlog
+"effect":"env.read"
+```
+
 A log written by an older `wj` (before the header carried grants) is refused with a message that says to record the run
 again.
 

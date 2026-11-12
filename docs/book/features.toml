@@ -222,3 +222,15 @@ id = "time-travel-debugging"
 title = "Replaying a recorded or simulated run and stepping through it (wj replay)"
 families = []
 spec = "docs/adr/0035-time-travel-debugging.md"
+
+[[feature]]
+id = "repl"
+title = "wj eval and the REPL: multi-line input, history, compiled-build warnings"
+
+[[feature]]
+id = "tooling"
+title = "fmt, check, fix, run --verify, error formats and the caches"
+
+[[feature]]
+id = "raw-sockets"
+title = "TCP and UDP sockets in std::net, their capabilities and the simulated network"
