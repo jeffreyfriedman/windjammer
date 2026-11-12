@@ -114,6 +114,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--release` | RELEASE |  | Like --compiled, with optimizations |
 | `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
 | `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty |
+| `--error-format` | FORMAT |  | How diagnostics and failed runs report on stderr: `human` (default); `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; or `json` (interpreted runs: one last line in the diagnostics schema with `stack` and `locals`, ADR-0036). Program stdout and the exit status do not change. `WJ_ERROR_FORMAT` sets the default for every command |
 | `--speculate` | SPECULATE |  | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) |
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
@@ -125,7 +126,6 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--jit-debug` | JIT_DEBUG |  | Interpreted runs: report on stderr which loops run as machine code and why others do not |
 | `--jit-mutant` | NAME |  | Interpreted runs (debug builds only): leave one machine-code check out (mutation tests) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
-| `--error-format` | FORMAT | human | Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036) |
 | `--no-locals` | NO_LOCALS |  | Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether) |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
 | `--record` | FILE |  | Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings) to FILE, a replayable log (ADR-0021) |
@@ -302,6 +302,7 @@ Usage: wj check [OPTIONS] [PATH]
 | `--json` | JSON |  | Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json) |
 | `--watch` | WATCH |  | Re-check whenever a .wj file changes |
 | `--fix` | FIX |  | Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...) |
+| `--error-format` | FORMAT |  | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command |
 
 ## `wj add`
 
