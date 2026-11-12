@@ -166,3 +166,26 @@ fn a_dependency_sidecar_never_changes_the_dependent_output() {
     let got = build_pair(&moved.path().join("w"), "b_moved");
     assert_same("moved", &with_sidecar, &got, &[root, moved.path()]);
 }
+
+/// The same library built repeatedly, into fresh directories and into one reused directory, cold and warm, writes the
+/// same file SET and the same bytes every time (a stray `lib.rs` in some runs was reported for a 93-file library).
+#[test]
+fn repeated_builds_write_identical_trees() {
+    let a = one_crate();
+    let proj = a.path().join("c");
+    let mut seen: Vec<(String, BTreeMap<String, String>)> = Vec::new();
+    for i in 0..10 {
+        if i % 2 == 0 {
+            let _ = fs::remove_dir_all(proj.join(".wj-cache")); // cold
+        }
+        let fresh = format!("fresh{i}");
+        wj(&proj, &["src", "-o", &fresh]);
+        seen.push((format!("fresh {i} ({})", if i % 2 == 0 { "cold" } else { "warm" }), tree(&proj.join(&fresh))));
+        wj(&proj, &["src", "-o", "reused"]);
+        seen.push((format!("reused {i}"), tree(&proj.join("reused"))));
+    }
+    let (base_label, base) = &seen[0];
+    for (label, got) in &seen {
+        assert_same(&format!("{label} vs {base_label}"), base, got, &[a.path()]);
+    }
+}
