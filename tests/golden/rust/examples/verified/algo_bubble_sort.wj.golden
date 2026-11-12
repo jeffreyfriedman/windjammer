@@ -5,7 +5,7 @@ fn bubble_sort(v: Vec<i64>) -> Vec<i64> {
     for i in 0_usize..n {
         for j in 0_usize..n - 1_usize - i {
             if a[j] > a[j + 1] {
-                let _ = a.swap(j, (j + 1) as usize);
+                a.swap(j, (j + 1) as usize);
             }
         }
     }

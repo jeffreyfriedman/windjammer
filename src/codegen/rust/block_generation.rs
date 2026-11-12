@@ -355,9 +355,16 @@ impl<'ast> CodeGenerator<'ast> {
     /// A non-final statement of a block: its value is discarded. An `if`/`else` there is a
     /// statement, so each branch tail ends with `;` even when it has a value (`v.remove(i)`
     /// yields the element), as an `if` without `else` already does. Decided by statement
-    /// position, not by the tail's type or name.
+    /// position, not by the tail's type or name. In a function returning `()` the branch tails
+    /// already end with `;` (the unit-return tail path), so only value-returning functions
+    /// need the void context.
     fn generate_discarded_statement(&mut self, stmt: &Statement<'ast>) -> String {
-        if !matches!(stmt, Statement::If { else_block: Some(_), .. }) {
+        let returns_unit = match &self.current_function_return_type {
+            None => true,
+            Some(Type::Tuple(types)) => types.is_empty(),
+            Some(_) => false,
+        };
+        if returns_unit || !matches!(stmt, Statement::If { else_block: Some(_), .. }) {
             return self.generate_statement(stmt);
         }
         let old_void = std::mem::replace(&mut self.in_void_block, true);

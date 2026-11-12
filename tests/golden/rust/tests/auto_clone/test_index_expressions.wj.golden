@@ -45,7 +45,7 @@ fn main() {
 #[inline]
 fn assert(condition: bool, message: &str) {
     if !condition {
-        let _ = panic!("{}", message);
+        panic!("{}", message);
     }
 }
 

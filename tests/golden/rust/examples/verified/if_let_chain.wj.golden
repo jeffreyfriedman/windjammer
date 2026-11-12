@@ -8,7 +8,7 @@ struct User {
 fn main() {
     let u = User { name: String::from("Ann"), email: None };
     if let name = u.name {
-        let _ = println!("name = {}", name);
+        println!("name = {}", name);
     }
     if let Some(e) = u.email {
         println!("email = {}", e);
@@ -17,7 +17,7 @@ fn main() {
     }
     let r: Result<i64, String> = Err(String::from("boom"));
     if let Err(m) = r {
-        let _ = println!("error: {}", m);
+        println!("error: {}", m);
     }
 }
 
