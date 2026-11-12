@@ -1,0 +1,10 @@
+// expect: n(locked) s
+// `for d in ["n", "s"]` binds `&str` in the compiled build; as the `else` value next to an owned
+// `"${d}(locked)"` it stays `d` (E0308 expected `String`, found `&str`).
+fn main() {
+    let mut ex: Vec<string> = []
+    for d in ["n", "s"] {
+        ex.push(if d == "n" { "${d}(locked)" } else { d })
+    }
+    println(ex.join(" "))
+}
