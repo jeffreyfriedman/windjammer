@@ -5,7 +5,7 @@ warning: explicit .clone() call [W0005]
   = suggestion: remove .clone() and let the compiler handle it
 
 Building Windjammer project from "<ws>" (target: rust)
-Output: "/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpck3EDd"
+Output: "{TMP}/.tmpck3EDd"
 
 Success! Transpilation complete!
 

@@ -94,12 +94,12 @@ P = all hidden vectors pass, F = runs but wrong, B = does not build/run (compile
 
 | task | status | passed | categories | first diagnostic |
 |---|---|---|---|---|
-| t042_parallel_sum | fail | 0/37 | api-misuse | error: no method named `spawn` found for value of type `fn`   --> /var/folders/k8/29syjv_n2255wky6v42379lw0000 |
+| t042_parallel_sum | fail | 0/37 | api-misuse | error: no method named `spawn` found for value of type `fn`   --> {TMP} |
 | t043_channel_pipeline | fail | 0/38 | unsupported | error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter   -->  |
 | t044_shared_histogram | fail | 0/35 | unsupported | error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter   --> /va |
-| t045_parallel_divisors | fail | 0/34 | api-misuse | error: no method named `spawn` found for value of type `fn`   --> /var/folders/k8/29syjv_n2255wky6v42379lw0000 |
+| t045_parallel_divisors | fail | 0/34 | api-misuse | error: no method named `spawn` found for value of type `fn`   --> {TMP} |
 | t046_producer_consumer | fail | 0/35 | unsupported | error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter   |
-| t054_dir_tree | fail | 0/34 | unsupported | mplemented by the interpreter   --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main. |
+| t054_dir_tree | fail | 0/34 | unsupported | mplemented by the interpreter   --> {TMP}/agentdx-ws-8f29bg45/main. |
 
 ## wj: tasks that do not pass
 

@@ -5,7 +5,7 @@
  "arm_name": "tiny-pack-only",
  "capability_denials": 0,
  "diag_samples": [
-  "Building Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpLWn4D1\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpLWn4D1\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn("
+  "Building Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmpLWn4D1\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"{TMP}/.tmpLWn4D1\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn("
  ],
  "diagnostic_categories": {
   "other": 1

@@ -4836,7 +4836,7 @@
      {
       "code": "E0277",
       "message": "`std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely",
-      "detail": "error[E0277]: `std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely\n   --> main.rs:9:19\n    |\n  9 |       thread::spawn(move || {\n    |  _____-------------_^\n    | |     |\n    | |     required by a bound introduced by this call\n 10 | |         let mut history: Vec<i64> = Vec::new();\n 11 | |         loop {\n 12 | |             let x = match rx.recv() {\n...   |\n 52 | |     });\n    | |_____^ `std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely\n    |\n    = help: the trait `Sync` is not implemented for `std::sync::mpsc::Receiver<i64>`\n    = note: required for `&std::sync::mpsc::Receiver<i64>` to implement `Send`\nnote: required because it's used within this closure\n   --> main.rs:9:19\n    |\n  9 |     thread::spawn(move || {\n    |                   ^^^^^^^\nnote: required by a bound in `std::thread::spawn`\n   --> /home/user/.rustup/toolchains/nig",
+      "detail": "error[E0277]: `std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely\n   --> main.rs:9:19\n    |\n  9 |       thread::spawn(move || {\n    |  _____-------------_^\n    | |     |\n    | |     required by a bound introduced by this call\n 10 | |         let mut history: Vec<i64> = Vec::new();\n 11 | |         loop {\n 12 | |             let x = match rx.recv() {\n...   |\n 52 | |     });\n    | |_____^ `std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely\n    |\n    = help: the trait `Sync` is not implemented for `std::sync::mpsc::Receiver<i64>`\n    = note: required for `&std::sync::mpsc::Receiver<i64>` to implement `Send`\nnote: required because it's used within this closure\n   --> main.rs:9:19\n    |\n  9 |     thread::spawn(move || {\n    |                   ^^^^^^^\nnote: required by a bound in `std::thread::spawn`\n   --> {RUSTUP_HOME}/toolchains/nig",
       "category": "toolchain-bug"
      }
     ],
@@ -5854,7 +5854,7 @@
     {
      "index": 0,
      "category": "api-misuse",
-     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> {TMP}/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
      "stdin": "2 5\n1 2 3 4 5\n",
      "args": [],
      "expected": "chunk 0: 6\nchunk 1: 9\ntotal: 15\n",
@@ -5864,7 +5864,7 @@
     {
      "index": 1,
      "category": "api-misuse",
-     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> {TMP}/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
      "stdin": "3 3\n10 -10 7\n",
      "args": [],
      "expected": "chunk 0: 10\nchunk 1: -10\nchunk 2: 7\ntotal: 7\n",
@@ -5874,7 +5874,7 @@
     {
      "index": 2,
      "category": "api-misuse",
-     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> {TMP}/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
      "stdin": "1 0\n\n",
      "args": [],
      "expected": "chunk 0: 0\ntotal: 0\n",
@@ -5904,7 +5904,7 @@
     {
      "index": 0,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "10\nmul:2 gt:5\n",
      "args": [],
      "expected": "8\n6 8 10 12 14 16 18 20\nsum=104\n",
@@ -5914,7 +5914,7 @@
     {
      "index": 1,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "5\n\n",
      "args": [],
      "expected": "5\n1 2 3 4 5\nsum=15\n",
@@ -5924,7 +5924,7 @@
     {
      "index": 2,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "0\nadd:1\n",
      "args": [],
      "expected": "0\n\nsum=0\n",
@@ -5954,7 +5954,7 @@
     {
      "index": 0,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "2 5\n1 1 2 9 0\n",
      "args": [],
      "expected": "hist: 1 2 1 0 0 0 0 0 0 1\nworker 0: 3\nworker 1: 2\nchecksum: 13\n",
@@ -5964,7 +5964,7 @@
     {
      "index": 1,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "3 0\n\n",
      "args": [],
      "expected": "hist: 0 0 0 0 0 0 0 0 0 0\nworker 0: 0\nworker 1: 0\nworker 2: 0\nchecksum: 0\n",
@@ -5974,7 +5974,7 @@
     {
      "index": 2,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "8 50000\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 ",
      "args": [],
      "expected": "hist: 0 0 0 0 0 0 0 0 0 50000\nworker 0: 6250\nworker 1: 6250\nworker 2: 6250\nworker 3: 6250\nworker 4: 6250\nworker 5: 6250\nworker 6: 6250\nworker 7: 6250\nchecksum: 450000\n",
@@ -6004,7 +6004,7 @@
     {
      "index": 0,
      "category": "api-misuse",
-     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> {TMP}/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
      "stdin": "2 3\n12 7 1\n",
      "args": [],
      "expected": "12 6\n7 2\n1 1\n",
@@ -6014,7 +6014,7 @@
     {
      "index": 1,
      "category": "api-misuse",
-     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> {TMP}/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
      "stdin": "1 1\n100\n",
      "args": [],
      "expected": "100 9\n",
@@ -6024,7 +6024,7 @@
     {
      "index": 2,
      "category": "api-misuse",
-     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> {TMP}/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
      "stdin": "4 12\n1 2 3 4 999999937 1000000000 735134400 999999999 1000000000 4 9 16\n",
      "args": [],
      "expected": "1 1\n2 2\n3 2\n4 3\n999999937 2\n1000000000 100\n735134400 1344\n999999999 20\n1000000000 100\n4 3\n9 3\n16 5\n",
@@ -6054,7 +6054,7 @@
     {
      "index": 0,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "2 3 2\n",
      "args": [],
      "expected": "items: 6\nchars: 24\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 6\n",
@@ -6064,7 +6064,7 @@
     {
      "index": 1,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "1 0 1\n",
      "args": [],
      "expected": "items: 0\nchars: 0\nconsumers_total: 0\n",
@@ -6074,7 +6074,7 @@
     {
      "index": 2,
      "category": "unsupported",
-     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> {TMP}/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
      "stdin": "6 200 4\n",
      "args": [],
      "expected": "items: 1200\nchars: 6552\nfirst: p0-1\nfirst: p0-10\nfirst: p0-100\nconsumers_total: 1200\n",
@@ -6223,7 +6223,7 @@
     {
      "index": 0,
      "category": "unsupported",
-     "message": "mplemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
+     "message": "mplemented by the interpreter\n  --> {TMP}/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at {TMP}/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
      "stdin": "",
      "args": [],
      "expected": "a.txt (5 bytes)\nsrc/\n  main.rs (13 bytes)\n1 directories, 2 files\n",
@@ -6233,7 +6233,7 @@
     {
      "index": 1,
      "category": "unsupported",
-     "message": "mplemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
+     "message": "mplemented by the interpreter\n  --> {TMP}/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at {TMP}/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
      "stdin": "",
      "args": [],
      "expected": "x (0 bytes)\n0 directories, 1 files\n",
@@ -6243,7 +6243,7 @@
     {
      "index": 2,
      "category": "unsupported",
-     "message": "mplemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
+     "message": "mplemented by the interpreter\n  --> {TMP}/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at {TMP}/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
      "stdin": "",
      "args": [],
      "expected": "0 directories, 0 files\n",

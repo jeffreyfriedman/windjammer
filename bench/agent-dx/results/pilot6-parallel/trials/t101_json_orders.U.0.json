@@ -8,8 +8,8 @@
  "diag_samples": [
   "error: bad width",
   "error: bad width",
-  "error: could not find `wj.toml` in ~/src/wj-wt/pilot6/bench/agent-dx/results/pilot6/work/t101_json_orders.U.0/ws or any parent directory (pass a .wj file or a directory with main.wj)",
-  "\u26a1 Incremental: 0/5 files changed \u2014 nothing to do (0.2s)\nBuilding Windjammer project from \"~/src/wj-wt/pilot6/bench/agent-dx/results/pilot6/work/t101_json_orders.U.0/ws\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/run/0835fc9a0f9cee5c\"\n\nSuccess! Transpilation complete!\n\nwarning: unused import: `windjammer_runtime::fs`\n --> h.rs:4:5\n  |\n4 | use windjammer_runtime::fs;\n  |     ^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `windjammer_runtime::fs::Metadata`\n --> h.r"
+  "error: could not find `wj.toml` in {REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.U.0/ws or any parent directory (pass a .wj file or a directory with main.wj)",
+  "\u26a1 Incremental: 0/5 files changed \u2014 nothing to do (0.2s)\nBuilding Windjammer project from \"{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.U.0/ws\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/run/0835fc9a0f9cee5c\"\n\nSuccess! Transpilation complete!\n\nwarning: unused import: `windjammer_runtime::fs`\n --> h.rs:4:5\n  |\n4 | use windjammer_runtime::fs;\n  |     ^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `windjammer_runtime::fs::Metadata`\n --> h.r"
  ],
  "diagnostic_categories": {
   "other": 4

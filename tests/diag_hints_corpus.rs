@@ -16,6 +16,16 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// Recorded data is location-free: `{REPO}`, `{TMP}` and `{RUSTUP_HOME}` stand for this machine's values and
+/// are substituted when the data is loaded (the gate `recorded_corpora_hold_no_absolute_paths` keeps it so).
+fn materialize(recorded: &str) -> String {
+    let rustup = std::env::var("RUSTUP_HOME").unwrap_or_else(|_| "<rustup-home>".into());
+    recorded
+        .replace("{REPO}", &root().to_string_lossy())
+        .replace("{TMP}", &std::env::temp_dir().to_string_lossy())
+        .replace("{RUSTUP_HOME}", &rustup)
+}
+
 fn trials() -> Vec<serde_json::Value> {
     let mut out = Vec::new();
     let results = root().join("bench/agent-dx/results");
@@ -25,7 +35,7 @@ fn trials() -> Vec<serde_json::Value> {
         let mut files: Vec<_> = std::fs::read_dir(d.join("trials")).unwrap().flatten().map(|e| e.path()).collect();
         files.sort();
         for f in files {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&f).unwrap()) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&materialize(&std::fs::read_to_string(&f).unwrap())) {
                 if v["lang"] == "wj" {
                     out.push(v);
                 }
