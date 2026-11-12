@@ -473,11 +473,11 @@ statement = "Remove a dependency from wj.toml"
 
 [[promise]]
 id = "wj repl"
-statement = "Start the Windjammerscript REPL (interactive interpreter)"
+statement = "Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway"
 
 [[promise]]
 id = "wj eval"
-statement = "Evaluate Windjammer and print the result: `wj eval 'strings.to_upper(\"hi\")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted"
+statement = "Evaluate Windjammer and print the result: `wj eval 'strings.to_upper(\"hi\")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted"
 
 [[promise]]
 id = "wj run"
@@ -497,7 +497,7 @@ statement = "Interpreted runs: also start a compiled build of the same content i
 
 [[promise]]
 id = "wj run --verify"
-statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr"
+statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints"
 
 [[promise]]
 id = "wj run --interpret"

@@ -54,6 +54,7 @@ pub mod project;
 mod register;
 mod resolved;
 pub mod repl;
+pub mod source_scan;
 pub mod runner;
 mod sched;
 mod scope;

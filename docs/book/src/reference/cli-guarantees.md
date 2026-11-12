@@ -90,13 +90,13 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj new` | Create a new Windjammer project | tested |
 | `wj new --template` | Project template (cli, web, lib, wasm) | tested |
 | `wj remove` | Remove a dependency from wj.toml | tested |
-| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) | tested |
-| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted | tested |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway | tested |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted | tested |
 | `wj run` | Compile and run a Windjammer file | tested |
 | `wj run --defer-drop` | Defer drop optimization mode (auto, always, never) | tested |
 | `wj run --defer-drop-threshold` | Defer drop threshold in bytes (default: 102400 = 100KB) | tested |
 | `wj run --speculate` | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) | tested |
-| `wj run --verify` | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr | tested |
+| `wj run --verify` | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints | tested |
 | `wj run --interpret` | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release | tested |
 | `wj run --target` | Target platform (rust, javascript, wasm) | tested |
 | `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH | tested |
