@@ -20,6 +20,7 @@
 
 pub mod option_fix;
 pub mod surface_fix;
+pub mod vec_context;
 pub mod template;
 
 pub use template::split_interp_spec;
