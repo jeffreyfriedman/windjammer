@@ -162,7 +162,7 @@ fn main() {
     }
     println("{:?}", xs)
     let mut ps = vec![P { x: 1, y: 1 }]
-    for pp in ps.iter_mut() {
+    for mut pp in ps.iter_mut() {
         pp.x += 5
     }
     println("{}", ps[0].x)

@@ -2,8 +2,10 @@
 
 Local bindings are immutable unless declared `mut`. A local the program changes without `mut` (assigned, a field or
 element assigned, a method that changes it such as `push`, or passed where the callee changes it) is the error
-`WJ0051`, reported the same way by `wj check`, `wj build` and `wj run`. Parameters and `self` are unaffected: how they
-are passed is still inferred.
+`WJ0051`, reported the same way by `wj check`, `wj build` and `wj run`. This includes loop variables: a loop that
+assigns to its variable or changes it through declares it `mut` (`for mut e in entities { e.x = 0 }`,
+`for (id, mut qty) in items { qty = qty + 1 }`); the loop still writes through to the collection, and which borrow it
+takes is still inferred. Parameters and `self` are unaffected: how they are passed is still inferred.
 
 ## Moving a project to this compiler
 
