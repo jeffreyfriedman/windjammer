@@ -46,9 +46,9 @@ pub fn set_owner(&self, id: u32, owner: String) -> Table {
         while i < self.entries.len() {
             let entry = self.entries[i].clone();
             if entry.id == id {
-                let _ = entries.push(Entry { id: entry.id, owner: owner.clone() });
+                entries.push(Entry { id: entry.id, owner: owner.clone() });
             } else {
-                let _ = entries.push(entry);
+                entries.push(entry);
             }
             i += 1;
         }

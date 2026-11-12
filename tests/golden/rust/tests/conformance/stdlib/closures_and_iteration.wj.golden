@@ -57,7 +57,7 @@ fn test_closure_filter() {
     let mut evens: Vec<i64> = vec![];
     for n in numbers {
         if n % 2_i64 == 0_i64 {
-            let _ = evens.push(n);
+            evens.push(n);
         }
     }
     let mut result = String::new();
@@ -85,7 +85,7 @@ fn test_closure_chain() {
     let mut result_vec: Vec<i64> = vec![];
     for n in numbers {
         if n % 2_i64 == 0_i64 {
-            let _ = result_vec.push(n * n);
+            result_vec.push(n * n);
         }
     }
     let mut result = String::new();

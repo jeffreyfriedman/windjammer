@@ -131,10 +131,10 @@ fn do_combat_round(player: &mut Player, enemy: &mut Enemy, round: i64) -> bool {
     enemy.stats.take_damage(damage);
     println!("[game] {} attacks {} for {} damage", player.name, enemy.name(), damage);
     if !enemy.stats.is_alive() {
-        let _ = println!("[game] {} defeated!", enemy.name());
+        println!("[game] {} defeated!", enemy.name());
         let xp = enemy_xp_reward(enemy.enemy_type);
         let _ = player.gain_xp(xp);
-        let _ = println!("[game] {} gains {} XP (total: {})", player.name, xp, player.xp);
+        println!("[game] {} gains {} XP (total: {})", player.name, xp, player.xp);
         return true;
     }
     println!("[game] {} HP: {}", enemy.name(), enemy.stats.hp);

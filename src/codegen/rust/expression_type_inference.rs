@@ -1081,6 +1081,21 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(ty) = self.infer_expression_type(expr) {
             return !self.expression_type_is_unit(&ty);
         }
+        // Built-ins declare their result in the intrinsic registry (`println`, `assert_eq`: `()`).
+        let intrinsic = match expr {
+            Expression::Call { function, .. } => match &**function {
+                Expression::Identifier { name, .. } => crate::intrinsics::Intrinsic::from_call_name(name),
+                _ => None,
+            },
+            Expression::MacroInvocation { name, .. } => crate::intrinsics::Intrinsic::from_macro_name(name),
+            _ => None,
+        };
+        if intrinsic.is_some_and(|i| i.returns_unit() || i.diverges()) {
+            return false;
+        }
+        if self.declared_unit_call(expr) {
+            return false;
+        }
         matches!(
             expr,
             Expression::MethodCall { .. }
@@ -1094,6 +1109,29 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// A call whose declaration has no result: a project function declared without `-> T`
+    /// (`fn note(n: int)`), or a core-surface method declared without one (`Vec::push`).
+    fn declared_unit_call(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Call { function, .. } => match &**function {
+                Expression::Identifier { name, .. } => {
+                    self.get_signature_with_global(name).is_some_and(|sig| sig.return_type.is_none())
+                }
+                _ => false,
+            },
+            Expression::MethodCall { object, method, .. } => {
+                let Some(recv) = self.infer_expression_type(object) else { return false };
+                let recv = match recv {
+                    Type::Reference(inner) | Type::MutableReference(inner) => *inner,
+                    other => other,
+                };
+                let Some(name) = crate::ir::stdlib_tables::surface_type_name(&recv) else { return false };
+                self.core_surface().declared(name, method).is_some_and(|(_, _, _, ret)| ret.is_none())
+            }
+            _ => false,
+        }
+    }
+
     /// Payload type of an owned-self `Option` adapter. `opt_ref.unwrap_or(d)` on `Option<&Copy>` is lowered
     /// to `.copied().unwrap_or(d)` (idiom_lowering): the result is the owned value, so a binding of it is
     /// not a reference and must not be dereferenced again.
