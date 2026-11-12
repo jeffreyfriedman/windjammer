@@ -850,6 +850,9 @@ impl Interpreter {
             Err(Ctl::Break(_)) | Err(Ctl::Continue(_)) => Err(semantic("`break`/`continue` outside of a loop")),
             other => other,
         };
+        if let Ok(v) = &r {
+            self.note_main_err(&f.name, v, |it| it.walker_locals());
+        }
         let r = match r {
             Ok(v) => match f.ret {
                 None => Ok(Value::Unit),

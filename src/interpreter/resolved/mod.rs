@@ -139,7 +139,11 @@ impl Interpreter {
                 if let Err(Ctl::Err(e)) = &mut r {
                     self.attach_slot_locals(e, &c.names, base);
                 }
-                self.finish_value(f, c, r)
+                let r = self.finish_value(f, c, r);
+                if let Ok(v) = &r {
+                    self.note_main_err(&f.name, v, |it| it.slot_locals(&c.names, base));
+                }
+                r
             }
             Body::I(code, u, t) => {
                 let mut r = code(self, base);

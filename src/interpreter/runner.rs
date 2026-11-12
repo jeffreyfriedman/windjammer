@@ -278,7 +278,8 @@ fn main_result_code_in(it: &mut Interpreter, v: &Value, json: bool) -> i32 {
                 let text = items.first().map(|x| it.debug_string(x).unwrap_or_default()).unwrap_or_default();
                 it.flush();
                 if json {
-                    it.write_err(&format!("{}\n", super::error_report::main_err_json(&text)));
+                    let site = it.main_err_site.take();
+                    it.write_err(&format!("{}\n", super::error_report::main_err_json(&text, site.as_ref())));
                 } else {
                     it.write_err(&format!("Error: {text}\n"));
                 }
