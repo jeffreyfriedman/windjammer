@@ -209,9 +209,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
         // A receiver whose static type is a user type the name-based receiver inference does not see (a local bound to
         // a method result, an operator expression, a loop element): the method is that type's.
-        let typed = receiver_type.is_none().then(|| self.user_receiver_type(object)).flatten();
+        let typed = receiver_type.clone().or_else(|| self.user_receiver_type(object));
         let sig = typed
-            .and_then(|t| self.resolve_callee_signature(&format!("{t}::{method}"), arguments.len()))
+            .and_then(|t| self.resolve_type_member(&t, method, arguments.len()))
             .or_else(|| self.resolve_callee_signature(&qualified, arguments.len()))
             .or_else(|| {
                 // Runtime-std `json::to_string` must not fall back to the first
@@ -558,7 +558,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     pub(super) fn declared_field_type(&self, receiver: &Type, field: &str) -> Option<Type> {
         let base = crate::ir::receiver_type::type_to_struct_base(receiver)?;
         let fields = self.struct_field_types?;
-        let ty = crate::type_inference::struct_field_registry::lookup_struct_field_map(fields, &base, &HashMap::new(), &HashMap::new())?
+        // The struct the file imports under this name (a homonym in another module is another struct).
+        let imported = self.analyzed.imported_paths.get(base.rsplit("::").next().unwrap_or(&base));
+        let by_identity = imported.and_then(|p| fields.get(p.as_str()).or_else(|| fields.get(&format!("crate::{p}"))));
+        let ty = by_identity
+            .or_else(|| crate::type_inference::struct_field_registry::lookup_struct_field_map(fields, &base, &HashMap::new(), &HashMap::new()))?
             .get(field)?;
         Some(strip_refs(ty).clone()).filter(|t| !contains_generic(t))
     }
@@ -573,10 +577,30 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         crate::ir::receiver_type::type_to_struct_base(t)
     }
 
+    /// `Type::member` by the type's identity (C3): the path the file imports the type from (`use crate::a::Mesh`), or
+    /// the file's own module, then the bare `Type::member` key. Two types named `Mesh` in two modules are two types.
+    pub(super) fn resolve_type_member(&self, type_name: &str, member: &str, arg_count: usize) -> Option<&FunctionSignature> {
+        let registry = self.registry?;
+        let base = type_name.split('<').next().unwrap_or(type_name);
+        let base = base.strip_prefix("crate::").unwrap_or(base);
+        let leaf = base.rsplit("::").next().unwrap_or(base);
+        let path = if base.contains("::") {
+            Some(base.to_string())
+        } else {
+            self.analyzed.imported_paths.get(leaf).cloned().or_else(|| {
+                (!self.analyzed.module_path.is_empty()).then(|| format!("{}::{leaf}", self.analyzed.module_path.join("::")))
+            })
+        };
+        let by_identity = path.and_then(|p| {
+            [format!("{p}::{member}"), format!("crate::{p}::{member}")].into_iter().find_map(|k| registry.get_signature(&k))
+        });
+        by_identity.or_else(|| self.resolve_callee_signature(&format!("{leaf}::{member}"), arg_count))
+    }
+
     /// The declared return type of method `method` of a user type (a homonym with no unique signature: `None`).
     pub(super) fn user_method_return(&self, receiver: &Type, method: &str, arg_count: usize) -> Option<Type> {
         let base = crate::ir::receiver_type::type_to_struct_base(receiver)?;
-        let ret = self.resolve_callee_signature(&format!("{base}::{method}"), arg_count)?.return_type.clone()?;
+        let ret = self.resolve_type_member(&base, method, arg_count)?.return_type.clone()?;
         let ret = match ret {
             Type::Custom(n) if n == "Self" => Type::Custom(base),
             other => other,

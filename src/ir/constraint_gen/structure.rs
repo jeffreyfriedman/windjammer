@@ -33,7 +33,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         delimiter: &MacroDelimiter,
         is_repeat: bool,
     ) -> ConstraintVar {
-        if !matches!(delimiter, MacroDelimiter::Brackets) && args.len() >= 2 && is_equality_assertion(name) {
+        if !matches!(delimiter, MacroDelimiter::Brackets) && args.len() >= 2 && crate::intrinsics::Intrinsic::is_equality_assertion(name) {
             let vars: Vec<ConstraintVar> = args.iter().map(|a| self.walk_expression(a)).collect();
             self.relate_equality_assertion(&vars);
             return self.cs.fresh_var();
@@ -522,7 +522,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     pub(super) fn emit_operator_impl(&mut self, op: &BinaryOp, left: &Expression<'ast>, r: ConstraintVar, result: ConstraintVar) -> bool {
         let Some(method) = operator_method(op) else { return false };
         let Some(Type::Custom(type_name)) = self.static_type(left) else { return false };
-        let Some(sig) = self.resolve_callee_signature(&format!("{type_name}::{method}"), 1).cloned() else { return false };
+        let Some(sig) = self.resolve_type_member(&type_name, method, 1).cloned() else { return false };
         let Some(rhs) = sig.formal_param_type(sig.arg_param_index(0)).or_else(|| sig.param_types.get(sig.arg_param_index(0))).cloned() else {
             return false;
         };
@@ -666,7 +666,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// two values of one type, like `a == b`: the two are one class (a side the walk cannot type, such as a user type's
     /// `len()`, holds that class for the legacy deciders). Returns whether the call is modelled here.
     pub(super) fn intrinsic_call(&mut self, callee: &str, arg_vars: &[ConstraintVar]) -> bool {
-        if arg_vars.len() >= 2 && is_equality_assertion(callee) {
+        if arg_vars.len() >= 2 && crate::intrinsics::Intrinsic::is_equality_assertion(callee) {
             self.relate_equality_assertion(arg_vars);
             return true;
         }
@@ -679,11 +679,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     }
 }
 
-/// Whether a call or macro name is one of the equality-assertion intrinsics (`assert_eq`, `assert_ne`).
-fn is_equality_assertion(name: &str) -> bool {
-    use crate::intrinsics::Intrinsic;
-    matches!(Intrinsic::from_call_name(name), Some(Intrinsic::AssertEq | Intrinsic::AssertNe))
-}
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// `loop { .. }`: its value is the value of its `break`s (`let r = loop { .. break k * 10 }`). Returns that value.

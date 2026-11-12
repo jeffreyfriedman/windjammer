@@ -76,7 +76,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             out
         } else {
-            let deref_operand = matches!(func_name, "assert_eq" | "assert_ne").then(|| self.borrowed_assert_operand(arguments)).flatten();
+            let deref_operand = crate::intrinsics::Intrinsic::is_equality_assertion(func_name).then(|| self.borrowed_assert_operand(arguments)).flatten();
             arguments
                 .iter()
                 .enumerate()
@@ -87,7 +87,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     // Deref borrowed Copy params in assert_eq!/assert_ne!
                     // to avoid E0277 (&i32 != i32 for PartialEq)
-                    if matches!(func_name, "assert_eq" | "assert_ne") {
+                    if crate::intrinsics::Intrinsic::is_equality_assertion(func_name) {
                         if let Expression::Identifier { name, .. } = arg {
                             if self.inferred_borrowed_params.contains(name.as_str()) {
                                 let param_type = self

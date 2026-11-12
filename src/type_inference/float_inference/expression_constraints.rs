@@ -404,7 +404,7 @@ impl FloatInference {
             Expression::MacroInvocation { name, args, .. } => {
                 // TDD FIX: assert_eq!/assert_ne! - both args must have same type
                 // assert_eq!(transform.x, 15.0) → 15.0 should infer f32 from transform.x
-                if (name == "assert_eq" || name == "assert_ne") && args.len() >= 2 {
+                if crate::intrinsics::Intrinsic::is_equality_assertion(name) && args.len() >= 2 {
                     // Recurse into args first (FieldAccess adds MustBeF32 for transform.x)
                     for arg in args {
                         self.collect_expression_constraints(arg, return_type);
