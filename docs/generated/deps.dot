@@ -172,7 +172,7 @@ digraph deps {
   "cli" -> "compiler_config" [label="3"];
   "cli" -> "config" [label="4"];
   "cli" -> "debug_env" [label="1"];
-  "cli" -> "diagnostics" [label="29"];
+  "cli" -> "diagnostics" [label="30"];
   "cli" -> "ejector" [label="2"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
