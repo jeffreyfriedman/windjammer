@@ -12,7 +12,7 @@ fn check(name: &str, arms: &str) -> (bool, String) {
     );
     let p = dir.path().join(format!("{name}.wj"));
     std::fs::write(&p, src).unwrap();
-    let o = Command::new(WJ).args(["check", "--no-lint"]).arg(&p).output().unwrap();
+    let o = Command::new(WJ).args(["check"]).arg(&p).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     (text.contains("WJ0010"), text)
 }

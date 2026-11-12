@@ -1,0 +1,15 @@
+fn main() {
+    let mut v: Vec<string> = ["bb", "a", "cc"]
+    v.sort_by(|a, b| {
+        let x = a.len()
+        let y = b.len()
+        if x != y {
+            y.cmp(x)
+        } else {
+            a.cmp(b)
+        }
+    })
+    for s in v {
+        println("${s}")
+    }
+}

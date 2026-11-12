@@ -1,0 +1,20 @@
+use std::collections::HashMap
+
+fn main() {
+    let mut totals: HashMap<string, int> = HashMap::new()
+    totals.insert("x", 3)
+    totals.insert("y", 5)
+    let mut users: Vec<string> = ["x", "y"]
+    users.sort_by(|a, b| {
+        let ta = totals.get(a).unwrap_or(0)
+        let tb = totals.get(b).unwrap_or(0)
+        if ta != tb {
+            tb.cmp(ta)
+        } else {
+            a.cmp(b)
+        }
+    })
+    for u in users {
+        println("${u}")
+    }
+}

@@ -29,6 +29,26 @@ fn truthy(v: &Value) -> bool {
     matches!(v, Value::Bool(true))
 }
 
+// test-only mutant `option` (debug builds): `unwrap_or` answers the default even for a `Some`
+fn option_unwrap_or(it: &mut Interpreter, v: &Value, a: Vec<Value>) -> R {
+    if is_some(v) && !it.mutant("option") {
+        Ok(payload(v).unwrap())
+    } else {
+        arg(&a, 0, "unwrap_or")
+    }
+}
+
+fn register_min_max(r: &mut Registry) {
+    r.pure(Kind::Any, "min", |_, v, a| {
+        let o = arg(&a, 0, "min")?;
+        Ok(if o.structural_cmp(v) == Ordering::Less { o } else { v.clone() })
+    });
+    r.pure(Kind::Any, "max", |_, v, a| {
+        let o = arg(&a, 0, "max")?;
+        Ok(if o.structural_cmp(v) == Ordering::Less { v.clone() } else { o })
+    });
+}
+
 pub fn register(r: &mut Registry) {
     // ---------------- Option ----------------
     r.pure(Kind::Option, "is_some", |_, v, _| Ok(Value::Bool(is_some(v))));
@@ -46,8 +66,7 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Option, "expect", |_, v, a| {
         payload(v).filter(|_| is_some(v)).ok_or_else(|| panic_ctl(arg_str(&a, 0, "expect").map(|s| (*s).clone()).unwrap_or_default()))
     });
-    // test-only mutant `option` (debug builds): `unwrap_or` answers the default even for a `Some`
-    r.pure(Kind::Option, "unwrap_or", |it, v, a| if is_some(v) && !it.mutant("option") { Ok(payload(v).unwrap()) } else { arg(&a, 0, "unwrap_or") });
+    r.pure(Kind::Option, "unwrap_or", option_unwrap_or);
     r.pure(Kind::Option, "unwrap_or_else", |it, v, a| {
         if is_some(v) {
             Ok(payload(v).unwrap())
@@ -333,14 +352,7 @@ pub fn register(r: &mut Registry) {
         }
         Ok(Value::some(ordering(v.structural_cmp(&o))))
     });
-    r.pure(Kind::Any, "min", |_, v, a| {
-        let o = arg(&a, 0, "min")?;
-        Ok(if o.structural_cmp(v) == Ordering::Less { o } else { v.clone() })
-    });
-    r.pure(Kind::Any, "max", |_, v, a| {
-        let o = arg(&a, 0, "max")?;
-        Ok(if o.structural_cmp(v) == Ordering::Less { v.clone() } else { o })
-    });
+    register_min_max(r);
     r.pure(Kind::Any, "hash", |_, _, _| Ok(Value::Unit));
 }
 

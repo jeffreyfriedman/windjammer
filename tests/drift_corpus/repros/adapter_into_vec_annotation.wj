@@ -1,0 +1,7 @@
+fn main() {
+    let keyed: Vec<(int, string)> = [(1, "a"), (2, "b")]
+    let names: Vec<string> = keyed.map(|p| p.1)
+    for n in names {
+        println("${n}")
+    }
+}

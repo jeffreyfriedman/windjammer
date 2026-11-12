@@ -1,0 +1,16 @@
+use std::collections::HashMap
+
+fn main() {
+    let keys: Vec<string> = ["ann edit", "ann view", "bob edit"]
+    let mut best: HashMap<string, string> = HashMap::new()
+    for key in keys {
+        let ps: Vec<string> = key.split_whitespace().collect()
+        let u = ps[0]
+        let act = ps[1]
+        let cur = best.get(u).unwrap_or("")
+        if act < cur || cur == "" {
+            best.insert(u, act)
+        }
+    }
+    println("${best.get("ann").unwrap_or("")}")
+}
