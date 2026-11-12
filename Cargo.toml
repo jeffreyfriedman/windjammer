@@ -573,3 +573,8 @@ path = "tests/portability_checkout_layout_gate.rs"
 [[test]]
 name = "recorded_corpus_location_free_gate"
 path = "tests/recorded_corpus_location_free_gate.rs"
+
+# No untracked files after the suite (run last): cargo test --test untracked_files_gate
+[[test]]
+name = "untracked_files_gate"
+path = "tests/untracked_files_gate.rs"

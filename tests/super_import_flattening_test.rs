@@ -40,7 +40,9 @@ pub struct Camera3D {
 "#;
 
     // Write the test file
-    let input_dir = "tests/generated/super_import_test";
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let input_dir_buf = scratch.path().join("super_import_test").to_string_lossy().into_owned();
+    let input_dir = input_dir_buf.as_str();
     fs::create_dir_all(input_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test_super_import.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
@@ -92,7 +94,9 @@ pub struct Camera3D {
 }
 "#;
 
-    let input_dir = "tests/generated/single_super_test";
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let input_dir_buf = scratch.path().join("single_super_test").to_string_lossy().into_owned();
+    let input_dir = input_dir_buf.as_str();
     fs::create_dir_all(input_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test_single_super.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
@@ -141,7 +145,9 @@ pub struct Foo {
 }
 "#;
 
-    let input_dir = "tests/generated/deep_super_test";
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let input_dir_buf = scratch.path().join("deep_super_test").to_string_lossy().into_owned();
+    let input_dir = input_dir_buf.as_str();
     fs::create_dir_all(input_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test_deep_super.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");

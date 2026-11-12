@@ -20,13 +20,15 @@ use tempfile::tempdir;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_method_params() {
+    let scratch = tempdir().expect("tempdir");
+    let out_dir = scratch.path().join("copy_type_method_params");
     // Compile the Windjammer file
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
             "tests/copy_type_method_params_test.wj",
             "--output",
-            "tests/generated/copy_type_method_params",
+            out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
         .output()
@@ -41,7 +43,7 @@ fn test_copy_type_method_params() {
 
     // Read the generated Rust code
     let generated = std::fs::read_to_string(
-        "tests/generated/copy_type_method_params/copy_type_method_params_test.rs",
+        out_dir.join("copy_type_method_params_test.rs"),
     )
     .expect("Failed to read generated file");
 
@@ -76,7 +78,7 @@ fn test_copy_type_method_params() {
     );
 
     // Type-check generated Rust in a temp dir (avoid leaving .rlib under tests/generated)
-    let rs_path = "tests/generated/copy_type_method_params/copy_type_method_params_test.rs";
+    let rs_path = out_dir.join("copy_type_method_params_test.rs");
     let tmp = tempdir().expect("tempdir");
     let compile_output = Command::new("rustc")
         .args([
