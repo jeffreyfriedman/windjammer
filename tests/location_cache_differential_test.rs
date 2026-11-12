@@ -98,6 +98,9 @@ fn a_crate_builds_identically_cold_warm_and_in_another_location() {
     // warm: every cache and sidecar the first build wrote is present
     wj(&proj, &["src", "-o", "out2"]);
     assert_same("warm, same location", &cold, &tree(&proj.join("out2")), &[a.path()]);
+    // incremental: the same output directory again, with its previous output, stamp and metadata in place
+    wj(&proj, &["src", "-o", "out1"]);
+    assert_same("rebuilt in place", &cold, &tree(&proj.join("out1")), &[a.path()]);
     // another location, sources only
     let b = tempfile::tempdir().unwrap();
     copy_dir(&proj, &b.path().join("moved"), true);
