@@ -132,7 +132,21 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
     }
     out.help = d.help.clone();
     out.notes.extend(d.notes.iter().cloned());
+    if code == "WJ0031" && !source_line_has_deref(cache, out.primary_span.as_ref()) {
+        out.help = vec![GENERATED_DEREF_HELP.to_string()];
+    }
     out
+}
+
+/// WJ0031 when the `.wj` line has no `*`: the dereference is the compiler's, so "remove the `*`" sends
+/// an agent looking for text that is not there.
+const GENERATED_DEREF_HELP: &str = "your source has no `*` here: the compiled backend dereferenced a value that is not a reference (a compiler defect; `wj run` interprets this program correctly). Keep the code; report it with `wj reduce`";
+
+/// Whether the line of `span` in its `.wj` file contains a `*` (a written dereference or product).
+fn source_line_has_deref(cache: &mut SourceCache, span: Option<&Span>) -> bool {
+    let Some(sp) = span else { return true };
+    let Some(text) = cache.text(&sp.file) else { return true };
+    text.lines().nth(sp.line_start.saturating_sub(1)).is_none_or(|l| l.contains('*'))
 }
 
 fn is_decl_line(line: &str) -> bool {
