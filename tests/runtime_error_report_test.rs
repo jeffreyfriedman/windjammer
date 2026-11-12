@@ -193,6 +193,46 @@ fn main_returning_err_is_reported_as_json_and_unchanged_as_text() {
     assert!(v["diagnostics"][0]["message"].as_str().unwrap().contains("no input"));
 }
 
+/// 1-based line of the first line of `src` that contains `needle`.
+fn line_of(src: &str, needle: &str) -> u64 {
+    src.lines().position(|l| l.contains(needle)).map(|i| i as u64 + 1).unwrap_or_else(|| panic!("{needle} not in source"))
+}
+
+fn json_report(r: &Run) -> Value {
+    serde_json::from_str(r.stderr.lines().last().unwrap()).unwrap()
+}
+
+#[test]
+fn main_err_from_try_has_the_span_of_the_try_and_the_locals() {
+    let src = "fn load(n: int) -> Result<int, string> {\n    if n < 0 {\n        return Err(\"negative\")\n    }\n    Ok(n)\n}\n\nfn main() -> Result<(), string> {\n    let a = load(2)?\n    println(\"a = ${a}\")\n    let b = load(-1)?\n    println(\"b = ${b}\")\n    Ok(())\n}\n";
+    let want = line_of(src, "load(-1)?");
+    for engine in ["walker", "resolved"] {
+        let j = run(src, &["--error-format", "json", "--engine", engine]);
+        assert_eq!(j.code, 1, "{engine}: {}", j.stderr);
+        let d = &json_report(&j)["diagnostics"][0];
+        assert_eq!(d["code"], "WJ0171", "{engine}");
+        assert_eq!(d["primary_span"]["line_start"], want, "{engine}: {d}");
+        assert_eq!(d["stack"][0]["span"]["line_start"], want, "{engine}: {d}");
+        let locals = d["locals"].as_array().unwrap();
+        let a = locals.iter().find(|l| l["name"] == "a").unwrap_or_else(|| panic!("{engine}: no local `a` in {d}"));
+        assert_eq!(a["value"], "2", "{engine}");
+        assert!(locals.iter().all(|l| l["name"] != "b"), "{engine}: `b` was never bound: {d}");
+    }
+}
+
+#[test]
+fn main_err_from_a_tail_err_has_the_span_of_that_expression() {
+    let src = "fn main() -> Result<(), string> {\n    let path = \"in.txt\"\n    println(\"reading ${path}\")\n    Err(\"no input\")\n}\n";
+    let want = line_of(src, "Err(\"no input\")");
+    for engine in ["walker", "resolved"] {
+        let j = run(src, &["--error-format", "json", "--engine", engine]);
+        assert_eq!(j.code, 1, "{engine}: {}", j.stderr);
+        let d = &json_report(&j)["diagnostics"][0];
+        assert_eq!(d["primary_span"]["line_start"], want, "{engine}: {d}");
+        assert!(d["locals"].as_array().unwrap().iter().any(|l| l["name"] == "path" && l["value"] == "\"in.txt\""), "{engine}: {d}");
+    }
+}
+
 #[test]
 fn an_unknown_error_format_is_refused() {
     let r = run("fn main() {}\n", &["--error-format", "xml"]);

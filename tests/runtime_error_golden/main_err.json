@@ -12,12 +12,28 @@
       "maturity": "proven",
       "message": "main returned an error: \"config missing\"",
       "origin": "runtime",
-      "primary_span": null,
+      "primary_span": {
+        "byte_end": 65,
+        "byte_start": 64,
+        "col_end": 9,
+        "col_start": 8,
+        "file": "main_err.wj",
+        "line_end": 3,
+        "line_start": 3
+      },
       "severity": "error",
       "stack": [
         {
           "function": "main",
-          "span": null
+          "span": {
+            "byte_end": 65,
+            "byte_start": 64,
+            "col_end": 9,
+            "col_start": 8,
+            "file": "main_err.wj",
+            "line_end": 3,
+            "line_start": 3
+          }
         }
       ]
     }
