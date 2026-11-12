@@ -299,10 +299,8 @@ impl<'ast> CodeGenerator<'ast> {
                     arg // Not a & expression — keep as-is
                 };
 
-                // TDD FIX for E0277: Methods like retain/filter/any/all pass &T to
-                // their closure, so closure params are references. Mark them as
-                // borrowed so binary comparisons (id != val) generate *id != val.
-                let predicate_receives_ref = Self::predicate_closure_receives_ref(method, receiver_type_name);
+                let predicate_receives_ref = Self::predicate_closure_receives_ref(method, receiver_type_name)
+                    || self.closure_receives_element_ref(object, method, &receiver_type_inferred);
                 let closure_borrowed_params: Vec<String> =
                     if predicate_receives_ref {
                         if let Expression::Closure { parameters, .. } = arg_to_generate {
@@ -323,6 +321,7 @@ impl<'ast> CodeGenerator<'ast> {
                     };
 
                 let ref_closure_names = self.mark_ref_closure_params(method, arg_to_generate);
+                let element_types = self.bind_element_param_types(object, method, arg_to_generate, &receiver_type_inferred);
                 let prev_closure_predicate = self.closure_predicate_typed_params;
                 if predicate_receives_ref {
                     self.closure_predicate_typed_params = true;
@@ -427,6 +426,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 self.release_closure_param_marks(&closure_borrowed_params, &ref_closure_names);
+                self.release_element_param_types(element_types);
 
                 // AUTO-WRAP function pointers in iterator adapter methods (before IR call-site path).
                 let recv_for_wrap = receiver_type_name

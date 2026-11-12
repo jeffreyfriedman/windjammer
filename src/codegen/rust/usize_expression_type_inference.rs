@@ -705,7 +705,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // P3.369: binary index already cast the i64 base to usize — do not wrap again.
-        if idx_str.contains(" as usize)") {
+        if idx_str.contains(" as usize") {
             return;
         }
         // P3.329: float coercion from call-site context must not stick on `[expr]` indices.
@@ -731,7 +731,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Identifiers: `(i as usize)` — not `(i) as usize` (array_indexing_i32_test / field index).
         if self.index_expr_needs_u32_or_i32_usize_cast(index) && !idx_str.contains(" as usize") {
             if matches!(index, Expression::Identifier { .. }) {
-                *idx_str = format!("({} as usize)", idx_str);
+                *idx_str = format!("{} as usize", idx_str);
             } else {
                 *idx_str = format!("({}) as usize", idx_str);
             }
@@ -743,7 +743,7 @@ impl<'ast> CodeGenerator<'ast> {
             if self.local_int_rust_type_name_excluding_ambiguous_int(name) == Some("i32")
                 && !idx_str.contains(" as usize")
             {
-                *idx_str = format!("({} as usize)", idx_str);
+                *idx_str = format!("{} as usize", idx_str);
                 return;
             }
         }
@@ -752,14 +752,14 @@ impl<'ast> CodeGenerator<'ast> {
                 matches!(ty, Type::Int32) || matches!(ty, Type::Custom(n) if n == "i32")
             }) && !idx_str.contains(" as usize")
             {
-                *idx_str = format!("({} as usize)", idx_str);
+                *idx_str = format!("{} as usize", idx_str);
                 return;
             }
         }
         if self.int_type_for_mixed_int_codegen(index) == crate::type_inference::IntType::I32
             && !idx_str.contains(" as usize")
         {
-            *idx_str = format!("({} as usize)", idx_str);
+            *idx_str = format!("{} as usize", idx_str);
             return;
         }
         // Non-negative integer literals infer as usize in index context — no cast needed.
@@ -789,7 +789,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .contains(name.as_str())
                 && !idx_str.contains(" as usize")
             {
-                *idx_str = format!("({} as usize)", idx_str);
+                *idx_str = format!("{} as usize", idx_str);
                 return;
             }
         }
@@ -803,7 +803,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }) || self.int_type_for_mixed_int_codegen(index)
                     == crate::type_inference::IntType::I32;
                 if is_i32_scan && !idx_str.contains(" as usize") {
-                    *idx_str = format!("({} as usize)", idx_str);
+                    *idx_str = format!("{} as usize", idx_str);
                     return;
                 }
                 if !is_i32_scan {
