@@ -4,7 +4,7 @@ last_verified: a9bcd09a3
 ---
 # ADR-0035: Time-travel debugging from the effect journal
 
-- **Status:** Proposed (first slice implemented: `wj replay` with a command script; see "Slice status")
+- **Status:** Proposed (first and second slices implemented: `wj replay` with a command script, expressions, `next`/`finish`, `--at-effect`, watches and conditions, grants in the journal header; see "Slice status")
 - **Date:** 2026-11-11
 - **Related:** [ADR-0021](0021-effects-and-capabilities.md) (section 10: the effect port, `--record`, `--replay`,
   `--simulate`), [ADR-0032](0032-raw-sockets.md) (sockets through the port, the virtual network),
@@ -45,7 +45,7 @@ in every run.
 ### 2. Command surface
 
 ```
-wj replay LOG PROGRAM [--script FILE|-] [--json] [--allow EFFECT[=RES]]...
+wj replay LOG PROGRAM [--script FILE|-] [--json] [--allow EFFECT[=RES]]... [--at-effect K]
 wj replay --simulate [--seed N] [--faults R] PROGRAM [--script FILE|-] [--json]
 ```
 
@@ -55,15 +55,20 @@ from the journal's header, as for `wj run --replay`. The second form debugs a si
 line, `#` starts a comment. The replayed program's own standard input is answered from the journal, so standard input
 is free for commands.
 
-Commands of the first slice:
+Commands:
 
 | Command | Meaning |
 |---|---|
-| `break LINE` / `break FILE:LINE` | stop when a statement on that line starts (once per entry to the line) |
-| `continue` | run to the next breakpoint, the failure, or the end |
+| `break LINE` / `break FILE:LINE` | stop when a statement on that line starts (once per entry to the line; a loop body of one statement is entered every iteration) |
+| `break LINE if EXPR` | the same, only when the read-only expression `EXPR` is true there |
+| `continue` | run to the next breakpoint, watch change, the failure, or the end |
 | `step [N]` | run N statements (default 1) |
+| `next` | run until a statement of this frame, or of a caller, starts: calls on the current statement are stepped over (breakpoints inside them still stop) |
+| `finish` | run until the current frame returns, report the value it returned, and stop in the caller |
 | `back [N]` | go back N statements (default 1): re-execute from the start to step K-N |
 | `print NAME` | the value of a binding in the current frame (`{:?}` form) |
+| `print EXPR` | the value of a read-only expression evaluated in the stopped frame (see "Read-only expressions") |
+| `watch NAME` | stop when the local `NAME` changes (see "Watches") |
 | `locals` | every binding of the current frame |
 | `where` | the call stack, innermost first, each frame with its file, line and column |
 
@@ -71,10 +76,37 @@ The session starts stopped before step 1. When the program fails (a panic, or a 
 **at the failure, before the stack unwinds**, so `print` and `where` see the failing frame. `continue` from there lets
 the failure finish; the session then reports how the program exited. `back` works after the end too.
 
-Planned, not in the first slice: `next` (step over a call), `finish` (run to the caller), `goto STEP`,
-`--at-effect K` (stop just before journal event K is answered; the stop events already carry the journal position),
-`print EXPR` (a side-effect-free expression evaluated in the stopped frame), watchpoints (`watch NAME`: stop when the
-value changes, found by re-execution with a value digest per step), and an interactive prompt with history.
+`--at-effect K` starts the session stopped at the statement that answers the K-th event of the journal (K counts from 1;
+the stop's `reason` is `effect` and its `effect` field is the number of events answered before the statement). It is
+found by one silent pass over the replay (the statement before the first one that starts with K events answered), then
+the usual re-execution to that step, so the session can `back` from there like any other. It needs a journal: it
+conflicts with `--simulate`, and a K beyond the journal's length is an error that counts the events.
+
+Planned: `goto STEP` and an interactive prompt with history.
+
+#### Read-only expressions
+
+`print EXPR` and the condition of `break LINE if EXPR` run the interpreter's own evaluator in the stopped frame, behind a
+guard that is a whitelist over the syntax tree: names, literals, fields, indexing, operators, casts, tuples, arrays,
+struct literals, `Some`/`Ok`/`Err`, and the built-in methods that only read (`len`, `is_empty`, `get`, `contains`,
+`starts_with`, `to_uppercase`, `trim`, `unwrap`, `clone`, ...). Everything else is refused before it runs, with a message
+that says why: a call to a program function or to a sink (`fs::read_to_string`, `println`) may have effects, a method
+that is not on the list (`push`, `pop`, `clear`) may change a binding, and blocks, closures, macros, `let`, assignments
+and task or channel operations are not expressions to read. A refused or failed `print` is an `error` event and the
+session goes on. The debugger is detached while the expression runs, so it adds no steps, cannot stop, and the output
+the evaluation writes is discarded. Calls to program functions are refused rather than analyzed: telling a pure
+function from an impure one needs the effect analysis of the compiler (ADR-0021), which this slice does not borrow.
+
+#### Watches
+
+`watch NAME` records the local's current text in the stopped frame (the `watching` event says what it is, or `null`
+when it is not bound yet). From then on, in every activation of that function at that call depth, the value is
+compared at the start of each statement with its value at the previous statement of the same activation; the first
+difference stops the run with `reason: "watch"`, the name, and `old` and `new` (`null` = not bound). The first statement
+of an activation only sets the baseline, so a binding that appears is reported as `null` to its first value. A change
+made while a callee runs (through a reference) is seen when control is back in the frame. Because a replay is
+deterministic, a watch found once is found again after `back`: the baselines are rebuilt by re-execution, and only
+`continue`, `next` and `finish` stop for a watch (`step` and `back` land where they were asked to).
 
 ### 3. Output for agents
 
@@ -83,8 +115,10 @@ short text lines for people. The events:
 
 | Event | Fields |
 |---|---|
-| `stopped` | `reason` (`start`, `breakpoint`, `step`, `back`, `failure`), `step`, `task`, `function`, `file`, `line`, `column`, `effect` (journal events answered so far; replay only), `message` (failure only) |
-| `value` | `name`, `value` |
+| `stopped` | `reason` (`start`, `breakpoint`, `step`, `next`, `finish`, `back`, `effect`, `watch`, `failure`), `step`, `task`, `function`, `file`, `line`, `column`, `effect` (journal events answered so far; replay only), `message` (failure; or a breakpoint whose condition could not be evaluated), `condition` (a conditional breakpoint's expression), `watch`, `old`, `new` (a watch change) |
+| `value` | `name` (the binding or the expression as written), `value` |
+| `returned` | `function`, `value`: what the frame left by `finish` returned, just before the `finish` stop (or before `exited`, for `main`) |
+| `watching` | `name`, `function`, `value` (`null` when the local is not bound yet) |
 | `locals` | `function`, `bindings`: `[{name, value}]` |
 | `stack` | `frames`: `[{function, file, line, column}]`, innermost first |
 | `output` | `stream` (`stdout`, `stderr`), `text`: what the program wrote since the last event. Each byte of program output is reported once per session, even when `back` re-executes the code that wrote it |
@@ -123,8 +157,12 @@ Not covered, stated plainly:
 
 Replay never opens a real file or socket: every effect is answered from the journal, the simulated world is in
 memory, and the gate (ADR-0021) still runs, so a call the recording was denied is denied again. `wj replay` takes the
-same `--allow` grants as the recording (a call that the recording was granted, but the replay is not, is denied and
-then diverges, which `exited` reports). Planned: write the grant into the journal's header so a replay needs no flags.
+same `--allow` grants as the recording, and the journal's header records them: a log is format 2, whose header has the
+`wj_effect_log` version and the `grants` the recorded run had (`--allow` flags, with `--allow-network` as the two
+grants it stands for), and `wj replay` applies them before its own `--allow` flags, so a replay needs none. A log of
+format 1 (before grants were recorded) is refused with the format number and `wj run --record` as the way out; `wj run
+--replay` reads the same format. Grants that come from `wj.toml` are not copied: they are read from the project at
+replay time, as they were at recording time.
 
 ### 6. Cost model
 
@@ -138,7 +176,12 @@ the optimization to reach for **only** when a measured session shows `back` abov
 actually debug; the interpreter's state includes threads and native handles, so snapshots are a large piece of work
 that this design does not need yet.
 
-The hook costs one `Option` test per statement in a run without the debugger.
+The hook costs one `Option` test per statement in a run without the debugger. This is a gate, not a promise:
+`the_hot_path_still_has_one_option_test_per_statement` in `tests/time_travel_test.rs` reads the walker's source and fails
+if `exec_stmt` tests the debugger more than once, or if any other interpreter file outside `debugger/` reads the field.
+Everything the second slice added (conditions, watches, `next`, `finish`, the `--at-effect` probe) lives behind that one
+test, in the debugged path; the files of the plain path (`eval_stmt.rs`, `call.rs`, `eval_expr.rs`, `engine.rs`) are
+unchanged by it.
 
 ### 7. Acceptance metric
 
@@ -164,6 +207,13 @@ the "re-execution is the time machine" claim is wrong for that class of program 
   the CLI adapter in `src/cli/replay.rs`.
 
 ## Slice status
+
+Implemented (second slice): `print EXPR` behind the read-only guard; `next` and `finish` (with the `returned` event);
+`--at-effect K`; `watch NAME`; `break LINE if EXPR`; the grants and a format version in the journal header (format 2) with
+a clear error for a format-1 log. Gates in `tests/time_travel_test.rs` (hand-traced steps for every command, the refused
+expressions and that a refusal changes nothing and consumes no journal event, `back` after `next`/`finish`/watch/at-effect,
+the header, the hot-path shape) and acceptance cases for each command in `tests/promises/replay.toml`. The first-slice
+goldens are unchanged.
 
 Implemented (first slice): both command forms, `--script`, `--json`, `--allow`; the commands `break`, `continue`,
 `step`, `back`, `print`, `locals`, `where`; the stop at a failure before unwinding; the events above. Gates in

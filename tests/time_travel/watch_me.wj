@@ -1,0 +1,11 @@
+fn main() {
+    let mut n = 0
+    let mut hits = 0
+    while n < 4 {
+        n = n + 1
+        if n % 2 == 0 {
+            hits = hits + 1
+        }
+    }
+    println("hits ${hits}")
+}

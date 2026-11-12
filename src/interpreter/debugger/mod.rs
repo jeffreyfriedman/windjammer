@@ -4,7 +4,9 @@
 //! A step is one statement started by the walker, counted from 1 across the run and its tasks. The hook in
 //! `exec_stmt` costs one `Option` test when no debugger is attached.
 
+mod commands;
 pub mod lines;
+mod readonly;
 pub mod render;
 pub mod script;
 pub mod session;
@@ -14,7 +16,7 @@ use super::error::{Ctl, ErrorKind, RuntimeError, R};
 use crate::parser::Statement;
 use crate::source_map::Location;
 use lines::Pos;
-use script::{Cmd, Line};
+use script::Line;
 use serde_json::{json, Value as Json};
 use std::path::PathBuf;
 
@@ -25,10 +27,16 @@ enum Resume {
     Start,
     /// Stop after N more statements start.
     Steps(u64),
-    /// Run to a breakpoint, the failure or the end.
+    /// Run to a breakpoint, a watched change, the failure or the end.
     Continue,
-    /// Re-executing after `back`: stop at this step.
+    /// Re-executing after `back` (or `--at-effect`): stop at this step.
     RunTo(u64),
+    /// `next`: run until a statement of this task starts at this call depth or a shallower one.
+    Over { depth: usize, task: usize },
+    /// `finish`: run until a statement starts at a shallower call depth than the frame being finished.
+    Finish { depth: usize },
+    /// `--at-effect K`: run silently to the statement that answers journal event K (then re-execute to stop there).
+    Probe(u64),
 }
 
 /// What the command loop decided at a stop.
@@ -43,18 +51,45 @@ pub(crate) enum Next {
 struct Breakpoint {
     file: Option<String>,
     line: usize,
+    /// `break LINE if EXPR`: stop only when this read-only expression is true.
+    cond: Option<String>,
+}
+
+/// `watch NAME`: stop when the local changes, in any activation of the function it was set in.
+struct Watch {
+    name: String,
+    function: String,
+    depth: usize,
+    /// The activation being watched has started and `last` is its previous value.
+    active: bool,
+    last: Option<String>,
+}
+
+/// Why a stop happened, and what the stop event says besides.
+pub(crate) struct Why {
+    reason: &'static str,
+    extra: Json,
+}
+
+impl Why {
+    fn plain(reason: &'static str) -> Why {
+        Why { reason, extra: json!({}) }
+    }
 }
 
 pub struct Debugger {
     cmds: Vec<Line>,
     next_cmd: usize,
     breakpoints: Vec<Breakpoint>,
+    watches: Vec<Watch>,
     pub(crate) events: Vec<Json>,
     resume: Resume,
     /// Statements started in this execution.
     pub(crate) step: u64,
     /// The last located statement started (a breakpoint stops once per entry to its line).
     prev_line: Option<Pos>,
+    /// The last statement started, by address: the same statement again is a new entry to its line (a loop body).
+    prev_stmt: usize,
     /// Where the run is stopped (the innermost frame of `where`).
     here: Option<Pos>,
     lines: lines::Lines,
@@ -69,6 +104,14 @@ pub struct Debugger {
     failing: bool,
     /// The program's directory: files in events are shown relative to it.
     root: PathBuf,
+    /// `--at-effect K`: the journal event the session starts at, until the probe run has found its statement.
+    probe: Option<u64>,
+    /// The reason the next `RunTo` stop reports (`back`, or `effect` after a probe).
+    run_to_reason: &'static str,
+    /// While `finish` runs: the value the frame's last completed statement produced (its tail, or a `return`).
+    finish_value: Option<super::value::Value>,
+    /// The function `finish` is finishing.
+    finishing: Option<String>,
 }
 
 pub(crate) const ABORT: &str = "the debugger left this run";
@@ -87,6 +130,7 @@ impl Debugger {
             resume: Resume::Start,
             step: 0,
             prev_line: None,
+            prev_stmt: 0,
             here: None,
             lines: lines::Lines::default(),
             out_seen: (0, 0),
@@ -95,17 +139,34 @@ impl Debugger {
             script_ended: false,
             failing: false,
             root,
+            probe: None,
+            run_to_reason: "back",
+            finish_value: None,
+            finishing: None,
+            watches: Vec::new(),
         }
+    }
+
+    /// Start the session at the statement that answers journal event `k` (1-based; `--at-effect`).
+    pub fn start_at_effect(&mut self, k: u64) {
+        self.probe = Some(k);
     }
 
     /// Get ready for one more execution of the program from its start.
     pub(crate) fn begin_execution(&mut self) {
-        self.resume = match self.restart.take() {
-            Some(t) => Resume::RunTo(t),
-            None => Resume::Start,
+        self.resume = match (self.restart.take(), self.probe) {
+            (Some(t), _) => Resume::RunTo(t),
+            (None, Some(k)) => Resume::Probe(k),
+            (None, None) => Resume::Start,
         };
         self.step = 0;
         self.prev_line = None;
+        self.prev_stmt = 0;
+        self.finish_value = None;
+        for w in &mut self.watches {
+            w.active = false;
+            w.last = None;
+        }
         self.aborting = false;
         self.failing = false;
     }
@@ -115,9 +176,11 @@ impl Debugger {
         p.to_string_lossy().to_string()
     }
 
-    fn bp_hit(&self, p: &Pos) -> bool {
+    /// The conditions of the breakpoints on this statement's line (`None` = unconditional).
+    fn breakpoints_at(&self, p: &Pos) -> Vec<Option<String>> {
         let file = self.file_name(p.loc);
-        self.breakpoints.iter().any(|b| b.line == p.line && b.file.as_ref().is_none_or(|f| file == *f || file.ends_with(&format!("/{f}"))))
+        let here = |b: &&Breakpoint| b.line == p.line && b.file.as_ref().is_none_or(|f| file == *f || file.ends_with(&format!("/{f}")));
+        self.breakpoints.iter().filter(here).map(|b| b.cond.clone()).collect()
     }
 
     /// Report the program output written since the last report.
@@ -136,12 +199,12 @@ impl Debugger {
         }
     }
 
-    fn stopped(&mut self, it: &Interpreter, reason: &str, step: u64, pos: Option<Pos>, message: Option<&str>) {
+    fn stopped(&mut self, it: &Interpreter, why: Why, step: u64, pos: Option<Pos>) {
         self.flush_output(it);
         self.here = pos;
         let mut e = json!({
             "event": "stopped",
-            "reason": reason,
+            "reason": why.reason,
             "step": step,
             "task": it.sched.current,
             "function": it.backtrace.last().map_or("<top>".to_string(), |(n, _)| n.to_string()),
@@ -154,8 +217,10 @@ impl Debugger {
         if let Some(n) = it.events_answered() {
             e["effect"] = json!(n);
         }
-        if let Some(m) = message {
-            e["message"] = json!(m);
+        if let Json::Object(extra) = why.extra {
+            for (k, v) in extra {
+                e[k] = v;
+            }
         }
         self.events.push(e);
     }
@@ -163,84 +228,156 @@ impl Debugger {
     fn error(&mut self, command: &str, message: impl Into<String>) {
         self.events.push(json!({ "event": "error", "command": command, "message": message.into() }));
     }
+}
 
-    /// Carry out commands until one resumes the run. `here` is the stopped step; `None` after the program ended
-    /// (`steps` statements ran), when only `break` and `back` still apply.
-    pub(crate) fn commands(&mut self, it: &mut Interpreter, here: Option<u64>, steps: u64) -> Next {
-        loop {
-            let Some(line) = self.cmds.get(self.next_cmd).cloned() else {
-                self.script_ended = true;
-                return Next::End;
-            };
-            self.next_cmd += 1;
-            let ended = "the program has exited; `back` goes back into it";
-            match line.cmd {
-                Cmd::Break { file, line } => self.breakpoints.push(Breakpoint { file, line }),
-                Cmd::Continue | Cmd::Step(_) if here.is_none() => self.error(&line.text, ended),
-                Cmd::Continue => {
-                    self.resume = Resume::Continue;
-                    return Next::Resume;
+impl Debugger {
+    /// `--at-effect`: the first statement that starts after journal event K was answered ends the probe run; the
+    /// statement before it is the one that answered it, and the session re-executes to stop there.
+    fn probe_check(&mut self, it: &Interpreter, step: u64) -> Option<Ctl> {
+        let Resume::Probe(k) = self.resume else { return None };
+        if it.events_answered().is_none_or(|n| n < k) {
+            return None;
+        }
+        self.found_effect_step(step.saturating_sub(1).max(1));
+        Some(abort())
+    }
+
+    fn found_effect_step(&mut self, step: u64) {
+        self.probe = None;
+        self.restart = Some(step);
+        self.run_to_reason = "effect";
+        self.aborting = true;
+    }
+
+    /// After a probe run that reached the end: the last statement answered event K, or the journal is too short.
+    pub(crate) fn probe_finished(&mut self, answered: Option<u64>) -> Result<(), String> {
+        let Some(k) = self.probe else { return Ok(()) };
+        match answered {
+            Some(n) if n >= k && self.step > 0 => {
+                self.found_effect_step(self.step);
+                Ok(())
+            }
+            Some(n) => Err(format!("--at-effect {k}: the journal holds only {n} event{}", if n == 1 { "" } else { "s" })),
+            None => Err("--at-effect needs a journal: it names an event of a recorded run (`wj replay LOG PROGRAM --at-effect K`)".into()),
+        }
+    }
+
+    /// Should the run stop at the statement that is starting? The resume mode says where it was going; breakpoints and
+    /// watches also stop a free-running (`continue`, `next`, `finish`) run.
+    fn decide(&mut self, it: &mut Interpreter, step: u64, loc: Option<Pos>, sid: usize) -> Option<Why> {
+        let (depth, task) = (it.backtrace.len(), it.sched.current);
+        let primary = match self.resume {
+            Resume::Start => Some("start"),
+            Resume::Steps(n) if n <= 1 => Some("step"),
+            Resume::Steps(n) => {
+                self.resume = Resume::Steps(n - 1);
+                None
+            }
+            Resume::RunTo(t) if t == step => Some(self.run_to_reason),
+            Resume::Over { depth: d, task: t } if depth <= d && task == t => Some("next"),
+            Resume::Finish { depth: d } if depth < d => Some("finish"),
+            _ => None,
+        };
+        let watch = self.observe_watches(it, depth);
+        let free = matches!(self.resume, Resume::Continue | Resume::Over { .. } | Resume::Finish { .. });
+        let same_line = |l: &Pos| self.prev_line.is_some_and(|p| p.line == l.line && p.loc.file == l.loc.file) && self.prev_stmt != sid;
+        let entered = loc.filter(|l| !same_line(l));
+        let mut why = primary.map(Why::plain);
+        if free && why.is_none() {
+            why = entered.and_then(|l| self.breakpoint_stop(it, &l));
+        }
+        match (&mut why, watch) {
+            (None, Some(w)) if free => Some(Why { reason: "watch", extra: w }),
+            (Some(y), Some(w)) if free => {
+                if let (Json::Object(mine), Json::Object(theirs)) = (&mut y.extra, w) {
+                    mine.extend(theirs);
                 }
-                Cmd::Step(n) => {
-                    self.resume = Resume::Steps(n);
-                    return Next::Resume;
-                }
-                Cmd::Back(n) => {
-                    let current = here.unwrap_or(steps + 1);
-                    if n >= current {
-                        self.error(&line.text, format!("cannot go back {n} from step {current}: the run starts at step 1"));
-                        continue;
-                    }
-                    return Next::Restart(current - n);
-                }
-                Cmd::Print(_) | Cmd::Locals | Cmd::Where if here.is_none() => self.error(&line.text, ended),
-                Cmd::Print(name) => match it.lookup_var(&name) {
-                    None => self.error(&line.text, format!("no binding `{name}` in the current frame")),
-                    Some(slot) => {
-                        let v = slot.borrow().clone();
-                        match format_quietly(it, &v) {
-                            Ok(text) => self.events.push(json!({ "event": "value", "name": name, "value": text })),
-                            Err(m) => self.error(&line.text, m),
-                        }
-                    }
-                },
-                Cmd::Locals => {
-                    let vars: Vec<(&'static str, super::value::Slot)> = it.scope.vars.clone();
-                    let mut bindings: Vec<Json> = Vec::new();
-                    for (i, (name, slot)) in vars.iter().enumerate() {
-                        // a shadowed binding is not visible: keep the last of each name
-                        if vars[i + 1..].iter().any(|(n, _)| n == name) {
-                            continue;
-                        }
-                        let v = slot.borrow().clone();
-                        let text = format_quietly(it, &v).unwrap_or_else(|m| format!("<{m}>"));
-                        bindings.push(json!({ "name": name, "value": text }));
-                    }
-                    let function = it.backtrace.last().map_or("<top>".to_string(), |(n, _)| n.to_string());
-                    self.events.push(json!({ "event": "locals", "function": function, "bindings": bindings }));
-                }
-                Cmd::Where => {
-                    let mut frames = Vec::new();
-                    let mut at = self.here.map(|p| (p.loc, p.line, p.column));
-                    for (name, site) in it.backtrace.iter().rev() {
-                        let mut f = json!({ "function": name.to_string() });
-                        if let Some((l, line, column)) = at {
-                            f["file"] = json!(self.file_name(l));
-                            f["line"] = json!(line);
-                            f["column"] = json!(column);
-                        }
-                        frames.push(f);
-                        at = site.map(|l| (l, l.line, l.display_column()));
-                    }
-                    self.events.push(json!({ "event": "stack", "frames": frames }));
-                }
+                why
+            }
+            _ => why,
+        }
+    }
+
+    /// A breakpoint on this line whose condition (if any) holds.
+    fn breakpoint_stop(&mut self, it: &mut Interpreter, at: &Pos) -> Option<Why> {
+        for cond in self.breakpoints_at(at) {
+            let Some(c) = cond else { return Some(Why::plain("breakpoint")) };
+            match readonly::eval_bool(it, &c) {
+                Ok(true) => return Some(Why { reason: "breakpoint", extra: json!({ "condition": c }) }),
+                Ok(false) => {}
+                Err(m) => return Some(Why { reason: "breakpoint", extra: json!({ "message": format!("condition `{c}` could not be evaluated: {m}") }) }),
             }
         }
+        None
+    }
+
+    /// The text of a local now (`None` when it is not bound in the current frame), the digest `watch` compares.
+    fn local_text(it: &mut Interpreter, name: &str) -> Option<String> {
+        let slot = it.lookup_var(name)?;
+        let v = slot.borrow().clone();
+        Some(format_quietly(it, &v).unwrap_or_else(|m| format!("<{m}>")))
+    }
+
+    /// Compare every watched local with its value at the previous statement of the same activation. Returns the
+    /// first change as stop-event fields. Baselines move on every statement, whatever the resume mode.
+    fn observe_watches(&mut self, it: &mut Interpreter, depth: usize) -> Option<Json> {
+        if self.watches.is_empty() {
+            return None;
+        }
+        let function = it.backtrace.last().map(|(n, _)| n.to_string());
+        let mut hit = None;
+        for i in 0..self.watches.len() {
+            let w = &mut self.watches[i];
+            if depth < w.depth {
+                w.active = false; // the watched frame returned; the next call starts a new activation
+                continue;
+            }
+            if depth != w.depth || function.as_deref() != Some(w.function.as_str()) {
+                continue;
+            }
+            let name = w.name.clone();
+            let now = Self::local_text(it, &name);
+            let w = &mut self.watches[i];
+            if !w.active {
+                w.active = true;
+            } else if now != w.last && hit.is_none() {
+                hit = Some(json!({ "watch": name, "old": w.last, "new": now }));
+            }
+            w.last = now;
+        }
+        hit
+    }
+
+    /// `finish`: remember what the frame's statements produce; the last one completed is the frame's value.
+    fn note_value(&mut self, depth: usize, r: &R) {
+        if !matches!(self.resume, Resume::Finish { depth: d } if d == depth) {
+            return;
+        }
+        self.finish_value = match r {
+            Ok(v) | Err(Ctl::Return(v)) => Some(v.clone()),
+            _ => None,
+        };
+    }
+
+    /// Report a stop. A `finish` stop first says what the finished frame returned.
+    fn report_stop(&mut self, it: &mut Interpreter, why: Why, step: u64, loc: Option<Pos>) {
+        if why.reason == "finish" {
+            self.report_returned(it);
+        }
+        self.stopped(it, why, step, loc);
+    }
+
+    /// The `returned` event of a `finish` (the function that was finished, and its value).
+    pub(crate) fn report_returned(&mut self, it: &mut Interpreter) {
+        let Resume::Finish { .. } = self.resume else { return };
+        let value = self.finish_value.take().map(|v| format_quietly(it, &v).unwrap_or_else(|m| format!("<{m}>")));
+        let function = self.finishing.take().unwrap_or_default();
+        self.events.push(json!({ "event": "returned", "function": function, "value": value }));
     }
 }
 
 /// `{:?}` of a value; anything the formatting writes (a user `Debug` impl that prints) is discarded.
-fn format_quietly(it: &mut Interpreter, v: &super::value::Value) -> Result<String, String> {
+pub(crate) fn format_quietly(it: &mut Interpreter, v: &super::value::Value) -> Result<String, String> {
     let (o, e) = (it.output.len(), it.err_output.as_ref().map(Vec::len));
     let r = it.debug_string(v);
     it.output.truncate(o);
@@ -279,28 +416,25 @@ impl Interpreter {
         d.step += 1;
         let step = d.step;
         let loc = d.lines.start(s);
-        let reason = match d.resume {
-            Resume::Start => Some("start"),
-            Resume::Steps(n) if n <= 1 => Some("step"),
-            Resume::Steps(n) => {
-                d.resume = Resume::Steps(n - 1);
-                None
-            }
-            Resume::RunTo(t) if t == step => Some("back"),
-            Resume::RunTo(_) => None,
-            Resume::Continue => loc.filter(|l| d.bp_hit(l) && !d.prev_line.is_some_and(|p| p.line == l.line && p.loc.file == l.loc.file)).map(|_| "breakpoint"),
-        };
+        if let Some(c) = d.probe_check(self, step) {
+            self.debug = Some(d);
+            return Err(c);
+        }
+        let sid = s as *const Statement as usize;
+        let why = d.decide(self, step, loc, sid);
         if loc.is_some() {
             d.prev_line = loc;
         }
-        if let Some(reason) = reason {
+        d.prev_stmt = sid;
+        if let Some(why) = why {
             self.mark(loc.map(|p| p.loc));
-            d.stopped(self, reason, step, loc, None);
+            d.report_stop(self, why, step, loc);
             if let Err(c) = self.debugger_decide(&mut d, Some(step)) {
                 self.debug = Some(d);
                 return Err(c);
             }
         }
+        let depth = self.backtrace.len();
         self.debug = Some(d);
         let r = self.exec_stmt_plain(s);
         if !matches!(self.debug.as_ref(), Some(d) if !d.aborting) {
@@ -308,10 +442,12 @@ impl Interpreter {
         }
         let failed = is_failure(&r).map(|e| e.message.clone());
         let mut d = self.debug.take().expect("debugger");
+        d.note_value(depth, &r);
         match failed {
             Some(msg) if !d.failing => {
                 d.failing = true;
-                d.stopped(self, "failure", step, loc, Some(&msg));
+                let why = Why { reason: "failure", extra: json!({ "message": msg }) };
+                d.stopped(self, why, step, loc);
                 if let Err(c) = self.debugger_decide(&mut d, Some(step)) {
                     self.debug = Some(d);
                     return Err(c);
