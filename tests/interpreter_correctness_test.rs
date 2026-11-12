@@ -143,3 +143,63 @@ fn question_dot_on_a_result_is_emitted_as_try_then_member() {
     assert!(rs.contains("let _oc = items(n)?;"), "{rs}");
     assert!(!rs.contains("unreachable!()"), "{rs}");
 }
+
+/// A `mut` loop variable over a collection is written back to its element, as the compiled build's `&mut`
+/// iteration does (the drift corpus case `for_mut_variable_write_through`); a range variable is a copy.
+/// Walker, resolved engine and resolved without the JIT agree.
+#[test]
+fn mut_loop_variables_write_through_to_their_elements_in_every_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drift_corpus/repros/for_mut_variable_write_through.wj")).unwrap();
+    std::fs::write(dir.path().join("p.wj"), &src).unwrap();
+    // hot enough that the resolved engine would otherwise compile (and jit) the loop
+    let hot = src.replace("fn main() {", "fn main() {\n    let mut warm = 0\n    while warm < 300 {\n        warm += 1\n    }");
+    for (name, text) in [("cold", &src), ("hot", &hot)] {
+        std::fs::write(dir.path().join("p.wj"), text).unwrap();
+        for engine in [vec!["--engine", "walker"], vec!["--engine", "resolved"], vec!["--engine", "resolved", "--no-jit"]] {
+            let o = Command::new(WJ).current_dir(dir.path()).args(["run", "--interpret", "--no-lint"]).args(&engine).arg("p.wj").output().unwrap();
+            assert_eq!(String::from_utf8_lossy(&o.stdout), "11 12 3 6\n", "{name} {engine:?}: {}", String::from_utf8_lossy(&o.stderr));
+        }
+    }
+}
+
+/// Index assignment through the loop variable (a field vector, a row), the variable of a method's `self.items`
+/// loop, and a copy loop that must stay unchanged. (The compiled backend rejects the first two: it iterates them
+/// by `&`, rustc E0596 / `copied()` on a `Vec`; recorded in docs/drift/findings.md section N.)
+#[test]
+fn loop_variable_write_back_covers_index_assignment_and_leaves_copies_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = r#"struct Q {
+    xs: Vec<int>,
+}
+
+fn main() {
+    let mut qs = [Q { xs: [1, 2] }, Q { xs: [3, 4] }]
+    for mut q in qs {
+        q.xs[0] = q.xs[0] * 10
+    }
+    let mut grid = [[1, 2], [3, 4]]
+    for mut row in grid {
+        row[1] = row[1] + 100
+    }
+    let nums = [5, 6]
+    let mut seen = 0
+    for n in nums {
+        seen += n
+    }
+    let mut counts = [1, 2, 3]
+    for mut c in counts {
+        c += 1
+        if c > 3 {
+            break
+        }
+    }
+    println("${qs[0].xs[0]} ${qs[1].xs[0]} ${qs[0].xs[1]} ${grid[0][1]} ${grid[1][1]} ${seen} ${counts[0]} ${counts[1]} ${counts[2]}")
+}
+"#;
+    for engine in [vec!["--engine", "walker"], vec!["--engine", "resolved"]] {
+        std::fs::write(dir.path().join("p.wj"), src).unwrap();
+        let o = Command::new(WJ).current_dir(dir.path()).args(["run", "--interpret", "--no-lint"]).args(&engine).arg("p.wj").output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&o.stdout), "10 30 2 102 104 11 2 3 4\n", "{engine:?}: {}", String::from_utf8_lossy(&o.stderr));
+    }
+}

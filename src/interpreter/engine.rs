@@ -231,6 +231,8 @@ pub struct Interpreter {
     pub(crate) capture_locals: bool,
     /// Where `main` produced the `Err` it returned: the span and the bindings, noted as `main` returns (ADR-0036).
     pub(crate) main_err_site: Option<MainErrSite>,
+    /// `for` bodies that change their loop variable, by body address (`analysis::loop_var_mutated`).
+    pub(crate) loop_mut_cache: HashMap<usize, bool>,
     /// Environment values (8+ characters) the failing frame's bindings are compared with before they are shown.
     pub(crate) secret_env: Vec<String>,
     pub(crate) output: Vec<String>,
@@ -348,6 +350,7 @@ impl Interpreter {
             cur: None,
             capture_locals: true,
             main_err_site: None,
+            loop_mut_cache: HashMap::new(),
             secret_env: Vec::new(),
             output: Vec::new(),
             capture_output: false,
