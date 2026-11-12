@@ -409,6 +409,11 @@ name = "docs_truth"
 path = "tests/docs_truth_test.rs"
 required-features = ["cli"]
 
+# Build-script rerun stability (no recompile from test output files or `git status`): cargo test --release --test build_rerun_stability
+[[test]]
+name = "build_rerun_stability"
+path = "tests/build_rerun_stability_test.rs"
+
 # Every example under examples/ is run or checked (examples/EXAMPLES.toml): cargo test --release --test examples_gate
 [[test]]
 name = "examples_gate"
