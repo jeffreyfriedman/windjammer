@@ -12,3 +12,10 @@ fn main() {
         }
     }
 }
+
+fn shout(text: string) {
+    for c in text.chars() {
+        println("is: ${c == "!"}")
+//~@29+3 ERROR WJ0003 expected `char`, found `string`
+    }
+}

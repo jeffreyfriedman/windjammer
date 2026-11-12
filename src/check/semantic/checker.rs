@@ -142,7 +142,7 @@ impl Cx<'_, '_> {
         self_ty: Option<&str>,
         ret: Option<&Type>,
     ) {
-        let mut col = Collect::new(self.idx, &self.aliases);
+        let mut col = Collect::new(self.idx, &self.aliases, self.idx.declared.as_ref());
         let mut typed: HashMap<String, String> = HashMap::new();
         for p in params {
             col.bind(&p.name);
@@ -192,6 +192,7 @@ impl Cx<'_, '_> {
 struct Collect<'i> {
     idx: &'i Index,
     aliases: &'i HashMap<String, String>,
+    declared: Option<&'i super::declared::Declared>,
     /// Bindings that hold a sequence of one scalar kind (`let cs = strings.chars(s)`), from declarations.
     elems: HashMap<String, Kind>,
     names: HashSet<String>,
@@ -202,9 +203,10 @@ struct Collect<'i> {
 }
 
 impl<'i> Collect<'i> {
-    fn new(idx: &'i Index, aliases: &'i HashMap<String, String>) -> Self {
+    fn new(idx: &'i Index, aliases: &'i HashMap<String, String>, declared: Option<&'i super::declared::Declared>) -> Self {
         Self {
             idx,
+            declared,
             aliases,
             elems: HashMap::new(),
             names: HashSet::new(),
@@ -252,8 +254,11 @@ impl Visitor for Collect<'_> {
     fn stmt(&mut self, s: &Statement<'_>) {
         // `for ch in strings.chars(text)`: the binding has the declared element kind.
         if let Statement::For { pattern: Pattern::Identifier(n), iterable, .. } = s {
-            let scope = Scope { scalars: &self.scalars, elems: &self.elems, aliases: self.aliases, names: &self.names };
-            if let Some(k) = elements::iterable_element(&scope, iterable) {
+            let found = self.declared.and_then(|declared| {
+                let scope = Scope { scalars: &self.scalars, elems: &self.elems, aliases: self.aliases, names: &self.names, declared };
+                elements::iterable_element(&scope, iterable)
+            });
+            if let Some(k) = found {
                 self.scalars.insert(n.clone(), (k, true));
             }
         }
@@ -296,10 +301,13 @@ impl Visitor for Collect<'_> {
             if let Some(k) = declared {
                 self.scalars.insert(n.clone(), k);
             }
-            let scope = Scope { scalars: &self.scalars, elems: &self.elems, aliases: self.aliases, names: &self.names };
-            let elem = match type_ {
-                Some(t) => elements::element_of_type(t),
-                None => elements::iterable_element(&scope, value),
+            let elem = match (type_, self.declared) {
+                (Some(t), _) => elements::element_of_type(t),
+                (None, Some(declared)) => {
+                    let scope = Scope { scalars: &self.scalars, elems: &self.elems, aliases: self.aliases, names: &self.names, declared };
+                    elements::iterable_element(&scope, value)
+                }
+                (None, None) => None,
             };
             match elem {
                 Some(k) => self.elems.insert(n.clone(), k),
@@ -799,7 +807,13 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
 
     fn operand_span(&self, e: &Expression<'_>) -> Option<Span> {
         match e {
-            Expression::Literal { value, location } => self.cx.loc.literal(&self.effective(location), value),
+            Expression::Literal { value, location } => {
+                let loc = self.effective(location);
+                self.cx.loc.literal(&loc, value).or_else(|| match value {
+                    Literal::String(s) => self.cx.loc.interpolated_string(s),
+                    _ => None,
+                })
+            }
             Expression::Identifier { name, location } => self.cx.loc.word(&self.effective(location), name),
             _ => None,
         }

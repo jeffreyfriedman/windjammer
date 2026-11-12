@@ -136,6 +136,9 @@ tests/diagnostics/cases/arity_too_many.wj	172f17e047e8a6dc	ok	fail
 tests/diagnostics/cases/bad_import.wj	7088ca50724bf042	ok	fail
 tests/diagnostics/cases/bad_operand.wj	88d86f2105473804	ok	fail
 tests/diagnostics/cases/borrow_conflict.wj	b91e7b6bfe885281	ok	fail
+tests/diagnostics/cases/char_eq_string_literal.wj	c6c3ce2a81f48fbc	ok	fail
+tests/diagnostics/cases/char_eq_string_ok.wj	ece29b2b6b5729fb	ok	ok
+tests/diagnostics/cases/char_ne_string_method.wj	c58b2b5d3ea71e8f	ok	fail
 tests/diagnostics/cases/clean_program.wj	ca47aac7fb737168	ok	ok
 tests/diagnostics/cases/duplicate_function.wj	868823a3b38e5d68	ok	fail
 tests/diagnostics/cases/duplicate_struct.wj	5ce081ac14fa30de	ok	fail
@@ -155,6 +158,8 @@ tests/diagnostics/cases/lint_to_string.wj	50d0bfb763ad297b	fail	skip
 tests/diagnostics/cases/lint_unwrap.wj	832da8219efe23c5	fail	skip
 tests/diagnostics/cases/macro_println.wj	768b128e88ae6113	ok	ok
 tests/diagnostics/cases/macro_vec.wj	6038ee7bce96cebf	ok	ok
+tests/diagnostics/cases/match_option_pattern_on_result.wj	a222ba3c74e44dfc	ok	fail
+tests/diagnostics/cases/match_result_pattern_on_option.wj	37c2f7378f5c5cbd	ok	fail
 tests/diagnostics/cases/missing_field.wj	751e69e60b719e95	ok	fail
 tests/diagnostics/cases/missing_trait_item.wj	0140a389c43dbb95	ok	fail
 tests/diagnostics/cases/no_such_method.wj	09aa61d2d142d9a5	ok	fail
