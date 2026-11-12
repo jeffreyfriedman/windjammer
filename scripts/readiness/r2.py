@@ -181,7 +181,7 @@ def summarize(res, quick):
     status = "fail" if (div or res["build_failures"]) else ("pass" if res["checked"] and seeds_ok and not res["unmeasured"] else "unmeasured")
     return {"id": "R2", "title": "No silent divergence", "target": "0 divergent programs",
             "percent": pct(ok, res["checked"]), "status": status,
-            "detail": {k: res[k] if not isinstance(res[k], list) else len(res[k]) for k in res} | {"hash_seeds": list(HASH_SEEDS_QUICK if quick else HASH_SEEDS_FULL)},
+            "detail": dict({k: res[k] if not isinstance(res[k], list) else len(res[k]) for k in res}, hash_seeds=list(HASH_SEEDS_QUICK if quick else HASH_SEEDS_FULL)),
             "blockers": [{"program": d["program"], "reason": f"[{d['kind']}] {d['reason']}"} for d in div]
                         + [{"program": b["program"], "reason": "[compiled-build-failed] " + b["reason"]} for b in res["build_failures"]]
                         + [{"program": u["program"], "reason": "unmeasured: " + u["reason"]} for u in res["unmeasured"]]}

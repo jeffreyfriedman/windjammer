@@ -18,7 +18,7 @@
 //   corpus     (plus 40 generated value-kind x position programs, drift_gen.wj) ecosystem tests + value-position programs: walker, resolved and compiled agree, or the
 //              divergence is in tests/drift_corpus/known_divergences.txt (a shrink-only ledger)
 // `--fast` skips the cargo steps (selftest, fuzz, corpus and spec only). WJ_CARGO_WRAPPER prefixes every cargo and
-// compiled run (a build-slot gate); DRIFT_BASE_REF (default next/v0.50.0) names the ref the ledger may only
+// compiled run (a build-slot gate); DRIFT_BASE_REF (default: the current branch's upstream, else the merge-base with origin/HEAD) names the ref the ledger may only
 // shrink against. Exit status 1 when any step fails.
 use std::env
 use std::fs
@@ -84,7 +84,7 @@ fn ran_text(text: string) -> string {
     for line in strings.split_lines(text) {
         match line.find("finished in ") {
             Some(i) => {
-                let rest = line[i + 12..].to_string()
+                let rest = line[i + 12..]
                 return " (ran ${strings.trim(rest)})"
             },
             None => {},
@@ -270,7 +270,7 @@ fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step
         }
     }
     // the ledger may only shrink against the base ref's copy (absent there: the ledger is being introduced)
-    let base_ref = env::var("DRIFT_BASE_REF").unwrap_or("next/v0.50.0")
+    let base_ref = base_ref_default()
     let mut base_arg = ""
     match sh("git show ${base_ref}:${LEDGER} > ${base_copy} 2>/dev/null") {
         Ok(r) => {
@@ -281,8 +281,9 @@ fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step
         Err(_) => {},
     }
     let mut cases = ""
+    let adopt_arg = if adopt != "" { "--adopt '${adopt}'" } else { "" }
     if ok {
-        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} ${if prune { "--prune" } else { "" }} ${if adopt != "" { "--adopt '" + adopt + "'" } else { "" }} 2>&1") {
+        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} ${if prune { "--prune" } else { "" }} ${adopt_arg} 2>&1") {
             Ok(r) => {
                 let first = strings.split_lines(r.stdout)
                 if first.len() > 0 {
@@ -317,17 +318,40 @@ fn absolute_wj(wj: string) -> Result<string, string> {
     }
 }
 
-// The scripts import the ecosystem packages through `windjammer-ecosystem/` at the repository root (without it
-// `wj check` reports WJ0044 on their externs). Create the link from WJ_ECOSYSTEM or a sibling checkout when it
-// is missing; Err(message) when there is nothing to link to. DRIFT_ECO_LINK renames the link (tests).
-fn ensure_ecosystem() -> Result<string, string> {
-    let link = env::var("DRIFT_ECO_LINK").unwrap_or("windjammer-ecosystem")
-    let cmd = "if [ -e ${quote(link)} ]; then echo present; exit 0; fi; for c in \"$WJ_ECOSYSTEM\" ../windjammer-ecosystem; do if [ -n \"$c\" ] && [ -d \"$c/packages\" ]; then ln -s \"$(cd \"$c\" && pwd)\" ${quote(link)} && echo linked; exit 0; fi; done; echo missing"
+// The ref the ledger may only shrink against: DRIFT_BASE_REF, else the current branch's upstream, else the
+// merge-base with origin's default branch, else HEAD (so a clone without either still has a base that exists).
+fn base_ref_default() -> string {
+    match env::var("DRIFT_BASE_REF") {
+        Some(v) => {
+            if v != "" {
+                return v
+            }
+        },
+        None => {},
+    }
+    let cmd = "git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || git merge-base HEAD origin/HEAD 2>/dev/null || echo HEAD"
     match sh(cmd) {
         Ok(r) => {
             let v = strings.trim(r.stdout)
-            if v == "missing" || v == "" {
-                Err("the ecosystem packages are not linked: put a windjammer-ecosystem checkout at ${link} (or set WJ_ECOSYSTEM to one), or keep it next to this repository")
+            if v == "" { "HEAD" } else { v }
+        },
+        Err(_) => "HEAD",
+    }
+}
+
+// The scripts import the ecosystem packages through scripts/wj/wj.toml, which reads WJ_ECOSYSTEM (a checkout of
+// windjammer-ecosystem) or falls back to `windjammer-ecosystem/` at the repository root (without them `wj check`
+// reports WJ0044 on the externs). No sibling directory is assumed. Err(message) when neither resolves.
+fn ensure_ecosystem() -> Result<string, string> {
+    let link = env::var("DRIFT_ECO_LINK").unwrap_or("windjammer-ecosystem")
+    let cmd = "if [ -n \"$WJ_ECOSYSTEM\" ]; then if [ -d \"$WJ_ECOSYSTEM/packages\" ]; then echo \"WJ_ECOSYSTEM\"; else echo missing-env; fi; elif [ -d ${quote(link)}/packages ]; then echo present; else echo missing; fi"
+    match sh(cmd) {
+        Ok(r) => {
+            let v = strings.trim(r.stdout)
+            if v == "missing-env" {
+                Err("WJ_ECOSYSTEM is set but has no packages/ directory: point it at a windjammer-ecosystem checkout")
+            } else if v == "missing" || v == "" {
+                Err("the ecosystem packages were not found: set WJ_ECOSYSTEM to a windjammer-ecosystem checkout, or put (or symlink) one at ${link}/")
             } else {
                 Ok(v)
             }
@@ -375,7 +399,7 @@ fn spec_step(wj: string, compiled: string) -> Step {
         }
     }
     if ok {
-        let base_ref = env::var("DRIFT_BASE_REF").unwrap_or("next/v0.50.0")
+        let base_ref = base_ref_default()
         let mut base_arg = ""
         match sh("git show ${base_ref}:${ledger} > ${run_dir}/base-ledger.txt 2>/dev/null") {
             Ok(r) => {

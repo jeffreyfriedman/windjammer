@@ -569,3 +569,18 @@ path = "tests/try_binding_method_args_test.rs"
 [[test]]
 name = "lint_clone_need"
 path = "tests/lint_clone_need_test.rs"
+
+# Checkout name / parent dir must not change layout or codegen: cargo test --test portability_checkout_layout_gate
+[[test]]
+name = "portability_checkout_layout_gate"
+path = "tests/portability_checkout_layout_gate.rs"
+
+# Recorded corpora hold no absolute paths: cargo test --test recorded_corpus_location_free_gate
+[[test]]
+name = "recorded_corpus_location_free_gate"
+path = "tests/recorded_corpus_location_free_gate.rs"
+
+# No untracked files after the suite (run last): cargo test --test untracked_files_gate
+[[test]]
+name = "untracked_files_gate"
+path = "tests/untracked_files_gate.rs"

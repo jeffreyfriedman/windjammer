@@ -619,6 +619,20 @@ pub fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         .map_err(|e| format!("Failed to read generated {}: {}", rs_name, e))
 }
 
+/// Compile inline source as `{name}.wj` inside a private temp dir (nothing is written into the repository).
+pub fn compile_source(name: &str, source: &str) -> Result<String, String> {
+    let tmp = TempDir::new().expect("tempdir");
+    let src_dir = tmp.path().join("src");
+    fs::create_dir_all(&src_dir).map_err(|e| e.to_string())?;
+    let file = src_dir.join(format!("{}.wj", name));
+    fs::write(&file, source).map_err(|e| e.to_string())?;
+    let out_dir = tmp.path().join("build");
+    build_project(&file, &out_dir, CompilationTarget::Rust, false).map_err(|e| e.to_string())?;
+    let rs_name = format!("{}.rs", name);
+    fs::read_to_string(out_dir.join(&rs_name))
+        .map_err(|e| format!("Failed to read generated {}: {}", rs_name, e))
+}
+
 // =============================================================================
 // Path helpers
 // =============================================================================

@@ -1,5 +1,5 @@
-Building Windjammer project from "~/src/wj-wt/pilot6/bench/agent-dx/results/pilot6/work/t104_activity_log.V2.1/ws" (target: rust)
-Output: "~/Library/Caches/windjammer/run/de1878c1eb9389a7"
+Building Windjammer project from "{REPO}/bench/agent-dx/results/pilot6/work/t104_activity_log.V2.1/ws" (target: rust)
+Output: "{CACHE}/run/de1878c1eb9389a7"
 
 Success! Transpilation complete!
 
