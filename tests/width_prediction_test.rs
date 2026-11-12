@@ -242,7 +242,10 @@ fn predictions_across_the_corpora() {
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
         "tests/effects/corpus/fs_helper_and_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
-        "tests/engine_parity/closures_compiled.wj 1",
+        // two, both rejected by rustc with E0308: `y + outer + x` (i64 against i32, family A) and, since the stream8
+        // closure-parameter changes, `inner(1_i64)` against `move |y: &i64|` (the explicitly typed `|y: int|` of a
+        // closure nested in `v.map(|x| ..)` is emitted by reference, family B)
+        "tests/engine_parity/closures_compiled.wj 2",
         "tests/engine_parity/map_get_match.wj 2",
         "tests/engine_parity/match_arms.wj 1",
         "tests/engine_parity/match_value.wj 3",
