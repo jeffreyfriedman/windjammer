@@ -165,7 +165,10 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Str, "to_ascii_uppercase", |_, v, _| Ok(Value::str(sv(v).to_ascii_uppercase())));
     r.pure(Kind::Str, "to_ascii_lowercase", |_, v, _| Ok(Value::str(sv(v).to_ascii_lowercase())));
     // test-only mutant `string` (debug builds): `trim` keeps the trailing whitespace
-    r.pure(Kind::Str, "trim", |it, v, _| Ok(Value::str(if it.mutant("string") { sv(v).trim_start() } else { sv(v).trim() })));
+    r.pure(Kind::Str, "trim", |it, v, _| {
+        let s = sv(v);
+        Ok(Value::str(if it.mutant("string") { s.trim_start() } else { s.trim() }))
+    });
     r.pure(Kind::Str, "trim_start", |_, v, _| Ok(Value::str(sv(v).trim_start())));
     r.pure(Kind::Str, "trim_end", |_, v, _| Ok(Value::str(sv(v).trim_end())));
     r.pure(Kind::Str, "chars", |_, v, _| Ok(new_iter(sv(v).chars().map(Value::Char).collect())));
