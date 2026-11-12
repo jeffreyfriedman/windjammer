@@ -1,6 +1,6 @@
 ⚡ Incremental: 0/3 files changed — nothing to do (0.3s)
 Building Windjammer project from "{REPO}/bench/agent-dx/results/pilot6/work/t104_activity_log.V2.1/ws" (target: rust)
-Output: "~/Library/Caches/windjammer/run/de1878c1eb9389a7"
+Output: "{CACHE}/run/de1878c1eb9389a7"
 
 Success! Transpilation complete!
 
