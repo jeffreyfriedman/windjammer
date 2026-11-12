@@ -14,6 +14,8 @@ use crate::codegen::rust::CodeGenerator;
 const COLLECTION: &str = "Vec";
 /// The borrowing iteration codegen inserts before an adapter on a collection (`v.map(f)` is `v.iter().map(f)`).
 const INSERTED_ITERATION: &str = "iter";
+/// The surface's text type, whose `chars` / `split` / `lines` produce iterators.
+const TEXT: &str = "String";
 
 /// What `bind_element_param_types` replaced, for `release_element_param_types`.
 pub(in crate::codegen::rust) struct BoundParams {
@@ -48,6 +50,19 @@ pub(in crate::codegen::rust) fn reference_depth(t: &Type) -> (usize, &Type) {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// The Rust core surface (`std/rust_core.wji`), parsed on first use and then kept by this generator.
+    pub(in crate::codegen::rust) fn core_surface(&self) -> &CoreSurface {
+        self.core_surface.get_or_init(CoreSurface::parse)
+    }
+
+    /// Whether a call can take part in an iterator chain at all: the surface declares the method on an iterator or
+    /// on a type that produces one. Asked before any receiver is inferred (inferring walks the whole call chain, once
+    /// per link, which is exponential in a long builder chain).
+    fn surface_declares_chain_method(&self, method: &str) -> bool {
+        let surface = self.core_surface();
+        [ITERATOR, COLLECTION, TEXT].iter().any(|t| surface.declared(t, method).is_some())
+    }
+
     /// True when `receiver.method(|x| ..)` gets `.iter()` inserted (a list receiver, an iterator adapter).
     fn adapter_gets_inserted_iter(&self, object: &Expression<'ast>, method: &str, receiver: &Option<Type>, surface: &CoreSurface) -> bool {
         let iterates_by_reference = Self::is_collection_literal_expr(object) || receiver.as_ref().is_some_and(Self::type_is_iterable_collection);
@@ -65,6 +80,9 @@ impl<'ast> CodeGenerator<'ast> {
     /// The `Iterator<Item>` type an expression evaluates to, typed from the declarations call by call.
     fn iterator_type_of(&self, expr: &Expression<'ast>, surface: &CoreSurface) -> Option<Type> {
         let Expression::MethodCall { object, method, type_args, .. } = expr else { return None };
+        if !self.surface_declares_chain_method(method) {
+            return None;
+        }
         let turbofish = type_args.clone().unwrap_or_default();
         let recv = match self.iterator_type_of(object, surface) {
             Some(it) => it,
@@ -88,12 +106,13 @@ impl<'ast> CodeGenerator<'ast> {
     /// The declared parameter types of the closure passed as argument `arg_index` of `object.method(..)`, when the
     /// call is an iterator adapter whose item type is known.
     fn adapter_closure_param_types(&self, object: &Expression<'ast>, method: &str, arg_index: usize, receiver: &Option<Type>) -> Option<Vec<Type>> {
-        let surface = CoreSurface::parse();
+        let surface = self.core_surface();
+        surface.declared(ITERATOR, method)?;
         // A receiver the declarations type as an iterator (`s.chars()`, `v.iter()`) gets nothing inserted.
-        let iterator = match self.iterator_type_of(object, &surface) {
+        let iterator = match self.iterator_type_of(object, surface) {
             Some(it) => it,
-            None if self.adapter_gets_inserted_iter(object, method, receiver, &surface) => {
-                Self::inserted_iterator_type(receiver.as_ref()?, &surface)?
+            None if self.adapter_gets_inserted_iter(object, method, receiver, surface) => {
+                Self::inserted_iterator_type(receiver.as_ref()?, surface)?
             }
             None => return None,
         };
@@ -106,8 +125,8 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// True when `receiver.method(|x| ..)` gets `.iter()` inserted and the adapter's declared closure takes the element only.
     pub(super) fn closure_receives_element_ref(&self, object: &Expression<'ast>, method: &str, receiver: &Option<Type>) -> bool {
-        let surface = CoreSurface::parse();
-        if !self.adapter_gets_inserted_iter(object, method, receiver, &surface) {
+        let surface = self.core_surface();
+        if !self.adapter_gets_inserted_iter(object, method, receiver, surface) {
             return false;
         }
         surface.declared(ITERATOR, method).is_some_and(|(type_generics, _, params, _)| {

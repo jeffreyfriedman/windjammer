@@ -30,10 +30,11 @@ pub fn install_layer_store(store: Arc<dyn LayerStore>, compiler_key: String) {
     *STORE.lock().unwrap_or_else(|e| e.into_inner()) = Some((store, compiler_key));
 }
 
-/// The store and the key of what the scan reads and runs: the build and the trees baked into it.
-fn shared() -> Option<(Arc<dyn LayerStore>, String)> {
+/// The store and the key of a table that is a function of the build and the trees baked into it (`kind` names
+/// the table: `runtime-layer`, `stdlib-tables`).
+pub fn shared_entry(kind: &str) -> Option<(Arc<dyn LayerStore>, String)> {
     let (store, compiler) = STORE.lock().unwrap_or_else(|e| e.into_inner()).clone()?;
-    let text = format!("wj-runtime-layer\n{FORMAT}\n{compiler}\n{}", crate::embedded_assets::scan_inputs_fingerprint());
+    let text = format!("wj-{kind}\n{FORMAT}\n{compiler}\n{}", crate::embedded_assets::scan_inputs_fingerprint());
     Some((store, Sha256::digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()))
 }
 
@@ -97,7 +98,7 @@ impl Snapshot {
 
 /// The populated runtime layer: loaded from the shared store when it has this build's entry, else scanned (and stored).
 pub(super) fn scanned_runtime_layer() -> SignatureRegistry {
-    let shared = shared();
+    let shared = shared_entry("runtime-layer");
     if let Some((store, key)) = &shared {
         if let Some(snap) = store.get(key).and_then(|text| serde_json::from_str::<Snapshot>(&text).ok()) {
             return snap.into_registry();
