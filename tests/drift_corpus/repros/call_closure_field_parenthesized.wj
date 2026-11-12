@@ -1,0 +1,25 @@
+// `(self.layers[i].before)(x)` calls the closure the field holds (it read as a method call `before` on the layer).
+struct Layer {
+    before: fn(int) -> int,
+}
+
+struct Net {
+    layers: Vec<Layer>,
+}
+
+fn dbl(x: int) -> int {
+    x * 2
+}
+
+fn main() {
+    let net = Net { layers: [Layer { before: dbl }, Layer { before: |x| x + 1 }] }
+    let mut i = 0
+    let mut t = 5
+    while i < 2 {
+        t = (net.layers[i].before)(t)
+        i += 1
+    }
+    println("${t}")
+    let l = Layer { before: dbl }
+    println("${(l.before)(4)}")
+}

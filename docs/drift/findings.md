@@ -266,3 +266,17 @@ the resolved engine runs such a function in the walker so all three engines agre
 (`tests/interpreter_correctness_test.rs`, drift case `repros/for_mut_variable_write_through.wj`). Two compiled-side gaps found
 on the way (the interpreter now follows the language, the compiled backend does not): `for mut q in qs { q.xs[0] = .. }` is emitted as
 `for q in &qs` (rustc E0596) and `for mut row in grid { row[0] = .. }` as `grid.iter().copied()` (E0277 on `Vec`); owner `codegen-ownership`.
+
+### N.7 Shadowed loop variable and the parenthesised field call
+
+- **Shadowing in a write-back loop.** `for mut row in flat { row[1] += 1; let row = 0 }` wrote the shadowing `row = 0` back to the
+  element because the write-back read the variable by name after the body. It now reads the slots the `for` bound before the body
+  runs, so a later binding of the same name is another variable (`rebuild_element`). Case `repros/for_mut_variable_shadowed_after_write.wj`,
+  test `a_shadowing_binding_in_the_body_is_not_written_back_to_the_element`. Ledgered until the ownership branch's
+  codegen fix is merged (then the compiled side prints `3 5`).
+- **`(self.layers[i].before)(x)`.** The parser gives `Call { function: FieldAccess }` for a parenthesised field, the shape the walker read as
+  a method call `before` on the layer (`has no method`). A call whose function is a place-field that holds a closure now calls
+  the closure; anything else keeps the method-call reading. The resolved engine hands that call shape to the walker, so the three
+  engines agree. Case `repros/call_closure_field_parenthesized.wj`, test `a_parenthesised_field_call_calls_the_stored_closure_in_every_engine`.
+  The compiled backend has the mirror defect (it emits `l.before(4)`, rustc E0599): ledgered, owner `codegen-types`. The ledger
+  ceiling rises 80 to 82 for these two compiled-side lines (the interpreter side is fixed).
