@@ -1,0 +1,3 @@
+pub trait Policy {
+    fn check(&mut self, who: string, relation: string) -> bool
+}
