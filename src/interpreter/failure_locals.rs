@@ -164,6 +164,11 @@ fn list(open: &str, close: &str, items: Vec<String>, total: usize) -> String {
 }
 
 impl super::engine::Interpreter {
+    /// Bindings of a closure-engine frame whose slots start at `base` of the run stack.
+    pub(crate) fn slot_locals(&self, names: &[(&'static str, usize)], base: usize) -> (Vec<Local>, usize) {
+        capture(names.iter().filter_map(|(n, s)| self.rstack.get(base + s).map(|v| (n.to_string(), v.clone()))), &self.secret_env)
+    }
+
     /// Bindings of the walker frame that is current now (call after the body failed, before the frame is popped).
     pub(crate) fn walker_locals(&self) -> (Vec<Local>, usize) {
         capture(self.scope.vars.iter().filter_map(|(n, slot)| slot.try_borrow().ok().map(|v| (n.to_string(), v.clone()))), &self.secret_env)
@@ -181,9 +186,32 @@ impl super::engine::Interpreter {
     /// The same for a closure-engine frame whose slots start at `base` of the run stack.
     pub(crate) fn attach_slot_locals(&self, e: &mut super::error::RuntimeError, names: &[(&'static str, usize)], base: usize) {
         if self.capture_locals && e.backtrace.is_empty() && e.locals.is_empty() {
-            let (l, more) = capture(names.iter().filter_map(|(n, s)| self.rstack.get(base + s).map(|v| (n.to_string(), v.clone()))), &self.secret_env);
+            let (l, more) = self.slot_locals(names, base);
             e.locals = l;
             e.locals_omitted = more;
         }
+    }
+}
+
+/// Where `main` produced the `Err` it returned (the `Err(..)`, `return` or `?` expression that ran last).
+pub(crate) struct MainErrSite {
+    pub span: Option<super::error::Span>,
+    pub locals: Vec<Local>,
+    pub omitted: usize,
+}
+
+fn is_err_result(v: &Value) -> bool {
+    matches!(v, Value::Enum(e) if &*e.ty == "Result" && &*e.variant == "Err")
+}
+
+impl super::engine::Interpreter {
+    /// `main` is returning `v`: when it is an `Err`, note the span of the expression that produced it. `locals`
+    /// renders the frame's bindings (walker scope or closure-engine slots) and is called only for an `Err`.
+    pub(crate) fn note_main_err(&mut self, name: &str, v: &Value, locals: impl FnOnce(&Self) -> (Vec<Local>, usize)) {
+        if name != "main" || self.backtrace.len() != 1 || !is_err_result(v) {
+            return;
+        }
+        let (locals, omitted) = if self.capture_locals { locals(self) } else { (Vec::new(), 0) };
+        self.main_err_site = Some(MainErrSite { span: self.span_of(self.cur), locals, omitted });
     }
 }

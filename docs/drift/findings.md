@@ -205,3 +205,64 @@ Baselines re-recorded and repros adopted (Linux run, values equal the Mac interp
   and needs no ledger line. The other five are compile failures of the generated Rust (WJ0003) and are ledgered with owners:
   `adapter_into_vec_annotation`, `closure_if_else_ordering` and `closure_map_get_if_else_ordering` (codegen-types); `map_insert_indexed_vec_string`
   and `nested_map_unwrap_or_new` (codegen-refs).
+
+## N. Interpreter correctness fixes (wt/interp-correct)
+
+Compiled behaviour is the reference unless the spec says otherwise; each fix has a test that fails without it.
+
+- **`DirEntry.name` field read.** `std/fs.wj` declares `DirEntry { name, path, is_file, is_dir }` and `Metadata { size, is_file, is_dir,
+  is_readonly }`; the interpreter held them as host objects, so a field read panicked (`cannot project Field(name)`) while `.name()`
+  worked. `Native::field` now answers `name` and `path` of a `DirEntry` and every `Metadata` field. `DirEntry.is_file` / `is_dir` stay
+  methods (they look at the file system again and go through the effect port). The compiled runtime's `DirEntry` keeps its fields private
+  (`crates/windjammer-runtime/src/fs.rs`), so a field read is a rustc error there (E0616/E0609): that is a rejection the interpreter
+  does not refuse, and the accessor methods remain the portable spelling. Test:
+  `tests/interpreter_correctness_test.rs::dir_entry_name_field_reads_like_the_name_method`.
+- **`json::parse_string::<T>` and unknown fields.** ADR-0027 denies unknown fields for structs. The compiled derive does that with
+  `#[serde(deny_unknown_fields)]` on a struct that has named fields (`item_generation.rs`) and nowhere else. The interpreter denied them
+  everywhere, so it rejected input the compiled build accepts: an unknown field inside an enum struct variant, and any field given to a
+  struct with no fields. Both now ignore unknown fields (the ADR does not cover variants, so the compiled build decides). A struct
+  variant also left the value of an ignored key unread, which would have corrupted the parse; it is skipped now. Test:
+  `tests/interpreter_correctness_test.rs::json_unknown_fields_follow_the_compiled_derive`. Open question for the owner: should the
+  compiled enum carry `deny_unknown_fields` too (then both engines would deny in variants)? That is a codegen change.
+- **`Err` returned from `main`.** The `WJ0171` report had no span and no locals. `main` now notes, as it returns an `Err`, the
+  location of the expression that ran last (the `Err(..)`, `return` or `?` that produced it) and the bindings of its frame
+  (walker and closure engine); `--error-format json` puts them in `primary_span`, `stack[0].span` and `locals`. Text output is
+  unchanged. Tests in `tests/runtime_error_report_test.rs` (`main_err_from_try_*`, `main_err_from_a_tail_err_*`).
+- **Reported locals after a machine-code bail-out.** ADR-0036 listed that a block-local binding that already ended may show
+  in the locals of a function the JIT bailed out of and the closure engine re-ran. On the current engine it does not: the
+  names a compiled function keeps are those of its own scope and a finished block releases its slots. No difference to the
+  walker reproduced for blocks, `if`, `for`, `while` and `match` arms; the ADR sentence is now a tested guarantee
+  (`runtime_error_report_test.rs::locals_match_the_walkers_across_engines_and_the_jit`).
+- **`items(n)?.len()` (finding 14).** On a `Result` receiver the interpreter now reads `?.member` as `?` followed by `.member`, the
+  way the compiled build treats it (`Ok(v)` continues with `v.member`, not lifted into an option; `Err(e)` returns). `?.` on an
+  `Option` is unchanged (ADR-0018 optional chaining). The lexer/parser still desugars both to `__opt_chain`; a parser-level
+  decision between the two needs the receiver type, which the parser does not have, so the interpreter decides at run time.
+  The Rust backend now emits the same for a `Result` receiver (`{ let _oc = items(n)?; _oc.len() }`,
+  `optional_chain_lowering.rs`); other non-`Option` receivers are still reported. Both engines print `x 3`; the ledger line is
+  deleted and the compiled baseline re-recorded (`exit0:4:19307120`).
+
+### N.5 `literal_out_of_range` (design note, ledger line stays)
+
+`fn small() -> u8 { let x = 255; let y = x + 1; y }` panics in the compiled build (`x` is a `u8` because `y` is returned as `u8`;
+`255 + 1` overflows, exit 101). The interpreter runs `x + 1` on two untyped literals, gets `256`, and only the return coercion
+(`coerce.rs`, `literal out of range for u8`) rejects it as a semantic error, exit 1. The difference is the width of a
+literal that is only fixed by a later use. A local fix is not clear: `coerce` cannot tell a source literal (`let a: u8 = 300`,
+rejected by rustc too) from a computed one (`x + 1`), because both are `Value::Int(_, Lit)`. The sound fix is a pre-pass that
+infers a width for each unannotated integer `let` from its later uses (the same unification the compiler's solver does,
+`solver-undecidable-width-classes`), stored in the resolved form so both engines start `x` as `u8`. Smaller step to try first:
+tag a `Lit` produced by arithmetic (`Int(_, LitComputed)`) so that `coerce` reports an overflow panic (exit 101,
+`attempt to add with overflow`) instead of `literal out of range`; this fixes the exit status but not the case where the sum
+fits in the wrong width and silently continues, so it is not a replacement for the pre-pass.
+
+### N.6 Loop variable write-through
+
+`for mut p in ps { p.x = .. }` and `for (id, mut qty) in self.items { qty = .. }` change the collection element in the compiled
+build (it iterates by `&mut` when the body changes the variable). The interpreter bound a copy. The parser drops the `mut`
+marker of a loop variable (ADR-0002 keeps it for `wj check`), so the interpreter finds the loops by analysis: a `for` over a
+place (a variable or field path) whose body assigns, assigns through or mutates a loop variable writes the variable (rebuilt from
+its pattern: identifier or tuple) back to its element after each iteration, including on `break`; `self` / a parameter looped
+that way counts as mutated (`analysis::loop_var_mutated`). Ranges, temporaries and unchanged variables are untouched, and
+the resolved engine runs such a function in the walker so all three engines agree
+(`tests/interpreter_correctness_test.rs`, drift case `repros/for_mut_variable_write_through.wj`). Two compiled-side gaps found
+on the way (the interpreter now follows the language, the compiled backend does not): `for mut q in qs { q.xs[0] = .. }` is emitted as
+`for q in &qs` (rustc E0596) and `for mut row in grid { row[0] = .. }` as `grid.iter().copied()` (E0277 on `Vec`); owner `codegen-ownership`.

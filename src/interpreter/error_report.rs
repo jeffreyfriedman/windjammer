@@ -81,10 +81,16 @@ pub fn runtime_error_json(e: &RuntimeError, exit: i32) -> String {
     finish(d, e.span.as_ref(), stack, e, exit).to_string()
 }
 
-/// The report for `main` returning `Err(value)`; `text` is the value's Debug form.
-pub fn main_err_json(text: &str) -> String {
+/// The report for `main` returning `Err(value)`; `text` is the value's Debug form. `site` is where `main` produced
+/// the `Err` (the `Err(..)`, `return` or `?` that ran last) with the bindings of its frame, when it was noted.
+pub(crate) fn main_err_json(text: &str, site: Option<&super::failure_locals::MainErrSite>) -> String {
     let d = diagnostic(CODE_MAIN_ERR, &format!("main returned an error: {text}"));
-    let stack = vec![json!({ "function": "main", "span": Value::Null })];
-    let e = RuntimeError::new(ErrorKind::Exit(1), "");
-    finish(d, None, stack, &e, 1).to_string()
+    let span = site.and_then(|s| s.span.as_ref());
+    let stack = vec![json!({ "function": "main", "span": span.map(span_json) })];
+    let mut e = RuntimeError::new(ErrorKind::Exit(1), "");
+    if let Some(s) = site {
+        e.locals = s.locals.clone();
+        e.locals_omitted = s.omitted;
+    }
+    finish(d, span, stack, &e, 1).to_string()
 }

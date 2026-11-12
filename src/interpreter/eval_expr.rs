@@ -366,7 +366,7 @@ impl Interpreter {
         })))
     }
 
-    fn eval_try(&mut self, v: Value) -> R {
+    pub(crate) fn eval_try(&mut self, v: Value) -> R {
         match &v {
             Value::Enum(en) if &*en.ty == "Option" => match &en.payload {
                 Payload::Tuple(p) if en.idx == 1 => Ok(p[0].clone()),
@@ -430,6 +430,7 @@ impl Interpreter {
                 let Callable::Path(p) = &**f else { unreachable!() };
                 Ok(self.builtins.constant(&format!("{p}::{field}")).expect("checked"))
             }
+            Value::Native(n) if n.field(field).is_some() => Ok(n.field(field).expect("checked")),
             other => Err(semantic(format!("no field `{}` on value of type `{}`", field, other.type_name()))),
         }
     }

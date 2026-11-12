@@ -193,6 +193,46 @@ fn main_returning_err_is_reported_as_json_and_unchanged_as_text() {
     assert!(v["diagnostics"][0]["message"].as_str().unwrap().contains("no input"));
 }
 
+/// 1-based line of the first line of `src` that contains `needle`.
+fn line_of(src: &str, needle: &str) -> u64 {
+    src.lines().position(|l| l.contains(needle)).map(|i| i as u64 + 1).unwrap_or_else(|| panic!("{needle} not in source"))
+}
+
+fn json_report(r: &Run) -> Value {
+    serde_json::from_str(r.stderr.lines().last().unwrap()).unwrap()
+}
+
+#[test]
+fn main_err_from_try_has_the_span_of_the_try_and_the_locals() {
+    let src = "fn load(n: int) -> Result<int, string> {\n    if n < 0 {\n        return Err(\"negative\")\n    }\n    Ok(n)\n}\n\nfn main() -> Result<(), string> {\n    let a = load(2)?\n    println(\"a = ${a}\")\n    let b = load(-1)?\n    println(\"b = ${b}\")\n    Ok(())\n}\n";
+    let want = line_of(src, "load(-1)?");
+    for engine in ["walker", "resolved"] {
+        let j = run(src, &["--error-format", "json", "--engine", engine]);
+        assert_eq!(j.code, 1, "{engine}: {}", j.stderr);
+        let d = &json_report(&j)["diagnostics"][0];
+        assert_eq!(d["code"], "WJ0171", "{engine}");
+        assert_eq!(d["primary_span"]["line_start"], want, "{engine}: {d}");
+        assert_eq!(d["stack"][0]["span"]["line_start"], want, "{engine}: {d}");
+        let locals = d["locals"].as_array().unwrap();
+        let a = locals.iter().find(|l| l["name"] == "a").unwrap_or_else(|| panic!("{engine}: no local `a` in {d}"));
+        assert_eq!(a["value"], "2", "{engine}");
+        assert!(locals.iter().all(|l| l["name"] != "b"), "{engine}: `b` was never bound: {d}");
+    }
+}
+
+#[test]
+fn main_err_from_a_tail_err_has_the_span_of_that_expression() {
+    let src = "fn main() -> Result<(), string> {\n    let path = \"in.txt\"\n    println(\"reading ${path}\")\n    Err(\"no input\")\n}\n";
+    let want = line_of(src, "Err(\"no input\")");
+    for engine in ["walker", "resolved"] {
+        let j = run(src, &["--error-format", "json", "--engine", engine]);
+        assert_eq!(j.code, 1, "{engine}: {}", j.stderr);
+        let d = &json_report(&j)["diagnostics"][0];
+        assert_eq!(d["primary_span"]["line_start"], want, "{engine}: {d}");
+        assert!(d["locals"].as_array().unwrap().iter().any(|l| l["name"] == "path" && l["value"] == "\"in.txt\""), "{engine}: {d}");
+    }
+}
+
 #[test]
 fn an_unknown_error_format_is_refused() {
     let r = run("fn main() {}\n", &["--error-format", "xml"]);
@@ -226,5 +266,28 @@ fn goldens() {
         let mut v: Value = serde_json::from_str(json.stderr.lines().last().unwrap()).unwrap();
         v["windjammer_version"] = Value::String("X".into());
         check_golden(name, "json", &(serde_json::to_string_pretty(&v).unwrap() + "\n"));
+    }
+}
+
+/// The bindings of a failing frame are the same whichever engine ran it, including machine code that bailed out
+/// and was re-run in the closure engine (ADR-0036): a binding of a block that already ended is not among them.
+#[test]
+fn locals_match_the_walkers_across_engines_and_the_jit() {
+    let src = "fn k(n: int) -> int {\n    let a = n + 1\n    let b = {\n        let t = n * 2\n        t + 1\n    }\n    let mut acc = 0\n    if a > 0 {\n        let u = a * 2\n        acc = acc + u\n    }\n    for q in 0..3 {\n        let w = q + n\n        acc = acc + w\n    }\n    acc + 100 / (b - 15) + a\n}\n\nfn main() {\n    let mut j = 0\n    let mut tot = 0\n    while j < 200 {\n        tot = tot + k(j + 100)\n        j = j + 1\n    }\n    println(\"${tot}\")\n    println(\"${k(7)}\")\n}\n";
+    let names = |flags: &[&str]| -> Vec<String> {
+        let r = run(src, flags);
+        assert_eq!(r.code, 101, "{flags:?}: {}", r.stderr);
+        let d = &json_report(&r)["diagnostics"][0];
+        d["locals"].as_array().unwrap().iter().map(|l| format!("{}={}", l["name"].as_str().unwrap(), l["value"].as_str().unwrap())).collect()
+    };
+    let walker = names(&["--error-format", "json", "--engine", "walker"]);
+    for t in ["t", "u", "w", "q"] {
+        assert!(walker.iter().all(|l| !l.starts_with(&format!("{t}="))), "walker shows `{t}`: {walker:?}");
+    }
+    for flags in [
+        vec!["--error-format", "json", "--engine", "resolved", "--no-jit"],
+        vec!["--error-format", "json", "--engine", "resolved"],
+    ] {
+        assert_eq!(names(&flags), walker, "{flags:?}");
     }
 }

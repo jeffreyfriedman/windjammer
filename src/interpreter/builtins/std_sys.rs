@@ -83,8 +83,44 @@ macro_rules! native {
         }
     };
 }
-native!(DirEntryObj, "DirEntry");
-native!(MetadataObj, "Metadata");
+impl Native for DirEntryObj {
+    fn type_name(&self) -> &'static str {
+        "DirEntry"
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    /// `entry.name` / `entry.path` read like the `name()` / `path()` methods (`std/fs.wj` declares both fields).
+    /// `is_file` / `is_dir` stay methods only: they look at the file system again and go through the effect port.
+    fn field(&self, name: &str) -> Option<Value> {
+        match name {
+            "name" => Some(s(&dirent_name(&self.path))),
+            "path" => Some(s(&self.path)),
+            _ => None,
+        }
+    }
+}
+impl Native for MetadataObj {
+    fn type_name(&self) -> &'static str {
+        "Metadata"
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn field(&self, name: &str) -> Option<Value> {
+        match name {
+            "size" => Some(Value::Int(self.len as i128, IntTy::I64)),
+            "is_file" => Some(Value::Bool(self.file)),
+            "is_dir" => Some(Value::Bool(self.dir)),
+            "is_readonly" => Some(Value::Bool(self.readonly)),
+            _ => None,
+        }
+    }
+}
+
+fn dirent_name(path: &str) -> String {
+    Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+}
 
 /// `(len, is_file, is_dir, readonly)` of a `Metadata` value (the effect log stores it as these four fields).
 pub(crate) fn metadata_parts(v: &Value) -> Option<(u64, bool, bool, bool)> {
@@ -278,7 +314,7 @@ fn register_fs(r: &mut Registry) {
     r.native("DirEntry", "path", |_, v, _| Ok(s(&entry(v)?.path)));
     for n in ["name", "file_name"] {
         r.native("DirEntry", n, |_, v, _| {
-            Ok(s(&Path::new(&entry(v)?.path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()))
+            Ok(s(&dirent_name(&entry(v)?.path)))
         });
     }
     // these look at the file system again, so they go through the same builtins as `fs::is_file` (the effect port sees them);

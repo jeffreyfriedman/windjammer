@@ -292,7 +292,10 @@ impl<'de> DeserializeSeed<'de> for Dec<'_> {
                 let base = leaf(n).to_string();
                 if let Some(def) = self.it.structs.get(&base) {
                     let fields: Vec<(&'static str, Type)> = def.fields.iter().map(|(n, t)| (*n, t.clone())).collect();
-                    let (tuple, copy, allow_unknown) = (def.tuple, def.copy, def.allow_unknown);
+                    // compiled: `#[serde(deny_unknown_fields)]` is emitted for a struct with named fields only (a struct
+                    // with no fields ignores what it is given), so the interpreter denies in exactly those cases
+                    let (tuple, copy) = (def.tuple, def.copy);
+                    let allow_unknown = def.allow_unknown || (!def.tuple && def.fields.is_empty());
                     let names = def.wire.clone();
                     let v = StructV { it: self.it, name: &base, fields: &fields, names: &names, copy, allow_unknown };
                     return match (tuple, fields.len()) {
@@ -588,8 +591,12 @@ impl<'de> Visitor<'de> for VariantFieldsV<'_> {
     }
     fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> DeResult<A::Error> {
         let mut slots: Vec<Option<Value>> = vec![None; self.fields.len()];
-        while let Some(key) = a.next_key_seed(FieldSeed { names: self.names, allow_unknown: false })? {
-            let Some(i) = key else { continue };
+        while let Some(key) = a.next_key_seed(FieldSeed { names: self.names, allow_unknown: true })? {
+            // compiled: the enum carries no `deny_unknown_fields`, so a struct variant ignores unknown fields
+            let Some(i) = key else {
+                a.next_value::<IgnoredAny>()?;
+                continue;
+            };
             if slots[i].is_some() {
                 return Err(de::Error::duplicate_field(self.names[i]));
             }
