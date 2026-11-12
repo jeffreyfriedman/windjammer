@@ -23,6 +23,8 @@ fn test_generates_mod_rs_for_subdirectory_output() {
     // should generate mod.rs, not lib.rs
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();
+    // The manifest makes `src/` the crate's source directory: an output inside it is a submodule.
+    fs::write(project_root.join("wj.toml"), "[package]\nname = \"p\"\nversion = \"0.1.0\"\n").unwrap();
 
     // Create a project structure with subdirectories
     let components_wj = project_root.join("src/components_wj");
@@ -124,10 +126,12 @@ fn test_generates_lib_rs_for_crate_root() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_detects_subdirectory_by_parent_src() {
-    // When output path contains "src/", it's likely a subdirectory
+fn test_detects_subdirectory_by_manifest_src() {
+    // An output inside the manifest's src/ directory is a submodule (decided by the manifest, not the directory name)
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();
+    // The manifest makes `src/` the crate's source directory: an output inside it is a submodule.
+    fs::write(project_root.join("wj.toml"), "[package]\nname = \"p\"\nversion = \"0.1.0\"\n").unwrap();
 
     // Create src/generated structure
     let source = project_root.join("components_wj");
