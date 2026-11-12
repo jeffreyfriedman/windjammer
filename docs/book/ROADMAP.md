@@ -22,7 +22,7 @@ published pages to what the compiler does today.
 | Networking: HTTP and raw sockets | reference/std, tutorial/sockets | sockets chapter new; an HTTP client and server chapter is next |
 | Rust interop | tutorial/rust-interop, showcase/rust-crates | complete |
 | Targets: Rust, Go, JavaScript, TypeScript, WebAssembly, WGSL | tutorial/targets, shaders, reference/targets | complete |
-| Tooling: fmt, check, fix, run, replay, cache | tutorial/tooling, repl, time-travel | complete; `wj build --mem-report` is documented once it reaches the integration branch |
+| Tooling: fmt, check, fix, run, replay, cache | tutorial/tooling, repl, time-travel | complete; the build memory report is documented once it reaches the integration branch |
 | Playground | tutorial/playground | complete; a multi-file editor on the page is the next step |
 | Appendices | appendix/ | migration guides for Rust, Go and TypeScript |
 

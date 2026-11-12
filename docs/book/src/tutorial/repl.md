@@ -1,7 +1,7 @@
 # Try ideas: eval and the REPL
 <!-- feature: repl -->
 
-Some questions are quicker to ask than to write a file for: what does this method return, how does this slice behave at
+Some questions are best asked without writing a file: what does this method return, how does this slice behave at
 the edge. Windjammer answers them in the interpreter, with no project and no build.
 
 ## One expression: `wj eval`
