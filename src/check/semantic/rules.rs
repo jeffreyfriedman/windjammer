@@ -39,28 +39,53 @@ fn binding_irrefutable(b: &EnumPatternBinding<'_>) -> bool {
 /// `(enum, missing variants)` when every guard-free arm names a variant of one user enum and
 /// some variants have no arm. `None` whenever anything is not understood.
 pub fn non_exhaustive(idx: &Index, arms: &[MatchArm<'_>]) -> Option<(String, Vec<String>)> {
+    let items: Vec<(&Pattern<'_>, bool)> = arms.iter().map(|a| (&a.pattern, a.guard.is_some())).collect();
+    gaps(idx, &items)
+}
+
+fn alternatives<'a, 'b>(p: &'b Pattern<'a>) -> Vec<&'b Pattern<'a>> {
+    match p {
+        Pattern::Or(ps) => ps.iter().collect(),
+        p => vec![p],
+    }
+}
+
+/// The core of `non_exhaustive` over `(pattern, has guard)` pairs. A variant whose payload is matched only by
+/// refutable patterns counts as covered when those payload patterns are themselves variants of one enum that
+/// together cover it (`Ok(Some(v))` and `Ok(None)` cover `Ok`).
+fn gaps(idx: &Index, items: &[(&Pattern<'_>, bool)]) -> Option<(String, Vec<String>)> {
     let mut enum_name: Option<String> = None;
     let mut covered: Vec<String> = Vec::new();
-    for arm in arms {
-        let pats: Vec<&Pattern<'_>> = match &arm.pattern {
-            Pattern::Or(ps) => ps.iter().collect(),
-            p => vec![p],
-        };
-        for p in pats {
+    let mut nested: Vec<(String, Vec<(&Pattern<'_>, bool)>)> = Vec::new();
+    for (pat, guarded) in items {
+        for p in alternatives(pat) {
             match p {
-                p if irrefutable(p) && arm.guard.is_none() => return None,
+                p if irrefutable(p) && !guarded => return None,
                 Pattern::EnumVariant(path, binding) => {
                     let (e, v) = path.rsplit_once("::")?;
                     let e = e.rsplit("::").next().unwrap_or(e);
                     if enum_name.get_or_insert_with(|| e.to_string()) != e {
                         return None;
                     }
-                    if arm.guard.is_none() && binding_irrefutable(binding) {
+                    if !guarded && binding_irrefutable(binding) {
                         covered.push(v.to_string());
+                    } else if let (false, EnumPatternBinding::Tuple(ps)) = (*guarded, binding) {
+                        if let [sub] = ps.as_slice() {
+                            match nested.iter_mut().find(|(n, _)| n == v) {
+                                Some((_, subs)) => subs.push((sub, false)),
+                                None => nested.push((v.to_string(), vec![(sub, false)])),
+                            }
+                        }
                     }
                 }
                 _ => return None,
             }
+        }
+    }
+    for (v, subs) in &nested {
+        let all_variants = subs.iter().all(|(p, _)| alternatives(p).iter().all(|q| matches!(q, Pattern::EnumVariant(..))));
+        if all_variants && gaps(idx, subs).is_none() {
+            covered.push(v.clone());
         }
     }
     let e = enum_name?;

@@ -145,6 +145,8 @@ impl Interpreter {
             "" => {
                 let s = match (v, spec.precision) {
                     (Value::Float(f, t), Some(p)) => {
+                        // test-only mutant `format` (debug builds): one digit too few after the point
+                        let p = if self.mutant("format") { p.saturating_sub(1) } else { p };
                         if *t == FloatTy::F32 { format!("{:.*}", p, *f as f32) } else { format!("{:.*}", p, f) }
                     }
                     (Value::Str(s), Some(p)) => s.chars().take(p).collect(),

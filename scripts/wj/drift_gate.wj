@@ -1,6 +1,6 @@
 // The drift gate: one command that fails when the interpreter and the compiled output disagree.
 //
-//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--check-env] [--prune] [--compiled recorded|live|skip]
+//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--fuzz-long] [--check-env] [--prune] [--compiled recorded|live|skip]
 //
 // Steps (docs/testing/DRIFT.md):
 //   selftest   the ledger comparer and the corpus tokens, against planted divergences
@@ -8,11 +8,16 @@
 //   fast-paths every fast path fires on its programs (a silent fallback is invisible to parity)
 //   jit-loops  generated loop programs: walker == resolved == no-jit
 //   packed-vec packed vectors == boxed vectors
+//   builtin-mutants  each shared builtin class (integer, float, format, string, sequence, map, option, iterator, JSON), deliberately
+//              broken in a debug build, changes a program whose output the compiled build fixes; restored, it prints it again
 //   crate-host Rust crate calls (ADR-0031): interpreted == compiled on the interop projects, panics, replay, grants
 //   spec       the language spec as an oracle: tests/spec cases under walker, resolved and compiled (spec_oracle.wj)
+//   fuzz       a short seeded run of the generators on seeds nobody tuned the engines to (walker vs resolved, no cargo, about
+//              half a minute); every divergence is in tests/drift_corpus/fuzz_divergences.txt or the gate fails. `--fuzz-long`
+//              runs a wider seed range (opt-in, minutes) against the same ledger
 //   corpus     (plus 40 generated value-kind x position programs, drift_gen.wj) ecosystem tests + value-position programs: walker, resolved and compiled agree, or the
 //              divergence is in tests/drift_corpus/known_divergences.txt (a shrink-only ledger)
-// `--fast` skips the cargo steps (selftest and corpus only). WJ_CARGO_WRAPPER prefixes every cargo and
+// `--fast` skips the cargo steps (selftest, fuzz, corpus and spec only). WJ_CARGO_WRAPPER prefixes every cargo and
 // compiled run (a build-slot gate); DRIFT_BASE_REF (default next/v0.50.0) names the ref the ledger may only
 // shrink against. Exit status 1 when any step fails.
 use std::env
@@ -28,6 +33,11 @@ use wj_table::plain
 const PROBE_BASELINE: string = "tests/drift_corpus/probe_baseline.tsv"
 const STDSHAPE_BASELINE: string = "tests/drift_corpus/stdshape_baseline.txt"
 const LEDGER: string = "tests/drift_corpus/known_divergences.txt"
+const FUZZ_LEDGER: string = "tests/drift_corpus/fuzz_divergences.txt"
+const FUZZ_GEN_SEEDS: string = "9001..9024"
+const FUZZ_PROBE_SEEDS: string = "9001..9003"
+const FUZZ_LONG_GEN_SEEDS: string = "9001..9400"
+const FUZZ_LONG_PROBE_SEEDS: string = "9001..9040"
 const MIN_CASES: string = "1300"
 const SPEC_MIN_CASES: string = "200"
 
@@ -113,6 +123,20 @@ fn cargo_step(name: string, filter: string) -> Step {
     }
 }
 
+// The builtin mutation checks need a debug build (release builds ignore WJ_JIT_MUTANT), so they run as their own
+// dev-profile test binary rather than inside the release `all` binary.
+fn mutant_step() -> Step {
+    let t0 = now()
+    match sh("${wrapper()} cargo test --test builtin_mutants -q 2>&1") {
+        Ok(r) => {
+            let n = passed_count(r.stdout)
+            let ok = r.status == 0 && n > 0
+            Step { name: "builtin-mutants", cases: if n >= 0 { "${n}${ran_text(r.stdout)}" } else { "?" }, verdict: if ok { "pass" } else if r.status == 0 { "FAIL (0 tests ran)" } else { "FAIL" }, secs: now() - t0, detail: if ok { "" } else { tail_lines(r.stdout, 25) } }
+        },
+        Err(e) => Step { name: "builtin-mutants", cases: "?", verdict: "FAIL", secs: now() - t0, detail: e },
+    }
+}
+
 fn wj_step(name: string, wj: string, args: string) -> Step {
     let t0 = now()
     match sh("${wj} run --interpret ${args} 2>&1") {
@@ -123,6 +147,55 @@ fn wj_step(name: string, wj: string, args: string) -> Step {
         },
         Err(e) => Step { name: name, cases: "?", verdict: "FAIL", secs: now() - t0, detail: e },
     }
+}
+
+// The seeded fuzz run: the generators (drift_gen.wj value-kind x position programs, drift_probes.wj semantic probes) on
+// a fixed seed set that is not the corpus's own, walker against resolved engine (no rustc, no cargo). Every divergent
+// row (including a generated program that does not run) must be listed in FUZZ_LEDGER with an owner, or the step fails.
+// `long` widens the seed range; the short set is its prefix, so one ledger serves both.
+fn fuzz_step(wj: string, long: bool) -> Step {
+    let run_dir = env.get_or("TMPDIR", "/tmp") + "/wj-drift-fuzz-${process.pid()}"
+    let _ = fs.create_dir_all(run_dir)
+    let t0 = now()
+    let gen_seeds = if long { FUZZ_LONG_GEN_SEEDS } else { FUZZ_GEN_SEEDS }
+    let probe_seeds = if long { FUZZ_LONG_PROBE_SEEDS } else { FUZZ_PROBE_SEEDS }
+    let rows = "${run_dir}/rows.tsv"
+    let mut ok = true
+    let mut detail = ""
+    let mut cases = ""
+    let cmd = "${wj} run --interpret scripts/wj/drift_gen.wj ${wj} ${run_dir}/gen ${run_dir}/gen.tsv --seeds ${gen_seeds} --no-rustc > /dev/null 2>&1 && ${wj} run --interpret scripts/wj/drift_probes.wj ${wj} ${run_dir}/probes ${run_dir}/probes.tsv --seeds ${probe_seeds} --no-rustc > /dev/null 2>&1 && cat ${run_dir}/gen.tsv ${run_dir}/probes.tsv > ${rows}"
+    match sh(cmd) {
+        Ok(r) => {
+            if r.status != 0 {
+                ok = false
+                detail = "the fuzz generators did not complete (seeds ${gen_seeds} and ${probe_seeds}); run them by hand: ${cmd}"
+            }
+        },
+        Err(e) => {
+            ok = false
+            detail = e
+        },
+    }
+    if ok {
+        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${rows} ${FUZZ_LEDGER} --min-cases ${if long { "1000" } else { "120" }} 2>&1") {
+            Ok(r) => {
+                let first = strings.split_lines(r.stdout)
+                if first.len() > 0 {
+                    cases = first[0]
+                }
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout + "\n  a divergence found by the fuzz run is a finding: reduce it (docs/drift/findings.md), fix it, or list it in ${FUZZ_LEDGER} with an owner (DRIFT_ALLOW_GROWTH=1)"
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
+    }
+    let _ = sh("rm -rf ${run_dir}")
+    Step { name: "fuzz (${if long { "long" } else { "seeded" }})", cases: cases, verdict: if ok { "pass" } else { "FAIL" }, secs: now() - t0, detail: detail }
 }
 
 fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step {
@@ -340,6 +413,7 @@ fn main() {
     let mut prune = false
     let mut adopt = ""
     let mut fast = false
+    let mut fuzz_long = false
     let mut compiled = "recorded"
     let mut i = 1
     while i < args.len() {
@@ -355,6 +429,8 @@ fn main() {
             check_env = true
         } else if args[i] == "--fast" {
             fast = true
+        } else if args[i] == "--fuzz-long" {
+            fuzz_long = true
         } else if args[i] == "--compiled" {
             compiled = args[i + 1]
             i += 1
@@ -391,7 +467,9 @@ fn main() {
         steps.push(cargo_step("jit-loops", "interpreter_jit_loops_test::"))
         steps.push(cargo_step("packed-vec", "interpreter_packed_vec_test::"))
         steps.push(cargo_step("crate-host", "interpreter_rust_crates_test::"))
+        steps.push(mutant_step())
     }
+    steps.push(fuzz_step(wj, fuzz_long))
     steps.push(corpus_step(wj, compiled, prune, adopt))
     steps.push(spec_step(wj, compiled))
     let mut t = new(["step", "cases", "verdict", "seconds"])

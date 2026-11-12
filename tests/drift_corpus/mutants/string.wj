@@ -1,0 +1,4 @@
+fn main() {
+    let s = "  hi there \n"
+    println("[${s.trim()}] [${s.trim_start()}]")
+}
