@@ -145,10 +145,8 @@ impl<'ast> CodeGenerator<'ast> {
             return bound;
         }
         for (p, ty) in parameters.iter().zip(declared) {
-            // A written parameter type (`|x: int|`) is the user's; only untyped parameters take the declaration.
-            if p.contains(": ") {
-                continue;
-            }
+            // A written element type (`|x: int|`) names the value; the declaration still decides how many references
+            // the parameter is behind (`filter(|x: int| ..)` is `|x: &&i64|`).
             let name = Self::closure_param_binding_name(p);
             let (depth, _) = reference_depth(&ty);
             let before_depth = self.idiom.adapter_closure_param_depth.insert(name.clone(), depth);

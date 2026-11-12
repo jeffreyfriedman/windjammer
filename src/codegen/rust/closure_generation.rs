@@ -30,7 +30,9 @@ impl<'ast> CodeGenerator<'ast> {
             let ty = crate::codegen::rust::types::parse_wj_type_name(type_str);
             let rust_ty = self.type_to_rust(&ty);
             if self.closure_predicate_typed_params {
-                format!("{}: &{}", name, rust_ty)
+                // the adapter's declaration gives the depth (`fn(&T)` over `Iterator<&T>`: two); one when it is unknown
+                let depth = self.idiom.adapter_closure_param_depth.get(name).copied().unwrap_or(1).max(1);
+                format!("{}: {}{}", name, "&".repeat(depth), rust_ty)
             } else {
                 format!("{}: {}", name, rust_ty)
             }
@@ -121,7 +123,11 @@ impl<'ast> CodeGenerator<'ast> {
             if matches!(statements.last(), Some(crate::parser::Statement::If { else_block: Some(_), .. } | crate::parser::Statement::Match { .. })));
         let was_expr = self.in_expression_context;
         self.in_expression_context = was_expr || tail_branches;
+        // The adapter's by-reference parameter typing (`filter(|x: int| ..)` is `|x: &i64|`) belongs to this closure's own
+        // parameters only: a closure nested in the body keeps its annotations as written (`|y: int|` is `|y: i64|`).
+        let prev_predicate_typed = std::mem::replace(&mut self.closure_predicate_typed_params, false);
         let mut body_str = self.generate_expression(body);
+        self.closure_predicate_typed_params = prev_predicate_typed;
         // a closure returns an owned value: a non-Copy field read through a reference parameter is cloned (`|p| p.1`)
         if let Expression::FieldAccess { object: Expression::Identifier { name, .. }, .. } = body {
             let through_ref = matches!(self.local_var_types.get(name), Some(crate::parser::Type::Reference(_)));
