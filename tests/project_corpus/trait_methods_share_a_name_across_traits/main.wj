@@ -1,0 +1,17 @@
+// Two traits declare a method `append`: `EventSink.append(event)` and `AuditSink.append(scope: string, event)`.
+// The call `writer.append(event)` on an `EventSink` implementor takes the event struct as is; the other trait's
+// leading `string` formal belongs to a different method. Expected by hand: size 2 is Ok; 4 + 3 = 7.
+// expect: ok 7
+mod ports
+mod mem_events
+mod mem_audit
+mod service
+use ports::EventDraft
+use service::Deps
+use mem_audit::MemAudit
+
+fn main() {
+    let ok = match service::write_event(EventDraft { name: "a", size: 2 }) { Ok(_) => "ok", Err(e) => e }
+    let n = service::record(Deps { audit: MemAudit {} }, "xyz")
+    println("${ok} ${n}")
+}
