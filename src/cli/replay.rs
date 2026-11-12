@@ -45,7 +45,7 @@ pub fn execute(a: Args) -> Result<()> {
     let entry = if entry.is_absolute() { entry } else { cwd.join(entry) };
     let cmds = script::parse(&read_script(&a.script)?).map_err(anyhow::Error::msg)?;
     // the interpreter never runs a program `wj check` rejects (as for `wj run --interpret`); lints do not stop it
-    crate::cli::check::require_clean(&entry, false)?;
+    crate::cli::check::require_clean(&entry, false, crate::diagnostics::render::Format::Human)?;
     let events = session::run(session::SessionSpec { entry, source, allow: a.allow, script: cmds }).map_err(anyhow::Error::msg)?;
     let mut out = String::new();
     for e in &events {
