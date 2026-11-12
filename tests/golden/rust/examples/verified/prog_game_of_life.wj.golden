@@ -23,7 +23,7 @@ fn render(g: &Vec<Vec<bool>>) -> String {
         let mut s = String::new();
         for c in 0_usize..5_usize {
             s = s + &{
-                if g[(r as usize)][(c as usize)] {
+                if g[r as usize][c as usize] {
                     String::from("#")
                 } else {
                     String::from(".")
@@ -53,7 +53,7 @@ fn step(g: &Vec<Vec<bool>>) -> Vec<Vec<bool>> {
         let mut row: Vec<bool> = vec![];
         for c in 0_i32..5_i32 {
             let n = neighbors(g, (r as i64), (c as i64));
-            let alive = g[(r as usize)][(c as usize)];
+            let alive = g[r as usize][c as usize];
             row.push(n == 3_i64 || alive && n == 2_i64);
         }
         out.push(row);
