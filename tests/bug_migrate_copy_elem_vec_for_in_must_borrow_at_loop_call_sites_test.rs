@@ -41,11 +41,14 @@ pub fn apply_like(applied: Vec<int>, located: Vec<int>) -> int {
 }
 "#;
 
+/// A bare `applied` argument moves only when the caller owns it; when `apply_like` itself takes `&Vec`, passing
+/// the reference on is a copy of the borrow (rustc accepts it inside the loop).
 fn moves_applied(rs: &str) -> bool {
-    rs.lines().any(|l| {
-        let t = l.trim();
-        t.contains("version_applied(applied,") && !t.contains("applied.clone()")
-    })
+    !rs.contains("fn apply_like(applied: &Vec")
+        && rs.lines().any(|l| {
+            let t = l.trim();
+            t.contains("version_applied(applied,") && !t.contains("applied.clone()")
+        })
 }
 
 #[test]

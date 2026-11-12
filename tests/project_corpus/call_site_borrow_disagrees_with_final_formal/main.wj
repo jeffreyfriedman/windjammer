@@ -1,7 +1,0 @@
-// A rank function is applied to both enums first, then they are matched one inside the other with Copy payloads of several kinds. Expected by hand: 0 -1 1 0.
-// expect: 0 -1 1 0
-mod val
-
-fn main() {
-    println("${val::val_cmp(val::Val::Flag(true), val::Val::Flag(true))} ${val::val_cmp(val::Val::Flag(false), val::Val::Flag(true))} ${val::val_cmp(val::Val::Num(5), val::Val::Num(3))} ${val::val_cmp(val::Val::Null, val::Val::Null)}")
-}

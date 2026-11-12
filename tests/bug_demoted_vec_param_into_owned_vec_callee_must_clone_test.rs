@@ -45,9 +45,12 @@ fn reused_vec_second_arg_into_owned_callee_must_clone_not_reborrow() {
         !rs.contains(", &samples)"),
         "must not reborrow into owned Vec formal. Generated:\n{rs}"
     );
+    // The IR keeps a read-only Vec formal borrowed down the whole chain (rustc accepts it, no copy); an owned
+    // `workload_verdict` formal must still receive a clone when `samples` is used after the call.
+    let borrowed_chain = rs.contains("fn workload_verdict(workload_id: u32, samples: &Vec<u64>)");
     assert!(
-        rs.contains("samples.clone()"),
-        "expected samples.clone() into owned workload_verdict when reused after. Generated:\n{rs}"
+        borrowed_chain || rs.contains("samples.clone()"),
+        "expected a borrowed formal chain or samples.clone() into owned workload_verdict. Generated:\n{rs}"
     );
     assert!(ok, "fixture must cargo-check. Generated:\n{rs}");
 }

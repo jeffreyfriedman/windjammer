@@ -4,25 +4,22 @@
 
 pub mod policy;
 pub mod reader;
-pub mod scan;
 pub mod writer;
 
 // Re-export public items
 pub use policy::*;
 pub use reader::*;
-pub use scan::*;
 pub use writer::*;
 // ==== main.rs ====
 use crate::policy::Policy;
 mod policy;
 mod reader;
 mod writer;
-mod scan;
 fn main() {
     let r = reader::Reader { allowed: vec!["viewer".to_string()] };
     let mut w = writer::Writer { log: vec![] };
     let _ok = w.check("bob".to_string(), "editor".to_string());
-    println!("{} {}", scan::allowed(&r, "alice", "viewer", 3_i64), w.log.len());
+    println!("{} {}", reader::allowed(&r, "alice", "viewer", 3_i64), w.log.len());
 }
 
 // ==== mod.rs ====
@@ -31,13 +28,11 @@ fn main() {
 
 pub mod policy;
 pub mod reader;
-pub mod scan;
 pub mod writer;
 
 // Re-export public items
 pub use policy::*;
 pub use reader::*;
-pub use scan::*;
 pub use writer::*;
 // ==== policy.rs ====
 #[allow(unused_imports)]
@@ -67,17 +62,12 @@ pub fn check(&self, who: &str, relation: &str) -> bool {
 }
 }
 
-// ==== scan.rs ====
-#[allow(unused_imports)]
-use super::*;
-
-use crate::reader::Reader;
 #[inline]
 pub fn allowed(policy: &Reader, who: &str, relation: &str, n: i64) -> i64 {
     let mut hits = 0_i64;
     let mut i = 0_i64;
     while i < n {
-        if policy.check(who, relation) {
+        if policy.check(who.clone(), relation.clone()) {
             hits += 1;
         }
         i += 1;

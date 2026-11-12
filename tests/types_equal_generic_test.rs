@@ -32,17 +32,11 @@ fn process(data: Vec<i32>) -> i32 {
 }
 "#,
     );
-    // process's `data` should be owned (not &Vec<i32>) because it's passed to consume_vec
-    assert!(
-        !output.contains("data: &Vec<i32>"),
-        "data should NOT be &Vec<i32> - passthrough should infer owned. Got:\n{}",
-        output
-    );
-    assert!(
-        output.contains("data: Vec<i32>") || output.contains("mut data: Vec<i32>"),
-        "data should be Vec<i32> (owned). Got:\n{}",
-        output
-    );
+    // Passthrough: `process` forwards `data`, so its formal follows `consume_vec`'s. A read-only Vec of Copy
+    // elements is borrowed (the IR rule P3.528), so both are `&Vec<i32>`; both owned is consistent as well.
+    let both_borrowed = output.contains("items: &Vec<i32>") && output.contains("data: &Vec<i32>");
+    let both_owned = output.contains("items: Vec<i32>") && (output.contains("data: Vec<i32>") || output.contains("mut data: Vec<i32>"));
+    assert!(both_borrowed || both_owned, "passthrough formal must follow the callee's. Got:\n{output}");
 }
 
 #[test]

@@ -76,7 +76,8 @@ rule; it exists because the solver's own body walk is incomplete. Status: Diverg
 
 ### OWN-STORED
 **Rule.** A parameter moved into a struct literal, enum payload, tuple, array, `Some(..)`, or a collection method that
-stores its argument (`push`, `insert`) is owned.
+stores its argument (`push`, `insert`), or used to initialise a mutable local (`let mut out = state`), is owned:
+the local is the parameter's value, changed in place, so a borrow would need a copy inside.
 **Example.** `fn wrap(b: Bag, t: string) -> Holder { Holder { bag: b, tag: t } }` emits both parameters owned.
 **Status.** Diverges in one shape (D-OWN-STORE-ASSIGN): storing through a field assignment, `h.tag = n`, demotes `n`
 to `&str` and copies inside, while `push(n)` keeps `n` owned and moves.
