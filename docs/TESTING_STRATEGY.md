@@ -31,6 +31,11 @@ cheat sheet.
 One binary means one link step (~800 fewer links). The rule is covered by
 `tests/build_test_module_discovery_test.rs`.
 
+`build.rs` watches the discovered test files, not the `tests/` directory as a whole: the test suite writes
+output files under `tests/`, and a build-script rerun recompiles the library. A test file added after the last
+build-script run is not in `all` yet; `tests/build_rerun_stability_test.rs` fails with the one-line fix
+(`touch build.rs`).
+
 ## 3. Feature groups
 
 The six features `parser_tests`, `analyzer_tests`, `codegen_tests`, `interpreter_tests`,

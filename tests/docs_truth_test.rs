@@ -616,3 +616,57 @@ fn spec_grammar_check_detects_parser_lexer_and_status_drift() {
     let (s, cfg) = spec_ctx(&format!("{SPEC_MINI}orphan = \"fn\" ;\n"));
     assert!(has(&docs_truth::spec_grammar::check_all(&s.ctx(), &cfg), "spec-grammar", "`orphan` is never exercised"));
 }
+
+// ---------------------------------------------------------------------------
+// Metric determinism: counted files come from `git ls-files`, never from untracked leftovers
+// ---------------------------------------------------------------------------
+
+fn git(dir: &std::path::Path, args: &[&str]) {
+    let st = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"])
+        .args(args)
+        .current_dir(dir)
+        .status()
+        .expect("git runs");
+    assert!(st.success(), "git {args:?} failed");
+}
+
+/// The metric inputs for `tests/` of `root`, exactly as `gen_meta::computed` derives them.
+fn test_counts(root: &std::path::Path) -> (u64, u64) {
+    docs_truth::gen_meta::test_file_counts(&docs_truth::util::walk(&root.join("tests")))
+}
+
+#[test]
+fn counted_test_files_ignore_untracked_files_in_a_git_checkout() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("tests/sub")).unwrap();
+    std::fs::write(root.join("tests/a_test.rs"), "").unwrap();
+    std::fs::write(root.join("tests/sub/p.wj"), "").unwrap();
+    git(root, &["init", "-q"]);
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-q", "-m", "base"]);
+    let before = test_counts(root);
+    assert_eq!(before, (1, 1));
+
+    // Untracked leftovers (a stray program, a stray test file, a generated dir) must not move the metric.
+    std::fs::write(root.join("tests/sub/leftover.wj"), "").unwrap();
+    std::fs::write(root.join("tests/leftover_test.rs"), "").unwrap();
+    std::fs::create_dir_all(root.join("tests/generated")).unwrap();
+    std::fs::write(root.join("tests/generated/x.wj"), "").unwrap();
+    assert_eq!(test_counts(root), before, "untracked files changed a counted metric");
+    assert_eq!(docs_truth::util::walk_fs(&root.join("tests")).len(), 5, "the leftovers really exist on disk");
+
+    // Tracking one makes it count.
+    git(root, &["add", "tests/sub/leftover.wj"]);
+    assert_eq!(test_counts(root), (1, 2));
+}
+
+#[test]
+fn counted_test_files_fall_back_to_a_filesystem_walk_outside_git() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("tests")).unwrap();
+    std::fs::write(dir.path().join("tests/p.wj"), "").unwrap();
+    std::fs::write(dir.path().join("tests/q_test.rs"), "").unwrap();
+    assert_eq!(test_counts(dir.path()), (1, 1));
+}
