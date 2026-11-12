@@ -13,8 +13,8 @@ fn name(&self) -> String {
         }
 }
 #[inline]
-fn area(self) -> f64 {
-        match self {
+fn area(&self) -> f64 {
+        match *self {
             Shape::Circle(r) => 3.14159_f64 * r * r,
             Shape::Rectangle(w, h) => w * h,
         }

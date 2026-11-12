@@ -10,8 +10,8 @@ pub use store::*;
 mod store;
 fn main() {
     let s = store::Store { rows: vec![1_i64, 2_i64, 3_i64], hits: 0_u64 };
-    let r = store::probe(&s, 2_i64);
-    let r2 = store::probe(&r.0, 9_i64);
+    let r = store::probe(s, 2_i64);
+    let r2 = store::probe(r.0, 9_i64);
     println!("{} {} {}", r.1, r2.0.hits, r2.1);
 }
 
@@ -50,8 +50,8 @@ pub fn has(mut self, key: i64) -> bool {
 }
 
 #[inline]
-pub fn probe(store: &Store, key: i64) -> (Store, bool) {
-    let mut active = store.clone();
+pub fn probe(store: Store, key: i64) -> (Store, bool) {
+    let mut active = store;
     let ok = active.clone().has(key);
     (active, ok)
 }
