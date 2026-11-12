@@ -408,3 +408,82 @@ polarity = "positive"
 files = { "m.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
 args = ["run", "--interpret", "--error-format", "agent", "{w}/m.wj"]
 stdout_has = ["ok"]
+
+[[case]]
+name = "repl continues an unfinished expression on the next line until it parses"
+polarity = "positive"
+args = ["repl"]
+stdin = "let total = 1 +\n  2 +\n  3\nprintln(\"total=${total}\")\n"
+stdout_has = ["total=6"]
+
+[[case]]
+name = "repl keeps a semicolon inside a string literal"
+polarity = "positive"
+args = ["repl"]
+stdin = "println(\"a;b\")\n"
+stdout_has = ["a;b"]
+
+[[case]]
+name = "repl reports an input that never completes instead of waiting for it"
+polarity = "negative"
+args = ["repl"]
+stdin = "let x = (1 +\n\n"
+exit = 0
+stderr_has = ["parse error"]
+
+[[case]]
+name = "repl lists its history and evaluates an earlier input again"
+polarity = "positive"
+args = ["repl"]
+stdin = "println(\"hist-marker\")\n:history\n!1\n"
+stdout_has = ["  1  println(\"hist-marker\")"]
+
+[[case]]
+name = "repl refuses a history number that does not exist without ending the session"
+polarity = "negative"
+args = ["repl"]
+stdin = "!7\nprintln(\"still-here\")\n"
+exit = 0
+stderr_has = ["no input 7 in the history"]
+stdout_has = ["still-here"]
+
+[[case]]
+name = "repl warns when the compiled build would reject an input and still runs it"
+polarity = "positive"
+args = ["repl"]
+stdin = "let five = 5\nlet add5 = |x: int| x + five\nprintln(\"${add5(1)}\")\n"
+stdout_has = ["6"]
+stderr_has = ["warning: the compiled build would reject this"]
+
+[[case]]
+name = "repl stays quiet about a program the compiled build accepts"
+polarity = "negative"
+args = ["repl"]
+exit = 0
+stdin = "let a = 2\nprintln(\"${a * 3}\")\n"
+stdout_has = ["6"]
+output_lacks = ["the compiled build would reject"]
+
+[[case]]
+name = "eval keeps a semicolon inside a string literal"
+polarity = "positive"
+args = ["eval", "let s = \"a;b\"; s"]
+stdout_has = ["a;b"]
+
+[[case]]
+name = "eval does not split a block at the semicolons inside it"
+polarity = "negative"
+exit = 0
+args = ["eval", "for i in 0..2 {\n    println(\"row ${i};\")\n}"]
+stdout_has = ["row 0;", "row 1;"]
+output_lacks = ["error"]
+
+[[case]]
+name = "run --verify shows the output printed before a panic and keeps the exit status"
+polarity = "negative"
+needs = "toolchain"
+files = { "m.wj" = "fn main() {\n    println(\"before-panic\")\n    panic(\"verify boom\")\n}\n" }
+args = ["run", "--verify", "{w}/m.wj"]
+exit = 101
+stdout_has = ["before-panic"]
+stderr_has = ["verify boom"]

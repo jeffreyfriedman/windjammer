@@ -1,8 +1,8 @@
 //! `wj run --verify` (ADR-0033 option b): interpret the program, then build it compiled and, when that is safe,
 //! run the compiled program a second time and compare.
 //!
-//! - The interpreted run is the normal one (`wj run --interpret` in a child process), its stdout captured and
-//!   printed once. Stdin is read once and given to both runs (it is never read twice from the terminal).
+//! - The interpreted run is the normal one (`wj run --interpret` in a child process), its stdout streamed to ours
+//!   as the program prints and kept for the comparison (once, and while the program runs). Stdin is read once and given to both runs (it is never read twice from the terminal).
 //! - The build is the same as `wj run --compiled`'s (`run::build_native`) and records the compiled verdict.
 //! - The compiled program runs again only when the effect analysis (ADR-0021) finds that `main` reaches nothing
 //!   beyond the console and a read of `/dev/stdin`, and stdin was captured: running it again then repeats no effect,
@@ -75,15 +75,14 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
         interp.args(["--error-format", "agent"]);
     }
     interp.arg(&entry).args(args).stdout(Stdio::piped()).stderr(Stdio::inherit());
-    let interp_out = match run_with_stdin(interp, stdin.as_deref()) {
+    // the interpreted stdout is written as it arrives (and kept for the comparison), not at the end
+    let interp_out = match run_streaming(interp, stdin.as_deref(), &mut std::io::stdout()) {
         Ok(o) => o,
         Err(e) => {
             eprintln!("error: cannot run the interpreter: {e}");
             return 1;
         }
     };
-    let _ = std::io::stdout().write_all(&interp_out.stdout);
-    let _ = std::io::stdout().flush();
     let interp_code = interp_out.status.code().unwrap_or(1);
     // the interpreter refused the program (a `wj check` error): the build refuses it too, nothing more to say
     if interp_code != 0 && refused(&entry, no_lint) {
@@ -207,9 +206,33 @@ fn refused(entry: &Path, no_lint: bool) -> bool {
     c.report.diagnostics.iter().any(|d| d.is_error() && (!no_lint || !is_lint(&d.code)))
 }
 
-fn run_with_stdin(mut cmd: Command, stdin: Option<&[u8]>) -> std::io::Result<std::process::Output> {
+/// Run `cmd` with `stdin` given as in `run_with_stdin`, writing its stdout to `sink` as it arrives (flushed per
+/// chunk) and returning it too, with the exit status. Its stderr is whatever `cmd` was configured with.
+pub fn run_streaming(mut cmd: Command, stdin: Option<&[u8]>, sink: &mut dyn Write) -> std::io::Result<std::process::Output> {
+    cmd.stdout(Stdio::piped());
     cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::inherit() });
     let mut child = cmd.spawn()?;
+    feed_stdin(&mut child, stdin);
+    let mut pipe = child.stdout.take().expect("stdout was piped");
+    let mut kept = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        match pipe.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                kept.extend_from_slice(&chunk[..n]);
+                let _ = sink.write_all(&chunk[..n]);
+                let _ = sink.flush();
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => break,
+        }
+    }
+    let status = child.wait()?;
+    Ok(std::process::Output { status, stdout: kept, stderr: Vec::new() })
+}
+
+fn feed_stdin(child: &mut std::process::Child, stdin: Option<&[u8]>) {
     if let (Some(data), Some(mut pipe)) = (stdin, child.stdin.take()) {
         let data = data.to_vec();
         // a writer thread, so a program that prints before reading all its input cannot deadlock on a full pipe
@@ -217,5 +240,11 @@ fn run_with_stdin(mut cmd: Command, stdin: Option<&[u8]>) -> std::io::Result<std
             let _ = pipe.write_all(&data);
         });
     }
+}
+
+fn run_with_stdin(mut cmd: Command, stdin: Option<&[u8]>) -> std::io::Result<std::process::Output> {
+    cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::inherit() });
+    let mut child = cmd.spawn()?;
+    feed_stdin(&mut child, stdin);
     child.wait_with_output()
 }
