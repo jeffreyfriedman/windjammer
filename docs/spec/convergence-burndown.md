@@ -123,8 +123,8 @@ reality (lower it with `cargo test --test all heuristic_surface_test::regenerate
 mutation check adds one guess of each kind to a real file and requires all three sections to fail. The gate also
 fails when the line below does not match the allow-list.
 
-Current totals (2026-11-09, after merging wt/c2 and the ownership O4 steps including public formals; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
-`H-NAME-MATCHES` 527, `H-MATCH-ARM-NAMES` 1127, `H-FALLBACK-LEGACY` 128 (total 1782)
+Current totals (2026-11-11, after U11 moved the trait-impl key helpers out of the signature registry; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
+`H-NAME-MATCHES` 527, `H-MATCH-ARM-NAMES` 1127, `H-FALLBACK-LEGACY` 126 (total 1780)
 
 Breakdown at seeding (2026-11-04):
 
@@ -140,7 +140,7 @@ Breakdown at seeding (2026-11-04):
 Largest files: name matches `ir_call_site.rs` 32, `program_generation.rs` 24, `match_statement_generation.rs` 23,
 `statement_generation.rs` 22; match-arm names are dominated by the other backends' builtin tables
 (`portable/builtins.rs` 259, `javascript/emit/builtin.rs` 244, `go/emit/builtin.rs` 237), which map std function names
-to target spellings and should come from the declared std surface; fallback/legacy `analyzer/signature_registry.rs` 48
+to target spellings and should come from the declared std surface; fallback/legacy `analyzer/signature_registry.rs` 48 at seeding, 46 now
 (the C3 bare-name searches), `signature_promotion.rs` 17, `ir_call_site.rs` 16.
 
 Solver meters at the same time (next, 2026-11-04): `D-WIDTH-OWNERS` 51, `D-OWN-STAGES` 9, `D-CLONE-OUTSIDE-SOLVER` 19,

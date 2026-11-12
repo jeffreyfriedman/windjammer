@@ -69,7 +69,9 @@ pub fn write(rows: Vec<Vec<string>>) -> Result<string, string> {
     );
     let bare_owned = generated.contains("write(rows.clone())")
         && !generated.contains("write(&rows.clone())");
-    let borrowed = generated.contains("write(&rows)")
+    // A formal only lent on is borrowed itself and passed as is (`&Vec<Vec<String>>` coerces to the slice).
+    let borrowed = (generated.contains("rows: &Vec<Vec<String>>") && generated.contains("csv::write(rows)"))
+        || generated.contains("write(&rows)")
         || generated.contains("write(&rows.clone())")
         || generated.contains("write(rows.as_slice())");
     assert!(

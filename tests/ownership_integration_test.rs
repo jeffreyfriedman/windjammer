@@ -48,7 +48,11 @@ pub fn sum(items: Vec<int>) -> int {
 }
 "#;
     let result = test_utils::compile_single_result(src).expect("compile");
-    assert!(result.contains("items: Vec<i64>") || result.contains("items: Vec<i32>"));
+    // Read-only iteration of Copy elements borrows the Vec (the IR rule P3.528); a by-value Vec is accepted too.
+    assert!(
+        ["items: Vec<i64>", "items: Vec<i32>", "items: &Vec<i64>", "items: &[i64]"].iter().any(|f| result.contains(f)),
+        "{result}"
+    );
 }
 
 #[test]

@@ -30,7 +30,7 @@ enum Action {
 
 impl Action {
 #[inline]
-pub fn execute(self, state: &State) {
+pub fn execute(self, state: State) {
         match self {
             Action::Change(name, delta) => {
                 state.change_value(&name, delta);
@@ -42,6 +42,6 @@ pub fn execute(self, state: &State) {
 fn main() {
     let mut action = Action::Change(String::from("test"), 10_i32);
     let mut state = State::new();
-    action.execute(&state);
+    action.execute(state);
 }
 

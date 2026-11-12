@@ -63,6 +63,9 @@ struct Collector {
     user_clones: BTreeMap<String, usize>,
     /// Per loop id, the (first, last) mention seq of its body.
     loop_ranges: BTreeMap<usize, (usize, usize)>,
+    /// Bindings the solver typed as scalars (numbers, `bool`, `char`): they hold no borrow, so a value they
+    /// were computed from (`let fa = a.as_float()`) is not kept alive by them.
+    scalars: BTreeSet<String>,
 }
 
 /// A statement as `read_after` sees it.
@@ -422,7 +425,12 @@ pub fn last_uses(entry: &[&str], body: &[&Statement<'_>]) -> BTreeSet<usize> {
 /// binding derived from the value may still borrow it (E0505). `always_move` is the gate
 /// self-test mutation: every read is last.
 pub fn last_moves(entry: &[&str], body: &[&Statement<'_>], always_move: bool) -> BTreeSet<usize> {
-    let c = collect(entry, body);
+    last_moves_typed(entry, body, always_move, &BTreeSet::new())
+}
+
+/// [`last_moves`] knowing which bindings are scalars (they cannot borrow what they were computed from).
+pub fn last_moves_typed(entry: &[&str], body: &[&Statement<'_>], always_move: bool, scalars: &BTreeSet<String>) -> BTreeSet<usize> {
+    let c = collect_typed(entry, body, scalars);
     if always_move {
         return c.mentions.values().flatten().filter_map(|m| m.node).collect();
     }
@@ -433,7 +441,11 @@ pub fn last_moves(entry: &[&str], body: &[&Statement<'_>], always_move: bool) ->
 }
 
 fn collect(entry: &[&str], body: &[&Statement<'_>]) -> Collector {
-    let mut c = Collector::default();
+    collect_typed(entry, body, &BTreeSet::new())
+}
+
+fn collect_typed(entry: &[&str], body: &[&Statement<'_>], scalars: &BTreeSet<String>) -> Collector {
+    let mut c = Collector { scalars: scalars.clone(), ..Collector::default() };
     for p in entry {
         c.declared_in.insert(p.to_string(), 0);
         c.let_bound.insert(p.to_string());
@@ -470,15 +482,20 @@ fn last_reads(c: &Collector, owned_only: bool) -> Vec<Mention> {
     out
 }
 
-/// Reads inside `stmt` followed by another read of the same binding inside `stmt` (by node): a
-/// move at such a read must copy, the later read still needs the value (CLONE-USE-AFTER-MOVE).
+/// Reads inside `stmt` followed by another read of the same binding inside `stmt` (by node) on a path
+/// that can follow it (not in a sibling `if`/`match` arm): a move at such a read must copy, the later
+/// read still needs the value (CLONE-USE-AFTER-MOVE).
 pub fn reread_in(stmt: &Statement<'_>) -> BTreeSet<usize> {
     let mut c = Collector::default();
     c.stmt(stmt);
     let mut out = BTreeSet::new();
     for ms in c.mentions.values() {
-        let reads: Vec<usize> = ms.iter().filter_map(|m| m.node).collect();
-        out.extend(reads.iter().take(reads.len().saturating_sub(1)).copied());
+        let reads: Vec<&Mention> = ms.iter().filter(|m| m.node.is_some()).collect();
+        for (i, m) in reads.iter().enumerate() {
+            if reads[i + 1..].iter().any(|later| !c.exclusive(m.branch, later.branch)) {
+                out.extend(m.node);
+            }
+        }
     }
     out
 }
@@ -517,7 +534,12 @@ pub fn dying_in(stmt: &Statement<'_>, last: &BTreeSet<usize>) -> BTreeSet<String
 /// that moves a binding in the statement must clone it when it is listed. `always_move` is the
 /// gate self-test mutation: nothing is ever read again.
 pub fn read_after(entry: &[&str], body: &[&Statement<'_>], always_move: bool) -> BTreeMap<usize, BTreeSet<String>> {
-    let c = collect(entry, body);
+    read_after_typed(entry, body, always_move, &BTreeSet::new())
+}
+
+/// [`read_after`] knowing which bindings are scalars (see [`last_moves_typed`]).
+pub fn read_after_typed(entry: &[&str], body: &[&Statement<'_>], always_move: bool, scalars: &BTreeSet<String>) -> BTreeMap<usize, BTreeSet<String>> {
+    let c = collect_typed(entry, body, scalars);
     let mut out: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
     for sp in &c.spans {
         let names = out.entry(sp.node).or_default();
@@ -612,7 +634,7 @@ fn borrowed_by_later_live_binding(c: &Collector, name: &str, seq: usize) -> bool
     let mut work = vec![name.to_string()];
     while let Some(src) = work.pop() {
         for (binding, froms) in &c.derived_from {
-            if binding != name && froms.contains(&src) && seen.insert(binding.clone()) {
+            if binding != name && !c.scalars.contains(binding) && froms.contains(&src) && seen.insert(binding.clone()) {
                 if c.mentions.get(binding).is_some_and(|ms| ms.iter().any(|m| m.seq > seq)) {
                     return true;
                 }
@@ -871,6 +893,23 @@ mod tests {
             .unwrap();
         assert_eq!(reread_in(decl.body[1]).len(), 1, "the first `v` is read again in the same statement");
         assert!(plain_bindings(&[], &decl.body).contains("v"));
+    }
+
+    #[test]
+    fn a_read_in_a_sibling_arm_is_not_a_reread() {
+        let src = "fn f(a: Vec<int>) -> int { 1 }\nfn main() {\n let v = vec![1]\n if true {\n  f(v)\n } else {\n  f(v)\n }\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(lexer.tokenize_with_locations())));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl),
+                _ => None,
+            })
+            .unwrap();
+        assert!(reread_in(decl.body[1]).is_empty(), "the arms of one `if` never both run");
     }
 
     #[test]
