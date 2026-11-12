@@ -1,0 +1,11 @@
+use std::collections::HashMap
+
+fn main() {
+    let mut actions: HashMap<string, HashMap<string, int>> = HashMap::new()
+    let u = "ann"
+    let mut m = actions.get(u).unwrap_or(HashMap::new())
+    let a = m.get("edit").unwrap_or(0)
+    m.insert("edit", a + 1)
+    actions.insert(u, m)
+    println("${actions.len()}")
+}
