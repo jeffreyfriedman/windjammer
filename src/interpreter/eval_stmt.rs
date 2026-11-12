@@ -55,7 +55,15 @@ impl Interpreter {
         r
     }
 
+    #[inline]
     pub(crate) fn exec_stmt(&mut self, s: &'static Statement<'static>) -> R {
+        if self.debug.is_some() {
+            return self.exec_stmt_debugged(s); // `wj replay` (ADR-0035)
+        }
+        self.exec_stmt_plain(s)
+    }
+
+    pub(crate) fn exec_stmt_plain(&mut self, s: &'static Statement<'static>) -> R {
         self.mark(stmt_loc(s));
         match s {
             Statement::Expression { expr, .. } => self.eval_raw(expr),

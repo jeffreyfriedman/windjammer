@@ -207,6 +207,8 @@ pub struct Interpreter {
     pub(crate) net: std::sync::Arc<super::builtins::std_net::NetState>,
     /// Journal of `durable fn` steps (`durable_rt`); `None` until a durable function is called or `enable_durable`.
     pub(crate) durable: Option<Box<super::durable_rt::DurableRt>>,
+    /// The time-travel debugger of `wj replay` (`debugger/`, ADR-0035); `None` = not debugging.
+    pub(crate) debug: Option<Box<super::debugger::Debugger>>,
     /// Resource limits of a sandboxed run (`limits.rs`); `None` = unlimited.
     pub(crate) limits: Option<Box<super::limits::Limits>>,
     /// MCP servers a script may call through `mcp::call` (`mcp_host.rs`).
@@ -325,6 +327,7 @@ impl Interpreter {
             port: None,
             net: Default::default(),
             durable: None,
+            debug: None,
             limits: None,
             mcp: None,
             frames: Vec::new(),
