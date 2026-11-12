@@ -133,6 +133,9 @@ pub(crate) type Epoch = std::time::Instant;
 pub(crate) struct Epoch;
 #[cfg(target_arch = "wasm32")]
 impl Epoch {
+    pub(crate) fn now() -> Epoch {
+        Epoch
+    }
     pub(crate) fn elapsed(&self) -> std::time::Duration {
         std::time::Duration::ZERO
     }
@@ -241,7 +244,7 @@ pub struct Interpreter {
     pub(crate) err_output: Option<Vec<String>>,
     pub(crate) out: std::io::BufWriter<std::io::Stdout>,
     /// When buffered output was last pushed to the process stdout (see `write_out`).
-    pub(crate) last_out_flush: std::time::Instant,
+    pub(crate) last_out_flush: Epoch,
     pub(crate) builtins: Registry,
     pub(crate) depth: usize,
     pub(crate) max_depth: usize,
@@ -327,7 +330,7 @@ impl Interpreter {
             next_subprocess: 0,
             sched: super::sched::Sched::new(),
             #[cfg(not(target_arch = "wasm32"))]
-            epoch: std::time::Instant::now(),
+            epoch: Epoch::now(),
             #[cfg(target_arch = "wasm32")]
             epoch: Epoch,
             rng: None,
@@ -356,7 +359,7 @@ impl Interpreter {
             capture_output: false,
             err_output: None,
             out: std::io::BufWriter::new(std::io::stdout()),
-            last_out_flush: std::time::Instant::now(),
+            last_out_flush: Epoch::now(),
             builtins: Registry::standard(),
             depth: 0,
             max_depth: 10_000,
@@ -464,7 +467,7 @@ impl Interpreter {
 
     pub fn flush(&mut self) {
         let _ = self.out.flush();
-        self.last_out_flush = std::time::Instant::now();
+        self.last_out_flush = Epoch::now();
     }
 
     pub(crate) fn write_out(&mut self, s: &str) {
