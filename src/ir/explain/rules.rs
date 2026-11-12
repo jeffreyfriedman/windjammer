@@ -41,6 +41,7 @@ pub const RULES: &[Rule] = rules![
     ("OWN-READONLY", ParamMode, "A parameter that is only read is borrowed `&T`"),
     ("OWN-MUT-ASSIGN", ParamMode, "Assigning to a parameter or one of its fields/elements makes it `&mut T`"),
     ("OWN-MUT-RECEIVER", ParamMode, "Calling a `&mut self` method on a parameter makes it `&mut T`"),
+    ("OWN-LOOP-WRITE", Mutability, "A `for` binding written through (field, element or itself) iterates its collection mutably"),
     ("OWN-MUT-ANALYZER", ParamMode, "Mutation detected by the analyzer (implementation seed)"),
     ("OWN-RETURNED", ParamMode, "A parameter (or a non-Copy field of it) that is returned is owned"),
     ("OWN-STORED", ParamMode, "A parameter moved into a struct, enum, tuple or collection is owned"),

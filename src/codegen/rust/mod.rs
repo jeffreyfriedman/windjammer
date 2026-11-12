@@ -82,6 +82,7 @@ mod unused_runtime_imports;
 mod match_arm_tuple_slots;
 mod match_binding_type_inference;
 pub mod match_statement_generation;
+mod element_borrow_conflict;
 mod move_at_last_use;
 pub mod method_signature;
 pub mod operator_generation;

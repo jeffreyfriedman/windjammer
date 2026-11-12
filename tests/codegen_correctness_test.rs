@@ -133,6 +133,11 @@ corpus_tests!(
     loop_return_in_else_branch,
     text_slice_into_owned_string,
     generic_element_read_clone,
+    loop_mut_writes_through_element,
+    shadowed_loop_var_typed_later,
+    field_iterated_inside_outer_loop,
+    loop_mut_shadowed_after_write,
+    element_read_then_collection_changed,
 );
 
 // ------------------------------------------------------------------ generated programs

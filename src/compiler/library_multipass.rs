@@ -1415,12 +1415,7 @@ pub(crate) fn build_library_multipass(
             }
             for (name, mode) in &codegen.self_receiver_upgrades {
                 if let Some(sig) = reg.signatures.get_mut(name) {
-                    sig.has_self_receiver = true;
-                    if sig.param_ownership.is_empty() {
-                        sig.param_ownership.push(*mode);
-                    } else if sig.param_ownership[0] != *mode {
-                        sig.param_ownership[0] = *mode;
-                    }
+                    sig.upgrade_self_receiver(*mode);
                 }
             }
 

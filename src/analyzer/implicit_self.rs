@@ -27,3 +27,24 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 }
+
+impl super::FunctionSignature {
+    /// Record the emitted receiver mode of a method. A declaration stub of a method with an implicit `self`
+    /// (`fn add(x: f32) { self.items.push(x) }`) has no receiver slot: the slot is inserted, so the first formal
+    /// keeps its own mode and every argument stays aligned with its formal.
+    pub fn upgrade_self_receiver(&mut self, mode: OwnershipMode) {
+        if !self.has_self_receiver_slot() {
+            let slot = Type::Custom("Self".to_string());
+            if self.formal_param_types.len() == self.param_types.len() {
+                self.formal_param_types.insert(0, slot.clone());
+            }
+            self.param_types.insert(0, slot);
+            self.param_ownership.insert(0, mode);
+        } else if let Some(first) = self.param_ownership.first_mut() {
+            *first = mode;
+        } else {
+            self.param_ownership.push(mode);
+        }
+        self.has_self_receiver = true;
+    }
+}

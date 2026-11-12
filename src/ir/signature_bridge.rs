@@ -1137,7 +1137,10 @@ pub fn sync_ir_ownership_to_registry(
         let Some(mut sig) = registry.get_signature(&base_key).cloned() else {
             continue;
         };
-        for (idx, param) in af.decl.parameters.iter().enumerate() {
+        // An implicit `self` (used, not declared) has a receiver slot in the signature but no declared parameter.
+        let implicit_self = usize::from(sig.has_self_receiver_slot() && !af.decl.parameters.iter().any(|p| p.name == "self"));
+        for (decl_idx, param) in af.decl.parameters.iter().enumerate() {
+            let idx = decl_idx + implicit_self;
             let Some(st) = ir_fn.param_types.get(&param.name) else {
                 continue;
             };

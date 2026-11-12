@@ -1,0 +1,18 @@
+// Methods that use `self` without declaring it, called from other functions and files: the receiver slot of the
+// signature stays aligned with the declared formals (the first argument keeps its own mode), and a caller that
+// reaches a `&mut self` method through an indexed element borrows its own receiver mutably.
+// expect: 0.5 1
+// expect: 3 4
+mod channel
+mod mixer
+mod mesh
+use crate::mixer::Mixer
+use crate::mesh::make_line
+
+fn main() {
+    let mut m = Mixer::new()
+    m.set_channel_volume(0, 0.5)
+    println("${m.channels[0].volume} ${m.channels[1].volume}")
+    let l = make_line(3)
+    println("${l.count} ${l.verts[5]}")
+}

@@ -155,6 +155,29 @@ red as ledgered above. The next candidate is call-site gated: `self` owned only 
 compilation owns its receiver at a last use (no call through a borrowed `self`, parameter, field or element). The
 value-formal fixed point already publishes receiver modes, so the gate can be a fixed-point fact.
 
+### Loop writes, scoped local types, implicit receivers (wt/ownership-9, 2026-11-12)
+
+- OWN-LOOP-WRITE: `IrFunction::write_through_loops` lists the `for` statements whose binding is assigned or written
+  through a field or element (the assignment root is resolved to its binding in `constraint_gen/loop_writes.rs`).
+  `for mut q in qs { q.xs[0] = 9 }` and `for mut row in grid { row[0] = 7 }` now iterate `&mut qs` / `&mut grid`
+  (were `&qs`, rustc E0596, and `grid.iter().copied()`, E0277).
+- Local types are scope-aware (`ir/local_types.rs`): a name bound twice with different types has no by-name entry;
+  each read gets the type of the binding it names (`use_local_types`). A later `let t: int` no longer retypes an
+  earlier loop variable `t` (`tokens.push(t)` converts the text slice again).
+- Partial move by a loop: `for v in t.out` is a `field_copy_sites` site when `t` is read after the loop or in the next
+  pass of an enclosing loop (liveness `read_after`); the loop then iterates `&t.out` instead of moving the field
+  (rustc E0382, reported as WJ0007).
+- Implicit `self` (a method that uses `self` without declaring it) keeps its receiver slot aligned in every registry
+  write: `upgrade_self_receiver` inserts the slot into a Self-free declaration stub instead of overwriting the first
+  formal, IR write-back offsets by the slot, and the method registration counts the analyzer's `self` as a receiver.
+  Callers no longer pass `&mut x` into `fn add_vertex(x: f32)`.
+- A read-only `let j = v[i]` of a non-Copy element stays a borrow only while `v` is not changed before the last read
+  of `j` (`codegen/rust/element_borrow_conflict.rs`: an assignment into `v` or a call of a method whose declared
+  receiver is `&mut self`); otherwise the element is copied (`let j = self.jobs[i]; self.jobs.remove(i); .. j ..` was
+  rustc E0502).
+- A Copy struct named `Vec3` is not the `Vec` collection: two `starts_with("Vec")` guesses now compare the type's base
+  name, so the bare-pass hint no longer borrows `Vec3` arguments into owned formals.
+
 ## Name-based guesses (decide from declarations instead)
 
 The compiler decides from declarations, never from what a program happens to call things. Each row below guesses a

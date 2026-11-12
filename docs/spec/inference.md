@@ -64,6 +64,14 @@ graph and is iterated to a fixed point across functions.
 **Example.** `fn add(b: Bag, s: string) { b.items.push(s) }` emits `b: &mut Bag, s: String`.
 **Status.** Conforms for same-file callees; cross-file needs the converged registry (D-OWNERS-OWN, ratchet residue 4).
 
+### OWN-LOOP-WRITE
+**Rule.** A `for` binding that is assigned, or whose field or element is assigned (`for mut q in qs { q.xs[0] = 9 }`,
+`for mut row in grid { row[0] = 7 }`), writes through to the element: the loop iterates the collection mutably. The
+assignment's root is resolved to the binding it names, so a body `let q = ..` that shadows the loop variable does
+not count. The `mut` on the loop variable is required (ADR-0002, WJ0051).
+**Example.** `for mut row in grid { row[0] = 7 }` emits `for row in &mut grid { row[0] = 7; }`.
+**Status.** Conforms (IR fact `IrFunction::write_through_loops`).
+
 ### OWN-MUT-ANALYZER
 Implementation seed: the analyzer's `mutated_parameters` set is replayed as a `&mut` constraint. Not a language
 rule; it exists because the solver's own body walk is incomplete. Status: Diverges (D-OWNERS-OWN).

@@ -2286,12 +2286,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub fn apply_self_receiver_upgrades(&self, registry: &mut SignatureRegistry) {
         for (qualified_name, upgrade_mode) in &self.self_receiver_upgrades {
             if let Some(sig) = registry.signatures.get_mut(qualified_name) {
-                sig.has_self_receiver = true;
-                if sig.param_ownership.is_empty() {
-                    sig.param_ownership.push(*upgrade_mode);
-                } else if sig.param_ownership[0] != *upgrade_mode {
-                    sig.param_ownership[0] = *upgrade_mode;
-                }
+                sig.upgrade_self_receiver(*upgrade_mode);
             }
         }
     }

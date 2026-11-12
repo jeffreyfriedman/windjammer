@@ -2559,7 +2559,7 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) {
         let qualified = format!("{impl_type}::{}", func.name);
-        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self") || analyzed.inferred_ownership.contains_key("self"); // implicit `self` too
         let registry_sig = self.signature_registry.get_signature(&qualified);
 
         // Preregister/formal emission already converged emitted Rust contracts — do not downgrade.

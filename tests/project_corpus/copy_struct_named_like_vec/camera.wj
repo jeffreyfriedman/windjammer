@@ -1,0 +1,21 @@
+use crate::vec3::Vec3
+use crate::grid::Grid
+
+pub struct Camera {
+    pub pos: Vec3,
+    pub scale: int,
+}
+
+impl Camera {
+    pub fn collides(grid: Grid, pos: Vec3, scale: int) -> bool {
+        let ix = (pos.x * scale as f32) as int
+        grid.get(ix) != 0u8
+    }
+
+    pub fn update(self, dx: f32, grid: Grid) {
+        let test_x = Vec3::new(self.pos.x + dx, self.pos.y, self.pos.z)
+        if !Camera::collides(grid, test_x, self.scale) {
+            self.pos = test_x
+        }
+    }
+}

@@ -19,9 +19,7 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&'ast Statement<'ast>],
         location: &crate::parser::ast::SourceLocation,
     ) -> String {
-        if let Some(simd_block) =
-            super::simd_transform::try_emit_simd_for_loop(self, pattern, iterable, body)
-        {
+        if let Some(simd_block) = super::simd_transform::try_emit_simd_for_loop(self, pattern, iterable, body) {
             return simd_block;
         }
 
@@ -31,12 +29,12 @@ impl<'ast> CodeGenerator<'ast> {
         let pattern_str = self.pattern_to_rust(pattern);
         let loop_var = pattern_analysis::extract_pattern_identifier(pattern);
 
-        // TDD FIX: Check if ANY binding in the pattern is mutated (not just simple identifier)
-        // For tuple patterns like (id, val), extract ALL bindings and check each one
         let mut all_pattern_bindings = std::collections::HashSet::new();
         self.extract_pattern_bindings(pattern, &mut all_pattern_bindings);
 
-        let needs_mut = if let Some(var) = loop_var.as_ref() {
+        // OWN-LOOP-WRITE (IR): the binding is assigned or written through a field or element.
+        let ir_writes = self.current_ir_function.as_ref().is_some_and(|f| f.loop_writes_through(location));
+        let needs_mut = ir_writes || if let Some(var) = loop_var.as_ref() {
             // Simple identifier pattern: check if it's mutated
             self.loop_body_modifies_variable(body, var)
                 || self.loop_body_calls_mut_dispatch_method(iterable, body, var)
@@ -200,6 +198,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // CLONE-USE-AFTER-MOVE (IR `field_copy_sites`): the owner of `t.out` is read after the loop, so borrow it.
+        needs_borrow |= self.clone_facts.field_copy_sites.contains_key(&crate::ir::numeric_defaults::node_id(iterable));
         let needs_mut_borrow = needs_mut && needs_borrow;
 
         let iterable_already_mut_ref = matches!(

@@ -1232,12 +1232,7 @@ impl<'ast> Analyzer<'ast> {
                 .copied()
                 .unwrap_or(OwnershipMode::Borrowed);
             param_ownership.insert(0, self_mode);
-            let self_ty = func
-                .decl
-                .parent_type
-                .as_ref()
-                .map(|n| Type::Custom(n.clone()))
-                .unwrap_or(Type::Custom("Self".to_string()));
+            let self_ty = func.decl.parent_type.as_ref().map(|n| Type::Custom(n.clone())).unwrap_or(Type::Custom("Self".to_string()));
             param_types.insert(0, self_ty);
         }
 
@@ -1249,9 +1244,11 @@ impl<'ast> Analyzer<'ast> {
         // Rust lowers these parameters as `&T` / `&mut T` — call-site helpers that key off
         // `param_ownership` must agree or we emit `.clone()` / `.to_string()` incorrectly.
         use crate::parser::Type as PType;
+        // An implicit `self` occupies slot 0 of the signature but is not a declared parameter.
+        let decl_offset = usize::from(synthetic_self_receiver);
         for idx in 0..param_types.len() {
             let ty = &param_types[idx];
-            let Some(formal) = func.decl.parameters.get(idx).map(|p| &p.type_) else {
+            let Some(formal) = idx.checked_sub(decl_offset).and_then(|d| func.decl.parameters.get(d)).map(|p| &p.type_) else {
                 continue;
             };
             // Copy scalars pass by value. Copy aggregates borrow only for field-enum-match
@@ -1275,7 +1272,7 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
                 if !self.param_only_used_as_field_enum_match_scrutinee(
-                    &func.decl.parameters[idx].name,
+                    &func.decl.parameters[idx - decl_offset].name,
                     &func.decl.body,
                 ) {
                     if matches!(
@@ -1305,7 +1302,7 @@ impl<'ast> Analyzer<'ast> {
         // Emit `Reference(T)` in converged signatures when ownership is borrowed but the
         // AST type is bare `T` — call-site IR + should_borrow key off param_types.
         for (idx, own) in param_ownership.iter().enumerate() {
-            let Some(formal) = func.decl.parameters.get(idx).map(|p| &p.type_) else {
+            let Some(formal) = idx.checked_sub(decl_offset).and_then(|d| func.decl.parameters.get(d)).map(|p| &p.type_) else {
                 continue;
             };
             if Self::is_generic_type_param(formal) {
@@ -1319,7 +1316,7 @@ impl<'ast> Analyzer<'ast> {
                     OwnershipMode::MutBorrowed => {}
                     OwnershipMode::Borrowed
                         if self.param_only_used_as_field_enum_match_scrutinee(
-                            &func.decl.parameters[idx].name,
+                            &func.decl.parameters[idx - decl_offset].name,
                             &func.decl.body,
                         ) => {}
                     _ => continue,

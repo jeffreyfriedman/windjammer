@@ -1,0 +1,12 @@
+// A name bound twice with different types (`for t in words` over text, later `let t: int`): each read is typed
+// by the binding it names, so `tokens.push(t)` converts the text slice and `t` prints as a number.
+// expect: 3 3
+fn main() {
+    let text = "3 4 5"
+    let mut tokens: Vec<string> = []
+    for t in text.split_whitespace() {
+        tokens.push(t)
+    }
+    let t: int = tokens[0].parse::<int>().unwrap_or(0)
+    println("${t} ${tokens.len()}")
+}
