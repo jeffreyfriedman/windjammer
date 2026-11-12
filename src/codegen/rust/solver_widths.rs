@@ -106,7 +106,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// function's `int`/`i32` return width apply.
     pub(in crate::codegen::rust) fn cast_tail_to_return_int_width(&self, expr_str: &mut String, expr: &Expression<'ast>) {
         // A branch of `let b = if .. { .. } else { .. }` is the binding's value, not the function's result.
-        if self.binding_value_depth > 0 || self.solver_operand_width(expr).is_some() {
+        if self.idiom.binding_value_depth > 0 || self.solver_operand_width(expr).is_some() {
             return;
         }
         let target = match &self.current_function_return_type {

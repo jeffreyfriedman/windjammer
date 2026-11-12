@@ -11,7 +11,6 @@ examples/verified/iter_collect_hashmap.wj | error[E0277]: a value of type `HashM
 examples/verified/iter_flat_map_chain.wj | error[E0271]: type mismatch resolving `<[i64; 2] as IntoIterator>::Item == &i64`
 examples/verified/iter_min_max_by.wj | error[E0061]: this method takes 1 argument but 0 arguments were supplied
 examples/verified/iter_partition_unzip.wj | error[E0277]: the trait bound `Vec<i64>: Extend<i32>` is not satisfied
-examples/verified/iter_take_skip_rev.wj | error[E0308]: mismatched types
 examples/verified/operators_overload.wj | error[E0046]: not all trait items implemented, missing: `Output`
 examples/verified/prog_event_handlers.wj | error[E0308]: mismatched types
 examples/verified/prog_lru_cache.wj | error[E0308]: mismatched types

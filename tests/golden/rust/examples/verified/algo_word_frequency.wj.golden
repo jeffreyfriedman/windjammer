@@ -9,7 +9,7 @@ fn main() {
     }
     let mut entries: Vec<(String, i64)> = freq.iter().map(|(k, v)| (k, *v)).collect::<Vec<(String, i64)>>();
     entries.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    for (w, c) in entries.iter().take(3_i64) {
+    for (w, c) in entries.iter().take(3) {
         println!("{}: {}", w, c);
     }
 }
