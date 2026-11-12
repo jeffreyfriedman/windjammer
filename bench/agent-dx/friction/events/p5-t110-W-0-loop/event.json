@@ -1,0 +1,16 @@
+{
+  "id": "p5-t110-W-0-loop",
+  "pilot": "pilot5",
+  "task": "t110_crc_lines",
+  "arm": "W",
+  "arm_name": "interpreted+final-build",
+  "trial": 0,
+  "call": -1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 0,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "skipped-loop",
+  "reason": "interpreted-first arm; the first program run was `wj run --compiled main.wj`, not `wj run --interpret`"
+}

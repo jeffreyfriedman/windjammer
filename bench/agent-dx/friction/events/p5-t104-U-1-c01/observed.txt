@@ -1,0 +1,15 @@
+error[WJ0017]: trait bound not satisfied: the type `[i64]` cannot be indexed by `int`
+  --> main.wj:19:21
+   |
+19 |     let mut ss: Vec<int> = []
+error[WJ0017]: trait bound not satisfied: the type `[std::string::string]` cannot be indexed by `int`
+  --> main.wj:17:21
+   |
+17 |     let mut us: Vec<string> = []
+error[WJ0017]: trait bound not satisfied: the type `[std::string::string]` cannot be indexed by `int`
+  --> main.wj:17:21
+   |
+17 |     let mut us: Vec<string> = []
+error[WJ0017]: trait bound not satisfied: the type `[std::string::string]` cannot be indexed by `int`
+  --> main.wj:17:21
+  

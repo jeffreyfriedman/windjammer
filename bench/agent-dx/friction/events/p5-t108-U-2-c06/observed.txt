@@ -1,0 +1,4 @@
+error[WJ0003]: mismatched types: expected `void`, found `string`
+  --> main.wj:11:22
+   |
+11 |     let mut out: Vec<string> = Vec::new()

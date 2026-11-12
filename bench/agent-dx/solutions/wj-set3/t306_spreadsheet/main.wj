@@ -1,0 +1,455 @@
+use std::fs
+
+// cell id = col * 21 + row (col 0..9, row 1..20); ordering by id is column-then-row
+struct Node {
+    kind: string,
+    n: int,
+    a: int,
+    b: int,
+    args: Vec<int>,
+}
+
+struct Val {
+    k: int,
+    n: int,
+    s: string,
+}
+
+struct W {
+    nodes: Vec<Node>,
+    tk: Vec<int>,
+    tn: Vec<int>,
+    ts: Vec<string>,
+    pos: int,
+    ckind: Vec<int>,
+    cnum: Vec<int>,
+    ctext: Vec<string>,
+    croot: Vec<int>,
+}
+
+fn cell_id(s: string) -> int {
+    let cs: Vec<char> = s.chars().collect()
+    if cs.len() < 2 || cs.len() > 3 { return -1 }
+    if cs[0] < 'A' || cs[0] > 'J' { return -1 }
+    if cs[1] == '0' { return -1 }
+    let mut row = 0
+    let mut i = 1
+    while i < cs.len() {
+        if cs[i] < '0' || cs[i] > '9' { return -1 }
+        row = row * 10 + (cs[i].to_string().parse::<int>().unwrap_or(0))
+        i += 1
+    }
+    if row < 1 || row > 20 { return -1 }
+    let col = cs[0] as int - 'A' as int
+    col * 21 + row
+}
+
+fn cell_name(id: int) -> string {
+    let col = (id - 1) / 21
+    let row = id - col * 21
+    let letters = "ABCDEFGHIJ"
+    "${letters[col..col + 1]}${row}"
+}
+
+fn mk_val(k: int, n: int, s: string) -> Val {
+    Val { k: k, n: n, s: s }
+}
+
+fn err(code: string) -> Val {
+    Val { k: 2, n: 0, s: code }
+}
+
+fn checked(v: int) -> Val {
+    let a = if v < 0 { 0 - v } else { v }
+    if a > 1000000000000 { err("#OVERFLOW") } else { mk_val(0, v, "") }
+}
+
+fn is_number(s: string) -> bool {
+    let cs: Vec<char> = s.chars().collect()
+    let mut i = 0
+    if cs.len() > 0 && cs[0] == '-' { i = 1 }
+    let digits = cs.len() - i
+    if digits < 1 || digits > 9 { return false }
+    while i < cs.len() {
+        if cs[i] < '0' || cs[i] > '9' { return false }
+        i += 1
+    }
+    true
+}
+
+impl W {
+    fn tokenize(self, s: string) -> bool {
+        self.tk = []
+        self.tn = []
+        self.ts = []
+        self.pos = 0
+        let cs: Vec<char> = s.chars().collect()
+        let mut i = 0
+        while i < cs.len() {
+            let c = cs[i]
+            if c == ' ' {
+                i += 1
+            } else if c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' || c == ',' || c == ':' {
+                self.tk.push(2)
+                self.tn.push(0)
+                self.ts.push(c.to_string())
+                i += 1
+            } else if c >= '0' && c <= '9' {
+                let mut t = ""
+                while i < cs.len() && cs[i] >= '0' && cs[i] <= '9' {
+                    t = t + cs[i].to_string()
+                    i += 1
+                }
+                if t.len() > 9 { return false }
+                self.tk.push(0)
+                self.tn.push(t.parse::<int>().unwrap_or(0))
+                self.ts.push(t)
+            } else if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
+                let mut t = ""
+                while i < cs.len() && ((cs[i] >= 'A' && cs[i] <= 'Z') || (cs[i] >= 'a' && cs[i] <= 'z') || (cs[i] >= '0' && cs[i] <= '9')) {
+                    t = t + cs[i].to_string()
+                    i += 1
+                }
+                self.tk.push(1)
+                self.tn.push(0)
+                self.ts.push(t)
+            } else {
+                return false
+            }
+        }
+        true
+    }
+
+    fn is_sym(self, p: int, c: string) -> bool {
+        p < self.tk.len() as int && self.tk[p] == 2 && self.ts[p] == c
+    }
+
+    fn add(self, kind: string, n: int, a: int, b: int, args: Vec<int>) -> int {
+        self.nodes.push(Node { kind: kind, n: n, a: a, b: b, args: args })
+        self.nodes.len() as int - 1
+    }
+
+    fn expr(self) -> int {
+        let mut a = self.term()
+        if a < 0 { return -1 }
+        while self.is_sym(self.pos, "+") || self.is_sym(self.pos, "-") {
+            let op = self.ts[self.pos]
+            self.pos += 1
+            let b = self.term()
+            if b < 0 { return -1 }
+            a = self.add(op, 0, a, b, [])
+        }
+        a
+    }
+
+    fn term(self) -> int {
+        let mut a = self.unary()
+        if a < 0 { return -1 }
+        while self.is_sym(self.pos, "*") || self.is_sym(self.pos, "/") {
+            let op = self.ts[self.pos]
+            self.pos += 1
+            let b = self.unary()
+            if b < 0 { return -1 }
+            a = self.add(op, 0, a, b, [])
+        }
+        a
+    }
+
+    fn unary(self) -> int {
+        if self.is_sym(self.pos, "-") {
+            self.pos += 1
+            let x = self.unary()
+            if x < 0 { return -1 }
+            return self.add("neg", 0, x, 0, [])
+        }
+        self.primary()
+    }
+
+    fn primary(self) -> int {
+        if self.pos >= self.tk.len() as int { return -1 }
+        let k = self.tk[self.pos]
+        if k == 0 {
+            let n = self.tn[self.pos]
+            self.pos += 1
+            return self.add("num", n, 0, 0, [])
+        }
+        if self.is_sym(self.pos, "(") {
+            self.pos += 1
+            let e = self.expr()
+            if e < 0 { return -1 }
+            if !self.is_sym(self.pos, ")") { return -1 }
+            self.pos += 1
+            return e
+        }
+        if k == 1 {
+            let w = self.ts[self.pos]
+            self.pos += 1
+            if self.is_sym(self.pos, "(") {
+                if w != "SUM" && w != "MIN" && w != "MAX" && w != "COUNT" && w != "ABS" { return -1 }
+                self.pos += 1
+                let mut args: Vec<int> = []
+                let first = self.arg()
+                if first < 0 { return -1 }
+                args.push(first)
+                while self.is_sym(self.pos, ",") {
+                    self.pos += 1
+                    let x = self.arg()
+                    if x < 0 { return -1 }
+                    args.push(x)
+                }
+                if !self.is_sym(self.pos, ")") { return -1 }
+                self.pos += 1
+                if w == "ABS" && (args.len() != 1 || self.nodes[args[0]].kind == "range") { return -1 }
+                return self.add(w, 0, 0, 0, args)
+            }
+            let id = cell_id(w)
+            if id < 0 { return -1 }
+            return self.add("ref", id, 0, 0, [])
+        }
+        -1
+    }
+
+    fn arg(self) -> int {
+        if self.pos + 2 < self.tk.len() as int && self.tk[self.pos] == 1 && self.is_sym(self.pos + 1, ":") {
+            let a = cell_id(self.ts[self.pos])
+            if self.tk[self.pos + 2] != 1 { return -1 }
+            let b = cell_id(self.ts[self.pos + 2])
+            if a < 0 || b < 0 { return -1 }
+            self.pos += 3
+            return self.add("range", 0, a, b, [])
+        }
+        self.expr()
+    }
+
+    fn members(self, a: int, b: int) -> Vec<int> {
+        let ca = (a - 1) / 21
+        let cb = (b - 1) / 21
+        let ra = a - ca * 21
+        let rb = b - cb * 21
+        let c1 = if ca < cb { ca } else { cb }
+        let c2 = if ca < cb { cb } else { ca }
+        let r1 = if ra < rb { ra } else { rb }
+        let r2 = if ra < rb { rb } else { ra }
+        let mut out: Vec<int> = []
+        let mut r = r1
+        while r <= r2 {
+            let mut c = c1
+            while c <= c2 {
+                out.push(c * 21 + r)
+                c += 1
+            }
+            r += 1
+        }
+        out
+    }
+
+    fn collect(self, n: int, out: Vec<int>) {
+        let k = self.nodes[n].kind
+        if k == "ref" {
+            out.push(self.nodes[n].n)
+        } else if k == "range" {
+            for m in self.members(self.nodes[n].a, self.nodes[n].b) {
+                out.push(m)
+            }
+        } else if k == "neg" {
+            self.collect(self.nodes[n].a, out)
+        } else if k == "+" || k == "-" || k == "*" || k == "/" {
+            self.collect(self.nodes[n].a, out)
+            self.collect(self.nodes[n].b, out)
+        } else if k != "num" {
+            for x in self.nodes[n].args {
+                self.collect(x, out)
+            }
+        }
+    }
+
+    fn sorted_deps(self, n: int) -> Vec<int> {
+        let mut raw: Vec<int> = []
+        self.collect(n, raw)
+        raw.sort()
+        let mut out: Vec<int> = []
+        for x in raw {
+            if out.len() == 0 || out[out.len() - 1] != x { out.push(x) }
+        }
+        out
+    }
+
+    fn value(self, c: int) -> Val {
+        let k = self.ckind[c]
+        if k == 0 { return mk_val(0, 0, "") }
+        if k == 1 { return mk_val(0, self.cnum[c], "") }
+        if k == 2 { return mk_val(1, 0, self.ctext[c]) }
+        self.eval(self.croot[c])
+    }
+
+    fn eval(self, n: int) -> Val {
+        let k = self.nodes[n].kind
+        if k == "num" { return mk_val(0, self.nodes[n].n, "") }
+        if k == "ref" {
+            let v = self.value(self.nodes[n].n)
+            if v.k == 1 { return err("#VALUE") }
+            return v
+        }
+        if k == "neg" {
+            let v = self.eval(self.nodes[n].a)
+            if v.k != 0 { return v }
+            return mk_val(0, 0 - v.n, "")
+        }
+        if k == "+" || k == "-" || k == "*" || k == "/" {
+            let l = self.eval(self.nodes[n].a)
+            if l.k != 0 { return l }
+            let r = self.eval(self.nodes[n].b)
+            if r.k != 0 { return r }
+            if k == "+" { return checked(l.n + r.n) }
+            if k == "-" { return checked(l.n - r.n) }
+            if k == "*" {
+                let la = if l.n < 0 { 0 - l.n } else { l.n }
+                let ra = if r.n < 0 { 0 - r.n } else { r.n }
+                if la != 0 && ra > 1000000000000 / la { return err("#OVERFLOW") }
+                return checked(l.n * r.n)
+            }
+            if r.n == 0 { return err("#DIV0") }
+            return checked(l.n / r.n)
+        }
+        let mut nums: Vec<int> = []
+        for a in self.nodes[n].args {
+            if self.nodes[a].kind == "range" {
+                for m in self.members(self.nodes[a].a, self.nodes[a].b) {
+                    if self.ckind[m] == 0 || self.ckind[m] == 2 { continue }
+                    let v = self.value(m)
+                    if v.k == 2 { return v }
+                    if v.k == 0 { nums.push(v.n) }
+                }
+            } else {
+                let v = self.eval(a)
+                if v.k != 0 { return v }
+                nums.push(v.n)
+            }
+        }
+        if k == "ABS" { return mk_val(0, if nums[0] < 0 { 0 - nums[0] } else { nums[0] }, "") }
+        if k == "COUNT" { return mk_val(0, nums.len() as int, "") }
+        if k == "SUM" {
+            let mut t = 0
+            for x in nums {
+                t += x
+                let a = if t < 0 { 0 - t } else { t }
+                if a > 1000000000000 { return err("#OVERFLOW") }
+            }
+            return mk_val(0, t, "")
+        }
+        if nums.len() == 0 { return err("#VALUE") }
+        let mut best = nums[0]
+        for x in nums {
+            if k == "MIN" && x < best { best = x }
+            if k == "MAX" && x > best { best = x }
+        }
+        mk_val(0, best, "")
+    }
+
+    fn show(self, c: int) -> string {
+        let k = self.ckind[c]
+        if k == 0 { return "(empty)" }
+        if k == 2 { return self.ctext[c] }
+        let v = self.value(c)
+        if v.k == 2 { return v.s }
+        "${v.n}"
+    }
+
+    fn dfs(self, x: int, cur: int, newroot: int, seen: Vec<bool>, path: Vec<int>) -> bool {
+        let mut ds: Vec<int> = []
+        if cur == x {
+            ds = self.sorted_deps(newroot)
+        } else if self.ckind[cur] == 3 {
+            ds = self.sorted_deps(self.croot[cur])
+        }
+        for d in ds {
+            if d == x {
+                path.push(x)
+                return true
+            }
+            if seen[d] { continue }
+            seen[d] = true
+            path.push(d)
+            if self.dfs(x, d, newroot, seen, path) { return true }
+            path.remove(path.len() - 1)
+        }
+        false
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut w = W { nodes: [], tk: [], tn: [], ts: [], pos: 0, ckind: [], cnum: [], ctext: [], croot: [] }
+    let mut i = 0
+    while i < 220 {
+        w.ckind.push(0)
+        w.cnum.push(0)
+        w.ctext.push("")
+        w.croot.push(0)
+        i += 1
+    }
+    for line in text.lines() {
+        if line.len() == 0 { continue }
+        let p: Vec<string> = line.split(" ").collect()
+        let mut id = -1
+        if p.len() >= 2 { id = cell_id(p[1]) }
+        if p[0] == "set" && p.len() >= 3 && id >= 0 {
+            let parts: Vec<string> = line.splitn(3, " ").collect()
+            let content = parts[2]
+            if content.len() == 0 {
+                println("error: bad command")
+            } else if content[0..1] == "=" {
+                let rest = content[1..content.len()]
+                let mut root = -1
+                if w.tokenize(rest) {
+                    root = w.expr()
+                    if root >= 0 && w.pos != w.tk.len() as int { root = -1 }
+                }
+                if root < 0 {
+                    println("error: bad formula")
+                } else {
+                    let mut seen: Vec<bool> = []
+                    let mut k = 0
+                    while k < 220 {
+                        seen.push(false)
+                        k += 1
+                    }
+                    let mut path: Vec<int> = [id]
+                    if w.dfs(id, id, root, seen, path) {
+                        let mut names: Vec<string> = []
+                        for c in path {
+                            names.push(cell_name(c))
+                        }
+                        println("error: cycle ${names.join(" -> ")}")
+                    } else {
+                        w.ckind[id] = 3
+                        w.croot[id] = root
+                    }
+                }
+            } else if is_number(content) {
+                w.ckind[id] = 1
+                w.cnum[id] = content.parse::<int>().unwrap_or(0)
+            } else {
+                w.ckind[id] = 2
+                w.ctext[id] = content
+            }
+        } else if p[0] == "clear" && p.len() == 2 && id >= 0 {
+            w.ckind[id] = 0
+        } else if p[0] == "get" && p.len() == 2 && id >= 0 {
+            println("${cell_name(id)} = ${w.show(id)}")
+        } else if p[0] == "dump" && p.len() == 1 {
+            let mut any = false
+            let mut c = 1
+            while c < 220 {
+                if w.ckind[c] != 0 {
+                    any = true
+                    println("${cell_name(c)} = ${w.show(c)}")
+                }
+                c += 1
+            }
+            if !any { println("(empty sheet)") }
+        } else {
+            println("error: bad command")
+        }
+    }
+}

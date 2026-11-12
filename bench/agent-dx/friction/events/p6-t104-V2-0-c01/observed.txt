@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected `Vec<string>`, found `Map<Iter<'_, _>, {closure@...}>`
+  --> main.wj:49:1
+   |
+49 |         let mut best = ""
+wj verify: the interpreter ran the program, but the compiled build failed (see the errors above): rustc is stricter than the interpreter here, so `wj build` would fail too
+ann 3 47 edit
+bob 2 4 login
+malformed: 2

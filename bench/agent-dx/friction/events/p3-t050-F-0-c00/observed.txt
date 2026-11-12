@@ -1,0 +1,11 @@
+error[E0599]: no method named `len` found for struct `std::str::Split<'a, P>` in the current scope
+    --> main.rs:52:28
+     |
+  52 |     let total: i64 = lines.len() as i64;
+For more information about this error, try `rustc --explain E0599`.
+warning: `windjammer` (bin "windjammer") generated 3 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 3 warnings emitted
+Error: Cargo build failed
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 3 warnings emitted
+Error: Cargo build failed
+Building Windjammer project from "main.w

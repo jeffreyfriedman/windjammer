@@ -1,0 +1,16 @@
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:6:16
+  |
+6 |     let mut k: int = 0
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:6:16
+  |
+6 |     let mut k: int = 0
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:38:1
+   |
+38 |             b.1.cmp(a.1)
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:40:1
+   |
+40 |             a.0.cmp(b.0)

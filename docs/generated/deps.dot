@@ -146,12 +146,12 @@ digraph deps {
   "cargo_toml" -> "embedded_assets" [label="2"];
   "check" -> "analyzer" [label="3"];
   "check" -> "codegen" [label="1"];
-  "check" -> "diagnostics" [label="24"];
+  "check" -> "diagnostics" [label="27"];
   "check" -> "fuzzy_matcher" [label="4"];
   "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="23"];
   "check" -> "lexer" [label="7"];
-  "check" -> "linter" [label="1"];
+  "check" -> "linter" [label="3"];
   "check" -> "metadata" [label="2"];
   "check" -> "module_system" [label="4"];
   "check" -> "package" [label="9"];
@@ -172,7 +172,7 @@ digraph deps {
   "cli" -> "compiler_config" [label="3"];
   "cli" -> "config" [label="4"];
   "cli" -> "debug_env" [label="1"];
-  "cli" -> "diagnostics" [label="25"];
+  "cli" -> "diagnostics" [label="29"];
   "cli" -> "ejector" [label="2"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];

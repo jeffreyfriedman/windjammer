@@ -1,0 +1,16 @@
+{
+  "id": "p3-t003-E-0-c00",
+  "pilot": "pilot3",
+  "task": "t003_prime_counts",
+  "arm": "E",
+  "arm_name": "tiny-pack+mcp",
+  "trial": 0,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "unhelpful-message",
+  "reason": "run-time panic located in the generated main.rs, not in main.wj"
+}

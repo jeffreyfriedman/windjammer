@@ -1,0 +1,13 @@
+error[E0277]: the type `str` cannot be indexed by `std::ops::Range<i64>`
+   --> main.rs:24:13
+    |
+ 24 |     &digits[d..(d + 1_i64)]
+error[E0308]: mismatched types
+  --> main.rs:24:5
+   |
+22 | fn digit_char(d: i64) -> String {
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 1 warning emitted
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 1 warning emitted

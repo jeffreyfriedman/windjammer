@@ -1,0 +1,16 @@
+{
+  "id": "p5-t110-V-2-c00",
+  "pilot": "pilot5",
+  "task": "t110_crc_lines",
+  "arm": "V",
+  "arm_name": "interpreted-first",
+  "trial": 2,
+  "call": 0,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 2,
+  "command": "wj run --interpret main.wj",
+  "source": "reconstructed",
+  "class": "compiler-bug",
+  "reason": "interpreter gap: a valid program the interpreter refuses"
+}

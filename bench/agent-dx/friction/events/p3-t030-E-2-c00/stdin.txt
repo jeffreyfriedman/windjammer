@@ -1,0 +1,6 @@
+open a 100
+open b 0
+transfer a b 30
+balance a
+withdraw b 50
+deposit b 5

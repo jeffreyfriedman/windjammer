@@ -1,0 +1,4 @@
+  compiled:    error
+wj verify: the compiled run's stderr:
+warning: unused import: `windjammer_runtime::fs::Metadata`
+ --> main.rs:2:5

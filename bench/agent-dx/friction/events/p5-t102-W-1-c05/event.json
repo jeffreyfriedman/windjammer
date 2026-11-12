@@ -1,0 +1,16 @@
+{
+  "id": "p5-t102-W-1-c05",
+  "pilot": "pilot5",
+  "task": "t102_file_tally",
+  "arm": "W",
+  "arm_name": "interpreted+final-build",
+  "trial": 1,
+  "call": 5,
+  "verb": "build",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj build main.wj",
+  "source": "none",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

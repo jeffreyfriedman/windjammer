@@ -1,0 +1,8 @@
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:20:52
+   |
+20 |                     Some(x) => { k = k * 10 + x as int }
+error[WJ0003]: mismatched types: expected `&i64`, found `int`
+  --> main.wj:20:52
+   |
+20 |                     Some(x) => { k = k * 10 + x as int }

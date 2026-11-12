@@ -1,0 +1,140 @@
+use std::fs
+use std::process
+
+struct Line {
+    sku: string,
+    qty: int,
+    unit: int,
+    base: int,
+    cur: int,
+}
+
+struct Rule {
+    kind: string,
+    target: string,
+    a: int,
+    b: int,
+}
+
+fn num(s: string, lo: int, hi: int) -> int {
+    // returns -1 when invalid
+    if s.len() == 0 || s.len() > 9 { return -1 }
+    for c in s.chars() {
+        if c < '0' || c > '9' { return -1 }
+    }
+    let v = s.parse::<int>().unwrap_or(-1)
+    if v < lo || v > hi { return -1 }
+    v
+}
+
+fn matches(target: string, sku: string) -> bool {
+    target == "*" || target == sku
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let maxv = 999999999
+    let mut errors: Vec<string> = []
+    let mut lines: Vec<Line> = []
+    let mut rules: Vec<Rule> = []
+    let mut ln = 0
+    for raw in text.lines() {
+        ln += 1
+        if raw.len() == 0 { continue }
+        let p: Vec<string> = raw.split(" ").collect()
+        let mut ok = false
+        if p[0] == "item" {
+            if p.len() == 4 && p[1].len() > 0 {
+                let q = num(p[2], 1, maxv)
+                let u = num(p[3], 0, maxv)
+                if q >= 0 && u >= 0 {
+                    lines.push(Line { sku: p[1], qty: q, unit: u, base: q * u, cur: q * u })
+                    ok = true
+                }
+            }
+        } else if p[0] == "rule" && p.len() >= 2 {
+            let k = p[1]
+            if k == "percent" && p.len() == 4 && p[2].len() > 0 {
+                let v = num(p[3], 0, 100)
+                if v >= 0 {
+                    rules.push(Rule { kind: k, target: p[2], a: v, b: 0 })
+                    ok = true
+                }
+            } else if k == "fixed" && p.len() == 4 && p[2].len() > 0 {
+                let v = num(p[3], 0, maxv)
+                if v >= 0 {
+                    rules.push(Rule { kind: k, target: p[2], a: v, b: 0 })
+                    ok = true
+                }
+            } else if k == "bogo" && p.len() == 5 && p[2].len() > 0 {
+                let n = num(p[3], 1, maxv)
+                let m = num(p[4], 1, maxv)
+                if n >= 0 && m >= 0 {
+                    rules.push(Rule { kind: k, target: p[2], a: n, b: m })
+                    ok = true
+                }
+            } else if k == "threshold" && p.len() == 4 {
+                let t = num(p[2], 0, maxv)
+                let pc = num(p[3], 0, 100)
+                if t >= 0 && pc >= 0 {
+                    rules.push(Rule { kind: k, target: "", a: t, b: pc })
+                    ok = true
+                }
+            }
+        }
+        if !ok { errors.push("error line ${ln}: ${raw}") }
+    }
+    let mut cart = 0
+    let mut rule_out: Vec<string> = []
+    let mut ri = 0
+    while ri < rules.len() {
+        let r = rules[ri]
+        let mut saved = 0
+        if r.kind == "threshold" {
+            let mut running = 0 - cart
+            for l in lines {
+                running += l.cur
+            }
+            if running >= r.a {
+                saved = running * r.b / 100
+                cart += saved
+            }
+        } else {
+            let mut i = 0
+            while i < lines.len() {
+                if matches(r.target, lines[i].sku) {
+                    let cur = lines[i].cur
+                    let mut d = 0
+                    if r.kind == "percent" {
+                        d = cur * r.a / 100
+                    } else if r.kind == "fixed" {
+                        d = if cur < r.a { cur } else { r.a }
+                    } else {
+                        let free = lines[i].qty / (r.a + r.b) * r.b
+                        let worth = free * lines[i].unit
+                        d = if cur < worth { cur } else { worth }
+                    }
+                    lines[i].cur = cur - d
+                    saved += d
+                }
+                i += 1
+            }
+        }
+        rule_out.push("rule ${ri + 1} ${r.kind} ${saved}")
+        ri += 1
+    }
+    for e in errors {
+        println(e)
+    }
+    let mut total = 0 - cart
+    for l in lines {
+        println("item ${l.sku} ${l.base} ${l.cur}")
+        total += l.cur
+    }
+    for r in rule_out {
+        println(r)
+    }
+    if total < 0 { total = 0 }
+    println("total ${total}")
+    if errors.len() > 0 { process::exit(1) }
+}

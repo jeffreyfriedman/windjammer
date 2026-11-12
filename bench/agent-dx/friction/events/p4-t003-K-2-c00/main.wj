@@ -1,0 +1,50 @@
+use std::fs
+
+fn main() {
+    let limit = 200000
+    let mut sieve: Vec<bool> = []
+    let mut cnt: Vec<int> = []
+    let mut last: Vec<int> = []
+    let mut i = 0
+    while i <= limit {
+        sieve.push(true)
+        cnt.push(0)
+        last.push(0)
+        i += 1
+    }
+    let mut c = 0
+    let mut l = 0
+    i = 2
+    while i <= limit {
+        if sieve[i] {
+            c += 1
+            l = i
+            let mut j = i * i
+            while j <= limit {
+                sieve[j] = false
+                j += i
+            }
+        }
+        cnt[i] = c
+        last[i] = l
+        i += 1
+    }
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut first = true
+    let mut t = 0
+    for line in text.lines() {
+        let s = line.trim()
+        if s == "" { continue }
+        if first {
+            first = false
+            t = s.parse::<int>().unwrap_or(0)
+            continue
+        }
+        let n = s.parse::<int>().unwrap_or(0)
+        if n < 2 {
+            println("0 none")
+        } else {
+            println("${cnt[n]} ${last[n]}")
+        }
+    }
+}

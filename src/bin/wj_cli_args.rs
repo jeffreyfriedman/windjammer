@@ -165,6 +165,11 @@ pub enum Commands {
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
 
+        /// Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message,
+        /// first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command
+        #[arg(long, value_name = "FORMAT", value_parser = ["human", "agent"])]
+        error_format: Option<String>,
+
         /// Interpreted runs: also start a compiled build of the same content in the background (lowest priority,
         /// offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033)
         #[arg(long, conflicts_with_all = ["compiled", "release", "verify"])]
@@ -524,6 +529,11 @@ pub enum Commands {
         /// Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...)
         #[arg(long)]
         fix: bool,
+
+        /// Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message,
+        /// first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command
+        #[arg(long, value_name = "FORMAT", value_parser = ["human", "agent"])]
+        error_format: Option<String>,
     },
 
     /// Add a dependency to wj.toml

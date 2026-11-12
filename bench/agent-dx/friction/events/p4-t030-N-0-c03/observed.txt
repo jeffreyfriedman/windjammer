@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+    --> main.rs:62:50
+     |
+  62 | ...                   if !acc.contains_key(parts[1]) {
+error[E0308]: mismatched types
+    --> main.rs:65:54
+     |
+  65 | ...                   if !acc.contains_key(parts[2]) {
+For more information about this error, try `rustc --explain E0308`.
+warning: `windjammer` (bin "windjammer") generated 2 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 5 previous errors; 2 warnings emitted
+Error: Cargo build failed
+error: could not compile `windjammer` (bin "windjammer") due to 5 previous errors; 2 warnings emit

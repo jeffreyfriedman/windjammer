@@ -1,0 +1,11 @@
+error[E0308]: mismatched types
+   --> main.rs:160:30
+    |
+160 |                     d = show(&Box::new(RTri { a: p[1].parse::<i64>().unwrap_or(0_i64), b: p[2].parse::<i64>().unwrap_or(0_i64) }));
+error[E0308]: mismatched types
+   --> main.rs:163:34
+    |
+163 | ... = show(&Box::new(Trap { a: p[1].parse::<i64>().unwrap_or(0_i64), b: p[2].parse::<i64>().unwrap_or(0_i64), h: p[3].parse::<i64>().unwrap_or(0_i64) }));
+For more information about this error, try `rustc --explain E0308`.
+warning: `windjammer` (bin "windjammer") generated 2 warnings
+error: could not compile `windjammer` (bin "windjamme

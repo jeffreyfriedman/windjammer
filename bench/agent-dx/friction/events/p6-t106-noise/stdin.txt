@@ -1,0 +1,9 @@
+add a 3
+add b 5
+add c 5
+pop
+peek
+size
+pop
+pop
+pop

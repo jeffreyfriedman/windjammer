@@ -1,0 +1,300 @@
+// Offline cost proxies of ADR-0037 that do not need the friction corpus:
+//   (e) CPU time of the agent loop's commands on a small and a medium program: `wj check`, `wj run --interpret`,
+//       `wj run --compiled` after an edit (cold) and again (warm), `wj run --verify`;
+//   (f) tokens to write: lines and approximate tokens (bytes / 4) of the Windjammer and Rust reference solutions of the
+//       same tasks (bench/agent-dx/solutions), and of the programs the pilot-6 agents finished with (arm R against U, V2).
+//
+//   wj run --interpret --allow 'fs.read=**' --allow 'fs.write=**' --allow 'process=*' --allow 'env.read=*' \
+//       bench/agent-dx/friction/cost_proxies.wj -- --wj /abs/path/to/wj [--repo .] [--write] [--times]
+//
+// Load guard (as scripts/interp_compare.sh): times are recorded only when the 1-minute load average is below
+// WJ_BENCH_MAX_LOAD (default 16) before and after the timed runs, and when repeated runs agree within a factor of 3;
+// otherwise they are printed, marked noisy, and `cost.time.*` keeps its previous values. Times are CPU (user + system,
+// child processes included, `/usr/bin/time -p`), median of 3.
+use std::env
+use std::fs
+use std::json
+use std::process
+use std::strings
+
+fn q(s: string) -> string {
+    "'" + strings::replace(s, "'", "'\\''") + "'"
+}
+
+fn sh(line: string) -> (int, string) {
+    match process::run_with_output("sh", ["-c", line]) {
+        Ok(o) => (o.status as int, o.stdout + o.stderr),
+        Err(e) => (127, e),
+    }
+}
+
+fn jstr(s: string) -> string {
+    json::stringify(json::json_string(s)) ?? "\"\""
+}
+
+fn ratio(a: int, b: int) -> string {
+    if b == 0 {
+        return "0"
+    }
+    ((a * 1000 / b) as f64 / 1000.0).to_string()
+}
+
+fn loc(text: string) -> int {
+    let mut n = 0
+    for l in strings::split_lines(text) {
+        if strings::trim(l).len() > 0 {
+            n = n + 1
+        }
+    }
+    n
+}
+
+fn load() -> f64 {
+    let (_, out) = sh("sysctl -n vm.loadavg 2>/dev/null || cut -d' ' -f1 /proc/loadavg")
+    let parts = strings::split_whitespace(strings::replace(strings::replace(out, "{", ""), "}", ""))
+    if parts.len() == 0 { 999.0 } else { parts[0].parse::<f64>() ?? 999.0 }
+}
+
+/// CPU milliseconds of one shell line (user + sys of its children).
+fn cpu_ms(line: string) -> int {
+    let (_, out) = sh("/usr/bin/time -p sh -c " + q(line + " >/dev/null 2>&1") + " 2>&1 >/dev/null")
+    let mut t = 0.0
+    for l in strings::split_lines(out) {
+        let p = strings::split_whitespace(l)
+        if p.len() == 2 && (p[0] == "user" || p[0] == "sys") {
+            t = t + (p[1].parse::<f64>() ?? 0.0)
+        }
+    }
+    (t * 1000.0) as int
+}
+
+fn median3(a: int, b: int, c: int) -> int {
+    let mut v = [a, b, c]
+    v.sort()
+    v[1]
+}
+
+struct Timing {
+    key: string,
+    ms: int,
+    spread_ok: bool,
+}
+
+fn time3(key: string, setup: string, line: string) -> Timing {
+    let mut v: Vec<int> = Vec::new()
+    for _ in 0..3 {
+        if setup.len() > 0 {
+            sh(setup)
+        }
+        v.push(cpu_ms(line))
+    }
+    let m = median3(v[0], v[1], v[2])
+    let mut lo = v[0]
+    let mut hi = v[0]
+    for x in v {
+        lo = lo.min(x)
+        hi = hi.max(x)
+    }
+    Timing { key: key, ms: m, spread_ok: lo == 0 || hi <= lo * 3 }
+}
+
+fn main() {
+    let args = env::args()
+    let mut wj = ""
+    let mut repo = "."
+    let mut write = false
+    let mut times = false
+    let mut i = 1
+    while i < args.len() {
+        if args[i] == "--wj" && i + 1 < args.len() {
+            wj = args[i + 1]
+            i = i + 1
+        } else if args[i] == "--repo" && i + 1 < args.len() {
+            repo = args[i + 1]
+            i = i + 1
+        } else if args[i] == "--write" {
+            write = true
+        } else if args[i] == "--times" {
+            times = true
+        }
+        i = i + 1
+    }
+    if wj == "" || !strings::starts_with(wj, "/") {
+        println("usage: cost_proxies.wj -- --wj /absolute/path/to/wj [--repo DIR] [--write] [--times]")
+        process::exit(2)
+    }
+    let bench = repo + "/bench/agent-dx"
+    let (_, version) = sh(q(wj) + " --version")
+    let vc = strings::split(version, "commit ")
+    let commit = if vc.len() > 1 { strings::split(vc[1], " ")[0] } else { "unknown" }
+    let mut m: Vec<(string, string)> = Vec::new()
+
+    // (f) reference solutions: every task with both a Windjammer and a Rust solution
+    let mut tasks = 0
+    let mut wj_b = 0
+    let mut rs_b = 0
+    let mut wj_l = 0
+    let mut rs_l = 0
+    let mut names: Vec<string> = Vec::new()
+    for e in fs::read_dir(bench + "/solutions/wj") ?? Vec::new() {
+        names.push(e.name())
+    }
+    names.sort()
+    for t in names {
+        let w = fs::read_to_string(bench + "/solutions/wj/" + t + "/main.wj") ?? ""
+        let r = fs::read_to_string(bench + "/solutions/rust/" + t + "/main.rs") ?? ""
+        if w.len() > 0 && r.len() > 0 {
+            tasks = tasks + 1
+            wj_b = wj_b + w.len() as int
+            rs_b = rs_b + r.len() as int
+            wj_l = wj_l + loc(w)
+            rs_l = rs_l + loc(r)
+        }
+    }
+    m.push(("cost.write.ref_tasks", tasks.to_string()))
+    m.push(("cost.write.ref_wj_tokens_per_task", (wj_b / 4 / tasks.max(1)).to_string()))
+    m.push(("cost.write.ref_rust_tokens_per_task", (rs_b / 4 / tasks.max(1)).to_string()))
+    m.push(("cost.write.ref_wj_loc_per_task", (wj_l / tasks.max(1)).to_string()))
+    m.push(("cost.write.ref_rust_loc_per_task", (rs_l / tasks.max(1)).to_string()))
+    m.push(("cost.write.ref_token_ratio_wj_over_rust", ratio(wj_b, rs_b)))
+
+    // (f) what the pilot-6 agents wrote: final programs of arm R (Rust) against U and V2 (Windjammer)
+    let tdir = bench + "/results/pilot6/trials"
+    let mut wj_n = 0
+    let mut rs_n = 0
+    let mut wj_t = 0
+    let mut rs_t = 0
+    for e in fs::read_dir(tdir) ?? Vec::new() {
+        let v = json::parse(fs::read_to_string(tdir + "/" + e.name()) ?? "{}") ?? json::object()
+        let src = match json::get(v, "final_source") {
+            Some(x) => json::as_str(x) ?? "",
+            None => "",
+        }
+        let lang = match json::get(v, "lang") {
+            Some(x) => json::as_str(x) ?? "",
+            None => "",
+        }
+        if src.len() == 0 {
+            continue
+        }
+        if lang == "wj" {
+            wj_n = wj_n + 1
+            wj_t = wj_t + src.len() as int / 4
+        } else {
+            rs_n = rs_n + 1
+            rs_t = rs_t + src.len() as int / 4
+        }
+    }
+    m.push(("cost.write.pilot6_wj_tokens_per_program", (wj_t / wj_n.max(1)).to_string()))
+    m.push(("cost.write.pilot6_rust_tokens_per_program", (rs_t / rs_n.max(1)).to_string()))
+    m.push(("cost.write.pilot6_token_ratio_wj_over_rust", ratio(wj_t * rs_n.max(1), rs_t * wj_n.max(1))))
+
+    // the pilot-6 result itself, for the book's cost page (arm means from results/pilot6/report.json)
+    let rep = json::parse(fs::read_to_string(bench + "/results/pilot6/report.json") ?? "{}") ?? json::object()
+    let arms = json::get(rep, "arms") ?? json::object()
+    for arm in ["R", "U", "V2"] {
+        for (metric, scale) in [("cost", 1000.0), ("turns", 10.0), ("pass", 100.0)] {
+            let mean = match json::get(arms, metric) {
+                Some(by_arm) => match json::get(by_arm, arm) {
+                    Some(ci) => json::as_f64(json::get_index(ci, 0) ?? json::null()) ?? 0.0,
+                    None => 0.0,
+                },
+                None => 0.0,
+            }
+            let rounded = ((mean * scale + 0.5) as int) as f64 / scale
+            m.push(("cost.pilot6." + arm + "." + metric, rounded.to_string()))
+        }
+    }
+    // which loop the interpreted-first+verify agents actually ran
+    let mut verify_calls = 0
+    let mut interp_calls = 0
+    let mut check_calls = 0
+    for e in fs::read_dir(tdir) ?? Vec::new() {
+        if !strings::contains(e.name(), ".V2.") {
+            continue
+        }
+        let v = json::parse(fs::read_to_string(tdir + "/" + e.name()) ?? "{}") ?? json::object()
+        let invs = json::get(v, "invocations") ?? json::array()
+        for i in 0..json::len(invs) {
+            let inv = json::get_index(invs, i) ?? json::object()
+            let verb = json::as_str(json::get(inv, "verb") ?? json::null()) ?? ""
+            let mode = json::as_str(json::get(inv, "mode") ?? json::null()) ?? ""
+            if verb == "run" && mode == "default" {
+                verify_calls = verify_calls + 1
+            } else if verb == "run" && mode == "interpret" {
+                interp_calls = interp_calls + 1
+            } else if verb == "check" {
+                check_calls = check_calls + 1
+            }
+        }
+    }
+    m.push(("cost.loop.v2_verify_calls", verify_calls.to_string()))
+    m.push(("cost.loop.v2_interpret_calls", interp_calls.to_string()))
+    m.push(("cost.loop.v2_check_calls", check_calls.to_string()))
+
+    // (e) loop command times
+    let mut quiet = true
+    if times {
+        let max_load = (env::get("WJ_BENCH_MAX_LOAD") ?? "16").parse::<f64>() ?? 16.0
+        let l0 = load()
+        let scratch = env::temp_dir() + "/wj-cost-times"
+        sh("rm -rf " + q(scratch) + " && mkdir -p " + q(scratch + "/small") + " " + q(scratch + "/medium"))
+        fs::write(scratch + "/small/main.wj", "fn main() {\n    let mut total = 0\n    for i in 0..1000 {\n        total += i\n    }\n    println(\"total \" + total.to_string())\n}\n").unwrap_or(())
+        sh("cp " + q(bench + "/solutions/wj-set2/t104_activity_log/main.wj") + " " + q(scratch + "/medium/main.wj"))
+        fs::write(scratch + "/medium/in.txt", "ann login 1\nbob login 2\nann edit 3\nann edit 4\nbob logout 9\n").unwrap_or(())
+        fs::write(scratch + "/small/in.txt", "").unwrap_or(())
+        let mut ts: Vec<Timing> = Vec::new()
+        for size in ["small", "medium"] {
+            let d = scratch + "/" + size
+            let c = "cd " + q(d) + " && "
+            let w = q(wj)
+            let edit = "printf '// edit\\n' >> " + q(d + "/main.wj")
+            ts.push(time3("cost.time." + size + ".check_ms", "", c + w + " check main.wj"))
+            ts.push(time3("cost.time." + size + ".interpret_ms", "", c + w + " run --interpret main.wj < in.txt"))
+            ts.push(time3("cost.time." + size + ".compiled_after_edit_ms", edit, c + w + " run --compiled main.wj < in.txt"))
+            ts.push(time3("cost.time." + size + ".compiled_warm_ms", "", c + w + " run --compiled main.wj < in.txt"))
+            ts.push(time3("cost.time." + size + ".verify_warm_ms", "", c + w + " run --verify main.wj < in.txt"))
+        }
+        let l1 = load()
+        quiet = l0 < max_load && l1 < max_load
+        for t in ts {
+            quiet = quiet && t.spread_ok
+            println("${t.key} = ${t.ms}${if t.spread_ok { "" } else { " (runs disagree by more than 3x)" }}")
+            m.push((t.key, t.ms.to_string()))
+        }
+        println("load average ${l0} before, ${l1} after (limit ${max_load})")
+        if !quiet {
+            println("times: machine not quiet; printed above, not recorded")
+        }
+        sh("rm -rf " + q(scratch))
+    }
+    for (k, v) in m {
+        if !strings::starts_with(k, "cost.time.") {
+            println("${k} = ${v}")
+        }
+    }
+    if write {
+        let mpath = repo + "/docs/generated/measured.json"
+        let doc = json::parse(fs::read_to_string(mpath) ?? "{}") ?? json::object()
+        let mut lines: Vec<string> = Vec::new()
+        let mut mine: Vec<string> = Vec::new()
+        for (k, v) in m {
+            if quiet || !strings::starts_with(k, "cost.time.") {
+                mine.push(k)
+            }
+        }
+        for k in json::keys(doc) {
+            if !mine.contains(k) {
+                lines.push("  " + jstr(k) + ": " + (json::stringify(json::get(doc, k) ?? json::object()) ?? "null"))
+            }
+        }
+        let cmd = "wj run --interpret bench/agent-dx/friction/cost_proxies.wj -- --wj WJ --write" + (if times { " --times" } else { "" })
+        for (k, v) in m {
+            if mine.contains(k) {
+                lines.push("  " + jstr(k) + ": {\"value\": " + v + ", \"commit\": " + jstr(commit) + ", \"command\": " + jstr(cmd) + "}")
+            }
+        }
+        fs::write(mpath, "{\n" + strings::join(lines, ",\n") + "\n}\n").unwrap_or(())
+        println("wrote the cost.write/time keys of ${mpath}")
+    }
+}

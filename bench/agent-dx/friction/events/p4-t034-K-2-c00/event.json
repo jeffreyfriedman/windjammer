@@ -1,0 +1,16 @@
+{
+  "id": "p4-t034-K-2-c00",
+  "pilot": "pilot4",
+  "task": "t034_shapes_trait",
+  "arm": "K",
+  "arm_name": "compiled-first+sheet",
+  "trial": 2,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

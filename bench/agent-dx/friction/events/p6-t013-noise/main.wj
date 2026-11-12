@@ -1,0 +1,122 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut keys: Vec<int> = []
+    let mut lefts: Vec<int> = []
+    let mut rights: Vec<int> = []
+    let mut root: int = -1
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().collect()
+        if parts.len() == 0 { continue }
+        let cmd = parts[0]
+        let mut x: int = 0
+        if parts.len() > 1 { x = parts[1].parse::<int>().unwrap_or(0) }
+        if cmd == "insert" || cmd == "contains" || cmd == "delete" {
+            let mut cur = root
+            let mut parent: int = -1
+            let mut isleft = false
+            while cur != -1 && keys[cur as usize] != x {
+                parent = cur
+                if x < keys[cur as usize] {
+                    isleft = true
+                    cur = lefts[cur as usize]
+                } else {
+                    isleft = false
+                    cur = rights[cur as usize]
+                }
+            }
+            if cmd == "contains" {
+                if cur != -1 { println("yes") } else { println("no") }
+            } else if cmd == "insert" {
+                if cur != -1 {
+                    println("dup")
+                } else {
+                    let id: int = keys.len() as int
+                    keys.push(x)
+                    lefts.push(-1)
+                    rights.push(-1)
+                    if parent == -1 {
+                        root = id
+                    } else if isleft {
+                        lefts[parent as usize] = id
+                    } else {
+                        rights[parent as usize] = id
+                    }
+                    println("ok")
+                }
+            } else {
+                if cur == -1 {
+                    println("missing")
+                } else {
+                    let l = lefts[cur as usize]
+                    let r = rights[cur as usize]
+                    if l != -1 && r != -1 {
+                        let mut sp = cur
+                        let mut s = r
+                        while lefts[s as usize] != -1 {
+                            sp = s
+                            s = lefts[s as usize]
+                        }
+                        keys[cur as usize] = keys[s as usize]
+                        if sp == cur {
+                            rights[sp as usize] = rights[s as usize]
+                        } else {
+                            lefts[sp as usize] = rights[s as usize]
+                        }
+                    } else {
+                        let child = if l != -1 { l } else { r }
+                        if parent == -1 {
+                            root = child
+                        } else if isleft {
+                            lefts[parent as usize] = child
+                        } else {
+                            rights[parent as usize] = child
+                        }
+                    }
+                    println("ok")
+                }
+            }
+        } else if cmd == "inorder" {
+            let mut out: Vec<string> = []
+            let mut stack: Vec<int> = []
+            let mut cur = root
+            while cur != -1 || stack.len() > 0 {
+                while cur != -1 {
+                    stack.push(cur)
+                    cur = lefts[cur as usize]
+                }
+                let n = stack.pop().unwrap_or(-1)
+                out.push("${keys[n as usize]}")
+                cur = rights[n as usize]
+            }
+            if out.len() == 0 { println("<empty>") } else { println(out.join(" ")) }
+        } else if cmd == "height" {
+            let mut h = 0
+            let mut level: Vec<int> = []
+            if root != -1 { level.push(root) }
+            while level.len() > 0 {
+                h += 1
+                let mut next: Vec<int> = []
+                for n in level {
+                    if lefts[n as usize] != -1 { next.push(lefts[n as usize]) }
+                    if rights[n as usize] != -1 { next.push(rights[n as usize]) }
+                }
+                level = next
+            }
+            println("${h}")
+        } else if cmd == "min" || cmd == "max" {
+            if root == -1 {
+                println("empty")
+            } else {
+                let mut cur = root
+                if cmd == "min" {
+                    while lefts[cur as usize] != -1 { cur = lefts[cur as usize] }
+                } else {
+                    while rights[cur as usize] != -1 { cur = rights[cur as usize] }
+                }
+                println("${keys[cur as usize]}")
+            }
+        }
+    }
+}

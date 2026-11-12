@@ -37,7 +37,7 @@ class ClaudeAgent:
         use_stream = bool(self.stream)
         argv = A.claude_argv(arm, task, self.model, self.max_turns, self.max_trial_usd, self.claude_bin, cfg, use_stream)
         env = dict(os.environ, PATH=shim_dir + os.pathsep + os.environ.get("PATH", ""),
-                   CLAUDE_CODE_DISABLE_AUTO_MEMORY="1")
+                   CLAUDE_CODE_DISABLE_AUTO_MEMORY="1", **(A.ARMS[arm].get("env") or {}))
         env.pop("WJ_BIN", None)
         try:
             p = subprocess.run(argv, cwd=ws, env=env, capture_output=True, text=True, timeout=self.timeout)
@@ -62,6 +62,9 @@ def _usage(j):
     u = j.get("usage") or {}
     tin = sum(u.get(k, 0) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
     return {"tokens_in": tin, "tokens_out": u.get("output_tokens", 0), "cost_usd": j.get("total_cost_usd"),
+            "split": {"fresh": u.get("input_tokens", 0) or 0, "cache_write": u.get("cache_creation_input_tokens", 0) or 0,
+                      "cache_read": u.get("cache_read_input_tokens", 0) or 0, "output": u.get("output_tokens", 0) or 0},
+            "model_usage": j.get("modelUsage"),
             "turns": j.get("num_turns"), "api_seconds": (j.get("duration_api_ms") or 0) / 1000.0,
             "subtype": j.get("subtype"), "is_error": j.get("is_error"),
             "permission_denials": len(j.get("permission_denials") or []),
@@ -116,7 +119,7 @@ def analyse_invocations(log, lang="wj"):
 def violations(arm, inv):
     """Calls using the other arm's loop commands. D may build; native baselines have no modes."""
     loop = A.ARMS[arm]["loop"]
-    if loop.startswith("native"):
+    if loop.startswith("native") or loop == "verify-one-command":
         return 0
     if loop == "interpreted-plus-build":
         return sum(1 for r in inv if r["verb"] in S.VERIFY_VERBS and r["mode"] == "compiled" and r["verb"] != "build")
@@ -191,6 +194,7 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"
     api = u["api_seconds"] if u["api_seconds"] is not None else None
     tr = {"schema": SCHEMA, "task": task, "arm": arm, "arm_name": A.ARMS[arm]["name"], "trial": trial,
+          "model": getattr(agent, "model", None),
           "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
           "final_grade": _slim(g["compiled"]), "pass_final": cpass,
           "interp_grade": _slim(g["interp"]),

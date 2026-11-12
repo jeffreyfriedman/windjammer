@@ -1,0 +1,113 @@
+use std::fs
+
+struct P {
+    toks: Vec<string>,
+    pos: int,
+    out: Vec<string>,
+    ok: bool,
+}
+
+impl P {
+    fn peek(self) -> string {
+        if self.pos < self.toks.len() as int {
+            self.toks[self.pos as usize]
+        } else {
+            ""
+        }
+    }
+
+    fn expr(self) {
+        self.term()
+        while self.ok {
+            let t = self.peek()
+            if t == "+" || t == "-" {
+                self.pos += 1
+                self.term()
+                self.out.push(t)
+            } else {
+                break
+            }
+        }
+    }
+
+    fn term(self) {
+        self.factor()
+        while self.ok {
+            let t = self.peek()
+            if t == "*" || t == "/" {
+                self.pos += 1
+                self.factor()
+                self.out.push(t)
+            } else {
+                break
+            }
+        }
+    }
+
+    fn factor(self) {
+        self.primary()
+        if self.ok && self.peek() == "^" {
+            self.pos += 1
+            self.factor()
+            self.out.push("^")
+        }
+    }
+
+    fn primary(self) {
+        let t = self.peek()
+        if t == "(" {
+            self.pos += 1
+            self.expr()
+            if self.ok && self.peek() == ")" {
+                self.pos += 1
+            } else {
+                self.ok = false
+            }
+        } else if t != "" && t[0..1] >= "0" && t[0..1] <= "9" {
+            self.pos += 1
+            self.out.push(t)
+        } else {
+            self.ok = false
+        }
+    }
+}
+
+fn convert(line: string) -> string {
+    let mut toks: Vec<string> = []
+    let mut num = ""
+    for c in line.chars() {
+        if c >= '0' && c <= '9' {
+            num = num + c.to_string()
+        } else {
+            if num != "" {
+                toks.push(num)
+                num = ""
+            }
+            if c == ' ' || c == '\t' || c == '\r' {
+            } else if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '(' || c == ')' {
+                toks.push(c.to_string())
+            } else {
+                return "error"
+            }
+        }
+    }
+    if num != "" {
+        toks.push(num)
+    }
+    let mut p = P { toks: toks, pos: 0, out: [], ok: true }
+    p.expr()
+    if !p.ok || p.pos != p.toks.len() as int {
+        return "error"
+    }
+    p.out.join(" ")
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim() == "" {
+            continue
+        }
+        println(convert(line))
+    }
+}

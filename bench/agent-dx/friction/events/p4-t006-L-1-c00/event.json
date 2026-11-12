@@ -1,0 +1,16 @@
+{
+  "id": "p4-t006-L-1-c00",
+  "pilot": "pilot4",
+  "task": "t006_base_convert",
+  "arm": "L",
+  "arm_name": "interpreted-first+sheet",
+  "trial": 1,
+  "call": 0,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 1,
+  "command": "wj run --interpret main.wj",
+  "source": "reconstructed",
+  "class": "user-error-good-message",
+  "reason": "Windjammer lint with help/fix"
+}

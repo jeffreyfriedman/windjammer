@@ -1,0 +1,16 @@
+{
+  "id": "p6-t101-U-1-c03",
+  "pilot": "pilot6",
+  "task": "t101_json_orders",
+  "arm": "U",
+  "arm_name": "compiled-first",
+  "trial": 1,
+  "call": 3,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "noise",
+  "reason": "build progress and rustc warnings in front of the program's own exit status"
+}

@@ -1,0 +1,16 @@
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:18:37
+   |
+18 |     let mut totals: HashMap<string, int> = HashMap::new()
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:18:37
+   |
+18 |     let mut totals: HashMap<string, int> = HashMap::new()
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:18:37
+   |
+18 |     let mut totals: HashMap<string, int> = HashMap::new()
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:44:1
+   |
+44 |         } else {

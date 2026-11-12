@@ -1,0 +1,46 @@
+use std::fs
+
+fn digit_val(c: char) -> int {
+    let b = c as int
+    if b >= 48 && b <= 57 {
+        b - 48
+    } else if b >= 65 && b <= 90 {
+        b - 55
+    } else {
+        b - 87
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if parts.len() < 3 {
+            continue
+        }
+        let from: int = parts[1].parse::<int>().unwrap_or(10)
+        let to: int = parts[2].parse::<int>().unwrap_or(10)
+        let mut v: int = 0
+        for c in parts[0].chars() {
+            v = v * from + digit_val(c)
+        }
+        if v == 0 {
+            println("0")
+            continue
+        }
+        let mut out: Vec<char> = []
+        while v > 0 {
+            let d = (v % to) as usize
+            out.push(digits.chars().nth(d).unwrap())
+            v = v / to
+        }
+        let mut s = ""
+        let mut i = out.len()
+        while i > 0 {
+            i -= 1
+            s = s + out[i].to_string()
+        }
+        println(s)
+    }
+}

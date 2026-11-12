@@ -916,3 +916,11 @@ statement = "Project directory (default: the current directory)"
 [[promise]]
 id = "wj rust-surface --write"
 statement = "Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one)"
+
+[[promise]]
+id = "wj check --error-format"
+statement = "Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command"
+
+[[promise]]
+id = "wj run --error-format"
+statement = "Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command"

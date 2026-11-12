@@ -1,0 +1,13 @@
+warning: explicit .clone() call [W0005]
+  --> <ws>/main.wj:29:26
+  = note: Windjammer auto-clones values when moved and used again
+  = help: remove .clone() - the compiler infers cloning automatically
+  = suggestion: remove .clone() and let the compiler handle it
+
+Building Windjammer project from "<ws>" (target: rust)
+Output: "/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpck3EDd"
+
+Success! Transpilation complete!
+
+Success! Transpilation complete (cargo build skipped)!
+Run ca

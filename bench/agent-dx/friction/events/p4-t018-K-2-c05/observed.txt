@@ -1,0 +1,8 @@
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:19:41
+   |
+19 |                     k = k * 10 + (ch as int - '0' as int)
+error[WJ0003]: mismatched types: expected `&i64`, found `int`
+  --> main.wj:19:41
+   |
+19 |                     k = k * 10 + (ch as int - '0' as int)

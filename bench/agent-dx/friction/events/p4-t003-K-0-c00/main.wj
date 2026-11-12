@@ -1,0 +1,56 @@
+use std::fs
+
+fn main() {
+    let limit = 200000
+    let mut comp: Vec<bool> = []
+    let mut cnt: Vec<int> = []
+    let mut last: Vec<int> = []
+    let mut i = 0
+    while i <= limit {
+        comp.push(false)
+        cnt.push(0)
+        last.push(0)
+        i += 1
+    }
+    let mut p = 2
+    while p <= limit {
+        if !comp[p] {
+            let mut m = p * p
+            while m <= limit {
+                comp[m] = true
+                m += p
+            }
+        }
+        p += 1
+    }
+    let mut c = 0
+    let mut l = 0
+    let mut k = 0
+    while k <= limit {
+        if k >= 2 && !comp[k] {
+            c += 1
+            l = k
+        }
+        cnt[k] = c
+        last[k] = l
+        k += 1
+    }
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut first = true
+    for line in text.lines() {
+        if first {
+            first = false
+            continue
+        }
+        let s = line.trim()
+        if s.len() == 0 {
+            continue
+        }
+        let n: int = s.parse::<int>().unwrap_or(0)
+        if n < 2 {
+            println("0 none")
+        } else {
+            println("${cnt[n]} ${last[n]}")
+        }
+    }
+}

@@ -1,0 +1,7 @@
+error: explicit .unwrap() call [W0002]
+  --> <ws>/main.wj:35:44
+  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead
+  = help: write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`
+Error: Rust leakage errors:
+Rust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI
+Building Windjammer project from "<ws>" (t
