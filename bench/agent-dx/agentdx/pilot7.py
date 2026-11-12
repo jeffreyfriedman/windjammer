@@ -9,7 +9,9 @@ import os
 import shutil
 import tempfile
 
-from . import arms as A, budget as B, costdecomp as CD, pilot as PL, tasks as T, workspace as W
+import sys
+
+from . import arms as A, budget as B, costdecomp as CD, pilot as PL, spend as SP, tasks as T, workspace as W
 from .paths import ROOT
 
 CONFIG = os.path.join(os.path.dirname(__file__), "pilot7_config.json")
@@ -29,11 +31,18 @@ def use_tasks(cfg):
     T.TASKS = tasks_dir(cfg)
 
 
+DEFAULT_SEED = 0   # the order of tasks/arms inside a round; recorded in every trial and the final report
+
+
+def seed_of(cfg):
+    return cfg.get("seed", DEFAULT_SEED)
+
+
 def matrix(cfg):
     """[(model, task, arm, trial)] in run order: cheapest model first, round-robin by trial inside a model."""
     out = []
     for model, mc in cfg["models"].items():
-        out += [(model, t, a, k) for t, a, k in PL.plan(cfg["tasks"], cfg["arms"], mc.get("trials_per_cell", cfg["trials_per_cell"]))]
+        out += [(model, t, a, k) for t, a, k in PL.plan(cfg["tasks"], cfg["arms"], mc.get("trials_per_cell", cfg["trials_per_cell"]), seed_of(cfg))]
     return out
 
 
@@ -50,6 +59,17 @@ class MatrixGuard:
         self.done = {m: 0 for m in cfg["models"]}
         self.spent_by = {m: 0.0 for m in cfg["models"]}
         self.aborted = {}
+        self.stopped = {}   # model -> {model, spent_usd, cap_usd, projection_usd, reason}
+
+    def _stop(self, m, reason):
+        self.aborted[m] = reason
+        self.stopped[m] = {"model": m, "spent_usd": round(self.spent, 4), "cap_usd": self.cap,
+                           "projection_usd": round(self.projection(), 4), "reason": reason}
+        return reason
+
+    def add_spend(self, m, usd):
+        """Money spent that is not a counted trial (an unfinished or re-run attempt)."""
+        self.spent_by[m] += usd
 
     @property
     def spent(self):
@@ -67,12 +87,10 @@ class MatrixGuard:
         if m in self.aborted:
             return self.aborted[m]
         if self.spent + self.trial_cap[m] > self.cap:
-            self.aborted[m] = f"hard cap: spent ${self.spent:.2f} + one {m} trial at its cap ${self.trial_cap[m]:.2f} > ${self.cap:.2f}"
-            return self.aborted[m]
+            return self._stop(m, f"hard cap: spent ${self.spent:.2f} + one {m} trial at its cap ${self.trial_cap[m]:.2f} > ${self.cap:.2f}")
         if self.done[m] >= self.check_after and self.projection() > self.cap:
-            self.aborted[m] = (f"projection after {self.done[m]} {m} trials (mean ${self.mean(m):.3f}): ${self.projection():.2f} "
-                               f"> cap ${self.cap:.2f}; {m} stopped")
-            return self.aborted[m]
+            return self._stop(m, f"projection after {self.done[m]} {m} trials (mean ${self.mean(m):.3f}): ${self.projection():.2f} "
+                                 f"> cap ${self.cap:.2f}; {m} stopped")
         return None
 
     def record(self, m, usd):
@@ -87,30 +105,111 @@ def decompose_trial(tr, cfg):
     return CD.decompose(split, tr.get("turn_log") or [], tr.get("final_source", ""), price, u.get("cost_usd"), u.get("model_usage"))
 
 
-def run_matrix(cfg, out_dir, agent_for, say=print, grader=PL.default_grader, real_wj=None):
-    """agent_for(model) -> agent with .run(); one trial at a time (pilot 6: parallel trials shared a binary)."""
+def trial_id(m, task, arm, k):
+    return f"{m}/{task}.{arm}.{k}"
+
+
+def charged_usd(tr):
+    u = tr.get("usage") or {}
+    c = u.get("charged_usd")
+    return c if c is not None else (u.get("cost_usd") or 0.0)
+
+
+def restore_guard(g, cfg, out_dir, ledger, say=print):
+    """Resume: settle unfinished attempts from their stream logs, then count every ledger attempt (finished at its
+    actual, unfinished at its reserved cap) and every recorded trial that the ledger does not know (older runs)."""
+    ledger.reconcile({m: cfg["prices"][m] for m in cfg["models"]}, say)
+    seen = {a["trial"] for a in ledger.attempts()}
+    for m in cfg["models"]:
+        for tr in PL.load_trials(os.path.join(out_dir, m)):
+            g.done[m] += 1
+            if trial_id(m, tr["task"], tr["arm"], tr["trial"]) not in seen:
+                g.add_spend(m, charged_usd(tr))
+    for a in ledger.attempts():
+        g.add_spend(a["model"], ledger.charged(a))
+        if a["usd"] is None:
+            say(f"ledger: unfinished attempt {a['trial']} counts at its reserved cap ${a['cap_usd']:.2f}")
+
+
+def say_stopped(info, say):
+    say(f"STOPPED model={info['model']} spent=${info['spent_usd']:.2f} cap=${info['cap_usd']:.2f} "
+        f"projection=${info['projection_usd']:.2f}: {info['reason']}")
+
+
+def run_matrix(cfg, out_dir, agent_for, say=None, grader=PL.default_grader, real_wj=None):
+    """agent_for(model) -> agent with .run(); one trial at a time (pilot 6: parallel trials shared a binary).
+
+    Spend safety (pilot 7 readiness): every attempt is reserved in <out>/spend.jsonl at its per-trial cap before the
+    model is called and settled with the actual after; a timed-out trial is recorded (status 'timeout', excluded from
+    grading, counted in spend) and re-run on resume only when cfg['rerun_timeouts'] is true; a stopped model prints a
+    stderr line and leaves <out>/STOPPED."""
+    say = say or (lambda m: print(m, flush=True))
     use_tasks(cfg)
+    os.makedirs(out_dir, exist_ok=True)
     rows = matrix(cfg)
     g = MatrixGuard(cfg, rows)
-    for m in cfg["models"]:           # resume: count trials already on disk
-        for tr in PL.load_trials(os.path.join(out_dir, m)):
-            g.record(m, (tr.get("usage") or {}).get("cost_usd"))
+    ledger = SP.Ledger(os.path.join(out_dir, "spend.jsonl"))
+    restore_guard(g, cfg, out_dir, ledger, say)
+    rerun = bool(cfg.get("rerun_timeouts", False))
+    reported = set()
     agents = {}
     for m, task, arm, k in rows:
         mdir = os.path.join(out_dir, m)
-        if os.path.exists(os.path.join(mdir, "trials", f"{task}.{arm}.{k}.json")):
-            continue
+        rec = os.path.join(mdir, "trials", f"{task}.{arm}.{k}.json")
+        if os.path.exists(rec):
+            if not (rerun and json.load(open(rec)).get("status") == "timeout"):
+                continue
+            g.done[m] -= 1   # re-run: the timed-out attempt's money stays counted, the trial is counted again when it finishes
         why = g.allow(m)
         if why:
+            if m not in reported:
+                reported.add(m)
+                say_stopped(g.stopped[m], lambda x: print(x, file=sys.stderr, flush=True))
             continue
         agents.setdefault(m, agent_for(m))
-        tr = PL.run_trial(task, arm, agents[m], k, mdir, grader, real_wj)
-        tr["model"] = m
+        tid = trial_id(m, task, arm, k)
+        stream = os.path.join(mdir, "work", f"{task}.{arm}.{k}", "claude.stream.jsonl")
+        if os.path.exists(stream):
+            os.remove(stream)    # a stale log must never be read as this attempt's
+        cap = cfg["models"][m]["per_trial_usd_cap"]
+        attempt = ledger.start(tid, m, cap, stream)
+        g.add_spend(m, cap)      # reserved while the model runs
+        try:
+            tr = PL.run_trial(task, arm, agents[m], k, mdir, grader, real_wj)
+        except BaseException:
+            usd, basis = SP.cost_from_stream(open(stream, errors="replace").read() if os.path.exists(stream) else "", cfg["prices"][m])
+            ledger.end(attempt, cap if usd is None else usd, "error", "per_trial_cap" if usd is None else basis)
+            raise
+        u = tr["usage"]
+        charged, basis = u["cost_usd"], u.get("cost_basis", "result")
+        if charged is None:   # no cost reported (crashed CLI): partial stream, else the per-trial cap
+            charged, basis = SP.cost_from_stream(open(stream, errors="replace").read() if os.path.exists(stream) else "", cfg["prices"][m])
+            if charged is None:
+                charged, basis = cap, "per_trial_cap"
+        u["charged_usd"], u["cost_basis"] = charged, basis
+        tr["model"], tr["seed"] = m, seed_of(cfg)
         tr["cost_decomposition"] = decompose_trial(tr, cfg)
-        g.record(m, tr["usage"]["cost_usd"])
+        g.spent_by[m] += charged - cap    # replace the reservation by the actual
+        g.done[m] += 1
+        ledger.end(attempt, charged, tr["status"], basis)
         PL.save(tr, mdir)
-        say(f"{m} {task} {arm} {k} pass={tr['pass_final']} turns={tr['usage']['turns']} cost={tr['usage']['cost_usd']} spent=${g.spent:.2f}")
-    return {"spent_usd": round(g.spent, 4), "done": g.done, "aborted": g.aborted}
+        say(f"{m} {task} {arm} {k} {tr['status']} pass={tr['pass_final']} turns={u['turns']} cost={charged} ({basis}) spent=${g.spent:.2f}")
+    return finish(cfg, out_dir, g, say)
+
+
+def finish(cfg, out_dir, g, say):
+    """Final JSON (also written to <out>/final.json); <out>/STOPPED exists iff a model was stopped."""
+    r = {"spent_usd": round(g.spent, 4), "done": g.done, "aborted": g.aborted, "stopped": list(g.stopped.values()),
+         "seed": seed_of(cfg), "hard_cap_usd": g.cap}
+    with open(os.path.join(out_dir, "final.json"), "w") as f:
+        json.dump(r, f, indent=1, sort_keys=True)
+    marker = os.path.join(out_dir, "STOPPED")
+    if g.stopped:
+        with open(marker, "w") as f:
+            json.dump(r["stopped"], f, indent=1)
+    elif os.path.exists(marker):
+        os.remove(marker)
+    return r
 
 
 def _check(ok, msg, problems):

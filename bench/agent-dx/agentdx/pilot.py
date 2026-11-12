@@ -10,8 +10,9 @@ import shutil
 import subprocess
 import time
 
-from . import tasks as T, arms as A, budget as B, diagnostics as dg, grade as G, shim as S, workspace as W
+from . import tasks as T, arms as A, budget as B, diagnostics as dg, grade as G, shim as S, spend as SP, workspace as W
 from .runners import wj_bin
+from .toolchains import wj_identity
 
 SCHEMA = 2
 DENIAL_MIN_TRIALS, DENIAL_MAX_SHARE = 8, 0.85   # stop when the sandbox policy, not the language, blocks most trials
@@ -22,8 +23,8 @@ PILOT_TASKS = ["t003_prime_counts", "t006_base_convert", "t009_rpn_eval", "t011_
 class ClaudeAgent:
     """Runs `claude -p` inside the sandbox with the wj shim first on PATH."""
 
-    def __init__(self, model="sonnet", max_turns=25, max_trial_usd=2.0, claude_bin="claude", timeout=1500, stream=False):
-        self.stream = stream
+    def __init__(self, model="sonnet", max_turns=25, max_trial_usd=2.0, claude_bin="claude", timeout=1500, stream=False, prices=None):
+        self.stream, self.prices = stream, prices
         self.model, self.max_turns, self.max_trial_usd = model, max_turns, max_trial_usd
         self.claude_bin, self.timeout = claude_bin, timeout
 
@@ -39,11 +40,22 @@ class ClaudeAgent:
         env = dict(os.environ, PATH=shim_dir + os.pathsep + os.environ.get("PATH", ""),
                    CLAUDE_CODE_DISABLE_AUTO_MEMORY="1", **(A.ARMS[arm].get("env") or {}))
         env.pop("WJ_BIN", None)
-        try:
-            p = subprocess.run(argv, cwd=ws, env=env, capture_output=True, text=True, timeout=self.timeout)
-            out, code = p.stdout, p.returncode
-        except subprocess.TimeoutExpired:
-            return {"json": None, "exit": -9, "log": "agent timeout"}
+        # stdout goes to a file in the trial dir, not a pipe: a timeout or a kill keeps the partial stream, which is
+        # how the spend of an unfinished trial is measured (spend.py).
+        self.stream_path = os.path.join(os.path.dirname(shim_dir), "claude.stream.jsonl")
+        timed_out = False
+        with open(self.stream_path, "w") as so, open(self.stream_path + ".err", "w") as se:
+            try:
+                p = subprocess.run(argv, cwd=ws, env=env, stdout=so, stderr=se, text=True, timeout=self.timeout)
+                code = p.returncode
+            except subprocess.TimeoutExpired:
+                code, timed_out = -9, True
+        out = open(self.stream_path, errors="replace").read()
+        if timed_out:
+            usd, basis = SP.cost_from_stream(out, self.prices)
+            if usd is None:
+                usd, basis = self.max_trial_usd, "per_trial_cap"
+            return {"json": None, "exit": -9, "log": "agent timeout", "timed_out": True, "timeout_cost_usd": usd, "cost_basis": basis}
         if use_stream:
             j, log, tools = ST.parse(out)
             extra = ST.summarise(log, tools)
@@ -192,9 +204,14 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     an = analyse_invocations(S.read_log(log, tool), lang)
     u = _usage(res["json"])
     cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"
+    timed_out = bool(res.get("timed_out"))
+    if timed_out:   # the harness charges what the partial stream shows, else the per-trial cap; see spend.py
+        u["cost_usd"], u["cost_basis"] = res["timeout_cost_usd"], res["cost_basis"]
+    ident = wj_identity(real_wj or wj_bin()) if (real_wj or wj_bin()) else {"version": "", "commit": ""}
     api = u["api_seconds"] if u["api_seconds"] is not None else None
     tr = {"schema": SCHEMA, "task": task, "arm": arm, "arm_name": A.ARMS[arm]["name"], "trial": trial,
           "model": getattr(agent, "model", None),
+          "status": "timeout" if timed_out else "completed", "excluded_from_grading": timed_out,
           "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
           "final_grade": _slim(g["compiled"]), "pass_final": cpass,
           "interp_grade": _slim(g["interp"]),
@@ -210,7 +227,7 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
           **(res.get("extra") or {}),
           "predictions": an["predictions"], "prediction_shown": bool(an["predictions"]), "compile_errors": an["compile_errors"],
           "failing_verify_calls": an["failing_verify_calls"], "fix_calls": an["fix_calls"], "verify_used": any("--verify" in e["argv"] for e in S.read_log(log, tool)),
-          "wj_version": os.environ.get("AGENTDX_WJ_VERSION", ""),
+          "wj_version": ident["version"], "wj_commit": ident["commit"],
           "invocations": an["invocations"], "verify_calls": an["verify_calls"],
           "verify_calls_to_green": an["verify_calls_to_green"], "diagnostic_categories": an["categories"],
           "mode_violations": violations(arm, an["invocations"]),

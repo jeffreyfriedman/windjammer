@@ -184,6 +184,35 @@ and selected with `AGENTDX_TASKS_DIR`. Run the Windjammer arms one trial at a ti
 compiled binary (`docs/drift/pilot6-repros/same_dir_name_runs_other_binary.md`). Report: `python3 -m agentdx pilot6-report --trials-dir results/pilot6 --notes results/pilot6/notes.md --md ... --json ...`
 (results and the ADR-0033 acceptance table in `results/pilot6/report.md`).
 
+## Pilot 7 (models x arms, paid): spend safety, configuration, preflight
+
+`python3 -m agentdx pilot7 [--dry-run | --yes] [--seed N] [--out results/pilot7]`; config `agentdx/pilot7_config.json`. Without `--yes` it validates and exits 3.
+
+**Spend accounting.** Every attempt is reserved in `<out>/spend.jsonl` (append-only, fsynced) at its per-trial cap before the model is called and settled with the
+actual cost after. On resume the guard counts settled attempts at their actual, unfinished ones (the process was killed) at their reserved cap, unless the stream log
+the harness keeps per trial (`<out>/<model>/work/<trial>/claude.stream.jsonl`) lets it settle them from Claude Code's own cost or the per-turn usage. A re-run trial
+never discards the money of its earlier attempts. A trial that hits the 1500 s agent timeout is recorded with `status: "timeout"`, `excluded_from_grading: true` and its
+cost (the partial stream priced at the config's table, else the per-trial cap); the report leaves it out of every metric but counts its spend. Resume re-runs it only with
+`"rerun_timeouts": true` in the config. Orphaned `claude` processes of a `kill -9` keep billing: check `pgrep -x claude` before resuming.
+
+**Stopping.** When the hard cap or the projection stops a model, the harness prints `STOPPED model=... spent=... cap=... projection=...` on stderr, writes `<out>/STOPPED` and
+`<out>/final.json` (same content as the final JSON line, with `stopped`, `seed`, `hard_cap_usd`) and exits 4.
+
+**Seed.** `seed` in the config (default 0, the value used so far) or `--seed N` fixes the order of tasks and arms inside each round; it is written into every trial record, `final.json` and the report.
+
+**Environment variables.**
+
+| Variable | Meaning |
+|---|---|
+| `WJ_BIN` | the wj binary the harness uses (else the first `wj` on PATH) |
+| `AGENTDX_RUSTC` | real rustc (not the rustup proxy) for arm R and grading |
+| `AGENTDX_WJ_VERSION`, `AGENTDX_WJ` | optional cross-checks, never sources: the harness derives the version and commit from `<wj> --version`, stores them as `wj_version` / `wj_commit` in every trial, and refuses to start when either variable is set and disagrees with the binary it uses |
+| `AGENTDX_TIMEOUT_SCALE`, `AGENTDX_CARGO_TARGET`, `CARGO_BUILD_JOBS` | grader build timeouts and cargo target / jobs |
+
+**Preflight.** `python3 -m agentdx pilot7-preflight --expect-commit <sha> [--accepted friction/pilot7-accepted.txt] [--min-free-mem-gb 4]` checks the wj binary (commit prefix, clean, release, env
+consistency), load average against `NOISY_LOAD`, available memory, the dry run, and that every open event of `friction/open-bugs.md` on a configured task is covered by a line
+`<event-id-prefix> <reason>` in the accepted file (`#` comments allowed). It prints GREEN/RED per check and exits 1 on any red, so `preflight.sh` can call it.
+
 ## Self-tests (`tests/`, `python3 -m unittest discover -s tests`)
 
 - `test_oracle.py`: vectors reproducible from seeds; samples are a subset of the hidden vectors; every task has >= 25 cases with
@@ -196,6 +225,7 @@ compiled binary (`docs/drift/pilot6-repros/same_dir_name_runs_other_binary.md`).
 - `test_driver.py`: scripted agents drive the loop (green first try, wrong-then-good, syntax-error-then-fix with the right
   first-error-to-fix distance, in-turn `./check` logging, never-green), the workspace never contains oracle data, replay is
   deterministic and detects a tampered transcript, the report aggregates correctly.
+- `test_pilot7_safety.py`: timeout accounting with a stub `claude`, the spend ledger and resume, the stop signal, seed, wj identity and preflight (no model call).
 - `test_diagnostics.py`: category mapping and the output comparison rule.
 
 ## Baseline (reference solutions, hidden vectors, Oct 2026 toolchains)
