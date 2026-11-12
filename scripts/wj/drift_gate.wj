@@ -74,7 +74,7 @@ fn ran_text(text: string) -> string {
     for line in strings.split_lines(text) {
         match line.find("finished in ") {
             Some(i) => {
-                let rest = line[i + 12..].to_string()
+                let rest = line[i + 12..]
                 return " (ran ${strings.trim(rest)})"
             },
             None => {},
@@ -208,7 +208,7 @@ fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step
         Err(_) => {},
     }
     let mut cases = ""
-    let adopt_arg = if adopt != "" { format!("--adopt '{}'", adopt) } else { "".to_string() }
+    let adopt_arg = if adopt != "" { "--adopt '${adopt}'" } else { "" }
     if ok {
         match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} ${if prune { "--prune" } else { "" }} ${adopt_arg} 2>&1") {
             Ok(r) => {
