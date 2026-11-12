@@ -50,7 +50,7 @@ fn main_file(target: string) -> string {
 
 fn env_for(mode: string, outdir: string) -> string {
     let on = if mode == "on" { "1" } else { "0" }
-    "WJ_ALLOW_TOOLCHAIN_MISMATCH=1 WJ_EXPERIMENT_SELF_FIELD_MOVE=" + on + " CARGO_TARGET_DIR='" + outdir + "/target-" + mode + "' "
+    "export WJ_ALLOW_TOOLCHAIN_MISMATCH=1 WJ_EXPERIMENT_SELF_FIELD_MOVE=" + on + " CARGO_TARGET_DIR='" + outdir + "/target-" + mode + "'; "
 }
 
 fn count_clones(dir: string) -> int {
@@ -83,8 +83,8 @@ fn main() {
         let off_out = outdir + "/off/" + s
         let on_out = outdir + "/on/" + s
         sh("rm -rf '" + off_out + "' '" + on_out + "'")
-        sh(env_for("off", outdir) + build_cmd(wj, target, off_out, false) + " > /dev/null 2>&1")
-        sh(env_for("on", outdir) + build_cmd(wj, target, on_out, false) + " > /dev/null 2>&1")
+        sh(env_for("off", outdir) + "(" + build_cmd(wj, target, off_out, false) + ") > /dev/null 2>&1")
+        sh(env_for("on", outdir) + "(" + build_cmd(wj, target, on_out, false) + ") > /dev/null 2>&1")
         let off = count_clones(off_out)
         let on = count_clones(on_out)
         total_off = total_off + off
@@ -93,8 +93,8 @@ fn main() {
         let mut build_on = "-"
         let mut behaviour = "-"
         if compile {
-            build_off = status(env_for("off", outdir) + build_cmd(wj, target, off_out + "-cargo", true))
-            build_on = status(env_for("on", outdir) + build_cmd(wj, target, on_out + "-cargo", true))
+            build_off = status(env_for("off", outdir) + "(" + build_cmd(wj, target, off_out + "-cargo", true) + ")")
+            build_on = status(env_for("on", outdir) + "(" + build_cmd(wj, target, on_out + "-cargo", true) + ")")
             let m = main_file(target)
             if off != on && m != "" {
                 let interp = sh("'" + wj + "' run --interpret '" + m + "' 2>/dev/null")
