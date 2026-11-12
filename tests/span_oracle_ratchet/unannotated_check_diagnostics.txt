@@ -559,7 +559,6 @@ tests/spec/types/SPEC-TYP-003.wj W0013
 tests/spec/types/SPEC-TYP-009.wj WJ0011
 tests/stdlib_all_tests.wj WJ0011
 tests/struct_pattern_tests.wj W0009
-tests/tuple_enum_variants.wj W0009,WJ0010
 tests/type_registry_imports_test.wj WJ0011
 tests/vec_index_local_var.wj W0002
 tests/windjammer_tests/regression_enum_kill_payload_extract_test.wj W0006
