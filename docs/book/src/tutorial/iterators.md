@@ -18,6 +18,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBbMiwgNCwgNiwgOF0KZm4gbWFpbigpIHsKICAgIGxldCB2ID0gWzEsIDIsIDMsIDRdCiAgICBsZXQgZG91YmxlZDogVmVjPGludD4gPSB2Lm1hcCh8eHwgeCAqIDIpLmNvbGxlY3QoKQogICAgcHJpbnRsbigiJHtkb3VibGVkOj99IikKfQo)
+
 `filter` hands your closure a reference to each item, which is why the closures below write `*x`; follow it with
 `.cloned()` when you want to collect values (see [Collections and strings](collections-and-strings.md)). Ranges are iterators too, so `skip`, `take` and `rev`
 cut and reverse them:
@@ -30,6 +32,8 @@ fn main() {
     println("${down:?} ${window:?}")
 }
 ```
+
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBbMywgMiwgMV0gWzMsIDQsIDVdCmZuIG1haW4oKSB7CiAgICBsZXQgZG93bjogVmVjPGludD4gPSAoMS4uPTMpLnJldigpLmNvbGxlY3QoKQogICAgbGV0IHdpbmRvdzogVmVjPGludD4gPSAoMS4uPTEwKS5za2lwKDIpLnRha2UoMykuY29sbGVjdCgpCiAgICBwcmludGxuKCIke2Rvd246P30gJHt3aW5kb3c6P30iKQp9Cg)
 
 ## Consumers produce one answer
 
@@ -46,6 +50,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiAxMCAyNApmbiBtYWluKCkgewogICAgbGV0IHYgPSBbMSwgMiwgMywgNF0KICAgIGxldCB0b3RhbCA9IHYuZm9sZCgwLCB8YWNjLCB4fCBhY2MgKyB4KQogICAgbGV0IHByb2R1Y3QgPSB2LmZvbGQoMSwgfGFjYywgeHwgYWNjICogeCkKICAgIHByaW50bG4oIiR7dG90YWx9ICR7cHJvZHVjdH0iKQp9Cg)
+
 ```wj
 // expect: 3 of 5 are odd
 fn main() {
@@ -54,6 +60,8 @@ fn main() {
     println("${odd} of ${v.len()} are odd")
 }
 ```
+
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiAzIG9mIDUgYXJlIG9kZApmbiBtYWluKCkgewogICAgbGV0IHYgPSBbMSwgMiwgMywgNCwgNV0KICAgIGxldCBvZGQgPSB2LmZpbHRlcih8eHwgKnggJSAyID09IDEpLmNvdW50KCkKICAgIHByaW50bG4oIiR7b2RkfSBvZiAke3YubGVuKCl9IGFyZSBvZGQiKQp9Cg)
 
 ## Chains
 
@@ -69,6 +77,8 @@ fn main() {
     println("${squares.sum::<int>()}")
 }
 ```
+
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiAyMApmbiBtYWluKCkgewogICAgbGV0IHYgPSBbMSwgMiwgMywgNF0KICAgIGxldCBldmVuczogVmVjPGludD4gPSB2LmZpbHRlcih8eHwgKnggJSAyID09IDApLmNsb25lZCgpLmNvbGxlY3QoKQogICAgbGV0IHNxdWFyZXM6IFZlYzxpbnQ-ID0gZXZlbnMubWFwKHx4fCB4ICogeCkuY29sbGVjdCgpCiAgICBwcmludGxuKCIke3NxdWFyZXMuc3VtOjo8aW50PigpfSIpCn0K)
 
 `enumerate` pairs each item with its position, and a `for` loop consumes any of these directly:
 `for (i, item) in names.enumerate()`. Maps iterate as `(key, value)` pairs; their order is not specified, so sort

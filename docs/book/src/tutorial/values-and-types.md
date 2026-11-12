@@ -63,6 +63,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBbMTAsIDIwLCAzMF0KZm4gbWFpbigpIHsKICAgIGxldCBtdXQgeHMgPSBbMSwgMiwgM10KICAgIGZvciBtdXQgeCBpbiB4cyB7CiAgICAgICAgeCA9IHggKiAxMAogICAgfQogICAgcHJpbnRsbigiJHt4czo_fSIpCn0K)
+
 Patterns carry the marker where it applies: `for (id, mut qty) in items`. Leave it out and `WJ0051` points at the loop
 variable and offers the fix; `wj fix` writes it for you ([Tooling](tooling.md#fix-wj-fix)).
 

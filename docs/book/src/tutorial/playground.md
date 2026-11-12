@@ -60,10 +60,12 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiB0b3RhbCA0MgovLyBleHBlY3Q6IGRvbmUKdXNlIHN0ZDo6dGhyZWFkCgpmbiB3b3JrKG46IGludCkgLT4gaW50IHsKICAgIG4gKiAyCn0KCmZuIG1haW4oKSB7CiAgICBsZXQgYSA9IHRocmVhZDo6c3Bhd24obW92ZSB8fCB3b3JrKDEwKSkKICAgIGxldCBiID0gdGhyZWFkOjpzcGF3bihtb3ZlIHx8IHdvcmsoMTEpKQogICAgbGV0IHRvdGFsID0gYS5qb2luKCkudW53cmFwX29yKDApICsgYi5qb2luKCkudW53cmFwX29yKDApCiAgICBwcmludGxuKCJ0b3RhbCAke3RvdGFsfSIpCiAgICBwcmludGxuKCJkb25lIikKfQo)
+
 ## Several files
 
 The playground API takes a whole in-memory source tree, which is how the book checks its multi-file samples: a project
-with `wj.toml`, `src/main.wj` and modules is run in the browser's interpreter and compared with the native run. The
+with a manifest, a main file and modules is run in the browser's interpreter and compared with the native run. The
 page's editor holds one file today, so a multi-file project is something you run with `wj run`; a multi-file editor is
 on the roadmap.
 
