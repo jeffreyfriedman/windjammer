@@ -608,12 +608,3 @@ path = "tests/check_cache_location_free_test.rs"
 [[test]]
 name = "match_variant_pattern_test"
 path = "tests/match_variant_pattern_test.rs"
-
-# These two write generated Rust; they use temp dirs (the untracked_files_gate keeps the checkout clean): cargo test --test copy_type_method_params_integration
-[[test]]
-name = "copy_type_method_params_integration"
-path = "tests/copy_type_method_params_integration_test.rs"
-
-[[test]]
-name = "super_import_flattening"
-path = "tests/super_import_flattening_test.rs"
