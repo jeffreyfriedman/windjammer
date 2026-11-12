@@ -31,6 +31,19 @@ fn ledger_lines(text: &str) -> Vec<&str> {
     text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect()
 }
 
+/// The streams that own known divergences (the same list as `OWNERS` in scripts/wj/drift_ledger.wj).
+const OWNERS: [&str; 9] = [
+    "numeric-width",
+    "codegen-refs",
+    "codegen-types",
+    "codegen-ownership",
+    "runtime-surface",
+    "parser-lexer",
+    "language-decision",
+    "gate-harness",
+    "interp-literal-typing",
+];
+
 fn check_ledger(text: &str, ceiling: usize) -> Result<(), String> {
     let lines = ledger_lines(text);
     if lines.len() > ceiling {
@@ -42,8 +55,12 @@ fn check_ledger(text: &str, ceiling: usize) -> Result<(), String> {
     let mut seen = HashSet::new();
     for l in &lines {
         let f: Vec<&str> = l.split(" | ").collect();
-        if f.len() != 3 || f.iter().any(|x| x.trim().is_empty()) {
-            return Err(format!("ledger line without `id | signature | reason`: {l}"));
+        if f.len() != 4 || f.iter().any(|x| x.trim().is_empty()) {
+            return Err(format!("ledger line without `id | signature | reason | owner: STREAM`: {l}"));
+        }
+        let owner = f[3].trim().strip_prefix("owner: ").unwrap_or("").trim();
+        if !OWNERS.contains(&owner) {
+            return Err(format!("ledger line without a known owner stream ({}): {l}", OWNERS.join(", ")));
         }
         if !f[1].starts_with("walker=") || !f[1].contains(" resolved=") || !f[1].contains(" compiled=") {
             return Err(format!("ledger signature is not `walker=A resolved=B compiled=C`: {l}"));
@@ -67,12 +84,14 @@ fn the_divergence_ledger_stays_within_its_ceiling() {
 /// Self-test: the check notices each way a ledger can go wrong.
 #[test]
 fn the_ledger_check_notices_growth_and_malformed_lines() {
-    let good = "# header\na | walker=x resolved=x compiled=y | why\nb | walker=x resolved=x compiled=y | why\n";
+    let good = "# header\na | walker=x resolved=x compiled=y | why | owner: codegen-types\nb | walker=x resolved=x compiled=y | why | owner: numeric-width\n";
     assert!(check_ledger(good, 2).is_ok());
     assert!(check_ledger(good, 1).unwrap_err().contains("above its ceiling"), "growth must fail");
-    assert!(check_ledger("a | walker=x resolved=x compiled=y |\n", 5).is_err(), "missing reason");
-    assert!(check_ledger("a | something else | why\n", 5).is_err(), "bad signature");
-    let dup = "a | walker=x resolved=x compiled=y | why\na | walker=x resolved=x compiled=z | why\n";
+    assert!(check_ledger("a | walker=x resolved=x compiled=y | | owner: codegen-types\n", 5).is_err(), "missing reason");
+    assert!(check_ledger("a | something else | why | owner: codegen-types\n", 5).is_err(), "bad signature");
+    assert!(check_ledger("a | walker=x resolved=x compiled=y | why\n", 5).unwrap_err().contains("owner"), "no owner");
+    assert!(check_ledger("a | walker=x resolved=x compiled=y | why | owner: nobody\n", 5).unwrap_err().contains("known owner"), "unknown owner");
+    let dup = "a | walker=x resolved=x compiled=y | why | owner: codegen-types\na | walker=x resolved=x compiled=z | why | owner: codegen-types\n";
     assert!(check_ledger(dup, 5).unwrap_err().contains("duplicate"));
 }
 

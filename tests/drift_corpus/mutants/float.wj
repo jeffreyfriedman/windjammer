@@ -1,0 +1,5 @@
+fn main() {
+    let x: f64 = 2.5
+    let y: f64 = -2.7
+    println("${x.round()} ${y.round()} ${x.floor()}")
+}

@@ -182,6 +182,14 @@ pub fn register(r: &mut Registry) {
     super::iter::register(r);
 }
 
+// test-only mutant `seq` (debug builds): `reverse` leaves the vector as it is
+fn reverse_vec(it: &mut Interpreter, v: &mut Value, _: Vec<Value>) -> R {
+    if !it.mutant("seq") {
+        vec_mut(v).reverse();
+    }
+    Ok(Value::Unit)
+}
+
 fn register_vec(r: &mut Registry) {
     r.pure(Kind::Vec, "len", |_, v, _| Ok(Value::usize(vec_of(v).len())));
     r.pure(Kind::Vec, "is_empty", |_, v, _| Ok(Value::Bool(vec_of(v).is_empty())));
@@ -367,10 +375,7 @@ fn register_vec(r: &mut Registry) {
         vv.swap(i, j);
         Ok(Value::Unit)
     });
-    r.mutating(Kind::Vec, "reverse", |_, v, _| {
-        vec_mut(v).reverse();
-        Ok(Value::Unit)
-    });
+    r.mutating(Kind::Vec, "reverse", reverse_vec);
     r.mutating(Kind::Vec, "resize", |_, v, a| {
         let n = arg_usize(&a, 0, "resize")?;
         let x = arg(&a, 1, "resize")?;

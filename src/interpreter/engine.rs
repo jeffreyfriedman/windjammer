@@ -620,6 +620,12 @@ pub(crate) struct FastHits {
 }
 
 impl Interpreter {
+    /// Test-only switch (debug builds, `WJ_JIT_MUTANT=<class>`): the named builtin class is deliberately broken, so the
+    /// drift gate's mutation checks can show they would notice (`tests/interpreter_builtin_mutants_test.rs`).
+    pub(crate) fn mutant(&self, class: &str) -> bool {
+        cfg!(debug_assertions) && self.jit_mutant.as_deref() == Some(class)
+    }
+
     /// Test-only switch (debug builds, `WJ_JIT_MUTANT=nofast-<path>`): the named fast path is not taken,
     /// so the gate that asserts each path fires can show it would notice.
     pub(crate) fn fast_off(&self, path: &str) -> bool {

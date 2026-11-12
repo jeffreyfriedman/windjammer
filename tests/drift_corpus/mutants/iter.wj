@@ -1,0 +1,5 @@
+fn main() {
+    let v = [10, 20, 30, 40]
+    let rest: Vec<int> = v.skip(2).collect()
+    println("${rest.len()} ${rest[0]}")
+}

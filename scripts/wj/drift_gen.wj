@@ -4,7 +4,7 @@
 // miss. Oracles: the tree walker for the resolved engine (stdout and exit status), and rustc for the compiled
 // backend (the generated Rust must type-check); `--run-compiled` also runs the compiled program and compares.
 //
-//   wj run scripts/wj/drift_gen.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled] [--only-write]
+//   wj run scripts/wj/drift_gen.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled] [--only-write] [--no-rustc]
 //
 // Rows (id <TAB> walker <TAB> resolved <TAB> compiled), like drift_corpus.wj:
 //   gen/seed-N          exit<N>:<bytes>:<checksum> of stdout under each engine (compiled: skip, or with --run-compiled)
@@ -222,9 +222,12 @@ fn main() {
     let mut lo = 1
     let mut hi = 60
     let mut compiled = false
+    let mut no_rustc = false
     let mut i = 4
     while i < args.len() {
-        if args[i] == "--seeds" {
+        if args[i] == "--no-rustc" {
+            no_rustc = true
+        } else if args[i] == "--seeds" {
             let parts = strings.split(args[i + 1], "..")
             lo = parts[0].parse::<int>().unwrap_or(1)
             hi = parts[1].parse::<int>().unwrap_or(40)
@@ -247,7 +250,9 @@ fn main() {
         let id = "gen/seed-${seed}"
         rows = rows + "${id}\t${w}\t${r}\t${c}\n"
         rows = rows + "${id}#runs\t${if strings.starts_with(w, "exit0:") { "runs" } else { "broken" }}\t${if strings.starts_with(r, "exit0:") { "runs" } else { "broken" }}\truns\n"
-        rows = rows + "${id}#rustc\ttypechecks\ttypechecks\t${rustc_verdict(wj, dir, file)}\n"
+        if !no_rustc {
+            rows = rows + "${id}#rustc\ttypechecks\ttypechecks\t${rustc_verdict(wj, dir, file)}\n"
+        }
         seed += 1
     }
     match fs.write(out, rows) {
