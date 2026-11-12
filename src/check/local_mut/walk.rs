@@ -59,6 +59,8 @@ pub struct Walker<'f> {
     macro_locs: Vec<SourceLocation>,
     closure_depth: usize,
     self_type: Option<Type>,
+    /// Names declared `mut` in `for` patterns, by the `for` statement's (line, column) (the parser's side table).
+    loop_mut: std::collections::HashSet<(usize, usize, String)>,
 }
 
 impl Env for Walker<'_> {
@@ -91,7 +93,14 @@ impl<'f> Walker<'f> {
             macro_locs: Vec::new(),
             closure_depth: 0,
             self_type: None,
+            loop_mut: Default::default(),
         }
+    }
+
+    /// The `for` patterns' `mut` names recorded by the parser.
+    pub fn with_loop_mut(mut self, names: &[(usize, usize, String)]) -> Self {
+        self.loop_mut = names.iter().cloned().collect();
+        self
     }
 
     fn lookup(&self, name: &str) -> Option<usize> {
@@ -261,6 +270,14 @@ impl<'f> Walker<'f> {
                 // borrow (iter / iter_mut / into_iter) stays inferred; `mut` is the visible sign the loop writes.
                 let elem = types::type_of(self.facts, self, iterable).and_then(|t| element_type(&t));
                 self.bind_pattern(pattern, elem, Kind::For, false, location);
+                if let Some(l) = location {
+                    let loop_scope = self.scopes.last().cloned().unwrap_or_default();
+                    for id in loop_scope {
+                        if self.loop_mut.contains(&(l.line, l.column, self.bindings[id].name.clone())) {
+                            self.bindings[id].declared_mut = true;
+                        }
+                    }
+                }
                 self.block(body);
                 self.scopes.pop();
             }
