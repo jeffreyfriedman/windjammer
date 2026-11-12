@@ -1871,8 +1871,6 @@ tests/drift_corpus/repros/mut_receiver_transitive_in_expr.wj#mainerr	none
 tests/drift_corpus/repros/mut_receiver_transitive_in_expr.wj	exit0:2:17897	
 tests/drift_corpus/repros/mut_receiver_tuple_binding.wj#mainerr	none	
 tests/drift_corpus/repros/mut_receiver_tuple_binding.wj	exit0:3:555096	
-tests/drift_corpus/repros/try_then_method_chain.wj#mainerr	none	
-tests/drift_corpus/repros/try_then_method_chain.wj	exit1:0:17	
 tests/drift_corpus/repros/vec_contains_local_ref.wj#mainerr	none	
 tests/drift_corpus/repros/vec_contains_local_ref.wj	exit0:11:182617260	
 tests/drift_corpus/repros/shadow_match_binding_literal.wj#mainerr	none	
@@ -1911,3 +1909,5 @@ tests/drift_corpus/repros/nested_map_unwrap_or_new.wj#mainerr	none
 tests/drift_corpus/repros/nested_map_unwrap_or_new.wj	exit1:0:17	
 tests/drift_corpus/repros/noise_warnings_in_build_output.wj#mainerr	none	
 tests/drift_corpus/repros/noise_warnings_in_build_output.wj	exit0:7:278344697	
+tests/drift_corpus/repros/try_then_method_chain.wj#mainerr	none	
+tests/drift_corpus/repros/try_then_method_chain.wj	exit0:4:19307120	
