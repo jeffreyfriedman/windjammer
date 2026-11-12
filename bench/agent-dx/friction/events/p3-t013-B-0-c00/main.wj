@@ -1,0 +1,200 @@
+use std::fs
+
+struct Bst {
+    keys: Vec<int>,
+    lefts: Vec<int>,
+    rights: Vec<int>,
+    root: int,
+}
+
+impl Bst {
+    fn contains(self, x: int) -> bool {
+        let mut cur = self.root
+        let mut found = false
+        while cur >= 0 {
+            let k = self.keys[cur]
+            if x == k {
+                found = true
+                cur = -1
+            } else if x < k {
+                cur = self.lefts[cur]
+            } else {
+                cur = self.rights[cur]
+            }
+        }
+        found
+    }
+
+    fn insert(self, x: int) -> bool {
+        if self.contains(x) {
+            return false
+        }
+        let idx: int = self.keys.len() as int
+        self.keys.push(x)
+        self.lefts.push(-1)
+        self.rights.push(-1)
+        if self.root < 0 {
+            self.root = idx
+            return true
+        }
+        let mut cur = self.root
+        let mut done = false
+        while !done {
+            if x < self.keys[cur] {
+                if self.lefts[cur] < 0 {
+                    self.lefts[cur] = idx
+                    done = true
+                } else {
+                    cur = self.lefts[cur]
+                }
+            } else {
+                if self.rights[cur] < 0 {
+                    self.rights[cur] = idx
+                    done = true
+                } else {
+                    cur = self.rights[cur]
+                }
+            }
+        }
+        true
+    }
+
+    // replace child link of parent (or root) that points to old with new
+    fn relink(self, parent: int, old: int, new: int) {
+        if parent < 0 {
+            self.root = new
+        } else if self.lefts[parent] == old {
+            self.lefts[parent] = new
+        } else {
+            self.rights[parent] = new
+        }
+    }
+
+    fn delete(self, x: int) -> bool {
+        let mut parent = -1
+        let mut cur = self.root
+        while cur >= 0 && self.keys[cur] != x {
+            parent = cur
+            if x < self.keys[cur] {
+                cur = self.lefts[cur]
+            } else {
+                cur = self.rights[cur]
+            }
+        }
+        if cur < 0 {
+            return false
+        }
+        let l = self.lefts[cur]
+        let r = self.rights[cur]
+        if l < 0 {
+            self.relink(parent, cur, r)
+        } else if r < 0 {
+            self.relink(parent, cur, l)
+        } else {
+            let mut sp = cur
+            let mut s = r
+            while self.lefts[s] >= 0 {
+                sp = s
+                s = self.lefts[s]
+            }
+            self.keys[cur] = self.keys[s]
+            let sr = self.rights[s]
+            self.relink(sp, s, sr)
+        }
+        true
+    }
+
+    fn inorder(self) -> string {
+        let mut out: Vec<string> = []
+        let mut stack: Vec<int> = []
+        let mut cur = self.root
+        while cur >= 0 || stack.len() > 0 {
+            while cur >= 0 {
+                stack.push(cur)
+                cur = self.lefts[cur]
+            }
+            let n = stack.pop().unwrap_or(-1)
+            out.push("${self.keys[n]}")
+            cur = self.rights[n]
+        }
+        if out.len() == 0 {
+            "<empty>"
+        } else {
+            out.join(" ")
+        }
+    }
+
+    fn height(self) -> int {
+        if self.root < 0 {
+            return 0
+        }
+        let mut best = 0
+        let mut nodes: Vec<int> = [self.root]
+        let mut depths: Vec<int> = [1]
+        while nodes.len() > 0 {
+            let n = nodes.pop().unwrap_or(-1)
+            let d = depths.pop().unwrap_or(0)
+            if d > best {
+                best = d
+            }
+            if self.lefts[n] >= 0 {
+                nodes.push(self.lefts[n])
+                depths.push(d + 1)
+            }
+            if self.rights[n] >= 0 {
+                nodes.push(self.rights[n])
+                depths.push(d + 1)
+            }
+        }
+        best
+    }
+
+    fn min(self) -> string {
+        if self.root < 0 {
+            return "empty"
+        }
+        let mut cur = self.root
+        while self.lefts[cur] >= 0 {
+            cur = self.lefts[cur]
+        }
+        "${self.keys[cur]}"
+    }
+
+    fn max(self) -> string {
+        if self.root < 0 {
+            return "empty"
+        }
+        let mut cur = self.root
+        while self.rights[cur] >= 0 {
+            cur = self.rights[cur]
+        }
+        "${self.keys[cur]}"
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut t = Bst { keys: [], lefts: [], rights: [], root: -1 }
+    for line in text.lines() {
+        let parts: Vec<string> = line.trim().split(" ").collect()
+        let cmd = parts[0]
+        if cmd == "insert" {
+            let x = parts[1].parse::<int>().unwrap_or(0)
+            if t.insert(x) { println("ok") } else { println("dup") }
+        } else if cmd == "contains" {
+            let x = parts[1].parse::<int>().unwrap_or(0)
+            if t.contains(x) { println("yes") } else { println("no") }
+        } else if cmd == "delete" {
+            let x = parts[1].parse::<int>().unwrap_or(0)
+            if t.delete(x) { println("ok") } else { println("missing") }
+        } else if cmd == "inorder" {
+            println(t.inorder())
+        } else if cmd == "height" {
+            println("${t.height()}")
+        } else if cmd == "min" {
+            println(t.min())
+        } else if cmd == "max" {
+            println(t.max())
+        }
+    }
+}

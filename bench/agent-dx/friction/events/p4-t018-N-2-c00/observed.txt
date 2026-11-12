@@ -1,0 +1,11 @@
+error: explicit .iter() call [W0003]
+  --> <ws>/main.wj:33:26
+  = note: Windjammer supports direct iteration
+  = help: write `for x in items` instead of `for x in items.iter()`
+  (error in `wj build`)
+warning: explicit .clone() call [W0005]
+  --> <ws>/main.wj:34:23
+  = note: Windjammer auto-clones values when moved and used again
+error: explicit .iter() call [W0003]
+  --> <ws>/main.wj:44:23
+  = note: Windjammer supports direc

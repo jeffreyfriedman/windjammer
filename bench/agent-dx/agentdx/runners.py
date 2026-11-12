@@ -57,7 +57,7 @@ class Runner:
     run_env = None      # extra environment for the program run
 
     def build_dir(self, wd):
-        d = os.path.join(wd, ".build")
+        d = os.path.join(os.path.abspath(wd), ".build")   # absolute: compilers run with cwd=wd (a relative --out doubled the path)
         os.makedirs(d, exist_ok=True)
         return d
 

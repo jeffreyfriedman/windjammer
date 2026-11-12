@@ -10,6 +10,7 @@
 - [A fast edit-run loop](showcase/fast-loop.md)
 - [Programs that ask for what they need](showcase/authority.md)
 - [Made for agents](showcase/agents.md)
+- [What it costs agents](showcase/agent-cost.md)
 - [How the interpreter stays honest](showcase/trust.md)
 - [What we have measured](showcase/measured.md)
 - [One source, many targets](showcase/one-source.md)

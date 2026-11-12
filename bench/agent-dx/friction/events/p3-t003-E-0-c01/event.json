@@ -1,0 +1,16 @@
+{
+  "id": "p3-t003-E-0-c01",
+  "pilot": "pilot3",
+  "task": "t003_prime_counts",
+  "arm": "E",
+  "arm_name": "tiny-pack+mcp",
+  "trial": 0,
+  "call": 1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

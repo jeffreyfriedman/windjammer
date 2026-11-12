@@ -25,7 +25,7 @@ Layer `tooling`. Reads `error_mapper`, `linter`, `intrinsics`, `source_map` type
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`codes::explain`, `codes::lookup`, `convert::*`, `render::render`, `apply::{collect_edits, apply_edits}`, `rustc_text::translate`, `hints::{mismatch, collect_elements}`, `runtime_text::classify`.
+`codes::explain`, `codes::lookup`, `convert::*`, `render::render` (human layout) and `render::render_as` with `render::Format::Agent` (one line per diagnostic; chosen by the driver from `--error-format agent` or `WJ_ERROR_FORMAT=agent`; ADR-0037), `apply::{collect_edits, apply_edits}`, `rustc_text::translate`, `hints::{mismatch, collect_elements}`, `runtime_text::classify`.
 
 ## Tests
 Unit tests in each file; tests/diagnostics_suite.rs (registry, goldens, schema, false-positive sweep).

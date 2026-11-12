@@ -1,0 +1,40 @@
+use std::fs
+use std::process
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut lines = text.lines()
+    let first = match lines.next() {
+        Some(l) => l.trim(),
+        None => "",
+    }
+    let w: int = match first.parse::<int>() {
+        Ok(n) => n,
+        Err(_) => 0,
+    }
+    if w <= 0 {
+        println("error: bad width")
+        process::exit(1)
+    }
+    let mut cur = ""
+    let mut curlen: int = 0
+    for line in lines {
+        for word in line.split_whitespace() {
+            let wl: int = word.len() as int
+            if curlen == 0 {
+                cur = word
+                curlen = wl
+            } else if curlen + 1 + wl <= w {
+                cur = "${cur} ${word}"
+                curlen = curlen + 1 + wl
+            } else {
+                println(cur)
+                cur = word
+                curlen = wl
+            }
+        }
+    }
+    if curlen > 0 {
+        println(cur)
+    }
+}

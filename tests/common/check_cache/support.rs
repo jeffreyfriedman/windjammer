@@ -44,7 +44,7 @@ pub fn compare(target: &Path, context: &str) -> Compared {
     assert_eq!(second.success, uncached.success, "{context}");
     for lints in [true, false] {
         let blocks = uncached.diagnostics.iter().any(|d| d.is_error() && (lints || !(d.code.len() == 5 && d.code.starts_with('W') && d.code[1..].bytes().all(|b| b.is_ascii_digit()))));
-        let gate = windjammer::cli::check::require_clean(target, lints);
+        let gate = windjammer::cli::check::require_clean(target, lints, Default::default());
         assert_eq!(gate.is_ok(), !blocks, "run gate (lints={lints}) differs from uncached check: {context}");
     }
     Compared { repeat_hit: second.summary.files_cached > 0, uncached }

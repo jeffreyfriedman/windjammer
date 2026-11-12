@@ -1,0 +1,16 @@
+{
+  "id": "p3-t018-B-0-c00",
+  "pilot": "pilot3",
+  "task": "t018_word_freq",
+  "arm": "B",
+  "arm_name": "compiled-first",
+  "trial": 0,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

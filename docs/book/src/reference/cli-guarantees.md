@@ -196,3 +196,5 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj rust-surface --fn` | Only these functions (repeatable); the cache copy always has every function | tested |
 | `wj rust-surface --path` | Project directory (default: the current directory) | tested |
 | `wj rust-surface --write` | Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one) | tested |
+| `wj check --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |
+| `wj run --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |

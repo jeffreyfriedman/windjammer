@@ -1,0 +1,14 @@
+error[W0004]: explicit borrow in function call
+  --> <ws>/main.wj:140:25
+    |
+140 |             walk(&keys, &l, &r, root, &mut out)
+error[W0004]: explicit borrow in function call
+  --> <ws>/main.wj:140:29
+    |
+140 |             walk(&keys, &l, &r, root, &mut out)
+error[W0004]: explicit borrow in function call
+  --> <ws>/main.wj:140:39
+    |
+140 |             walk(&keys, &l, &r, root, &mut out)
+error[W0004]: explicit borrow in function call
+ 

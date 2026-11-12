@@ -1,0 +1,5 @@
+ann login 5
+bob login 3
+ann edit 40
+ann edit 2
+bob logout 1

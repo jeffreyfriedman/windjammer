@@ -1,0 +1,4 @@
+error[WJ0007]: value `t` is used after it was moved
+  --> main.wj:94:13
+   |
+94 |     let mut t = Tree { keys: [], left: [], right: [], root: -1, out: [] }

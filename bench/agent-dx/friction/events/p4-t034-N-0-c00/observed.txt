@@ -1,0 +1,11 @@
+  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release
+  = help: replace `println("largest={} area2={}", best_name, best)` with `println("largest=${best_name} area2=${best}")` (or run `wj fix`)
+  = suggestion: println("largest=${best_name} area2=${best}")
+
+error[W0001]: explicit ownership annotation
+  --> <ws>/main.wj:35:13
+   |
+35 | fn show(sh: &dyn Shape) -> int {
+error[W0004]: explicit borrow in function call
+  --> <ws>/main.wj:57:18
+

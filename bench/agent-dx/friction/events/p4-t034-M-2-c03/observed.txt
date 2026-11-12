@@ -1,0 +1,10 @@
+error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`
+    --> main.rs:147:51
+     |
+ 147 |         let p = line.split_whitespace().collect::<Vec<String>>();
+For more information about this error, try `rustc --explain E0277`.
+warning: `windjammer` (bin "windjammer") generated 3 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 3 warnings emitted
+Error: Cargo build failed
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 3 warnings emitted
+Error: Cargo build f

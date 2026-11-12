@@ -1,0 +1,1 @@
+open-compiler-bug: WJ0003: mismatched types: expected `uint`, found `int`

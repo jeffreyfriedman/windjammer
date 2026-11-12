@@ -1,0 +1,16 @@
+{
+  "id": "p5-t107-V-1-c01",
+  "pilot": "pilot5",
+  "task": "t107_text_wrap",
+  "arm": "V",
+  "arm_name": "interpreted-first",
+  "trial": 1,
+  "call": 1,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 1,
+  "command": "wj run --interpret main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

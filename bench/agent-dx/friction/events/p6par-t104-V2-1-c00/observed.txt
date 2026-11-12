@@ -1,0 +1,13 @@
+error[WJ0003]: mismatched types: expected `uint`, found `int`
+  --> main.wj:18:37
+   |
+18 |     let mut counts: HashMap<string, int> = HashMap::new()
+error[WJ0003]: mismatched types: expected `&_`, found `string`
+  --> main.wj:18:29
+   |
+18 |     let mut counts: HashMap<string, int> = HashMap::new()
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:18:29
+   |
+18 |     let mut counts: HashMap<string, int> = HashMap::new()
+wj verify: the interpreter ran the program, but the compiled build failed (see the errors above): rustc is stricter than the

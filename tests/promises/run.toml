@@ -393,3 +393,18 @@ files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
 args = ["run", "--speculate", "--compiled", "{w}/m.wj"]
 exit = 2
 output_has = ["cannot be used with"]
+
+[[case]]
+name = "run --error-format agent prints the interpreter's refusal compactly"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"${missing}\")\n}\n" }
+args = ["run", "--interpret", "--error-format", "agent", "{w}/m.wj"]
+exit = 1
+output_has = ["m.wj:2:16: error WJ0001: cannot find value `missing`"]
+
+[[case]]
+name = "run --error-format agent runs a valid program unchanged"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+args = ["run", "--interpret", "--error-format", "agent", "{w}/m.wj"]
+stdout_has = ["ok"]

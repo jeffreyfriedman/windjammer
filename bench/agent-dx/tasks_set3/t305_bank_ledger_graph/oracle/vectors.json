@@ -1,0 +1,289 @@
+[
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open ann 100\nopen bob 20\nopen cy 0\niou ann bob 30\niou bob cy 50\niou cy ann 10\nsettle\nall\nhistory bob\ntransfer cy ann 50\n",
+  "stdout": "ann pays cy 20\nbob pays cy 20\nann: 80\nbob: 0\ncy: 40\nopen 20\nout 20 to cy\nerror: overdraft cy\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open a 10\nopen b 5\ntransfer a b 7\ntransfer a b 7\ntransfer b a 12\nbalance a\nbalance b\nbalance zed\nopen a 1\ntransfer a a 1\n",
+  "stdout": "error: overdraft a\na: 15\nb: 0\nerror: unknown account zed\nerror: account exists a\nerror: self transfer\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "all\nsettle\nbalance x\nhistory x\n",
+  "stdout": "(no accounts)\nnothing to settle\nerror: unknown account x\nerror: unknown account x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open a 0\nopen b 0\nopen c 0\niou a b 5\niou b c 5\nsettle\nsettle\nall\nhistory a\nhistory c\n",
+  "stdout": "a pays c 5 (failed: overdraft)\nnothing to settle\na: 0\nb: 0\nc: 0\nopen 0\nopen 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open a 10\nopen b 10\niou a b 5\niou b a 5\nsettle\nhistory a\n",
+  "stdout": "nothing to settle\nopen 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open a 100\nopen b 0\nopen c 0\nopen d 0\niou a b 10\niou a c 10\niou d a 5\nsettle\nall\n",
+  "stdout": "a pays b 10\na pays c 5\nd pays c 5 (failed: overdraft)\na: 85\nb: 10\nc: 5\nd: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open x 50\nopen y 50\nopen z 50\nopen w 50\niou x w 30\niou y w 30\niou z w 20\niou x z 1\nsettle\nall\n",
+  "stdout": "x pays w 31\ny pays w 30\nz pays w 19\nw: 130\nx: 19\ny: 20\nz: 31\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open a 1\nopen b 1\niou a b 100\nsettle\nhistory a\nhistory b\ntransfer a b 1\ntransfer a b 1\nhistory a\n",
+  "stdout": "a pays b 100 (failed: overdraft)\nopen 1\nopen 1\nerror: overdraft a\nopen 1\nout 1 to b\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open a\nopen a b c\nopen a -1\nopen a 1x\nopen a 1234567890\ntransfer a b\ntransfer a b 0\niou a b 0\nfoo\nbalance\nall now\nsettle now\nhistory\n open a 1\n",
+  "stdout": "error: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open a 5\niou q a 3\niou a q 3\niou a a 3\ntransfer q a 1\ntransfer a q 1\ntransfer a a 1\nopen b 5\ntransfer b a 6\nhistory b\n",
+  "stdout": "error: unknown account q\nerror: unknown account q\nerror: self transfer\nerror: unknown account q\nerror: unknown account q\nerror: self transfer\nerror: overdraft b\nopen 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open m 10\nopen n 10\nopen o 10\niou m n 7\niou m o 7\niou n o 7\niou o m 7\nsettle\nall\nhistory m\n",
+  "stdout": "m pays o 7\nm: 3\nn: 10\no: 17\nopen 10\nout 7 to o\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open Eve 500\nopen f1 50\nopen bob 100\nopen ann 100\nopen dee 10\niou f1 dee 4\niou Eve bob 46\niou Eve bob 20\niou ann f1 33\nsettle\niou bob bob 2\ntransfer Eve ann 113\nall\nsettle\nsettle\nall\n",
+  "stdout": "Eve pays bob 66\nann pays f1 29\nann pays dee 4\nerror: self transfer\nEve: 321\nann: 180\nbob: 166\ndee: 14\nf1: 79\nnothing to settle\nnothing to settle\nEve: 321\nann: 180\nbob: 166\ndee: 14\nf1: 79\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 100\nopen dee 50\nopen bob 0\niou bob dee 57\niou f1 dee 61\nsettle\nhistory f1\niou dee f1 31\niou f1 dee 75\nsettle\nhistory bob\ntransfer dee bob 43\nopen dup\niou bob f1 62\nbogus\nall\ntransfer a\niou f1 dee 63\ntransfer dee bob 79\nbogus\niou dee bob 40\ntransfer bob bob 66\niou dee dee 79\nsettle\nall\n",
+  "stdout": "f1 pays dee 61\nbob pays dee 57 (failed: overdraft)\nopen 100\nout 61 to dee\nf1 pays dee 44 (failed: overdraft)\nopen 0\nerror: bad command\nerror: bad command\nbob: 43\ndee: 68\nf1: 39\nerror: bad command\nerror: overdraft dee\nerror: bad command\nerror: self transfer\nerror: self transfer\nbob pays dee 22\nf1 pays dee 1\nbob: 21\ndee: 91\nf1: 38\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open dee 50\nopen ann 500\nopen bob 50\nsettle\nhistory bob\niou ann dee 13\niou bob bob 52\niou dee bob 19\niou dee dee 76\niou bob bob 50\niou dee dee 1\ntransfer dee bob 31\ntransfer bob bob 77\nall\niou dee dee 40\nsettle\nbalance dee\niou ann ann 15\niou ann dee 79\nsettle\nsettle\ntransfer bob dee 59\nsettle\nall\n",
+  "stdout": "nothing to settle\nopen 50\nerror: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\nann: 500\nbob: 81\ndee: 19\nerror: self transfer\nann pays bob 13\ndee pays bob 6\ndee: 13\nerror: self transfer\nann pays dee 79\nnothing to settle\nnothing to settle\nann: 408\nbob: 41\ndee: 151\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open cy 100\nopen dee 10\niou cy cy 61\ntransfer cy cy 69\niou cy dee 14\ntransfer cy cy 33\niou cy dee 50\ntransfer cy dee 38\ntransfer dee cy 34\niou cy dee 30\ntransfer dee dee 8\ntransfer cy dee 13\niou dee dee 24\ntransfer cy cy 112\nbalance dee\ntransfer cy cy 30\nsettle\nall\n",
+  "stdout": "error: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\ndee: 27\nerror: self transfer\ncy pays dee 94 (failed: overdraft)\ncy: 83\ndee: 27\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open bob 100\nopen cy 0\nopen f1 500\ntransfer f1 cy 69\nbalance f1\niou f1 bob 10\niou bob f1 11\niou bob f1 53\nsettle\nall\n",
+  "stdout": "f1: 431\nbob pays f1 54\nbob: 46\ncy: 69\nf1: 485\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open dee 100\nopen f1 10\ntransfer f1 dee 34\ntransfer dee dee 90\niou dee dee 42\niou dee f1 37\niou dee f1 74\ntransfer f1 dee 39\ntransfer dee dee 112\ntransfer dee dee 75\nall\niou f1 f1 29\niou f1 f1 53\nsettle\nall\n",
+  "stdout": "error: overdraft f1\nerror: self transfer\nerror: self transfer\nerror: overdraft f1\nerror: self transfer\nerror: self transfer\ndee: 100\nf1: 10\nerror: self transfer\nerror: self transfer\ndee pays f1 111 (failed: overdraft)\ndee: 100\nf1: 10\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open ann 0\nopen bob 0\nopen Eve 500\nopen cy 500\nopen f1 500\niou bob bob 55\niou cy bob 3\niou bob cy 53\nbalance Eve\nsettle\nopen dup\nsettle\nsettle\nall\n",
+  "stdout": "error: self transfer\nEve: 500\nbob pays cy 50 (failed: overdraft)\nerror: bad command\nnothing to settle\nnothing to settle\nEve: 500\nann: 0\nbob: 0\ncy: 500\nf1: 500\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open ann 50\nopen cy 100\nbalance nobody\nsettle\niou ann cy 30\nsettle\nhistory ann\niou cy cy 1\ntransfer ann ann 69\nbogus\ntransfer ann ann 62\niou cy ann 58\nsettle\nall\n",
+  "stdout": "error: unknown account nobody\nnothing to settle\nann pays cy 30\nopen 50\nout 30 to cy\nerror: self transfer\nerror: self transfer\nerror: bad command\nerror: self transfer\ncy pays ann 58\nann: 78\ncy: 72\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 0\nopen cy 0\ntransfer cy cy 55\ntransfer cy f1 78\nbogus\niou cy f1 6\niou cy cy 20\niou f1 f1 10\nsettle\ntransfer cy cy 106\nbalance cy\nall\niou f1 f1 73\nsettle\nhistory f1\ntransfer cy cy 29\nall\ntransfer cy f1 76\ntransfer cy f1 16\ntransfer f1 cy 96\nsettle\nall\n",
+  "stdout": "error: self transfer\nerror: overdraft cy\nerror: bad command\nerror: self transfer\nerror: self transfer\ncy pays f1 6 (failed: overdraft)\nerror: self transfer\ncy: 0\ncy: 0\nf1: 0\nerror: self transfer\nnothing to settle\nopen 0\nerror: self transfer\ncy: 0\nf1: 0\nerror: overdraft cy\nerror: overdraft cy\nerror: overdraft f1\nnothing to settle\ncy: 0\nf1: 0\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 0\nopen ann 100\nopen cy 50\niou f1 ann 36\niou ann cy 48\nsettle\ntransfer cy f1 102\ntransfer ann cy 11\nall\nsettle\niou f1 f1 71\ntransfer ann ann 111\ntransfer ann cy 33\ntransfer ann cy 36\niou ann cy 28\nsettle\niou ann ann 35\ntransfer ann cy 50\nsettle\nall\n",
+  "stdout": "f1 pays cy 36 (failed: overdraft)\nann pays cy 12\nerror: overdraft cy\nann: 77\ncy: 73\nf1: 0\nnothing to settle\nerror: self transfer\nerror: self transfer\nann pays cy 28 (failed: overdraft)\nerror: self transfer\nerror: overdraft ann\nnothing to settle\nann: 8\ncy: 142\nf1: 0\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open dee 0\nopen ann 500\nopen cy 0\nopen bob 0\nopen Eve 10\niou bob bob 80\nall\nsettle\ntransfer ann bob 87\niou cy Eve 22\nbalance cy\ntransfer dee Eve 61\niou dee Eve 76\niou ann ann 26\niou cy dee 4\nsettle\nall\n",
+  "stdout": "error: self transfer\nEve: 10\nann: 500\nbob: 0\ncy: 0\ndee: 0\nnothing to settle\ncy: 0\nerror: overdraft dee\nerror: self transfer\ndee pays Eve 72 (failed: overdraft)\ncy pays Eve 26 (failed: overdraft)\nEve: 10\nann: 413\nbob: 87\ncy: 0\ndee: 0\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open bob 500\nopen cy 0\nopen Eve 500\nopen f1 100\nopen dee 100\niou cy bob 43\niou dee f1 23\nsettle\niou Eve Eve 19\niou bob f1 61\ntransfer Eve bob 29\ntransfer Eve f1 36\ntransfer cy bob 67\niou bob Eve 22\ntransfer f1 cy 82\ntransfer Eve bob 71\ntransfer dee f1 101\ntransfer f1 Eve 71\niou Eve dee 1\niou dee Eve 28\niou bob Eve 68\nsettle\nall\n",
+  "stdout": "cy pays bob 43 (failed: overdraft)\ndee pays f1 23\nerror: self transfer\nerror: overdraft cy\nerror: overdraft dee\nbob pays Eve 117\nbob pays f1 34\ndee pays f1 27\nEve: 552\nbob: 449\ncy: 82\ndee: 50\nf1: 67\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 50\nopen Eve 10\nopen ann 50\nopen dee 0\nopen cy 0\niou dee cy 7\niou cy ann 72\niou cy f1 16\nsettle\ntransfer cy cy 45\ntransfer Eve ann 119\niou ann f1 78\nsettle\nsettle\niou f1 dee 77\niou f1 cy 63\niou dee Eve 61\nbalance Eve\nbalance cy\nbalance dee\nbalance nobody\nsettle\nall\n",
+  "stdout": "cy pays ann 72 (failed: overdraft)\ncy pays f1 9 (failed: overdraft)\ndee pays f1 7 (failed: overdraft)\nerror: self transfer\nerror: overdraft Eve\nann pays f1 78 (failed: overdraft)\nnothing to settle\nEve: 10\ncy: 0\ndee: 0\nerror: unknown account nobody\nf1 pays cy 63 (failed: overdraft)\nf1 pays Eve 61 (failed: overdraft)\nf1 pays dee 16\nEve: 10\nann: 50\ncy: 0\ndee: 16\nf1: 34\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open cy 100\nopen Eve 100\nopen bob 100\nopen ann 50\niou cy ann 73\nbalance nobody\niou cy cy 38\ntransfer ann cy 14\ntransfer a\niou ann Eve 26\nsettle\ntransfer Eve bob 51\nsettle\nsettle\nsettle\nsettle\niou Eve ann 10\ntransfer Eve cy 96\nhistory Eve\niou ann cy 52\ntransfer cy Eve 5\niou ann cy 73\ntransfer cy Eve 54\nsettle\nsettle\nall\n",
+  "stdout": "error: unknown account nobody\nerror: self transfer\nerror: bad command\ncy pays ann 47\ncy pays Eve 26\nnothing to settle\nnothing to settle\nnothing to settle\nnothing to settle\nerror: overdraft Eve\nopen 100\nin 26 from cy\nout 51 to bob\nerror: overdraft cy\nann pays cy 115 (failed: overdraft)\nEve pays cy 10\nnothing to settle\nEve: 70\nann: 83\nbob: 151\ncy: 46\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open Eve 50\nopen ann 100\nopen dee 100\nopen cy 10\niou dee Eve 37\ntransfer dee cy 45\nsettle\niou Eve cy 38\ntransfer cy Eve 101\niou ann Eve 79\ntransfer ann dee 78\ntransfer a\nbalance dee\nsettle\nall\niou Eve ann 48\nsettle\nall\n",
+  "stdout": "dee pays Eve 37\nerror: overdraft cy\nerror: bad command\ndee: 96\nann pays Eve 41 (failed: overdraft)\nann pays cy 38 (failed: overdraft)\nEve: 87\nann: 22\ncy: 55\ndee: 96\nEve pays ann 48\nEve: 39\nann: 70\ncy: 55\ndee: 96\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 10\nopen dee 100\nopen ann 10\nopen Eve 50\nbalance nobody\ntransfer ann dee 66\ntransfer ann ann 92\nhistory ann\ntransfer ann dee 39\niou ann Eve 73\nall\niou ann dee 26\niou Eve dee 53\nsettle\nall\nsettle\niou dee ann 28\nall\niou f1 f1 69\niou Eve Eve 66\niou dee ann 23\niou Eve dee 2\niou dee ann 79\ntransfer ann Eve 42\ntransfer f1 Eve 105\ntransfer f1 ann 50\nsettle\nall\n",
+  "stdout": "error: unknown account nobody\nerror: overdraft ann\nerror: self transfer\nopen 10\nerror: overdraft ann\nEve: 50\nann: 10\ndee: 100\nf1: 10\nann pays dee 79 (failed: overdraft)\nann pays Eve 20 (failed: overdraft)\nEve: 50\nann: 10\ndee: 100\nf1: 10\nnothing to settle\nEve: 50\nann: 10\ndee: 100\nf1: 10\nerror: self transfer\nerror: self transfer\nerror: overdraft ann\nerror: overdraft f1\nerror: overdraft f1\ndee pays ann 128 (failed: overdraft)\nEve pays ann 2\nEve: 48\nann: 12\ndee: 100\nf1: 10\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open Eve 100\nopen f1 50\nopen ann 10\nopen dee 0\nopen cy 500\nsettle\niou dee ann 20\nsettle\niou ann cy 22\ntransfer cy cy 83\ntransfer ann cy 53\niou dee ann 6\nall\nsettle\nsettle\ntransfer dee Eve 3\niou ann cy 46\niou ann ann 17\ntransfer f1 Eve 66\niou ann Eve 45\ntransfer dee cy 41\ntransfer f1 Eve 41\nsettle\nall\n",
+  "stdout": "nothing to settle\ndee pays ann 20 (failed: overdraft)\nerror: self transfer\nerror: overdraft ann\nEve: 100\nann: 10\ncy: 500\ndee: 0\nf1: 50\nann pays cy 16 (failed: overdraft)\ndee pays cy 6 (failed: overdraft)\nnothing to settle\nerror: overdraft dee\nerror: self transfer\nerror: overdraft f1\nerror: overdraft dee\nann pays cy 46 (failed: overdraft)\nann pays Eve 45 (failed: overdraft)\nEve: 141\nann: 10\ncy: 500\ndee: 0\nf1: 9\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 100\nopen Eve 500\nopen cy 10\niou Eve cy 35\niou cy f1 21\niou f1 f1 10\ntransfer cy cy 108\ntransfer Eve cy 30\nhistory Eve\ntransfer f1 Eve 70\nopen dup\niou Eve f1 64\nbogus\ntransfer cy cy 48\nsettle\nhistory cy\niou cy Eve 11\nhistory Eve\niou Eve Eve 6\nhistory f1\ntransfer f1 f1 4\nhistory Eve\nsettle\nall\n",
+  "stdout": "error: self transfer\nerror: self transfer\nopen 500\nout 30 to cy\nerror: bad command\nerror: bad command\nerror: self transfer\nEve pays f1 85\nEve pays cy 14\nopen 10\nin 30 from Eve\nin 14 from Eve\nopen 500\nout 30 to cy\nin 70 from f1\nout 85 to f1\nout 14 to cy\nerror: self transfer\nopen 100\nout 70 to Eve\nin 85 from Eve\nerror: self transfer\nopen 500\nout 30 to cy\nin 70 from f1\nout 85 to f1\nout 14 to cy\ncy pays Eve 11\nEve: 452\ncy: 43\nf1: 115\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open cy 50\nopen bob 500\ntransfer cy bob 44\ntransfer cy cy 70\niou bob bob 15\ntransfer bob bob 119\niou cy bob 69\nall\niou bob bob 33\niou bob bob 9\ntransfer bob cy 47\nsettle\ntransfer cy bob 79\ntransfer bob bob 63\ntransfer cy bob 92\ntransfer cy bob 69\ntransfer cy cy 36\nall\ntransfer cy bob 119\nhistory bob\nsettle\nall\n",
+  "stdout": "error: self transfer\nerror: self transfer\nerror: self transfer\nbob: 544\ncy: 6\nerror: self transfer\nerror: self transfer\ncy pays bob 69 (failed: overdraft)\nerror: overdraft cy\nerror: self transfer\nerror: overdraft cy\nerror: overdraft cy\nerror: self transfer\nbob: 497\ncy: 53\nerror: overdraft cy\nopen 500\nin 44 from cy\nout 47 to cy\nnothing to settle\nbob: 497\ncy: 53\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open bob 50\nopen Eve 0\nopen dee 0\nopen cy 50\nopen f1 500\niou f1 dee 34\niou Eve bob 66\niou dee bob 58\ntransfer f1 bob 19\niou f1 f1 77\ntransfer cy cy 24\niou cy bob 43\nsettle\niou dee cy 73\nbalance Eve\niou Eve bob 3\niou cy Eve 45\nsettle\ntransfer Eve bob 79\nall\nsettle\ntransfer bob cy 13\ntransfer f1 cy 52\ntransfer cy bob 13\nsettle\nall\n",
+  "stdout": "error: self transfer\nerror: self transfer\nEve pays bob 66 (failed: overdraft)\ncy pays bob 43\nf1 pays bob 34\ndee pays bob 24 (failed: overdraft)\nEve: 0\ndee pays Eve 42 (failed: overdraft)\ndee pays cy 28 (failed: overdraft)\ndee pays bob 3 (failed: overdraft)\nerror: overdraft Eve\nEve: 0\nbob: 146\ncy: 7\ndee: 0\nf1: 447\nnothing to settle\nnothing to settle\nEve: 0\nbob: 146\ncy: 59\ndee: 0\nf1: 395\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 0\nopen ann 0\nopen bob 50\nopen cy 10\nopen dee 10\niou ann dee 75\niou cy bob 8\ntransfer f1 ann 23\niou f1 dee 23\nbalance ann\niou f1 bob 60\niou cy dee 33\ntransfer cy ann 10\ntransfer bob ann 34\ntransfer bob dee 24\nall\nall\nsettle\ntransfer ann ann 64\ntransfer bob dee 17\nsettle\nall\n",
+  "stdout": "error: overdraft f1\nann: 0\nerror: overdraft bob\nann: 44\nbob: 16\ncy: 0\ndee: 10\nf1: 0\nann: 44\nbob: 16\ncy: 0\ndee: 10\nf1: 0\nf1 pays dee 83 (failed: overdraft)\nann pays bob 68 (failed: overdraft)\ncy pays dee 41 (failed: overdraft)\nann pays dee 7\nerror: self transfer\nerror: overdraft bob\nnothing to settle\nann: 37\nbob: 16\ncy: 0\ndee: 17\nf1: 0\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open ann 0\nopen Eve 500\ntransfer Eve Eve 64\nsettle\nall\ntransfer ann ann 27\niou ann Eve 8\nsettle\nall\n",
+  "stdout": "error: self transfer\nnothing to settle\nEve: 500\nann: 0\nerror: self transfer\nann pays Eve 8 (failed: overdraft)\nEve: 500\nann: 0\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open f1 50\nopen cy 500\ntransfer f1 cy 23\ntransfer f1 cy 53\nsettle\niou cy cy 58\ntransfer f1 f1 61\niou x y z w\ntransfer f1 f1 24\ntransfer f1 f1 75\nsettle\nall\n",
+  "stdout": "error: overdraft f1\nnothing to settle\nerror: self transfer\nerror: self transfer\nerror: bad command\nerror: self transfer\nerror: self transfer\nnothing to settle\ncy: 523\nf1: 27\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open dee 0\nopen Eve 0\nopen bob 50\nopen f1 50\nopen cy 50\ntransfer f1 Eve 25\niou f1 f1 68\nbalance bob\niou Eve dee 62\ntransfer bob cy 34\niou f1 bob 25\ntransfer cy cy 107\niou dee f1 71\niou dee cy 34\niou Eve Eve 67\nbalance nobody\ntransfer dee f1 56\niou dee Eve 23\ntransfer dee cy 65\niou bob Eve 31\niou f1 cy 25\ntransfer Eve dee 9\nsettle\nall\n",
+  "stdout": "error: self transfer\nbob: 50\nerror: self transfer\nerror: self transfer\nerror: unknown account nobody\nerror: overdraft dee\nerror: overdraft dee\ndee pays cy 59 (failed: overdraft)\nEve pays f1 8\ndee pays f1 7\nbob pays f1 6\nEve: 8\nbob: 10\ncy: 84\ndee: 2\nf1: 46\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open dee 100\nopen ann 500\nopen f1 50\nopen Eve 0\nopen bob 500\nsettle\ntransfer dee ann 67\nall\ntransfer Eve f1 30\nsettle\ntransfer f1 f1 62\nhistory ann\niou ann dee 3\nsettle\nall\n",
+  "stdout": "nothing to settle\nEve: 0\nann: 567\nbob: 500\ndee: 33\nf1: 50\nerror: overdraft Eve\nnothing to settle\nerror: self transfer\nopen 500\nin 67 from dee\nann pays dee 3\nEve: 0\nann: 564\nbob: 500\ndee: 36\nf1: 50\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open Eve 50\nopen f1 10\nopen bob 0\ntransfer Eve f1 85\nall\niou Eve bob 77\ntransfer f1 Eve 54\ntransfer f1 bob 117\nsettle\nall\n",
+  "stdout": "error: overdraft Eve\nEve: 50\nbob: 0\nf1: 10\nerror: overdraft f1\nerror: overdraft f1\nEve pays bob 77 (failed: overdraft)\nEve: 50\nbob: 0\nf1: 10\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open dee 10\nopen bob 100\nopen ann 10\ntransfer ann dee 106\ntransfer dee bob 55\ntransfer bob bob 12\ntransfer dee ann 110\ntransfer bob dee 108\ntransfer bob ann 120\niou ann dee 78\nbalance dee\nsettle\niou dee dee 68\niou ann dee 51\niou dee bob 44\niou ann dee 40\niou bob bob 33\niou dee bob 77\niou bob bob 17\niou dee ann 42\ntransfer dee dee 84\ntransfer bob bob 98\niou ann ann 52\nbalance dee\niou ann dee 70\nsettle\nall\n",
+  "stdout": "error: overdraft ann\nerror: overdraft dee\nerror: self transfer\nerror: overdraft dee\nerror: overdraft bob\nerror: overdraft bob\ndee: 10\nann pays dee 78 (failed: overdraft)\nerror: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\nerror: self transfer\ndee: 10\nann pays bob 119 (failed: overdraft)\ndee pays bob 2\nann: 10\nbob: 102\ndee: 8\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open dee 0\nopen ann 10\nopen bob 100\nopen Eve 500\nopen f1 100\ntransfer f1 Eve 100\niou bob f1 36\ntransfer bob Eve 23\niou dee bob 70\niou bob Eve 56\ntransfer dee ann 46\niou bob ann 1\ntransfer ann Eve 60\nsettle\niou Eve dee 69\nsettle\nhistory bob\nall\ntransfer dee Eve 100\ntransfer dee bob 90\nsettle\nall\n",
+  "stdout": "error: overdraft dee\nerror: overdraft ann\ndee pays Eve 56 (failed: overdraft)\nbob pays f1 23\ndee pays f1 13 (failed: overdraft)\ndee pays ann 1 (failed: overdraft)\nEve pays dee 69\nopen 100\nout 23 to Eve\nout 23 to f1\nEve: 554\nann: 10\nbob: 54\ndee: 69\nf1: 23\nerror: overdraft dee\nerror: overdraft dee\nnothing to settle\nEve: 554\nann: 10\nbob: 54\ndee: 69\nf1: 23\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open cy 0\nopen dee 50\nopen ann 10\nopen bob 10\nopen Eve 10\niou dee Eve 71\nsettle\niou Eve ann 64\nsettle\niou Eve bob 78\nall\ntransfer bob cy 71\niou Eve cy 18\ntransfer bob dee 46\ntransfer ann Eve 6\nbalance dee\ntransfer cy bob 80\niou bob Eve 56\nsettle\nall\n",
+  "stdout": "dee pays Eve 71 (failed: overdraft)\nEve pays ann 64 (failed: overdraft)\nEve: 10\nann: 10\nbob: 10\ncy: 0\ndee: 50\nerror: overdraft bob\nerror: overdraft bob\ndee: 50\nerror: overdraft cy\nEve pays bob 22 (failed: overdraft)\nEve pays cy 18 (failed: overdraft)\nEve: 16\nann: 4\nbob: 10\ncy: 0\ndee: 50\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open ann 500\nopen dee 500\nopen bob 50\nopen cy 0\nopen Eve 50\niou bob cy 76\niou cy Eve 56\ntransfer Eve Eve 90\nsettle\niou dee dee 33\nall\ntransfer Eve ann 32\nsettle\ntransfer cy Eve 52\nsettle\nall\n",
+  "stdout": "error: self transfer\nbob pays Eve 56 (failed: overdraft)\nbob pays cy 20\nerror: self transfer\nEve: 50\nann: 500\nbob: 30\ncy: 20\ndee: 500\nnothing to settle\nerror: overdraft cy\nnothing to settle\nEve: 18\nann: 532\nbob: 30\ncy: 20\ndee: 500\n"
+ }
+]

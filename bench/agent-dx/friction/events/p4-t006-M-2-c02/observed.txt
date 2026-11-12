@@ -1,0 +1,11 @@
+error[E0308]: mismatched types
+   --> main.rs:39:49
+    |
+ 39 |             let _ = out.push(digits.chars().nth(d).unwrap_or('0'));
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+warning: `windjammer` (bin "windjammer") generated 2 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 2 previous errors; 2 warnings emitted
+For more information about an error, try `rustc --explain E0277`.
+warning: `windjammer` (bin "windjammer") generated 2 warnings
+error: could not compile `windjammer` (bin "windjammer")

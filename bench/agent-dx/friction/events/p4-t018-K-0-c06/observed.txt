@@ -1,0 +1,4 @@
+error[WJ0003]: mismatched types: expected an owned `int`, found an owned `int`
+  --> main.wj:12:13
+   |
+12 |             k = line.trim().parse::<i64>().unwrap_or(0)

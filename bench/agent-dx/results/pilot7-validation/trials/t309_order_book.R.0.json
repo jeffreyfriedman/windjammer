@@ -1,0 +1,149 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": false,
+  "interp_pass": false,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [
+   "wrong-output"
+  ],
+  "passed": 45,
+  "status": "fail",
+  "total": 46
+ },
+ "final_source": "use std::collections::{BTreeMap, HashMap, VecDeque};\nuse std::io::Read;\n\nconst QTY_MAX: u64 = 1_000_000;\nconst PRICE_MAX: u64 = 100_000;\nconst ID_MAX: u64 = 9_999_999;\n\n#[derive(Clone, Copy, PartialEq)]\nenum Tif {\n    Gtc,\n    Ioc,\n    Fok,\n}\n\nstruct Order {\n    trader: String,\n    buy: bool,\n    price: u64,\n    qty: u64,\n}\n\nstruct Engine {\n    orders: HashMap<u64, Order>,\n    bids: BTreeMap<u64, VecDeque<u64>>,\n    asks: BTreeMap<u64, VecDeque<u64>>,\n    next_id: u64,\n    pos: BTreeMap<String, (i64, i64)>,\n    out: String,\n    failed: bool,\n}\n\nfn num(s: &str, lo: u64, hi: u64) -> Option<u64> {\n    if s.is_empty() || s.len() > 18 || !s.bytes().all(|b| b.is_ascii_digit()) {\n        return None;\n    }\n    let v: u64 = s.parse().ok()?;\n    if v >= lo && v <= hi {\n        Some(v)\n    } else {\n        None\n    }\n}\n\nfn parse_id(s: &str) -> Option<u64> {\n    if s.len() > 7 {\n        return None;\n    }\n    num(s, 1, ID_MAX)\n}\n\nimpl Engine {\n    fn new() -> Self {\n        Engine {\n            orders: HashMap::new(),\n            bids: BTreeMap::new(),\n            asks: BTreeMap::new(),\n            next_id: 1,\n            pos: BTreeMap::new(),\n            out: String::new(),\n            failed: false,\n        }\n    }\n\n    fn emit(&mut self, s: &str) {\n        if s.starts_with(\"error:\") {\n            self.failed = true;\n        }\n        self.out.push_str(s);\n        self.out.push('\\n');\n    }\n\n    fn side_of(&mut self, buy: bool) -> &mut BTreeMap<u64, VecDeque<u64>> {\n        if buy {\n            &mut self.bids\n        } else {\n            &mut self.asks\n        }\n    }\n\n    fn crosses(buy: bool, limit: Option<u64>, p: u64) -> bool {\n        match limit {\n            None => true,\n            Some(l) => {\n                if buy {\n                    p <= l\n                } else {\n                    p >= l\n                }\n            }\n        }\n    }\n\n    /// Removes a resting order from the book and returns it.\n    fn remove_resting(&mut self, id: u64) -> Order {\n        let o = self.orders.remove(&id).unwrap();\n        let side = self.side_of(o.buy);\n        let empty = match side.get_mut(&o.price) {\n            Some(dq) => {\n                if let Some(i) = dq.iter().position(|&x| x == id) {\n                    dq.remove(i);\n                }\n                dq.is_empty()\n            }\n            None => false,\n        };\n        if empty {\n            side.remove(&o.price);\n        }\n        o\n    }\n\n    fn transfer(&mut self, buyer: &str, seller: &str, q: u64, price: u64) {\n        let (q, cash) = (q as i64, (q * price) as i64);\n        let b = self.pos.entry(buyer.to_string()).or_insert((0, 0));\n        b.0 += q;\n        b.1 -= cash;\n        let s = self.pos.entry(seller.to_string()).or_insert((0, 0));\n        s.0 -= q;\n        s.1 += cash;\n    }\n\n    fn submit(&mut self, trader: &str, buy: bool, qty: u64, limit: Option<u64>, tif: Tif) {\n        let id = self.next_id;\n        self.next_id += 1;\n        self.pos.entry(trader.to_string()).or_insert((0, 0));\n        self.emit(&format!(\"order {}\", id));\n\n        if tif == Tif::Fok {\n            let mut avail = 0;\n            let opp = if buy { &self.asks } else { &self.bids };\n            for (&p, dq) in opp.iter() {\n                if Self::crosses(buy, limit, p) {\n                    for rid in dq {\n                        let o = &self.orders[rid];\n                        if o.trader != trader {\n                            avail += o.qty;\n                        }\n                    }\n                }\n            }\n            if avail < qty {\n                self.emit(&format!(\"reject {} fok\", id));\n                return;\n            }\n        }\n\n        let mut rem = qty;\n        while rem > 0 {\n            let best = {\n                let opp = if buy { &self.asks } else { &self.bids };\n                let p = if buy {\n                    opp.keys().next().copied()\n                } else {\n                    opp.keys().next_back().copied()\n                };\n                p.filter(|&p| Self::crosses(buy, limit, p))\n            };\n            let Some(price) = best else { break };\n            let rid = *self.side_of(!buy).get(&price).unwrap().front().unwrap();\n            let rtrader = self.orders[&rid].trader.clone();\n            if rtrader == trader {\n                self.remove_resting(rid);\n                self.emit(&format!(\"cancel {} self-trade\", rid));\n                continue;\n            }\n            let rqty = self.orders[&rid].qty;\n            let q = rem.min(rqty);\n            let (bid_id, ask_id) = if buy { (id, rid) } else { (rid, id) };\n            let (buyer, seller) = if buy {\n                (trader, rtrader.as_str())\n            } else {\n                (rtrader.as_str(), trader)\n            };\n            self.emit(&format!(\"trade {} {} {} @ {}\", bid_id, ask_id, q, price));\n            self.transfer(buyer, seller, q, price);\n            rem -= q;\n            if q == rqty {\n                self.remove_resting(rid);\n            } else {\n                self.orders.get_mut(&rid).unwrap().qty -= q;\n            }\n        }\n\n        if rem == 0 {\n            return;\n        }\n        match (tif, limit) {\n            (Tif::Gtc, Some(p)) => {\n                self.side_of(buy).entry(p).or_default().push_back(id);\n                self.orders.insert(\n                    id,\n                    Order {\n                        trader: trader.to_string(),\n                        buy,\n                        price: p,\n                        qty: rem,\n                    },\n                );\n                self.emit(&format!(\"rest {} {}\", id, rem));\n            }\n            _ => self.emit(&format!(\"drop {} {}\", id, rem)),\n        }\n    }\n\n    fn cancel(&mut self, trader: &str, id: u64) {\n        let Some((owner, rem)) = self.orders.get(&id).map(|o| (o.trader.clone(), o.qty)) else {\n            return self.emit(&format!(\"error: no such order {}\", id));\n        };\n        if owner != trader {\n            return self.emit(\"error: not owner\");\n        }\n        self.remove_resting(id);\n        self.emit(&format!(\"cancelled {} {}\", id, rem));\n    }\n\n    fn amend(&mut self, trader: &str, id: u64, q: u64) {\n        let Some((owner, cur)) = self.orders.get(&id).map(|o| (o.trader.clone(), o.qty)) else {\n            return self.emit(&format!(\"error: no such order {}\", id));\n        };\n        if owner != trader {\n            return self.emit(\"error: not owner\");\n        }\n        if q > cur {\n            let o = self.remove_resting(id);\n            let (buy, price) = (o.buy, o.price);\n            self.side_of(buy).entry(price).or_default().push_back(id);\n            self.orders.insert(id, Order { qty: q, ..o });\n        } else {\n            self.orders.get_mut(&id).unwrap().qty = q;\n        }\n        self.emit(&format!(\"amended {} {}\", id, q));\n    }\n\n    fn book_lines(&self, buy: bool) -> Vec<String> {\n        let side = if buy { &self.bids } else { &self.asks };\n        let mut v = Vec::new();\n        for (p, dq) in side.iter().rev() {\n            let total: u64 = dq.iter().map(|id| self.orders[id].qty).sum();\n            v.push(format!(\"  {} {} {}\", p, total, dq.len()));\n        }\n        if v.is_empty() {\n            v.push(\"  (none)\".to_string());\n        }\n        v\n    }\n\n    fn print_book(&mut self) {\n        let mut lines = vec![\"asks:\".to_string()];\n        lines.extend(self.book_lines(false));\n        lines.push(\"bids:\".to_string());\n        lines.extend(self.book_lines(true));\n        for l in lines {\n            self.emit(&l);\n        }\n    }\n\n    fn print_pos(&mut self) {\n        if self.pos.is_empty() {\n            self.emit(\"(no traders)\");\n            return;\n        }\n        let lines: Vec<String> = self\n            .pos\n            .iter()\n            .map(|(n, (q, c))| format!(\"{} {} {}\", n, q, c))\n            .collect();\n        for l in lines {\n            self.emit(&l);\n        }\n    }\n\n    fn command(&mut self, line: &str) {\n        let f: Vec<&str> = line.split_whitespace().collect();\n        if f.is_empty() {\n            return;\n        }\n        let cmd = f[0];\n        match cmd {\n            \"book\" if f.len() == 1 => self.print_book(),\n            \"pos\" if f.len() == 1 => self.print_pos(),\n            \"cancel\" if f.len() == 3 => match parse_id(f[2]) {\n                Some(id) => self.cancel(f[1], id),\n                None => self.emit(\"error: bad command\"),\n            },\n            \"amend\" if f.len() == 4 => match (parse_id(f[2]), num(f[3], 1, QTY_MAX)) {\n                (Some(id), Some(q)) => self.amend(f[1], id, q),\n                _ => self.emit(\"error: bad command\"),\n            },\n            \"buy\" | \"sell\" if f.len() == 4 || f.len() == 5 => {\n                let tif = if f.len() == 5 {\n                    match f[4] {\n                        \"ioc\" => Some(Tif::Ioc),\n                        \"fok\" => Some(Tif::Fok),\n                        _ => None,\n                    }\n                } else {\n                    Some(Tif::Gtc)\n                };\n                match (num(f[2], 1, QTY_MAX), num(f[3], 1, PRICE_MAX), tif) {\n                    (Some(q), Some(p), Some(tif)) => {\n                        self.submit(f[1], cmd == \"buy\", q, Some(p), tif)\n                    }\n                    _ => self.emit(\"error: bad command\"),\n                }\n            }\n            \"mbuy\" | \"msell\" if f.len() == 3 => match num(f[2], 1, QTY_MAX) {\n                Some(q) => self.submit(f[1], cmd == \"mbuy\", q, None, Tif::Ioc),\n                None => self.emit(\"error: bad command\"),\n            },\n            _ => self.emit(\"error: bad command\"),\n        }\n    }\n}\n\nfn main() {\n    let mut input = String::new();\n    std::io::stdin().read_to_string(&mut input).unwrap();\n    let mut e = Engine::new();\n    for line in input.lines() {\n        e.command(line);\n    }\n    print!(\"{}\", e.out);\n    if e.failed {\n        std::process::exit(1);\n    }\n}\n",
+ "first_source": "use std::collections::{BTreeMap, HashMap, VecDeque};\nuse std::io::Read;\n\nconst QTY_MAX: u64 = 1_000_000;\nconst PRICE_MAX: u64 = 100_000;\nconst ID_MAX: u64 = 9_999_999;\n\n#[derive(Clone, Copy, PartialEq)]\nenum Tif {\n    Gtc,\n    Ioc,\n    Fok,\n}\n\nstruct Order {\n    trader: String,\n    buy: bool,\n    price: u64,\n    qty: u64,\n}\n\nstruct Engine {\n    orders: HashMap<u64, Order>,\n    bids: BTreeMap<u64, VecDeque<u64>>,\n    asks: BTreeMap<u64, VecDeque<u64>>,\n    next_id: u64,\n    pos: BTreeMap<String, (i64, i64)>,\n    out: String,\n    failed: bool,\n}\n\nfn num(s: &str, lo: u64, hi: u64) -> Option<u64> {\n    if s.is_empty() || s.len() > 18 || !s.bytes().all(|b| b.is_ascii_digit()) {\n        return None;\n    }\n    let v: u64 = s.parse().ok()?;\n    if v >= lo && v <= hi {\n        Some(v)\n    } else {\n        None\n    }\n}\n\nfn parse_id(s: &str) -> Option<u64> {\n    if s.len() > 7 {\n        return None;\n    }\n    num(s, 1, ID_MAX)\n}\n\nimpl Engine {\n    fn new() -> Self {\n        Engine {\n            orders: HashMap::new(),\n            bids: BTreeMap::new(),\n            asks: BTreeMap::new(),\n            next_id: 1,\n            pos: BTreeMap::new(),\n            out: String::new(),\n            failed: false,\n        }\n    }\n\n    fn emit(&mut self, s: &str) {\n        if s.starts_with(\"error:\") {\n            self.failed = true;\n        }\n        self.out.push_str(s);\n        self.out.push('\\n');\n    }\n\n    fn side_of(&mut self, buy: bool) -> &mut BTreeMap<u64, VecDeque<u64>> {\n        if buy {\n            &mut self.bids\n        } else {\n            &mut self.asks\n        }\n    }\n\n    fn crosses(buy: bool, limit: Option<u64>, p: u64) -> bool {\n        match limit {\n            None => true,\n            Some(l) => {\n                if buy {\n                    p <= l\n                } else {\n                    p >= l\n                }\n            }\n        }\n    }\n\n    /// Removes a resting order from the book and returns it.\n    fn remove_resting(&mut self, id: u64) -> Order {\n        let o = self.orders.remove(&id).unwrap();\n        let side = self.side_of(o.buy);\n        let empty = match side.get_mut(&o.price) {\n            Some(dq) => {\n                if let Some(i) = dq.iter().position(|&x| x == id) {\n                    dq.remove(i);\n                }\n                dq.is_empty()\n            }\n            None => false,\n        };\n        if empty {\n            side.remove(&o.price);\n        }\n        o\n    }\n\n    fn transfer(&mut self, buyer: &str, seller: &str, q: u64, price: u64) {\n        let (q, cash) = (q as i64, (q * price) as i64);\n        let b = self.pos.entry(buyer.to_string()).or_insert((0, 0));\n        b.0 += q;\n        b.1 -= cash;\n        let s = self.pos.entry(seller.to_string()).or_insert((0, 0));\n        s.0 -= q;\n        s.1 += cash;\n    }\n\n    fn submit(&mut self, trader: &str, buy: bool, qty: u64, limit: Option<u64>, tif: Tif) {\n        let id = self.next_id;\n        self.next_id += 1;\n        self.pos.entry(trader.to_string()).or_insert((0, 0));\n        self.emit(&format!(\"order {}\", id));\n\n        if tif == Tif::Fok {\n            let mut avail = 0;\n            let opp = if buy { &self.asks } else { &self.bids };\n            for (&p, dq) in opp.iter() {\n                if Self::crosses(buy, limit, p) {\n                    for rid in dq {\n                        let o = &self.orders[rid];\n                        if o.trader != trader {\n                            avail += o.qty;\n                        }\n                    }\n                }\n            }\n            if avail < qty {\n                self.emit(&format!(\"reject {} fok\", id));\n                return;\n            }\n        }\n\n        let mut rem = qty;\n        while rem > 0 {\n            let best = {\n                let opp = if buy { &self.asks } else { &self.bids };\n                let p = if buy {\n                    opp.keys().next().copied()\n                } else {\n                    opp.keys().next_back().copied()\n                };\n                p.filter(|&p| Self::crosses(buy, limit, p))\n            };\n            let Some(price) = best else { break };\n            let rid = *self.side_of(!buy).get(&price).unwrap().front().unwrap();\n            let rtrader = self.orders[&rid].trader.clone();\n            if rtrader == trader {\n                self.remove_resting(rid);\n                self.emit(&format!(\"cancel {} self-trade\", rid));\n                continue;\n            }\n            let rqty = self.orders[&rid].qty;\n            let q = rem.min(rqty);\n            let (bid_id, ask_id) = if buy { (id, rid) } else { (rid, id) };\n            let (buyer, seller) = if buy {\n                (trader, rtrader.as_str())\n            } else {\n                (rtrader.as_str(), trader)\n            };\n            self.emit(&format!(\"trade {} {} {} @ {}\", bid_id, ask_id, q, price));\n            self.transfer(buyer, seller, q, price);\n            rem -= q;\n            if q == rqty {\n                self.remove_resting(rid);\n            } else {\n                self.orders.get_mut(&rid).unwrap().qty -= q;\n            }\n        }\n\n        if rem == 0 {\n            return;\n        }\n        match (tif, limit) {\n            (Tif::Gtc, Some(p)) => {\n                self.side_of(buy).entry(p).or_default().push_back(id);\n                self.orders.insert(\n                    id,\n                    Order {\n                        trader: trader.to_string(),\n                        buy,\n                        price: p,\n                        qty: rem,\n                    },\n                );\n                self.emit(&format!(\"rest {} {}\", id, rem));\n            }\n            _ => self.emit(&format!(\"drop {} {}\", id, rem)),\n        }\n    }\n\n    fn cancel(&mut self, trader: &str, id: u64) {\n        let Some((owner, rem)) = self.orders.get(&id).map(|o| (o.trader.clone(), o.qty)) else {\n            return self.emit(&format!(\"error: no such order {}\", id));\n        };\n        if owner != trader {\n            return self.emit(\"error: not owner\");\n        }\n        self.remove_resting(id);\n        self.emit(&format!(\"cancelled {} {}\", id, rem));\n    }\n\n    fn amend(&mut self, trader: &str, id: u64, q: u64) {\n        let Some((owner, cur)) = self.orders.get(&id).map(|o| (o.trader.clone(), o.qty)) else {\n            return self.emit(&format!(\"error: no such order {}\", id));\n        };\n        if owner != trader {\n            return self.emit(\"error: not owner\");\n        }\n        if q > cur {\n            let o = self.remove_resting(id);\n            let (buy, price) = (o.buy, o.price);\n            self.side_of(buy).entry(price).or_default().push_back(id);\n            self.orders.insert(id, Order { qty: q, ..o });\n        } else {\n            self.orders.get_mut(&id).unwrap().qty = q;\n        }\n        self.emit(&format!(\"amended {} {}\", id, q));\n    }\n\n    fn book_lines(&self, buy: bool) -> Vec<String> {\n        let side = if buy { &self.bids } else { &self.asks };\n        let mut v = Vec::new();\n        for (p, dq) in side.iter().rev() {\n            let total: u64 = dq.iter().map(|id| self.orders[id].qty).sum();\n            v.push(format!(\"  {} {} {}\", p, total, dq.len()));\n        }\n        if v.is_empty() {\n            v.push(\"  (none)\".to_string());\n        }\n        v\n    }\n\n    fn print_book(&mut self) {\n        let mut lines = vec![\"asks:\".to_string()];\n        lines.extend(self.book_lines(false));\n        lines.push(\"bids:\".to_string());\n        lines.extend(self.book_lines(true));\n        for l in lines {\n            self.emit(&l);\n        }\n    }\n\n    fn print_pos(&mut self) {\n        if self.pos.is_empty() {\n            self.emit(\"(no traders)\");\n            return;\n        }\n        let lines: Vec<String> = self\n            .pos\n            .iter()\n            .map(|(n, (q, c))| format!(\"{} {} {}\", n, q, c))\n            .collect();\n        for l in lines {\n            self.emit(&l);\n        }\n    }\n\n    fn command(&mut self, line: &str) {\n        let f: Vec<&str> = line.split_whitespace().collect();\n        if f.is_empty() {\n            return;\n        }\n        let cmd = f[0];\n        match cmd {\n            \"book\" if f.len() == 1 => self.print_book(),\n            \"pos\" if f.len() == 1 => self.print_pos(),\n            \"cancel\" if f.len() == 3 => match parse_id(f[2]) {\n                Some(id) => self.cancel(f[1], id),\n                None => self.emit(\"error: bad command\"),\n            },\n            \"amend\" if f.len() == 4 => match (parse_id(f[2]), num(f[3], 1, QTY_MAX)) {\n                (Some(id), Some(q)) => self.amend(f[1], id, q),\n                _ => self.emit(\"error: bad command\"),\n            },\n            \"buy\" | \"sell\" if f.len() == 4 || f.len() == 5 => {\n                let tif = if f.len() == 5 {\n                    match f[4] {\n                        \"ioc\" => Some(Tif::Ioc),\n                        \"fok\" => Some(Tif::Fok),\n                        _ => None,\n                    }\n                } else {\n                    Some(Tif::Gtc)\n                };\n                match (num(f[2], 1, QTY_MAX), num(f[3], 1, PRICE_MAX), tif) {\n                    (Some(q), Some(p), Some(tif)) => {\n                        self.submit(f[1], cmd == \"buy\", q, Some(p), tif)\n                    }\n                    _ => self.emit(\"error: bad command\"),\n                }\n            }\n            \"mbuy\" | \"msell\" if f.len() == 3 => match num(f[2], 1, QTY_MAX) {\n                Some(q) => self.submit(f[1], cmd == \"mbuy\", q, None, Tif::Ioc),\n                None => self.emit(\"error: bad command\"),\n            },\n            _ => self.emit(\"error: bad command\"),\n        }\n    }\n}\n\nfn main() {\n    let mut input = String::new();\n    std::io::stdin().read_to_string(&mut input).unwrap();\n    let mut e = Engine::new();\n    for line in input.lines() {\n        e.command(line);\n    }\n    print!(\"{}\", e.out);\n    if e.failed {\n        std::process::exit(1);\n    }\n}\n",
+ "first_turn_input": 13964,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [
+   "wrong-output"
+  ],
+  "passed": 45,
+  "status": "fail",
+  "total": 46
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 0.72,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "load_avg": 67.2,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "model": "haiku",
+ "n_tool_calls": 2,
+ "other_seconds": 4.93,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": false,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T14:40:10",
+ "schema": 2,
+ "task": "t309_order_book",
+ "thinking_seconds": 67.863,
+ "tool_result_tokens_est": 184,
+ "tool_wait_seconds": 0.72,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6847,
+   "cache_write": 7115,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13964,
+   "output": 3,
+   "result_chars": 644,
+   "text_chars": 0,
+   "thinking_chars": 0,
+   "tool_input_chars": 10896,
+   "turn": 1,
+   "write_chars": 9910
+  },
+  {
+   "cache_read": 13962,
+   "cache_write": 17539,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 31503,
+   "output": 7,
+   "result_chars": 0,
+   "text_chars": 945,
+   "thinking_chars": 0,
+   "tool_input_chars": 0,
+   "turn": 2,
+   "write_chars": 0
+  }
+ ],
+ "usage": {
+  "api_seconds": 67.863,
+  "cost_usd": 0.01388029,
+  "denied_commands": [],
+  "is_error": false,
+  "model_usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationEphemeral1hInputTokens": 24654,
+    "cacheCreationEphemeral5mInputTokens": 0,
+    "cacheCreationInputTokens": 24654,
+    "cacheReadInputTokens": 20809,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.01388029,
+    "inputTokens": 4,
+    "maxOutputTokens": 128000,
+    "outputTokens": 17482,
+    "provider": "firstParty",
+    "thinkingTokens": 12857,
+    "webSearchRequests": 0
+   }
+  },
+  "permission_denials": 0,
+  "result_excerpt": "The solution is in `main.rs` and compiles cleanly with `rustc --edition 2021`. Both examples produce the expected output. Example 1 exits 0 and example 2 exits 1, as specified.\n\nI made these choices where the spec was open:\n\n- **Error text for unknown ids:** the spec says `error: no such order ID`, but the example prints `error: no such order 1`. I followed the example and print the id.\n- **Known ",
+  "split": {
+   "cache_read": 20809,
+   "cache_write": 24654,
+   "fresh": 4,
+   "output": 17482
+  },
+  "subtype": "success",
+  "tokens_in": 45467,
+  "tokens_out": 17482,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 73.51,
+ "wj_version": ""
+}

@@ -1,0 +1,16 @@
+{
+  "id": "p6-t107-V2-2-c01",
+  "pilot": "pilot6",
+  "task": "t107_text_wrap",
+  "arm": "V2",
+  "arm_name": "interpreted-first+verify",
+  "trial": 2,
+  "call": 1,
+  "verb": "run",
+  "mode": "default",
+  "exit": 1,
+  "command": "wj run --verify main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

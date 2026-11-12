@@ -1,0 +1,8 @@
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:6:16
+  |
+6 |     let mut k: int = 0
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:6:16
+  |
+6 |     let mut k: int = 0

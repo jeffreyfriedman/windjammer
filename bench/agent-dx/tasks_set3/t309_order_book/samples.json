@@ -1,0 +1,15 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell ann 10 101\nsell bob 5 100\nbuy cy 12 101\nbook\npos\ncancel ann 1\nbuy cy 3 99\nbook\n",
+  "stdout": "order 1\nrest 1 10\norder 2\nrest 2 5\norder 3\ntrade 3 2 5 @ 100\ntrade 3 1 7 @ 101\nasks:\n  101 3 1\nbids:\n  (none)\nann -7 707\nbob -5 500\ncy 12 -1207\ncancelled 1 3\norder 4\nrest 4 3\nasks:\n  (none)\nbids:\n  99 3 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "buy ann 5 50\nbuy ann 5 50 ioc\nsell ann 8 49\nsell bob 8 49 fok\nsell bob 4 50\namend ann 1 2\namend bob 9 1\nbook\n",
+  "stdout": "order 1\nrest 1 5\norder 2\ndrop 2 5\norder 3\ncancel 1 self-trade\nrest 3 8\norder 4\nreject 4 fok\norder 5\nrest 5 4\nerror: no such order 1\nerror: no such order 9\nasks:\n  50 4 1\n  49 8 1\nbids:\n  (none)\n"
+ }
+]

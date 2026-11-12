@@ -9,15 +9,15 @@ use std::time::Duration;
 use crate::check::{self, CheckOptions, Checked};
 use crate::diagnostics::render;
 
-pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool) -> Result<()> {
+pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool, format: render::Format) -> Result<()> {
     let root = path.unwrap_or_else(|| Path::new("."));
     if path.is_none() && Path::new("Cargo.toml").exists() && !has_wj_files(root) {
         return cargo_check();
     }
     if watch {
-        return watch_loop(root, json, fix);
+        return watch_loop(root, json, fix, format);
     }
-    let ok = run_once(root, json, fix)?;
+    let ok = run_once(root, json, fix, format)?;
     if !ok {
         std::process::exit(1);
     }
@@ -34,7 +34,7 @@ fn check_quietly(root: &Path) -> Result<Checked> {
     result.map(|c| super::widths_gate::add_to(c, root))
 }
 
-fn run_once(root: &Path, json: bool, fix: bool) -> Result<bool> {
+fn run_once(root: &Path, json: bool, fix: bool, format: render::Format) -> Result<bool> {
     let mut checked = check_quietly(root)?;
     if checked.report.summary.files_checked == 0 {
         checked.report = check_path(root);
@@ -50,7 +50,7 @@ fn run_once(root: &Path, json: bool, fix: bool) -> Result<bool> {
     if json {
         println!("{}", checked.report.to_json());
     } else {
-        print_human(&checked);
+        print_human(&checked, format);
         if let Some(f) = fixed {
             println!(
                 "wj check --fix: {} edit(s) applied in {} file(s){}",
@@ -67,10 +67,10 @@ fn run_once(root: &Path, json: bool, fix: bool) -> Result<bool> {
     Ok(checked.report.success)
 }
 
-fn print_human(c: &Checked) {
+fn print_human(c: &Checked, format: render::Format) {
     let source_of = |f: &str| c.sources.get(f).cloned();
     for d in &c.report.diagnostics {
-        println!("{}", render::render(d, &source_of));
+        println!("{}", render::render_as(d, &source_of, format));
     }
     let s = &c.report.summary;
     println!(
@@ -83,10 +83,10 @@ fn print_human(c: &Checked) {
     );
 }
 
-fn watch_loop(root: &Path, json: bool, fix: bool) -> Result<()> {
+fn watch_loop(root: &Path, json: bool, fix: bool, format: render::Format) -> Result<()> {
     loop {
         let before = check::watch::snapshot(root);
-        let _ = run_once(root, json, fix)?;
+        let _ = run_once(root, json, fix, format)?;
         if !json {
             eprintln!("watching {} for changes (Ctrl-C to stop)...", root.display());
         }
@@ -97,7 +97,7 @@ fn watch_loop(root: &Path, json: bool, fix: bool) -> Result<()> {
 /// Gate for `wj run --interpret`: the interpreter must not be more permissive than the compiler.
 /// Runs the same front-end checks as `wj check`; on any error-level diagnostic prints them and
 /// returns `Err` so the caller refuses to execute the program. Warnings do not block.
-pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
+pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> Result<()> {
     // Cached only inside a project (`wj.toml`): results go to its `.wj-cache/`, the build's cache directory; a
     // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
     // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
@@ -133,7 +133,7 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
             for sp in d.primary_span.iter_mut() {
                 sp.file = short(&sp.file);
             }
-            eprintln!("{}", render::render(&d, &source_of));
+            eprintln!("{}", render::render_as(&d, &source_of, format));
         }
         return Ok(());
     }
@@ -142,7 +142,7 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
         for sp in d.primary_span.iter_mut().chain(d.secondary_spans.iter_mut()) {
             sp.file = short(&sp.file);
         }
-        eprintln!("{}", render::render(&d, &source_of));
+        eprintln!("{}", render::render_as(&d, &source_of, format));
     }
     anyhow::bail!(
         "not running {}: `wj check` reports {} error(s); the interpreter runs only programs the compiler accepts",

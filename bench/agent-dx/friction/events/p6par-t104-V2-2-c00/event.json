@@ -1,0 +1,16 @@
+{
+  "id": "p6par-t104-V2-2-c00",
+  "pilot": "pilot6-parallel",
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "arm_name": "interpreted-first+verify",
+  "trial": 2,
+  "call": 0,
+  "verb": "run",
+  "mode": "default",
+  "exit": 1,
+  "command": "wj run --verify main.wj",
+  "source": "reconstructed",
+  "class": "compiler-bug",
+  "reason": "rustc rejection translated to WJ0003-style; message shape of a known drift class"
+}

@@ -1,0 +1,246 @@
+use std::fs
+use std::process
+
+struct Ord {
+    id: int,
+    trader: string,
+    qty: int,
+    px: int,
+    side: int,
+    alive: bool,
+    seq: int,
+}
+
+struct Book {
+    orders: Vec<Ord>,
+    names: Vec<string>,
+    pqty: Vec<int>,
+    cash: Vec<int>,
+    out: Vec<string>,
+    errors: int,
+    seq: int,
+}
+
+fn num(s: string, lo: int, hi: int) -> int {
+    if s.len() == 0 || s.len() > 7 { return -1 }
+    for c in s.chars() {
+        if c < '0' || c > '9' { return -1 }
+    }
+    let v = s.parse::<int>().unwrap_or(-1)
+    if v < lo || v > hi { return -1 }
+    v
+}
+
+impl Book {
+    fn err(self, m: string) {
+        self.errors += 1
+        self.out.push("error: ${m}")
+    }
+
+    fn trader_idx(self, t: string) -> int {
+        let mut i = 0
+        while i < self.names.len() {
+            if self.names[i] == t { return i as int }
+            i += 1
+        }
+        self.names.push(t)
+        self.pqty.push(0)
+        self.cash.push(0)
+        self.names.len() as int - 1
+    }
+
+    // side: 0 buy, 1 sell; limit < 0 means market; tif: 0 gtc, 1 ioc, 2 fok, 3 market
+    fn submit(self, side: int, trader: string, qty: int, limit: int, tif: int) {
+        self.trader_idx(trader)
+        let id = self.orders.len() as int + 1
+        self.orders.push(Ord { id: id, trader: trader, qty: qty, px: limit, side: side, alive: false, seq: 0 })
+        let me = id - 1
+        self.out.push("order ${id}")
+        let opp = 1 - side
+        if tif == 2 {
+            let mut avail = 0
+            for o in self.orders {
+                if o.alive && o.side == opp && o.trader != trader {
+                    let ok = if side == 0 { o.px <= limit } else { o.px >= limit }
+                    if ok { avail += o.qty }
+                }
+            }
+            if avail < qty {
+                self.out.push("reject ${id} fok")
+                return
+            }
+        }
+        let mut rem = qty
+        while rem > 0 {
+            // best resting order on the opposite side
+            let mut best = -1
+            let mut i = 0
+            while i < self.orders.len() {
+                let o = self.orders[i]
+                if o.alive && o.side == opp {
+                    if best < 0 {
+                        best = i as int
+                    } else {
+                        let b = self.orders[best]
+                        let better = if side == 0 { o.px < b.px } else { o.px > b.px }
+                        if better || (o.px == b.px && o.seq < b.seq) { best = i as int }
+                    }
+                }
+                i += 1
+            }
+            if best < 0 { break }
+            let r = self.orders[best]
+            if tif != 3 {
+                let crosses = if side == 0 { r.px <= limit } else { r.px >= limit }
+                if !crosses { break }
+            }
+            if r.trader == trader {
+                self.orders[best].alive = false
+                self.out.push("cancel ${r.id} self-trade")
+                continue
+            }
+            let q = if rem < r.qty { rem } else { r.qty }
+            self.orders[best].qty = r.qty - q
+            if r.qty - q == 0 { self.orders[best].alive = false }
+            let bid = if side == 0 { id } else { r.id }
+            let sid = if side == 0 { r.id } else { id }
+            self.out.push("trade ${bid} ${sid} ${q} @ ${r.px}")
+            let mi = self.trader_idx(trader)
+            let ri = self.trader_idx(r.trader)
+            let bi = if side == 0 { mi } else { ri }
+            let si = if side == 0 { ri } else { mi }
+            self.pqty[bi] = self.pqty[bi] + q
+            self.cash[bi] = self.cash[bi] - q * r.px
+            self.pqty[si] = self.pqty[si] - q
+            self.cash[si] = self.cash[si] + q * r.px
+            rem -= q
+        }
+        if rem > 0 {
+            if tif == 0 {
+                self.seq += 1
+                self.orders[me].qty = rem
+                self.orders[me].alive = true
+                self.orders[me].seq = self.seq
+                self.out.push("rest ${id} ${rem}")
+            } else {
+                self.out.push("drop ${id} ${rem}")
+            }
+        }
+    }
+
+    // new_qty < 0 means cancel
+    fn change(self, trader: string, id: int, new_qty: int) {
+        if id > self.orders.len() as int || !self.orders[id - 1].alive {
+            self.err("no such order ${id}")
+            return
+        }
+        let i = id - 1
+        if self.orders[i].trader != trader {
+            self.err("not owner")
+            return
+        }
+        if new_qty < 0 {
+            self.orders[i].alive = false
+            self.out.push("cancelled ${id} ${self.orders[i].qty}")
+        } else {
+            if new_qty > self.orders[i].qty {
+                self.seq += 1
+                self.orders[i].seq = self.seq
+            }
+            self.orders[i].qty = new_qty
+            self.out.push("amended ${id} ${new_qty}")
+        }
+    }
+
+    fn side_lines(self, side: int) {
+        let mut prices: Vec<int> = []
+        for o in self.orders {
+            if o.alive && o.side == side {
+                let mut seen = false
+                for p in prices {
+                    if p == o.px { seen = true }
+                }
+                if !seen { prices.push(o.px) }
+            }
+        }
+        if prices.len() == 0 { self.out.push("  (none)") }
+        prices.sort()
+        let mut k = prices.len() as int - 1
+        while k >= 0 {
+            let px = prices[k]
+            let mut total = 0
+            let mut count = 0
+            for o in self.orders {
+                if o.alive && o.side == side && o.px == px {
+                    total += o.qty
+                    count += 1
+                }
+            }
+            self.out.push("  ${px} ${total} ${count}")
+            k -= 1
+        }
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut b = Book { orders: [], names: [], pqty: [], cash: [], out: [], errors: 0, seq: 0 }
+    for line in text.lines() {
+        if line.len() == 0 { continue }
+        let p: Vec<string> = line.split(" ").collect()
+        let mut named = true
+        for t in p {
+            if t.len() == 0 { named = false }
+        }
+        let c = p[0]
+        let n = p.len()
+        if !named {
+            b.err("bad command")
+        } else if (c == "buy" || c == "sell") && (n == 4 || n == 5) {
+            let q = num(p[2], 1, 1000000)
+            let px = num(p[3], 1, 100000)
+            let mut tif = 0
+            let mut ok = q >= 0 && px >= 0
+            if n == 5 {
+                if p[4] == "ioc" {
+                    tif = 1
+                } else if p[4] == "fok" {
+                    tif = 2
+                } else {
+                    ok = false
+                }
+            }
+            if ok { b.submit(if c == "buy" { 0 } else { 1 }, p[1], q, px, tif) } else { b.err("bad command") }
+        } else if (c == "mbuy" || c == "msell") && n == 3 {
+            let q = num(p[2], 1, 1000000)
+            if q >= 0 { b.submit(if c == "mbuy" { 0 } else { 1 }, p[1], q, -1, 3) } else { b.err("bad command") }
+        } else if c == "cancel" && n == 3 {
+            let id = num(p[2], 1, 9999999)
+            if id >= 0 { b.change(p[1], id, -1) } else { b.err("bad command") }
+        } else if c == "amend" && n == 4 {
+            let id = num(p[2], 1, 9999999)
+            let q = num(p[3], 1, 1000000)
+            if id >= 0 && q >= 0 { b.change(p[1], id, q) } else { b.err("bad command") }
+        } else if c == "book" && n == 1 {
+            b.out.push("asks:")
+            b.side_lines(1)
+            b.out.push("bids:")
+            b.side_lines(0)
+        } else if c == "pos" && n == 1 {
+            if b.names.len() == 0 { b.out.push("(no traders)") }
+            let mut sorted: Vec<string> = []
+            for t in b.names { sorted.push(t) }
+            sorted.sort()
+            for t in sorted {
+                let i = b.trader_idx(t)
+                b.out.push("${t} ${b.pqty[i]} ${b.cash[i]}")
+            }
+        } else {
+            b.err("bad command")
+        }
+    }
+    for l in b.out {
+        println(l)
+    }
+    if b.errors > 0 { process::exit(1) }
+}

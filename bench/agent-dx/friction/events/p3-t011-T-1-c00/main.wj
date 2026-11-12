@@ -1,0 +1,79 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut ks: Vec<int> = []
+    let mut vs: Vec<int> = []
+    let mut cap: int = 0
+    let mut first = true
+    for line in text.lines() {
+        let t = line.trim()
+        if t.len() == 0 {
+            continue
+        }
+        if first {
+            cap = t.parse::<int>().unwrap_or(1)
+            first = false
+            continue
+        }
+        let parts: Vec<string> = t.split_whitespace().collect()
+        let cmd = parts[0]
+        if cmd == "put" {
+            let k = parts[1].parse::<int>().unwrap_or(0)
+            let v = parts[2].parse::<int>().unwrap_or(0)
+            let mut i = 0
+            let n: int = ks.len() as int
+            while i < n {
+                if ks[i as usize] == k {
+                    ks.remove(i as usize)
+                    vs.remove(i as usize)
+                    break
+                }
+                i += 1
+            }
+            ks.insert(0, k)
+            vs.insert(0, v)
+            if ks.len() as int > cap {
+                let last = ks.len() - 1
+                let ek = ks[last]
+                ks.remove(last)
+                vs.remove(last)
+                println("evict ${ek}")
+            }
+        } else if cmd == "get" {
+            let k = parts[1].parse::<int>().unwrap_or(0)
+            let mut found = -1
+            let mut i = 0
+            let n: int = ks.len() as int
+            while i < n {
+                if ks[i as usize] == k {
+                    let v = vs[i as usize]
+                    ks.remove(i as usize)
+                    vs.remove(i as usize)
+                    ks.insert(0, k)
+                    vs.insert(0, v)
+                    found = v
+                    break
+                }
+                i += 1
+            }
+            println("${found}")
+        } else if cmd == "keys" {
+            if ks.len() == 0 {
+                println("<empty>")
+            } else {
+                let mut s = ""
+                let mut i = 0
+                let n: int = ks.len() as int
+                while i < n {
+                    if i > 0 {
+                        s = s + " "
+                    }
+                    s = s + "${ks[i as usize]}"
+                    i += 1
+                }
+                println("${s}")
+            }
+        }
+    }
+}

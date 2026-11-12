@@ -1,0 +1,16 @@
+{
+  "id": "p3-t034-T-0-c01",
+  "pilot": "pilot3",
+  "task": "t034_shapes_trait",
+  "arm": "T",
+  "arm_name": "tiny-pack-only",
+  "trial": 0,
+  "call": 1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "compiler-bug",
+  "reason": "raw rustc error on the generated Rust; message shape of a known drift class"
+}

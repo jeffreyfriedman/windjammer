@@ -1,0 +1,16 @@
+{
+  "id": "p3-t006-B-0-c01",
+  "pilot": "pilot3",
+  "task": "t006_base_convert",
+  "arm": "B",
+  "arm_name": "compiled-first",
+  "trial": 0,
+  "call": 1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

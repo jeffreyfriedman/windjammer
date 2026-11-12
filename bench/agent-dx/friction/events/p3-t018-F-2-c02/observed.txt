@@ -1,0 +1,11 @@
+error[E0308]: mismatched types
+  --> main.rs:42:23
+   |
+42 |           if a.1 != b.1 {
+error[E0308]: mismatched types
+  --> main.rs:44:16
+   |
+44 |           } else {
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 3 warnings emitted
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 3 warnings emitted

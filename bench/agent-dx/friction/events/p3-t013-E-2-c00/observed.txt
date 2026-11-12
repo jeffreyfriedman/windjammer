@@ -1,0 +1,10 @@
+error[E0308]: mismatched types
+   --> main.rs:166:55
+    |
+166 | ...                   let strs: Vec<String> = { t.out.iter().map(|v| format!("{}", v)) };
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 1 warning emitted
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 1 warning emitted
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 1 warning emitted

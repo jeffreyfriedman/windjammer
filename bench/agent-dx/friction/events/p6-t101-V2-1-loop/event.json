@@ -1,0 +1,16 @@
+{
+  "id": "p6-t101-V2-1-loop",
+  "pilot": "pilot6",
+  "task": "t101_json_orders",
+  "arm": "V2",
+  "arm_name": "interpreted-first+verify",
+  "trial": 1,
+  "call": -1,
+  "verb": "run",
+  "mode": "default",
+  "exit": 0,
+  "command": "wj run --verify main.wj",
+  "source": "none",
+  "class": "skipped-loop",
+  "reason": "interpreted-first arm; the first program run was `wj run --verify main.wj`, not `wj run --interpret`"
+}
