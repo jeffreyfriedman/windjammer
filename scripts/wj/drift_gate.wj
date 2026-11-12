@@ -322,12 +322,12 @@ fn absolute_wj(wj: string) -> Result<string, string> {
 // merge-base with origin's default branch, else HEAD (so a clone without either still has a base that exists).
 fn base_ref_default() -> string {
     match env::var("DRIFT_BASE_REF") {
-        Some(v) => {
+        Ok(v) => {
             if v != "" {
                 return v
             }
         },
-        None => {},
+        Err(_) => {},
     }
     let cmd = "git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || git merge-base HEAD origin/HEAD 2>/dev/null || echo HEAD"
     match sh(cmd) {
