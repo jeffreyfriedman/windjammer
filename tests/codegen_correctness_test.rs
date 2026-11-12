@@ -134,6 +134,11 @@ corpus_tests!(
     text_slice_into_owned_string,
     generic_element_read_clone,
     nested_closure_typed_param,
+    if_value_in_let_not_cast_to_return_width,
+    int_element_compared_with_len_and_used_as_index,
+    struct_field_read_moves_literal_to_i32,
+    assert_in_match_let_value_takes_field_width,
+    sequence_adapters_take_usize_counts,
 );
 
 // ------------------------------------------------------------------ generated programs
