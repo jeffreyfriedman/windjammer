@@ -163,6 +163,11 @@ fn every_promise_has_positive_and_negative_acceptance_cases() {
 fn run_all(sb: &Sandbox, cases: &[(String, Case)]) -> Vec<String> {
     let cargo = std::env::var("WJ_PROMISES_CARGO").is_ok();
     let runnable: Vec<&(String, Case)> = cases.iter().filter(|(_, c)| cargo || c.needs.as_deref() != Some("cargo")).collect();
+    if runnable.iter().any(|(_, c)| c.needs.is_some()) {
+        if let Err(msg) = promise::runner::require_toolchain() {
+            return vec![msg];
+        }
+    }
     let fails = std::sync::Mutex::new(Vec::new());
     std::thread::scope(|s| {
         for chunk in runnable.chunks(runnable.len().div_ceil(4).max(1)) {
