@@ -128,7 +128,7 @@ fn scan_rust_file(
 
     registry.register_runtime_file_stem(module_name);
     maybe_register_platform_leaf_alias(registry, module_name);
-
+    let generics = generic_returns::FileGenerics::new(&content);
     // Track `impl Type { ... }` so methods register as `Type::fn` (free functions
     // keep exclusive claim on `module::fn` — see `register_scanned_runtime_signature`).
     let mut current_impl: Option<String> = None;
@@ -152,7 +152,7 @@ fn scan_rust_file(
             }
             let header_done = header.contains('{') || trimmed.ends_with(';');
             if header_done {
-                if let Some(sig) = generic_returns::parse_sig(&header, module_name, &content) {
+                if let Some(sig) = generic_returns::parse_sig(&header, module_name, &generics) {
                     let mark_sanitizer = pending_sanitizer;
                     pending_sanitizer = false;
                     register_scanned_runtime_signature(
@@ -250,7 +250,7 @@ fn scan_rust_file(
 
         // Single-line `pub fn … {` (multi-line headers registered via pending_fn_header).
         if pending_fn_header.is_none() {
-            if let Some(sig) = generic_returns::parse_sig(trimmed, module_name, &content) {
+            if let Some(sig) = generic_returns::parse_sig(trimmed, module_name, &generics) {
                 let mark_sanitizer = pending_sanitizer;
                 pending_sanitizer = false;
                 register_scanned_runtime_signature(
