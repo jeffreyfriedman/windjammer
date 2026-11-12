@@ -11,7 +11,8 @@ use super::locate::{masked_ranges, Locator};
 use super::semantic::{walk_block, Index, Visitor};
 use super::std_calls::std_imports;
 use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, SourceIndex, Span};
-use crate::parser::ast::core::{EnumPatternBinding, Expression, FunctionDecl, Item, MatchArm, Pattern, Statement, Type};
+use crate::parser::ast::core::{EnumPatternBinding, Expression, FunctionDecl, Item, MatchArm, Pattern, Statement};
+use crate::parser::Type;
 use crate::stdlib_surface::std_functions::{self, Wrapper};
 use std::collections::{HashMap, HashSet};
 
