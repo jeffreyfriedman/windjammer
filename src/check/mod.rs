@@ -18,6 +18,7 @@ pub mod local_mut;
 mod project;
 mod rust_calls;
 mod rust_surface_health;
+mod match_variants;
 mod std_calls;
 mod semantic;
 pub mod watch;
