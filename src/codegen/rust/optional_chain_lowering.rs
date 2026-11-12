@@ -23,6 +23,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// The `T` of a `Result<T, E>` receiver (references peeled): there `?.member` is postfix `?` then `.member`.
+    fn result_chain_payload(&self, object: &Expression<'ast>) -> Option<Type> {
+        let mut ty = self.infer_expression_type(object)?;
+        while let Type::Reference(inner) | Type::MutableReference(inner) = ty {
+            ty = *inner;
+        }
+        match ty {
+            Type::Result(ok, _) => Some(*ok),
+            _ => None,
+        }
+    }
+
     /// Static type of the member the closure body reads from a payload of type `payload`.
     fn opt_chain_member_type(&self, payload: &Type, body: &Expression<'ast>) -> Option<Type> {
         let name = Self::type_to_name(payload)?;
@@ -58,6 +70,17 @@ impl<'ast> CodeGenerator<'ast> {
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
         let Some((_, Expression::Closure { body, .. })) = arguments.first() else { return self.unsupported_optional_chain() };
+        if let Some(ok) = self.result_chain_payload(object) {
+            // `items(n)?.len()` on a `Result`: `?` then the member, as postfix try reads (the interpreter does the same)
+            let receiver = self.generate_expression(object);
+            let previous = self.local_var_types.insert(OPT_CHAIN_PARAM.to_string(), ok);
+            let value = self.generate_expression(body);
+            match previous {
+                Some(t) => self.local_var_types.insert(OPT_CHAIN_PARAM.to_string(), t),
+                None => self.local_var_types.remove(OPT_CHAIN_PARAM),
+            };
+            return format!("{{ let {OPT_CHAIN_PARAM} = {receiver}?; {value} }}");
+        }
         let Some(payload) = self.opt_chain_payload(object) else { return self.unsupported_optional_chain() };
         let Some(member) = self.opt_chain_member_type(&payload, body) else { return self.unsupported_optional_chain() };
         let receiver = self.generate_expression(object);

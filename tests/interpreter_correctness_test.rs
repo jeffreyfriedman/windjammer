@@ -77,3 +77,69 @@ fn main() {
     assert_eq!(r.stdout, "struct: true\nempty: true\nvariant: true\n", "{}", r.stderr);
 }
 
+/// `items(n)?.len()` reads `?.` as optional chaining; on a `Result` it must be `?` then `.len()` (compiled
+/// build), and `Err` must return from the function. `?.` on an `Option` is still optional chaining (ADR-0018).
+#[test]
+fn question_dot_on_a_result_is_try_then_method() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = r#"fn items(n: int) -> Result<Vec<int>, string> {
+    if n < 0 {
+        return Err("negative")
+    }
+    let mut v: Vec<int> = Vec::new()
+    let mut i = 0
+    while i < n {
+        v.push(i)
+        i = i + 1
+    }
+    Ok(v)
+}
+
+fn count(n: int) -> Result<int, string> {
+    Ok(items(n)?.len() as int)
+}
+
+fn shout(name: Option<string>) -> Option<string> {
+    name?.to_uppercase()
+}
+
+fn show(r: Result<int, string>) {
+    match r {
+        Ok(n) => println("ok ${n}"),
+        Err(e) => println("err ${e}"),
+    }
+}
+
+fn show_opt(o: Option<string>) {
+    match o {
+        Some(n) => println("some ${n}"),
+        None => println("none"),
+    }
+}
+
+fn main() {
+    show(count(3))
+    show(count(-1))
+    show_opt(shout(Some("abcd")))
+    show_opt(shout(None))
+}
+"#;
+    let r = run(dir.path(), src);
+    assert_eq!(r.code, 0, "{}", r.stderr);
+    assert_eq!(r.stdout, "ok 3\nerr negative\nsome ABCD\nnone\n", "{}", r.stderr);
+}
+
+/// The compiled side of the same finding: `items(n)?.len()` on a `Result` receiver is emitted as `?` followed by
+/// the member (it used to be refused as optional chaining without a receiver type).
+#[test]
+fn question_dot_on_a_result_is_emitted_as_try_then_member() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = "fn items(n: int) -> Result<Vec<int>, string> {\n    if n < 0 {\n        return Err(\"negative\")\n    }\n    Ok(Vec::new())\n}\n\nfn count(n: int) -> Result<int, string> {\n    Ok(items(n)?.len() as int)\n}\n\nfn main() {\n    match count(1) {\n        Ok(n) => println(\"${n}\"),\n        Err(e) => println(e),\n    }\n}\n";
+    std::fs::write(dir.path().join("p.wj"), src).unwrap();
+    let out = dir.path().join("out");
+    let o = Command::new(WJ).current_dir(dir.path()).args(["build", "--no-cargo", "--no-lint", "-o"]).arg(&out).arg("p.wj").output().unwrap();
+    assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let rs = std::fs::read_to_string(out.join("p.rs")).unwrap();
+    assert!(rs.contains("let _oc = items(n)?;"), "{rs}");
+    assert!(!rs.contains("unreachable!()"), "{rs}");
+}

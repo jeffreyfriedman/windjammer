@@ -366,7 +366,7 @@ impl Interpreter {
         })))
     }
 
-    fn eval_try(&mut self, v: Value) -> R {
+    pub(crate) fn eval_try(&mut self, v: Value) -> R {
         match &v {
             Value::Enum(en) if &*en.ty == "Option" => match &en.payload {
                 Payload::Tuple(p) if en.idx == 1 => Ok(p[0].clone()),
