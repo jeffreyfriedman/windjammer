@@ -41,6 +41,29 @@ fn share_analysis() {
     });
 }
 
+/// The scanned runtime signature layer, shared by every process of this compiler build (`<cache root>/registry`,
+/// `analyzer/signature_registry/snapshot.rs`). Needs no project, so every check installs it.
+fn share_registry_layer() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let layer = crate::cargo_cache::entries::RegistryStore { dir: crate::cargo_cache::entries::registry_dir() };
+        if let Some(compiler) = check::shared_cache::compiler_key() {
+            crate::analyzer::install_layer_store(std::sync::Arc::new(RegistryDir(layer)), compiler);
+        }
+    });
+}
+
+struct RegistryDir(crate::cargo_cache::entries::RegistryStore);
+
+impl crate::analyzer::LayerStore for RegistryDir {
+    fn get(&self, key: &str) -> Option<String> {
+        self.0.get(key)
+    }
+    fn put(&self, key: &str, text: &str) {
+        self.0.put(key, text)
+    }
+}
+
 struct AnalysisDir(crate::cargo_cache::entries::AnalysisStore);
 
 impl check::shared_cache::SharedStore for AnalysisDir {
@@ -55,6 +78,7 @@ impl check::shared_cache::SharedStore for AnalysisDir {
 /// The lexer reports bad characters by panicking; the checker catches that and reports a
 /// diagnostic, so the default panic message would only be noise.
 fn check_quietly(root: &Path) -> Result<Checked> {
+    share_registry_layer();
     share_analysis();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
@@ -131,6 +155,7 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
     // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
     // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
     let use_cache = check::effects::manifest_path(path).is_some();
+    share_registry_layer();
     if use_cache {
         share_analysis();
     }
