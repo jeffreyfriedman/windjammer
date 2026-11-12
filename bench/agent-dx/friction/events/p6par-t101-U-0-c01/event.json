@@ -1,0 +1,16 @@
+{
+  "id": "p6par-t101-U-0-c01",
+  "pilot": "pilot6-parallel",
+  "task": "t101_json_orders",
+  "arm": "U",
+  "arm_name": "compiled-first",
+  "trial": 0,
+  "call": 1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

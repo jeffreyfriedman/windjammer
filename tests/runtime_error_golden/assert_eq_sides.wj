@@ -1,0 +1,8 @@
+fn check(expected: int, actual: int) {
+    let label = "sum"
+    assert_eq(actual, expected, "sums differ")
+}
+
+fn main() {
+    check(10, 3 + 4)
+}

@@ -15,7 +15,7 @@ Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in
 
 - Types: `int` (64-bit), `float`, `bool`, `string`, `char`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `HashMap<K, V>` (`use std::collections::HashMap`).
 - No semicolons. `let mut` to mutate. The last expression is the block value. `[1, 2]` is a Vec (no `vec!`).
-- Strings: `println("${x} ${y:.2}")` is a function, not a macro. Use `string`, never `String`; literals need no `.to_string()`.
+- Strings: `println("${x} ${y:.2}")` is a function, not a macro. Use `string`, never `String`; literals need no `.to_string()`. A dollar sign before a value is `"\$${p}"` (`$$` prints `$` and stops the interpolation).
 - Ownership is inferred: `fn f(v: Vec<int>)`, `self`; never `&`, `&mut`, `.iter()`, `.unwrap()`. Iterate with `for x in v`; adapters start at the collection: `v.map(..)`.
 - Input: `use std::fs`, `let text = fs::read_to_string("/dev/stdin").unwrap_or("")`, `for line in text.lines()`. `std::env::args()` is an iterator.
 - `len()` is `usize` when compiled: `let n: int = v.len() as int`. Slice strings with `s[a..b]`.
@@ -61,6 +61,7 @@ wj fmt FILE                     # formatter; wj lint FILE checks Rust-isms; wj f
 ```
 
 Exit status of a program: 0 ok, 101 panic, N for `process::exit(N)`, 2 means "unsupported in the interpreter".
+A failed interpreted run prints the failing source line, the call stack (`0: `f` at file:line:col`) and the values of the failing frame's bindings (`locals in `f``): fix from that output, do not add prints. `wj run --interpret --error-format json FILE` prints the same as one diagnostics-schema line (`stack`, `locals`) on stderr; `--no-locals` leaves the values out. Values named like secrets or equal to an environment variable show `<redacted>`.
 `wj check` passing does not mean `wj run --interpret` passes, and the interpreter accepts more than `wj build`
 (see "Compiled path gaps").
 
@@ -466,11 +467,12 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj new` | Create a new Windjammer project |
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
-| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
-| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
 | `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
 | `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
+| `wj replay` | Step through a recorded (`wj run --record LOG`) or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035) |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) |
 | `wj fmt` | Format Windjammer code |
 | `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms and add the `mut` of changed locals (WJ0051) |
@@ -568,7 +570,8 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--compiled` | COMPILED |  | Transpile to Rust and run with cargo (the release path), skipping the interpreter |
 | `--release` | RELEASE |  | Like --compiled, with optimizations |
 | `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
-| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr |
+| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty |
+| `--error-format` | FORMAT |  | How diagnostics and failed runs report on stderr: `human` (default); `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; or `json` (interpreted runs: one last line in the diagnostics schema with `stack` and `locals`, ADR-0036). Program stdout and the exit status do not change. `WJ_ERROR_FORMAT` sets the default for every command |
 | `--speculate` | SPECULATE |  | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) |
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
@@ -580,6 +583,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--jit-debug` | JIT_DEBUG |  | Interpreted runs: report on stderr which loops run as machine code and why others do not |
 | `--jit-mutant` | NAME |  | Interpreted runs (debug builds only): leave one machine-code check out (mutation tests) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
+| `--no-locals` | NO_LOCALS |  | Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether) |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
 | `--record` | FILE |  | Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings) to FILE, a replayable log (ADR-0021) |
 | `--replay` | FILE |  | Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and none is performed; seeds, arguments and the time mode come from the log (ADR-0021) |
@@ -601,7 +605,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 
 ### `wj repl`
 
-Start the Windjammerscript REPL (interactive interpreter)
+Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway
 
 ```text
 Usage: wj repl
@@ -609,7 +613,7 @@ Usage: wj repl
 
 ### `wj eval`
 
-Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
+Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
 
 ```text
 Usage: wj eval <CODE>
@@ -677,6 +681,24 @@ Usage: wj test [OPTIONS] [PATH]
 | `--watch` | WATCH |  | Re-run the tests on every source change |
 | `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
 | `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
+
+### `wj replay`
+
+Step through a recorded (`wj run --record LOG`) or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035)
+
+```text
+Usage: wj replay [OPTIONS] <LOG PROGRAM>...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATHS>` | LOG PROGRAM |  | `LOG PROGRAM`: an effect log written by `wj run --record` and the program it recorded; with --simulate, only `PROGRAM` |
+| `--script` | FILE |  | Debugger commands, one per line (`break LINE`, `continue`, `step [N]`, `back [N]`, `print NAME`, `locals`, `where`); `-` or no script reads them from standard input |
+| `--json` | JSON |  | Print the events as JSON Lines, one object per line (for agents and scripts) |
+| `--simulate` | SIMULATE |  | Debug the run of the deterministic simulated world instead of a recorded one (as `wj run --simulate`) |
+| `--seed` | N | 1 | With --simulate: the seed of the world |
+| `--faults` | RATE | 0 | With --simulate: probability (0 to 1) that a file or network call fails |
+| `--allow` | EFFECT[=RESOURCE] |  | Grant a capability as the recording did, `EFFECT[=RESOURCE]` (repeatable); nothing is performed either way |
 
 ### `wj reduce`
 
@@ -755,6 +777,7 @@ Usage: wj check [OPTIONS] [PATH]
 | `--json` | JSON |  | Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json) |
 | `--watch` | WATCH |  | Re-check whenever a .wj file changes |
 | `--fix` | FIX |  | Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...) |
+| `--error-format` | FORMAT |  | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command |
 
 ### `wj add`
 

@@ -46,6 +46,11 @@ LOOP_TEXT = {
         "Before you finish, run `wj build main.wj` ONCE as a final check that the program also compiles with the production "
         "compiler (the final grade uses it). Run `wj build` again only if that check failed and you changed the code. "
         "Do not use `wj run --compiled`."),
+    "verify-one-command": (
+        "Development loop: one command does everything. After writing `main.wj`, run "
+        "`printf '<input>' | wj run --verify main.wj`: it runs the program at once, builds it with the production compiler "
+        "(the final grade uses that build), runs the build on the same input and compares. Read what it reports, fix, and run "
+        "it again. You are done when it exits 0 and the output is what the task asks for. No other build or run command is needed."),
     "native-python": (
         "Development loop: run the program with `python3 main.py` (pass program input on stdin)."),
     "native-go": (
@@ -82,6 +87,10 @@ ARMS = {
     "W": {"name": "interpreted+final-build", "loop": "interpreted-plus-build", "pack_file": "pilot5/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
     # pilot 6: U (compiled-first) and R (rust) as before; V2 = interpreted-first with width/String predictions and `wj run --verify` as the last step
     "V2": {"name": "interpreted-first+verify", "loop": "interpreted-verify", "pack_file": "pilot6/sheet_v2.md", "bash": "core+docs", "lang": "wj"},
+    # pilot 7: V3 = the loop agents actually follow (one command, measured in pilot 6) with compact diagnostics (ADR-0037)
+    "V3": {"name": "verify-one-command", "loop": "verify-one-command", "pack_file": "pilot7/sheet_v3.md", "bash": "core+docs", "lang": "wj",
+           "env": {"WJ_ERROR_FORMAT": "agent"}},
+    "U7": {"name": "compiled-first", "loop": "compiled-first", "pack_file": "pilot7/sheet_u.md", "bash": "core+docs", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
     "R": {"name": "rust", "loop": "native-rust", "pack": False, "lang": "rust"},

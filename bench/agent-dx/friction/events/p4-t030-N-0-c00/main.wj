@@ -1,0 +1,78 @@
+use std::fs
+use std::collections::HashMap
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut acc: HashMap<string, int> = HashMap::new()
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if parts.len() == 0 {
+            continue
+        }
+        let cmd = parts[0].clone()
+        if cmd == "open" && parts.len() >= 3 {
+            let amt: int = parts[2].parse::<int>().unwrap_or(0)
+            if amt < 0 {
+                println("error: invalid amount")
+            } else if acc.contains_key(&parts[1]) {
+                println("error: duplicate account")
+            } else {
+                acc.insert(parts[1].clone(), amt)
+                println("ok")
+            }
+        } else if cmd == "balance" && parts.len() >= 2 {
+            if acc.contains_key(&parts[1]) {
+                println("{}", acc[&parts[1]])
+            } else {
+                println("error: unknown account {}", parts[1])
+            }
+        } else if (cmd == "deposit" || cmd == "withdraw") && parts.len() >= 3 {
+            let amt: int = parts[2].parse::<int>().unwrap_or(0)
+            if amt <= 0 {
+                println("error: invalid amount")
+            } else if !acc.contains_key(&parts[1]) {
+                println("error: unknown account {}", parts[1])
+            } else {
+                let bal: int = acc[&parts[1]]
+                if cmd == "deposit" {
+                    acc.insert(parts[1].clone(), bal + amt)
+                    println("ok")
+                } else if bal < amt {
+                    println("error: insufficient funds")
+                } else {
+                    acc.insert(parts[1].clone(), bal - amt)
+                    println("ok")
+                }
+            }
+        } else if cmd == "transfer" && parts.len() >= 4 {
+            let amt: int = parts[3].parse::<int>().unwrap_or(0)
+            if amt <= 0 {
+                println("error: invalid amount")
+            } else if !acc.contains_key(&parts[1]) {
+                println("error: unknown account {}", parts[1])
+            } else if !acc.contains_key(&parts[2]) {
+                println("error: unknown account {}", parts[2])
+            } else if parts[1] == parts[2] {
+                println("error: same account")
+            } else {
+                let fb: int = acc[&parts[1]]
+                let tb: int = acc[&parts[2]]
+                if fb < amt {
+                    println("error: insufficient funds")
+                } else {
+                    acc.insert(parts[1].clone(), fb - amt)
+                    acc.insert(parts[2].clone(), tb + amt)
+                    println("ok")
+                }
+            }
+        }
+    }
+    let mut names: Vec<string> = Vec::new()
+    for k in acc.keys() {
+        names.push(k.clone())
+    }
+    names.sort()
+    for n in names.iter() {
+        println("{} {}", n, acc[n])
+    }
+}

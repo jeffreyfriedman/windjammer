@@ -1,0 +1,4 @@
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:67:28
+   |
+67 |         let mut parts: Vec<string> = []

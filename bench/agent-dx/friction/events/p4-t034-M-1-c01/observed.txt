@@ -1,0 +1,10 @@
+error[E0599]: no method named `file_name` found for reference `&dyn Shape` in the current scope
+   --> main.rs:137:74
+    |
+137 |     windjammer_runtime::io::println(&format!("{} corners={} area2={}", s.file_name(), s.corners(), d));
+For more information about this error, try `rustc --explain E0599`.
+warning: `windjammer` (bin "windjammer") generated 2 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 2 warnings emitted
+Error: Cargo build failed
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 2 warnings emitted
+Error: C

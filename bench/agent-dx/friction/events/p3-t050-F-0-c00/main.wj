@@ -1,0 +1,65 @@
+use std::fs
+use std::env
+use std::process
+
+fn emit(text: string, number: bool, counter: int) -> int {
+    let mut n = counter
+    if !number {
+        print(text)
+        return n
+    }
+    let ends = text.ends_with("\n")
+    let lines = text.split("\n")
+    let total: int = lines.len() as int
+    let mut i: int = 0
+    for line in lines {
+        i = i + 1
+        if i == total && ends {
+            break
+        }
+        if i == total && line == "" {
+            break
+        }
+        n = n + 1
+        println("${n:>6}\t${line}")
+    }
+    n
+}
+
+fn main() {
+    let mut number = false
+    let mut names: Vec<string> = []
+    let mut first = true
+    for a in env::args() {
+        if first {
+            first = false
+            continue
+        }
+        if a == "-n" {
+            number = true
+        } else {
+            names.push(a)
+        }
+    }
+    let mut counter: int = 0
+    let mut status: int = 0
+    if names.len() == 0 {
+        let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+        counter = emit(text, number, counter)
+    } else {
+        for name in names {
+            match fs::read_to_string(name) {
+                Ok(t) => {
+                    counter = emit(t, number, counter)
+                }
+                Err(_) => {
+                    println("cat: ${name}: No such file")
+                    status = 1
+                }
+            }
+        }
+    }
+    if status != 0 {
+        process::exit(1)
+    }
+}

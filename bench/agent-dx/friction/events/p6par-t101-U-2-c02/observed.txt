@@ -1,0 +1,17 @@
+Building Windjammer project from "{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.U.2/ws" (target: rust)
+Output: "{CACHE}/run/1d15148902d3cd46"
+
+Success! Transpilation complete!
+
+warning: unused import: `windjammer_runtime::fs::Metadata`
+ --> main.rs:4:5
+  |
+4 | use windjammer_runtime::fs::Metadata;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `windjammer_runtime::fs::DirEntry`
+ --> main.rs:5:5
+  |
+5 | use wi

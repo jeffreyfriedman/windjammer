@@ -1,0 +1,16 @@
+{
+  "id": "p3-t050-F-0-c02",
+  "pilot": "pilot3",
+  "task": "t050_cat_number",
+  "arm": "F",
+  "arm_name": "tiny-pack+wj-docs",
+  "trial": 0,
+  "call": 2,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "noise",
+  "reason": "build progress and rustc warnings in front of the program's own exit status"
+}

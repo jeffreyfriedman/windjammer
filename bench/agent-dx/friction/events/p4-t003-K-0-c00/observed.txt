@@ -1,0 +1,4 @@
+error[WJ0003]: mismatched types: expected `int`, found `uint`
+  --> main.wj:6:22
+  |
+6 |     let mut cnt: Vec<int> = []

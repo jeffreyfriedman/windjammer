@@ -1,0 +1,141 @@
+use std::fs
+use std::process
+
+struct Iou {
+    debtor: int,
+    creditor: int,
+    amount: int,
+}
+
+fn amount(s: string, lo: int) -> int {
+    // -1 when invalid
+    if s.len() == 0 || s.len() > 9 { return -1 }
+    for c in s.chars() {
+        if c < '0' || c > '9' { return -1 }
+    }
+    let v = s.parse::<int>().unwrap_or(-1)
+    if v < lo { return -1 }
+    v
+}
+
+fn find(names: Vec<string>, n: string) -> int {
+    let mut i = 0
+    while i < names.len() {
+        if names[i] == n { return i }
+        i += 1
+    }
+    -1
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut names: Vec<string> = []
+    let mut bal: Vec<int> = []
+    let mut journal: Vec<Vec<string>> = []
+    let mut book: Vec<Iou> = []
+    let mut errors = 0
+    for line in text.lines() {
+        if line.len() == 0 { continue }
+        let p: Vec<string> = line.split(" ").collect()
+        let mut named = true
+        for t in p {
+            if t.len() == 0 { named = false }
+        }
+        let mut err = ""
+        if !named {
+            err = "bad command"
+        } else if p[0] == "open" && p.len() == 3 && amount(p[2], 0) >= 0 {
+            if find(names, p[1]) >= 0 {
+                err = "account exists ${p[1]}"
+            } else {
+                let n = amount(p[2], 0)
+                names.push(p[1])
+                bal.push(n)
+                journal.push(["open ${n}"])
+            }
+        } else if (p[0] == "transfer" || p[0] == "iou") && p.len() == 4 && amount(p[3], 1) >= 0 {
+            let n = amount(p[3], 1)
+            let a = find(names, p[1])
+            let b = find(names, p[2])
+            if a < 0 {
+                err = "unknown account ${p[1]}"
+            } else if b < 0 {
+                err = "unknown account ${p[2]}"
+            } else if a == b {
+                err = "self transfer"
+            } else if p[0] == "iou" {
+                book.push(Iou { debtor: a, creditor: b, amount: n })
+            } else if bal[a] < n {
+                err = "overdraft ${p[1]}"
+            } else {
+                bal[a] = bal[a] - n
+                bal[b] = bal[b] + n
+                journal[a].push("out ${n} to ${p[2]}")
+                journal[b].push("in ${n} from ${p[1]}")
+            }
+        } else if p[0] == "balance" && p.len() == 2 {
+            let a = find(names, p[1])
+            if a < 0 { err = "unknown account ${p[1]}" } else { println("${p[1]}: ${bal[a]}") }
+        } else if p[0] == "all" && p.len() == 1 {
+            if names.len() == 0 { println("(no accounts)") }
+            let mut sorted: Vec<string> = []
+            for n in names { sorted.push(n) }
+            sorted.sort()
+            for n in sorted {
+                println("${n}: ${bal[find(names, n)]}")
+            }
+        } else if p[0] == "history" && p.len() == 2 {
+            let a = find(names, p[1])
+            if a < 0 {
+                err = "unknown account ${p[1]}"
+            } else {
+                for e in journal[a] {
+                    println(e)
+                }
+            }
+        } else if p[0] == "settle" && p.len() == 1 {
+            let mut net: Vec<int> = []
+            for n in names { net.push(0) }
+            for i in book {
+                net[i.debtor] = net[i.debtor] - i.amount
+                net[i.creditor] = net[i.creditor] + i.amount
+            }
+            book = []
+            let mut steps = 0
+            while true {
+                let mut d = -1
+                let mut c = -1
+                let mut k = 0
+                while k < names.len() {
+                    if net[k] < 0 && (d < 0 || net[k] < net[d] || (net[k] == net[d] && names[k] < names[d])) { d = k }
+                    if net[k] > 0 && (c < 0 || net[k] > net[c] || (net[k] == net[c] && names[k] < names[c])) { c = k }
+                    k += 1
+                }
+                if d < 0 { break }
+                let debt = 0 - net[d]
+                let amt = if debt < net[c] { debt } else { net[c] }
+                let mut out = "${names[d]} pays ${names[c]} ${amt}"
+                if bal[d] >= amt {
+                    bal[d] = bal[d] - amt
+                    bal[c] = bal[c] + amt
+                    journal[d].push("out ${amt} to ${names[c]}")
+                    journal[c].push("in ${amt} from ${names[d]}")
+                } else {
+                    out = "${out} (failed: overdraft)"
+                }
+                net[d] = net[d] + amt
+                net[c] = net[c] - amt
+                println(out)
+                steps += 1
+            }
+            if steps == 0 { println("nothing to settle") }
+        } else {
+            err = "bad command"
+        }
+        if err.len() > 0 {
+            println("error: ${err}")
+            errors += 1
+        }
+    }
+    if errors > 0 { process::exit(1) }
+}

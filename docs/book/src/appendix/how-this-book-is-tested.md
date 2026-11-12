@@ -28,9 +28,9 @@ runs as a project in the interpreter and compiled, with the same agreement check
 | Blocks marked `ignore` | 0 |
 | Programs that run interpreted only | 4 |
 | Chapters still to be written | 0 |
-| Pages | 53 |
+| Pages | 56 |
 | Promises no page mentions yet | 0 |
-| Language features in the registry | 40 |
+| Language features in the registry | 41 |
 | Registry features no page covers yet | 0 |
 <!-- wj:end -->
 

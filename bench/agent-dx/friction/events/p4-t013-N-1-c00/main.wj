@@ -1,0 +1,150 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut keys: Vec<int> = []
+    let mut lt: Vec<int> = []
+    let mut rt: Vec<int> = []
+    let mut root: int = -1
+    for line in text.lines() {
+        let parts: Vec<string> = line.trim().split_whitespace().map(|s| s.to_string()).collect()
+        if parts.len() == 0 {
+            continue
+        }
+        let cmd = parts[0].clone()
+        let mut x: int = 0
+        if parts.len() > 1 {
+            x = parts[1].parse::<int>().unwrap_or(0)
+        }
+        if cmd == "insert" || cmd == "contains" || cmd == "delete" {
+            let mut cur = root
+            let mut par: int = -1
+            let mut left = false
+            while cur != -1 && keys[cur as usize] != x {
+                par = cur
+                if x < keys[cur as usize] {
+                    left = true
+                    cur = lt[cur as usize]
+                } else {
+                    left = false
+                    cur = rt[cur as usize]
+                }
+            }
+            if cmd == "insert" {
+                if cur != -1 {
+                    println("dup")
+                } else {
+                    let id = keys.len() as int
+                    keys.push(x)
+                    lt.push(-1)
+                    rt.push(-1)
+                    if par == -1 {
+                        root = id
+                    } else if left {
+                        lt[par as usize] = id
+                    } else {
+                        rt[par as usize] = id
+                    }
+                    println("ok")
+                }
+            } else if cmd == "contains" {
+                if cur != -1 {
+                    println("yes")
+                } else {
+                    println("no")
+                }
+            } else {
+                if cur == -1 {
+                    println("missing")
+                } else {
+                    let l = lt[cur as usize]
+                    let r = rt[cur as usize]
+                    if l != -1 && r != -1 {
+                        let mut sp = cur
+                        let mut s = r
+                        while lt[s as usize] != -1 {
+                            sp = s
+                            s = lt[s as usize]
+                        }
+                        keys[cur as usize] = keys[s as usize]
+                        let sr = rt[s as usize]
+                        if sp == cur {
+                            rt[sp as usize] = sr
+                        } else {
+                            lt[sp as usize] = sr
+                        }
+                    } else {
+                        let mut child = l
+                        if l == -1 {
+                            child = r
+                        }
+                        if par == -1 {
+                            root = child
+                        } else if left {
+                            lt[par as usize] = child
+                        } else {
+                            rt[par as usize] = child
+                        }
+                    }
+                    println("ok")
+                }
+            }
+        } else if cmd == "inorder" {
+            if root == -1 {
+                println("<empty>")
+            } else {
+                let mut out: Vec<string> = []
+                let mut stack: Vec<int> = []
+                let mut cur = root
+                while cur != -1 || stack.len() > 0 {
+                    while cur != -1 {
+                        stack.push(cur)
+                        cur = lt[cur as usize]
+                    }
+                    let n = stack.pop().unwrap()
+                    out.push(keys[n as usize].to_string())
+                    cur = rt[n as usize]
+                }
+                println(out.join(" "))
+            }
+        } else if cmd == "height" {
+            let mut best: int = 0
+            if root != -1 {
+                let mut st: Vec<int> = [root]
+                let mut dp: Vec<int> = [1]
+                while st.len() > 0 {
+                    let n = st.pop().unwrap()
+                    let d = dp.pop().unwrap()
+                    if d > best {
+                        best = d
+                    }
+                    if lt[n as usize] != -1 {
+                        st.push(lt[n as usize])
+                        dp.push(d + 1)
+                    }
+                    if rt[n as usize] != -1 {
+                        st.push(rt[n as usize])
+                        dp.push(d + 1)
+                    }
+                }
+            }
+            println(best.to_string())
+        } else if cmd == "min" || cmd == "max" {
+            if root == -1 {
+                println("empty")
+            } else {
+                let mut c = root
+                if cmd == "min" {
+                    while lt[c as usize] != -1 {
+                        c = lt[c as usize]
+                    }
+                } else {
+                    while rt[c as usize] != -1 {
+                        c = rt[c as usize]
+                    }
+                }
+                println(keys[c as usize].to_string())
+            }
+        }
+    }
+}

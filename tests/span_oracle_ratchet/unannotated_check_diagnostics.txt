@@ -236,7 +236,6 @@ tests/check_negative/mutants/trait_display_to_string__unknown_field.wj WJ0014
 tests/check_negative/mutants/vec_basics__unknown_method.wj WJ0015
 tests/codegen_correctness_corpus/thread_handles.wj WJ0005
 tests/conformance/control_flow/pipe_operator.wj W0007
-tests/conformance/types/enums_and_matching.wj WJ0010
 tests/conformance_programs/01_arith_i32.wj W0008
 tests/conformance_programs/02_arith_i64.wj W0008
 tests/conformance_programs/03_arith_f64.wj W0008
@@ -560,7 +559,6 @@ tests/spec/types/SPEC-TYP-003.wj W0013
 tests/spec/types/SPEC-TYP-009.wj WJ0011
 tests/stdlib_all_tests.wj WJ0011
 tests/struct_pattern_tests.wj W0009
-tests/tuple_enum_variants.wj W0009,WJ0010
 tests/type_registry_imports_test.wj WJ0011
 tests/vec_index_local_var.wj W0002
 tests/windjammer_tests/regression_enum_kill_payload_extract_test.wj W0006

@@ -171,8 +171,7 @@ pub fn run(cli: Cli) -> Result<()> {
             compiled,
             release,
             watch,
-            verify, speculate,
-            hot,
+            verify, speculate, error_format, hot,
             sched_seed,
             hash_seed,
             engine,
@@ -181,7 +180,7 @@ pub fn run(cli: Cli) -> Result<()> {
             jit_loop_hot,
             jit_debug,
             jit_mutant,
-            no_lint,
+            no_lint, no_locals,
             deterministic_time,
             allow_network,
             mock_http,
@@ -202,17 +201,18 @@ pub fn run(cli: Cli) -> Result<()> {
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
+            let output = output_of(error_format.as_deref());
             use windjammer::cli::run_dev::{execute, Mode, RunOptions};
             let (path, args) = split_path_and_args(path_and_args);
-            if let Some(code) = run_loop_mode(verify, watch, &target, path.as_deref(), bin.as_deref(), &args, no_lint)? {
+            if let Some(code) = run_loop_mode(verify, watch, &target, path.as_deref(), bin.as_deref(), &args, (no_lint, output))? {
                 std::process::exit(code);
             }
             let mode = run_mode(compiled, release, interpret || hot || record.is_some() || replay.is_some() || journal.is_some());
             let lint = windjammer::cli_execution::report_build_lints;
             let engine_resolved = engine_is_resolved(&engine)?;
             let jit_on = jit_setting(&jit, no_jit)?;
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, binds: bind, limits, result_json, durable_sites: Vec::new(), simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant };
-            let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint, speculate });
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, binds: bind, limits, result_json, durable_sites: Vec::new(), simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant, json_errors: error_format.as_deref() == Some("json"), no_locals };
+            let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint, speculate, output });
             if code != 0 {
                 std::process::exit(code);
             }
@@ -306,6 +306,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 allow_empty,
             })?;
         }
+        Commands::Replay { paths, script, json, simulate, seed, faults, allow } => windjammer::cli::replay::execute(windjammer::cli::replay::Args { paths, script, json, simulate, seed, faults, allow })?,
         Commands::Reduce {
             path,
             oracle,
@@ -342,13 +343,8 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }
-        Commands::Check {
-            path,
-            json,
-            watch,
-            fix,
-        } => {
-            windjammer::cli::check::execute(path.as_deref(), json, watch, fix)?;
+        Commands::Check { path, json, watch, fix, error_format } => {
+            windjammer::cli::check::execute(path.as_deref(), json, watch, fix, output_of(error_format.as_deref()).format)?
         }
         Commands::Add {
             package,
@@ -620,7 +616,7 @@ fn run_repl() -> Result<()> {
         eprintln!("wj: Rust crate calls are not available in this REPL: {e}");
         None
     });
-    windjammer::interpreter::repl::run_repl_with(crates);
+    windjammer::interpreter::repl::run_repl_with(crates, Some(windjammer::cli::eval::predict_session));
     Ok(())
 }
 
@@ -702,12 +698,21 @@ fn engine_is_resolved(engine: &str) -> anyhow::Result<bool> {
 /// separator, as older invocations wrote it, is dropped).
 /// `wj run --verify` (interpret, build, compare: ADR-0033) and `wj run --watch` (restart on change) take over the whole
 /// run; `None` for an ordinary run.
-fn run_loop_mode(verify: bool, watch: bool, target: &str, path: Option<&std::path::Path>, bin: Option<&str>, args: &[String], no_lint: bool) -> Result<Option<i32>> {
+/// Diagnostic format (`--error-format`, else `WJ_ERROR_FORMAT`) and build progress (`WJ_PROGRESS=1`/`0`, else only on a
+/// terminal) for `wj check` and `wj run` (ADR-0037). The driver is the one place that reads these variables.
+fn output_of(flag: Option<&str>) -> windjammer::cli::run::Output {
+    use windjammer::toolchain::env;
+    let format = windjammer::diagnostics::render::Format::parse(flag.or(env::get("WJ_ERROR_FORMAT").as_deref()));
+    let progress = env::get("WJ_PROGRESS").map(|v| v == "1");
+    windjammer::cli::run::Output::for_stderr(format, progress)
+}
+
+fn run_loop_mode(verify: bool, watch: bool, target: &str, path: Option<&std::path::Path>, bin: Option<&str>, args: &[String], (no_lint, output): (bool, windjammer::cli::run::Output)) -> Result<Option<i32>> {
     if verify {
         if target != "rust" {
             anyhow::bail!("`--verify` compares with the Rust build; it does not take `--target {target}`");
         }
-        return Ok(Some(windjammer::cli::verify::execute(path, bin, args, no_lint)));
+        return Ok(Some(windjammer::cli::verify::execute(path, bin, args, no_lint, output)));
     }
     if watch {
         let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();

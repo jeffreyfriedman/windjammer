@@ -10,6 +10,7 @@
 - [A fast edit-run loop](showcase/fast-loop.md)
 - [Programs that ask for what they need](showcase/authority.md)
 - [Made for agents](showcase/agents.md)
+- [What it costs agents](showcase/agent-cost.md)
 - [How the interpreter stays honest](showcase/trust.md)
 - [What we have measured](showcase/measured.md)
 - [One source, many targets](showcase/one-source.md)
@@ -27,6 +28,7 @@
 - [Ownership and borrowing, inferred](tutorial/ownership.md)
 - [Structs, enums, traits and generics](tutorial/types-and-traits.md)
 - [Errors and Result](tutorial/errors.md)
+- [Read a runtime error](tutorial/runtime-errors.md)
 - [Modules and packages](tutorial/modules.md)
 - [Collections and strings](tutorial/collections-and-strings.md)
 - [Closures](tutorial/closures.md)
@@ -41,6 +43,7 @@
 - [Targets: Rust, JavaScript, WebAssembly and Go](tutorial/targets.md)
 - [Shaders](tutorial/shaders.md)
 - [Testing](tutorial/testing.md)
+- [Debug a failing run deterministically](tutorial/time-travel.md)
 - [A final project](tutorial/final-project.md)
 - [Beyond the language](tutorial/beyond.md)
 

@@ -1,0 +1,248 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge s a 1\nedge s b 1\nedge a t 1\nedge b t 1\npath s t\npath t s\npath s q\n",
+  "stdout": "2 s>a>t\nunreachable\nunknown node q\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a b 5\nedge b c 5\nedge a c 20\npath a c\nedge a c 3\npath a c\nedge a b 0\nhello\n",
+  "stdout": "10 a>b>c\n3 a>c\nbad command: edge a b 0\nbad command: hello\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge s n2 1\nedge s n10 1\nedge n2 t 1\nedge n10 t 1\npath s t\n",
+  "stdout": "2 s>n10>t\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge s a 2\nedge s B 2\nedge a t 1\nedge B t 1\npath s t\n",
+  "stdout": "3 s>B>t\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge x y 4\nedge x y 9\nedge x y 2\npath x y\npath y x\npath x x\npath y y\n",
+  "stdout": "2 x>y\nunreachable\n0 x\n0 y\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a a 3\npath a a\npath a b\npath b a\npath q z\n",
+  "stdout": "0 a\nunknown node b\nunknown node b\nunknown node q\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a b -1\nedge a b 0\nedge a b 1000001\nedge a b 1000000\nedge a b 1x\nedge a b\nedge a\n path a b\npath a b\n \nedge a b 5 6\nfoo bar\n",
+  "stdout": "bad command: edge a b -1\nbad command: edge a b 0\nbad command: edge a b 1000001\nbad command: edge a b 1x\nbad command: edge a b\nbad command: edge a\nbad command:  path a b\n1000000 a>b\nbad command:  \nbad command: edge a b 5 6\nbad command: foo bar\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a d 10\nedge a b 3\nedge b c 3\nedge c d 3\nedge a c 6\npath a d\n\n\npath d a\n",
+  "stdout": "9 a>b>c>d\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a b 1\nedge a c 1\nedge b d 2\nedge c d 2\nedge b e 1\nedge c e 1\nedge e d 1\npath a d\npath a e\n",
+  "stdout": "3 a>b>d\n2 a>b>e\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge 1 2 1\nedge 2 3 1\nedge 1 3 2\nedge 1 10 1\nedge 10 3 1\npath 1 3\n",
+  "stdout": "2 1>10>3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path b A1\nedge b A1 2\nedge b b 1\npath b A1\nedge A1 A1 1\npath b A1\npath b A1\nedge b n2 6\nedge n2 n2 3\nedge b A1 2\nedge n2 n2 1\nedge A1 n2 2\nedge b b 1\nedge b n2 6\nedge b b 1\nedge n2 n2 2\npath A1 b\nedge A1 n2 3\nedge A1 b 1\nedge A1 b 1\npath A1 b\n",
+  "stdout": "unknown node b\n2 b>A1\n2 b>A1\n2 b>A1\nunreachable\n1 A1>b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge e d 1\nedge e A1 3\npath d e\nedge c a 1\nedge d e 2\nedge b d 7\nedge A1 e 2\npath d e\npath d n2\npath a a\nedge c b 3\npath b c\npath d A1\nedge c c 2\nedge e n2 3\npath e d\npath a b\nedge d a 2\npath c a\npath d n2\npath A1 A1\npath n2 d\n",
+  "stdout": "unreachable\n2 d>e\nunknown node n2\n0 a\nunreachable\n5 d>e>A1\n1 e>d\nunreachable\n1 c>a\n5 d>e>n2\n0 A1\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge e f 1\npath b e\npath A1 e\nedge f a 3\nedge A1 A1 5\nedge e d 3\npath d a\nedge d A1 5\npath f e\npath f d\nedge e a 7\nedge A1 d 2\npath f a\nedge f b 2\npath a b\nedge a f 1\nedge b e 3\nedge b A1 2\nedge a b 0\npath e d\n",
+  "stdout": "unknown node b\nunknown node A1\nunreachable\nunreachable\nunreachable\n3 f>a\nunreachable\nbad command: edge a b 0\n3 e>d\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path A1 d\nedge A1 n10 -2\npath f f\nedge a b x\nedge n10 f 6\npath d n10\nedge n10 A1 1\npath A1 c\nedge A1 f 4\nedge A1 n10 1\npath A1 n10\n",
+  "stdout": "unknown node A1\nbad command: edge A1 n10 -2\nunknown node f\nbad command: edge a b x\nunknown node d\nunknown node c\n1 A1>n10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge A1 n10 1\nedge a b x\nedge c A1 1\n\nedge b a 2\nedge n2 A1 3\nedge a n2 3\npath b a\npath A1 a\nedge b n2 9\npath A1 c\npath A1 a\npath a a\nedge A1 b 3\nedge b b 3\nedge n2 A1 1\npath n2 b\nedge e c 8\npath c c\nedge n10 a 5\nedge c n10 3\nedge a e 0\npath n2 a\n",
+  "stdout": "bad command: edge a b x\n2 b>a\nunreachable\nunreachable\nunreachable\n0 a\n4 n2>A1>b\n0 c\nbad command: edge a e 0\n6 n2>A1>b>a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a b 0\nedge b d 2\nedge b d 2\nedge b e 1\npath b e\nedge d b 7\npath d b\nedge a f 2\nedge d d 2\npath n2 f\npath n2 d\nedge n2 b 2\npath f a\n",
+  "stdout": "bad command: edge a b 0\n1 b>e\n7 d>b\nunknown node n2\nunknown node n2\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge e f 3\npath e f\nedge e f 7\npath f e\npath f B\npath B f\npath e B\nedge e B 4\nedge e e 2\nedge e e 4\npath a\nedge f f 3\nedge B e 1\nedge f e 2\npath f B\nedge f f 3\nedge B B 3\nedge e f 1\npath B B\nedge a b x\nedge e e 2\npath f e\n",
+  "stdout": "3 e>f\nunreachable\nunknown node B\nunknown node B\nunknown node B\nbad command: path a\n6 f>e>B\n0 B\nbad command: edge a b x\n2 f>e\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge A1 e 2\nedge e a 1\nedge A1 e 2\npath A1 f\npath e e\nedge f f 1\nedge A1 f 2\nedge e A1 -2\nedge a A1 q\nedge f f 3\npath a f\nedge f A1 1\nedge f a 3\npath zz A1\npath f f\nedge a a 1\nedge e e 8\nedge e a 3\npath A1 e\npath f e\n",
+  "stdout": "unknown node f\n0 e\nbad command: edge e A1 -2\nbad command: edge a A1 q\nunreachable\nunknown node zz\n0 f\n2 A1>e\n3 f>A1>e\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a c 1\nedge a a 1\nedge c b 2\nedge c a 2\nedge b B 1\nedge a b 1\nedge b b 3\nedge b f 1\nedge b a 9\nedge a b x\nedge c a 5\nedge f a 2\nedge c b 3\nedge a B 2\npath a B\npath a f\nedge c f 3\npath f a\n",
+  "stdout": "bad command: edge a b x\n2 a>B\n2 a>b>f\n2 f>a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path c c\nedge a b x\nedge c b 1\nedge f c 2\nedge f A1 1\nnope\nedge B b 2\nedge c B 6\npath n10 e\n",
+  "stdout": "unknown node c\nbad command: edge a b x\nbad command: nope\nunknown node n10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path B d\nedge a a 2\nedge a n10 9\npath n10 n10\nedge B d 3\nedge B B 3\npath B n10\npath a n10\nedge a B 4\nedge d a 3\npath n10 a\npath a a\npath d d\nedge d n10 9\nedge B d 2\npath a B\n",
+  "stdout": "unknown node B\n0 n10\nunreachable\n9 a>n10\nunreachable\n0 a\n0 d\n4 a>B\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a c 1\npath a b\npath d b\npath e a\nedge a A1 3\nedge b c 1\nedge d c 3\npath e d\nedge A1 c 2\npath e e\npath c a\npath a c\npath a A1\nedge e A1 3\npath b a\n",
+  "stdout": "unknown node b\nunknown node d\nunknown node e\nunknown node e\nunknown node e\nunreachable\n1 a>c\n3 a>A1\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path b A1\nedge A1 c 3\npath c b\nedge A1 n2 1\nedge A1 A1 q\nedge c A1 2\npath b b\npath c b\npath d n2\npath f c\npath b f\n",
+  "stdout": "unknown node b\nunknown node b\nbad command: edge A1 A1 q\nunknown node b\nunknown node b\nunknown node d\nunknown node f\nunknown node b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge B f 1\npath c f\nnope\nedge B f 2\nedge d d 1\nedge d c 3\nedge B c 1\nedge f c 1\nedge B d q\nedge c f 3\npath c c\nedge a b x\npath c d\nedge d B 4\nedge d f 5\npath d d\nedge c c 3\nedge B c 7\npath c B\n",
+  "stdout": "unknown node c\nbad command: nope\nbad command: edge B d q\n0 c\nbad command: edge a b x\nunreachable\n0 d\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge e c 3\nedge c n10 q\npath e n10\nedge e n10 1\nedge a b 0\nedge n10 n10 2\nedge n10 c 2\npath e e\nedge e n10 3\nedge n10 n10 3\nedge c n10 0\npath c e\n",
+  "stdout": "bad command: edge c n10 q\nunknown node n10\nbad command: edge a b 0\n0 e\nbad command: edge c n10 0\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path B B\npath B n10\nedge n10 n2 -2\nedge B B 5\nedge B n2 3\npath f f\nedge f n2 3\nnope\nedge n2 B 1\nedge a b 0\nedge B n10 2\nedge n10 n2 1\nedge B n2 3\npath f n10\nedge n2 B 8\nedge f f 1\nnope\nedge B B 3\npath n2 B\n",
+  "stdout": "unknown node B\nunknown node B\nbad command: edge n10 n2 -2\nunknown node f\nbad command: nope\nbad command: edge a b 0\n6 f>n2>B>n10\nbad command: nope\n1 n2>B\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path e e\npath n2 n10\nedge n2 b 1\npath n2 n10\nedge b n10 3\nedge B n2 3\nedge e b 2\nedge b e 2\nedge n2 B 2\npath B n2\n",
+  "stdout": "unknown node e\nunknown node n2\nunknown node n10\n3 B>n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path n2 d\npath A1 A1\npath a\nedge A1 b 2\npath A1 n2\nedge n10 b 3\nedge n10 a 3\nedge n2 n2 2\nedge d d 2\nedge a A1 1\npath a b\nedge n2 n2 1\npath n2 n2\nedge b d 7\npath A1 n10\n",
+  "stdout": "unknown node n2\nunknown node A1\nbad command: path a\nunknown node n2\n3 a>A1>b\n0 n2\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge n2 A1 3\npath B b\npath A1 b\nedge n2 A1 2\npath n2 B\nedge b A1 2\nedge B n2 1\nedge B n2 3\npath B A1\n",
+  "stdout": "unknown node B\nunknown node b\nunknown node B\n3 B>n2>A1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge c a q\nedge a b 2\npath c b\nedge n2 n2 2\nedge b b 2\npath a a\nedge b b 3\nedge b n2 3\npath b c\nedge c n2 2\nedge c b 3\nedge a b x\npath b n2\nedge c a 2\npath c b\npath a a\npath c a\npath a a\n",
+  "stdout": "bad command: edge c a q\nunknown node c\n0 a\nunknown node c\nbad command: edge a b x\n3 b>n2\n3 c>b\n0 a\n2 c>a\n0 a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge b A1 3\npath B b\npath a n10\nedge B a 2\nedge n2 A1 3\npath B A1\nedge c B 2\nedge b B -2\npath n10 n10\npath c B\nedge c n10 3\nedge n10 a 2\nedge n2 n10 6\npath a\nedge a c 3\nedge c n2 3\npath n10 A1\npath a n2\nedge B A1 2\npath B a\npath A1 c\npath b a\n",
+  "stdout": "unknown node B\nunknown node a\nunreachable\nbad command: edge b B -2\nunknown node n10\n2 c>B\nbad command: path a\n11 n10>a>c>n2>A1\n6 a>c>n2\n2 B>a\nunreachable\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge b c 2\npath e b\npath n2 B\nedge b c 3\nedge e a 2\npath A1 e\nedge A1 c 0\nedge c b 1\nedge n2 c 2\npath B n2\nedge A1 b 2\npath a B\npath a b\nedge b a 3\npath c a\n",
+  "stdout": "unknown node e\nunknown node n2\nunknown node A1\nbad command: edge A1 c 0\nunknown node B\nunknown node B\nunreachable\n4 c>b>a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a e 2\npath a\nedge a b 3\npath e n10\nedge e b 2\nedge B e 2\nedge A1 n10 1\nedge b n10 0\npath a A1\npath e A1\nedge a e q\nedge n10 a 3\npath n10 A1\nedge A1 A1 2\nedge d B 3\nedge d b 1\nedge b b 7\nedge e a 5\npath d d\n",
+  "stdout": "bad command: path a\nunknown node n10\nbad command: edge b n10 0\nunreachable\nunreachable\nbad command: edge a e q\nunreachable\n0 d\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a b x\npath f f\nedge f a q\npath n10 a\nedge a f 3\nedge a n10 5\nedge n10 f 2\nedge a n10 7\npath f n10\nedge n10 f 1\npath f f\nedge a a 3\nedge f f 1\nedge a f 1\nedge f n10 8\npath f a\nedge f f 1\npath f a\n",
+  "stdout": "bad command: edge a b x\nunknown node f\nbad command: edge f a q\nunknown node n10\nunreachable\n0 f\nunreachable\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path a a\npath n2 a\nedge n2 d 8\npath d B\nedge a n2 7\npath d a\nedge a b x\npath A1 d\npath A1 a\npath a d\nedge A1 A1 7\nedge a n2 q\nedge A1 d 1\npath A1 a\npath a B\n",
+  "stdout": "unknown node a\nunknown node n2\nunknown node B\nunreachable\nbad command: edge a b x\nunknown node A1\nunknown node A1\n15 a>n2>d\nbad command: edge a n2 q\nunreachable\nunknown node B\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a b 1\nedge n10 n10 9\nedge n10 a 1\npath zz n10\nedge n10 b 2\nedge n10 a 3\nedge a a 1\nedge b n10 -2\npath b b\npath n10 n10\nedge n10 n10 3\nedge a a 0\nedge a b 1\nedge b a 3\npath n10 b\nedge a n10 -2\nedge a n10 3\npath b n10\npath a n10\n",
+  "stdout": "unknown node zz\nbad command: edge b n10 -2\n0 b\n0 n10\nbad command: edge a a 0\n2 n10>a>b\nbad command: edge a n10 -2\n6 b>a>n10\n3 a>n10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge f n10 1\nedge a n10 2\nedge f f 3\npath B n2\nedge f B 3\nedge n10 b 0\nedge n10 f 2\nedge f B 2\npath f b\nedge n10 B 1\npath n10 a\nedge a b 0\nedge b n2 3\npath c f\npath B f\nedge n2 a 1\nedge n2 b 1\npath f f\n",
+  "stdout": "unknown node B\nbad command: edge n10 b 0\nunknown node b\nunreachable\nbad command: edge a b 0\nunknown node c\nunreachable\n0 f\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "path a\npath n2 n10\nedge n2 n10 3\nedge a b 2\nedge n2 e 1\npath n10 B\npath e n2\nedge a n2 -2\nedge B b 1\npath B e\npath b n10\npath e B\n",
+  "stdout": "bad command: path a\nunknown node n2\nunknown node B\nunreachable\nbad command: edge a n2 -2\nunreachable\nunreachable\nunreachable\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge B c 3\npath d A1\npath n2 b\nedge A1 b 1\nedge b c 1\nedge n2 c 2\npath d A1\nedge b A1 2\nedge b b 3\nedge n2 n2 1\npath n2 d\npath d c\nedge A1 c 2\nedge A1 c 3\nedge B c 2\nedge c c 7\nedge n2 n2 3\npath A1 b\nedge A1 c 1\nedge A1 c 2\npath d B\n",
+  "stdout": "unknown node d\nunknown node n2\nunknown node d\nunknown node d\nunknown node d\n1 A1>b\nunknown node d\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge A1 A1 3\nedge A1 d 1\nedge b d -2\nedge b b -2\npath b b\nedge d d -2\nedge d A1 q\npath d A1\npath d A1\npath a\npath A1 d\n",
+  "stdout": "bad command: edge b d -2\nbad command: edge b b -2\nunknown node b\nbad command: edge d d -2\nbad command: edge d A1 q\nunreachable\nunreachable\nbad command: path a\n1 A1>d\n"
+ }
+]

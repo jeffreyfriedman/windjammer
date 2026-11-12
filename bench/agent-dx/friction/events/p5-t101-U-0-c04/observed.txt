@@ -1,0 +1,18 @@
+Building Windjammer project from "<ws>" (target: rust)
+Output: "{CACHE}/run/e46401b8104c19a8"
+
+Success! Transpilation complete!
+
+warning: unused import: `windjammer_runtime::json::Value`
+ --> main.rs:4:5
+  |
+4 | use windjammer_runtime::json::Value;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `windjammer_runtime::fs::Metadata`
+ --> main.rs:6:5
+  |
+6 | use windjammer_runtime::fs::Metadata;
+  |  

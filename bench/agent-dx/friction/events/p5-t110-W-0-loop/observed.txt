@@ -1,0 +1,1 @@
+(behaviour, no output: the agent's first program run used mode compiled)

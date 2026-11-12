@@ -257,6 +257,7 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
         param_typed,
         ret_int,
         scalar,
+        names: cx.all_locals(),
         tail_hint: cx.tail_hint,
         #[cfg(feature = "jit")]
         calls: std::cell::Cell::new(0),

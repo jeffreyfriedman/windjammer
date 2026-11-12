@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge s a 1\nedge s b 1\nedge a t 1\nedge b t 1\npath s t\npath t s\npath s q\n",
+  "stdout": "2 s>a>t\nunreachable\nunknown node q\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "edge a b 5\nedge b c 5\nedge a c 20\npath a c\nedge a c 3\npath a c\nedge a b 0\nhello\n",
+  "stdout": "10 a>b>c\n3 a>c\nbad command: edge a b 0\nbad command: hello\n"
+ }
+]

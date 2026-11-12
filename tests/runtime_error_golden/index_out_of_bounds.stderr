@@ -1,0 +1,12 @@
+thread 'main' panicked at index_out_of_bounds.wj:3:11:
+index out of bounds: the len is 3 but the index is 5
+stack backtrace:
+  --> index_out_of_bounds.wj:3:11
+ 3 |     scores[which]
+   |           ^
+  0: `pick` at index_out_of_bounds.wj:3:11
+  1: `main` at index_out_of_bounds.wj:9:20
+locals in `pick`:
+  scores = [90, 85, 70]
+  which = 5
+  total = 3

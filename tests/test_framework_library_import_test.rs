@@ -36,12 +36,7 @@ fn test_library_compilation_creates_linkable_crate() {
     // Relative paths don't work from temporary directories
     // NOTE: Convert to forward slashes for TOML compatibility on Windows
     // (backslashes are interpreted as escape sequences in TOML strings)
-    let runtime_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer")
-        .join("crates")
-        .join("windjammer-runtime");
+    let runtime_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
     let runtime_path_str = runtime_path.to_string_lossy().replace('\\', "/");
 
     // Create wj.toml

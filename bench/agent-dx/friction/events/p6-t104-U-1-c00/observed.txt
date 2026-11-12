@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected `&_`, found `string`
+  --> main.wj:14:29
+   |
+14 |     let mut counts: HashMap<string, int> = HashMap::new()
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:14:29
+   |
+14 |     let mut counts: HashMap<string, int> = HashMap::new()

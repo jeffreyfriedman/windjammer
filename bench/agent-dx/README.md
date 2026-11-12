@@ -102,6 +102,25 @@ Recorded per trial (`transcripts/*.json`, schema 1, full sources included):
 | diagnostic categories | histogram over build errors (and run failures) in a common taxonomy: syntax, name-resolution, type-mismatch, ownership-borrow, trait-bound, api-misuse, lint-style, unsupported, runtime-panic, timeout, wrong-output, toolchain-bug, other |
 | first-error-to-fix distance | from the first failing build to the next passing build: number of build attempts (including the agent's own `./check` calls) and number of changed source lines between the two snapshots |
 
+## Friction corpus and offline cost proxies (no LLM)
+
+`friction/` turns every pilot trial record (pilots 3 to 6, every arm) into replayable events: each `wj` call that failed,
+with the output the agent saw and, where it can be recovered, the program at that moment; plus one build-noise event per
+pilot-6 task and one event per interpreted-first trial that skipped the interpreter. Each event has a class
+(`compiler-bug`, `user-error-good-message`, `unhelpful-message`, `noise`, `skipped-loop`, `program-output`).
+
+```
+WJ=/absolute/path/to/wj
+G="--allow fs.read=** --allow fs.write=** --allow process=* --allow env.read=*"
+wj run --interpret --allow 'fs.read=**' --allow 'fs.write=**' friction/extract.wj -- ../..   # rebuild events/ (deterministic)
+wj run --interpret $G friction/replay.wj -- --wj $WJ --repo ../.. --write                      # status per event + cost.* keys
+wj run --interpret $G friction/cost_proxies.wj -- --wj $WJ --repo ../.. --write --times        # loop times (load-guarded), tokens to write
+```
+
+The proxies (ADR-0037) land in `docs/generated/measured.json`; `tests/agent_cost_ratchet_test.rs` holds them to
+`friction/ratchet.json` (friction, noise and diagnostic tokens shrink-only, fix coverage grow-only, fixes never create a
+diagnostic), and the book's "What it costs agents" page reads them.
+
 ## Replay and CI (no LLM)
 
 ```

@@ -41,6 +41,8 @@ pub enum Category {
     Module,
     Lint,
     Effects,
+    /// A failure of a running program (panic, `main` returned `Err`), ADR-0036.
+    Runtime,
     Internal,
 }
 
@@ -54,6 +56,8 @@ pub enum Origin {
     RustcMapped,
     /// A lint or deprecation.
     Lint,
+    /// A program failed while running (`wj run --error-format json`).
+    Runtime,
     /// A compiler bug or an untranslatable rustc error.
     Internal,
 }

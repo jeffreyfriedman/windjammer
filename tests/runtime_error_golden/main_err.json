@@ -1,0 +1,36 @@
+{
+  "command": "run",
+  "diagnostics": [
+    {
+      "category": "runtime",
+      "code": "WJ0171",
+      "docs": {
+        "explain": "wj explain WJ0171",
+        "url": "https://windjammer.dev/errors/WJ0171"
+      },
+      "locals": [],
+      "maturity": "proven",
+      "message": "main returned an error: \"config missing\"",
+      "origin": "runtime",
+      "primary_span": null,
+      "severity": "error",
+      "stack": [
+        {
+          "function": "main",
+          "span": null
+        }
+      ]
+    }
+  ],
+  "exit_code": 1,
+  "schema_version": 2,
+  "success": false,
+  "summary": {
+    "elapsed_ms": 0,
+    "errors": 1,
+    "files_cached": 0,
+    "files_checked": 0,
+    "warnings": 0
+  },
+  "windjammer_version": "X"
+}

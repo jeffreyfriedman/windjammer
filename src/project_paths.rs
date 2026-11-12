@@ -4,26 +4,30 @@ use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// A directory that holds a project manifest is a project boundary.
+fn is_project_boundary(dir: &Path) -> bool {
+    dir.join("wj.toml").exists() || dir.join("Cargo.toml").exists()
+}
+
 /// Find the actual source root for a Windjammer file.
 ///
-/// Walks up from the file looking for a directory that is a project source root.
-/// Priority order (first match closest to the file wins):
-///   1. `src` — only if it looks like a real project source dir  
-///      (sibling Cargo.toml, or contains mod.wj / .wj files)
-///   2. Topmost directory containing mod.wj
+/// Walks up from the file, never past the nearest project boundary (a directory
+/// holding `wj.toml` or `Cargo.toml`), so where a checkout lives or what its
+/// directories are called cannot change the result. Priority (closest wins):
+///   1. `src` whose project dir has a manifest/`mod.wj`, or that itself holds
+///      `mod.wj` / `lib.wj` / `main.wj`
+///   2. Topmost directory containing mod.wj (inside the boundary)
 ///   3. The file's immediate parent (standalone file fallback)
+///
+/// A directory's NAME alone never makes it a source root.
 pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     let mut current = file_path;
     let mut topmost_mod_wj_dir = None;
     let mut found_project_src: Option<&Path> = None;
-    let mut depth = 0;
 
     while let Some(parent) = current.parent() {
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            if dir_name == "src"
-                && found_project_src.is_none()
-                && is_project_source_dir(parent, depth)
-            {
+            if dir_name == "src" && found_project_src.is_none() && is_project_source_dir(parent) {
                 found_project_src = Some(parent);
             }
         }
@@ -32,8 +36,10 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
             topmost_mod_wj_dir = Some(parent);
         }
 
+        if is_project_boundary(parent) {
+            break;
+        }
         current = parent;
-        depth += 1;
     }
 
     if let Some(src) = found_project_src {
@@ -47,54 +53,18 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     file_path.parent()
 }
 
-/// Check if a `src/` directory is a real project source root, not just any
-/// directory named "src" (e.g. `/Users/dev/src/` is a personal code directory).
-///
-/// The `depth` parameter indicates how many levels we've walked up from the original file.
-/// This prevents matching distant ancestor `src/` directories.
-fn is_project_source_dir(src_dir: &Path, depth: usize) -> bool {
+/// A `src/` directory is a project source root only on content evidence:
+/// its project dir holds a manifest or `mod.wj`, or it holds `mod.wj`,
+/// `lib.wj` or `main.wj` itself. (Stray `.wj` files nearby prove nothing.)
+fn is_project_source_dir(src_dir: &Path) -> bool {
     if let Some(project_dir) = src_dir.parent() {
-        if project_dir.join("Cargo.toml").exists() {
-            return true;
-        }
-        if project_dir.join("mod.wj").exists() {
+        if is_project_boundary(project_dir) || project_dir.join("mod.wj").exists() {
             return true;
         }
     }
-    if src_dir.join("mod.wj").exists() {
-        return true;
-    }
-    if src_dir.join("lib.wj").exists() || src_dir.join("main.wj").exists() {
-        return true;
-    }
-
-    // TDD FIX: Recognize bare src/ directories with .wj files (even without mod.wj)
-    // This fixes the case where `wj build src/ecs/entity.wj` should use `src/` as root.
-    // CONSTRAINT: Only apply this heuristic if we're close to the original file (depth <= 3)
-    // to avoid matching distant ancestor directories like /Users/username/src/
-    if depth <= 3 && src_dir.file_name().and_then(|n| n.to_str()) == Some("src") {
-        // If the src/ directory contains any .wj files (directly or in subdirs), it's a source root
-        if let Ok(entries) = fs::read_dir(src_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("wj") {
-                    return true;
-                }
-                if path.is_dir() {
-                    // Check one level deep for .wj files (covers src/ecs/entity.wj case)
-                    if let Ok(sub_entries) = fs::read_dir(&path) {
-                        if sub_entries.flatten().any(|e| {
-                            e.path().extension().and_then(|ext| ext.to_str()) == Some("wj")
-                        }) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    false
+    src_dir.join("mod.wj").exists()
+        || src_dir.join("lib.wj").exists()
+        || src_dir.join("main.wj").exists()
 }
 
 /// Calculate output path that preserves directory structure

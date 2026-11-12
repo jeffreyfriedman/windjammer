@@ -1,0 +1,16 @@
+{
+  "id": "p5-t109-W-1-c01",
+  "pilot": "pilot5",
+  "task": "t109_spiral",
+  "arm": "W",
+  "arm_name": "interpreted+final-build",
+  "trial": 1,
+  "call": 1,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 1,
+  "command": "wj run --interpret main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

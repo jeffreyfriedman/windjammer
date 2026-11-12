@@ -207,6 +207,8 @@ pub struct Interpreter {
     pub(crate) net: std::sync::Arc<super::builtins::std_net::NetState>,
     /// Journal of `durable fn` steps (`durable_rt`); `None` until a durable function is called or `enable_durable`.
     pub(crate) durable: Option<Box<super::durable_rt::DurableRt>>,
+    /// The time-travel debugger of `wj replay` (`debugger/`, ADR-0035); `None` = not debugging.
+    pub(crate) debug: Option<Box<super::debugger::Debugger>>,
     /// Resource limits of a sandboxed run (`limits.rs`); `None` = unlimited.
     pub(crate) limits: Option<Box<super::limits::Limits>>,
     /// MCP servers a script may call through `mcp::call` (`mcp_host.rs`).
@@ -224,11 +226,17 @@ pub struct Interpreter {
     /// Active user calls: (qualified name, call-site location). Rendered lazily on error.
     pub(crate) backtrace: Vec<(Rc<str>, Option<&'static Location>)>,
     pub(crate) cur: Option<&'static Location>,
+    /// Render the failing frame's bindings into an error (`--no-locals` turns it off; ADR-0036).
+    pub(crate) capture_locals: bool,
+    /// Environment values (8+ characters) the failing frame's bindings are compared with before they are shown.
+    pub(crate) secret_env: Vec<String>,
     pub(crate) output: Vec<String>,
     pub(crate) capture_output: bool,
     /// Standard error captured too (`set_capture_stderr`): hosts without a process stderr, such as the browser playground.
     pub(crate) err_output: Option<Vec<String>>,
     pub(crate) out: std::io::BufWriter<std::io::Stdout>,
+    /// When buffered output was last pushed to the process stdout (see `write_out`).
+    pub(crate) last_out_flush: std::time::Instant,
     pub(crate) builtins: Registry,
     pub(crate) depth: usize,
     pub(crate) max_depth: usize,
@@ -274,6 +282,9 @@ impl Default for Interpreter {
         Self::new()
     }
 }
+
+/// The longest buffered program output waits before it is written on (checked at each print and before a sleep).
+const OUT_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
 
 impl Interpreter {
     pub fn new() -> Self {
@@ -321,6 +332,7 @@ impl Interpreter {
             port: None,
             net: Default::default(),
             durable: None,
+            debug: None,
             limits: None,
             mcp: None,
             frames: Vec::new(),
@@ -331,10 +343,13 @@ impl Interpreter {
             hash_seed: 0,
             backtrace: Vec::new(),
             cur: None,
+            capture_locals: true,
+            secret_env: Vec::new(),
             output: Vec::new(),
             capture_output: false,
             err_output: None,
             out: std::io::BufWriter::new(std::io::stdout()),
+            last_out_flush: std::time::Instant::now(),
             builtins: Registry::standard(),
             depth: 0,
             max_depth: 10_000,
@@ -391,12 +406,22 @@ impl Interpreter {
         self.sched.set_seed(seed);
     }
 
+    /// Run tasks as nested calls on this thread instead of OS threads (always so on wasm32; see `sched.rs`).
+    pub fn set_one_thread_tasks(&mut self, on: bool) {
+        self.sched.one_thread = on;
+    }
+
     /// Deterministic time: no real clock is read; time advances only through `sleep`.
     pub fn set_deterministic_time(&mut self, on: bool) {
         self.sched.deterministic = on;
     }
 
     /// Wait out sleeps in real time (a live `wj run`; see `Sched::real_sleep`).
+    pub fn set_capture_locals(&mut self, on: bool, env_values: Vec<String>) {
+        self.capture_locals = on;
+        self.secret_env = env_values.into_iter().filter(|v| v.chars().count() >= 8).collect();
+    }
+
     pub fn set_real_sleep(&mut self, on: bool) {
         self.sched.real_sleep = on;
     }
@@ -432,6 +457,7 @@ impl Interpreter {
 
     pub fn flush(&mut self) {
         let _ = self.out.flush();
+        self.last_out_flush = std::time::Instant::now();
     }
 
     pub(crate) fn write_out(&mut self, s: &str) {
@@ -442,6 +468,11 @@ impl Interpreter {
             self.output.push(s.to_string());
         } else {
             let _ = self.out.write_all(s.as_bytes());
+            // a reader of a pipe (`wj run --verify`, an agent) sees output while the program runs: buffered output
+            // is pushed on at most every `OUT_FLUSH_INTERVAL`, so a print-heavy loop is not a syscall per line
+            if self.last_out_flush.elapsed() >= OUT_FLUSH_INTERVAL {
+                self.flush();
+            }
         }
     }
 
@@ -606,6 +637,12 @@ pub(crate) struct FastHits {
 }
 
 impl Interpreter {
+    /// Test-only switch (debug builds, `WJ_JIT_MUTANT=<class>`): the named builtin class is deliberately broken, so the
+    /// drift gate's mutation checks can show they would notice (`tests/interpreter_builtin_mutants_test.rs`).
+    pub(crate) fn mutant(&self, class: &str) -> bool {
+        cfg!(debug_assertions) && self.jit_mutant.as_deref() == Some(class)
+    }
+
     /// Test-only switch (debug builds, `WJ_JIT_MUTANT=nofast-<path>`): the named fast path is not taken,
     /// so the gate that asserts each path fires can show it would notice.
     pub(crate) fn fast_off(&self, path: &str) -> bool {

@@ -1,0 +1,16 @@
+{
+  "id": "p5-t102-W-1-c04",
+  "pilot": "pilot5",
+  "task": "t102_file_tally",
+  "arm": "W",
+  "arm_name": "interpreted+final-build",
+  "trial": 1,
+  "call": 4,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 2,
+  "command": "wj run --interpret main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

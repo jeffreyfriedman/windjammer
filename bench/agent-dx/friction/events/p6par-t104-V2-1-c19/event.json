@@ -1,0 +1,16 @@
+{
+  "id": "p6par-t104-V2-1-c19",
+  "pilot": "pilot6-parallel",
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "arm_name": "interpreted-first+verify",
+  "trial": 1,
+  "call": 19,
+  "verb": "run",
+  "mode": "default",
+  "exit": 1,
+  "command": "wj run --verify main.wj",
+  "source": "none",
+  "class": "compiler-bug",
+  "reason": "tooling: same-named workspaces shared one compiled binary (pilot6-findings entry 1)"
+}

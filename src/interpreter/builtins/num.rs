@@ -42,9 +42,13 @@ macro_rules! int_pure {
 
 macro_rules! float_fn {
     ($r:expr, $name:literal, $f:expr) => {
-        $r.pure(Kind::Float, $name, |_, v, _| {
+        $r.pure(Kind::Float, $name, |it, v, _| {
             let (x, t) = float_of(v);
             let f: fn(f64) -> f64 = $f;
+            // test-only mutant `float` (debug builds): `round` truncates
+            if $name == "round" && it.mutant("float") {
+                return Ok(fl(x.trunc(), t));
+            }
             Ok(fl(f(x), t))
         });
     };
@@ -152,7 +156,8 @@ fn register_int(r: &mut Registry) {
         let un = if n < 0 && !t.signed() { n } else { n };
         Ok(Value::Int(t.wrap(un >> s), t))
     });
-    int_pure!(r, "checked_add", |_, v, a| checked(BinaryOp::Add, v, &a));
+    // test-only mutant `int` (debug builds): an overflowing checked add yields the wrapped value instead of None
+    int_pure!(r, "checked_add", |it, v, a| if it.mutant("int") { wrapping(BinaryOp::Add, v, &a).map(Value::some) } else { checked(BinaryOp::Add, v, &a) });
     int_pure!(r, "checked_sub", |_, v, a| checked(BinaryOp::Sub, v, &a));
     int_pure!(r, "checked_mul", |_, v, a| checked(BinaryOp::Mul, v, &a));
     int_pure!(r, "checked_div", |_, v, a| checked(BinaryOp::Div, v, &a));

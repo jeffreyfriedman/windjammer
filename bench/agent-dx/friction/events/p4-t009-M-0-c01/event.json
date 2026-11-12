@@ -1,0 +1,16 @@
+{
+  "id": "p4-t009-M-0-c01",
+  "pilot": "pilot4",
+  "task": "t009_rpn_eval",
+  "arm": "M",
+  "arm_name": "interpreted+final-build+sheet",
+  "trial": 0,
+  "call": 1,
+  "verb": "build",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj build main.wj",
+  "source": "none",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

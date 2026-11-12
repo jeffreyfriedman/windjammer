@@ -1,0 +1,76 @@
+use std::fs
+
+fn parse_num(t: string) -> Option<int> {
+    let cs = t.chars().collect::<Vec<char>>()
+    let n: int = cs.len() as int
+    let mut i: int = 0
+    let mut neg = false
+    if n > 0 && cs[0] == '-' {
+        neg = true
+        i = 1
+    }
+    if i >= n {
+        return None
+    }
+    let mut v: int = 0
+    while i < n {
+        let c = cs[i as usize]
+        if c < '0' || c > '9' {
+            return None
+        }
+        v = v * 10 + (c as int - '0' as int)
+        i += 1
+    }
+    if neg {
+        Some(0 - v)
+    } else {
+        Some(v)
+    }
+}
+
+fn eval(line: string) -> string {
+    let mut st: Vec<int> = []
+    for t in line.split(" ") {
+        if t == "" {
+            continue
+        }
+        if t == "+" || t == "-" || t == "*" || t == "/" {
+            if st.len() < 2 {
+                return "error: underflow"
+            }
+            let b = st.pop().unwrap()
+            let a = st.pop().unwrap()
+            if t == "+" {
+                st.push(a + b)
+            } else if t == "-" {
+                st.push(a - b)
+            } else if t == "*" {
+                st.push(a * b)
+            } else {
+                if b == 0 {
+                    return "error: divzero"
+                }
+                st.push(a / b)
+            }
+        } else {
+            match parse_num(t) {
+                Some(v) => st.push(v),
+                None => return "error: token",
+            }
+        }
+    }
+    if st.len() != 1 {
+        return "error: leftover"
+    }
+    "${st[0]}"
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim() == "" {
+            continue
+        }
+        println("${eval(line)}")
+    }
+}

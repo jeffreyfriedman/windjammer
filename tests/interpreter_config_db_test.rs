@@ -159,6 +159,12 @@ fn main() {
 const DB_ORACLE: &str = r#"
 import sqlite3
 c = sqlite3.connect(":memory:")
+def code(e):
+    # sqlite_errorcode exists from Python 3.11; older versions: the primary code for the two errors used here
+    c = getattr(e, "sqlite_errorcode", None)
+    if c is not None:
+        return c
+    return 14 if "unable to open" in str(e) else 1
 def cell(v):
     return str(v) if isinstance(v, (int, str)) and not isinstance(v, bool) else ""
 cur = c.execute("CREATE TABLE items (id INTEGER, name TEXT, price REAL)")
@@ -170,7 +176,7 @@ for r in c.execute("SELECT id, name, price FROM items WHERE id >= ? ORDER BY id"
 try:
     c.execute("SELECT nope FROM items")
 except sqlite3.OperationalError as e:
-    print(f"ERR error returned from database: (code: {e.sqlite_errorcode}) {e}")
+    print(f"ERR error returned from database: (code: {code(e)}) {e}")
 name = c.execute("SELECT name FROM items").fetchone()[0]
 try:
     int(name)
@@ -179,7 +185,7 @@ except ValueError:
 try:
     sqlite3.connect("file:/nonexistent/dir/x.db?mode=rw", uri=True)
 except sqlite3.OperationalError as e:
-    print(f"ERR error returned from database: (code: {e.sqlite_errorcode}) {e}")
+    print(f"ERR error returned from database: (code: {code(e)}) {e}")
 "#;
 
 #[test]

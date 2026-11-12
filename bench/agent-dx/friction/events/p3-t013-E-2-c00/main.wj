@@ -1,0 +1,180 @@
+use std::fs
+
+struct Tree {
+    keys: Vec<int>,
+    left: Vec<int>,
+    right: Vec<int>,
+    root: int,
+    out: Vec<int>,
+}
+
+impl Tree {
+    fn contains(self, x: int) -> bool {
+        let mut cur = self.root
+        while cur >= 0 {
+            let k = self.keys[cur as usize]
+            if x == k {
+                return true
+            }
+            if x < k {
+                cur = self.left[cur as usize]
+            } else {
+                cur = self.right[cur as usize]
+            }
+        }
+        false
+    }
+
+    fn new_node(self, x: int) -> int {
+        self.keys.push(x)
+        self.left.push(-1)
+        self.right.push(-1)
+        (self.keys.len() as int) - 1
+    }
+
+    fn ins(self, node: int, x: int) -> int {
+        if node < 0 {
+            return self.new_node(x)
+        }
+        let k = self.keys[node as usize]
+        if x < k {
+            let l = self.left[node as usize]
+            let r = self.ins(l, x)
+            self.left[node as usize] = r
+        } else {
+            let l = self.right[node as usize]
+            let r = self.ins(l, x)
+            self.right[node as usize] = r
+        }
+        node
+    }
+
+    fn min_node(self, node: int) -> int {
+        let mut cur = node
+        while self.left[cur as usize] >= 0 {
+            cur = self.left[cur as usize]
+        }
+        cur
+    }
+
+    fn max_node(self, node: int) -> int {
+        let mut cur = node
+        while self.right[cur as usize] >= 0 {
+            cur = self.right[cur as usize]
+        }
+        cur
+    }
+
+    fn del(self, node: int, x: int) -> int {
+        if node < 0 {
+            return node
+        }
+        let k = self.keys[node as usize]
+        if x < k {
+            let c = self.left[node as usize]
+            let r = self.del(c, x)
+            self.left[node as usize] = r
+            return node
+        }
+        if x > k {
+            let c = self.right[node as usize]
+            let r = self.del(c, x)
+            self.right[node as usize] = r
+            return node
+        }
+        let l = self.left[node as usize]
+        let r = self.right[node as usize]
+        if l < 0 {
+            return r
+        }
+        if r < 0 {
+            return l
+        }
+        let s = self.min_node(r)
+        let sk = self.keys[s as usize]
+        self.keys[node as usize] = sk
+        let nr = self.del(r, sk)
+        self.right[node as usize] = nr
+        node
+    }
+
+    fn height(self, node: int) -> int {
+        if node < 0 {
+            return 0
+        }
+        let a = self.height(self.left[node as usize])
+        let b = self.height(self.right[node as usize])
+        if a > b {
+            return a + 1
+        }
+        b + 1
+    }
+
+    fn walk(self, node: int) {
+        if node < 0 {
+            return
+        }
+        self.walk(self.left[node as usize])
+        self.out.push(self.keys[node as usize])
+        self.walk(self.right[node as usize])
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut t = Tree { keys: [], left: [], right: [], root: -1, out: [] }
+    for line in text.lines() {
+        let parts: Vec<string> = line.trim().split(" ").collect()
+        if parts.len() == 0 {
+            continue
+        }
+        let cmd = parts[0]
+        if cmd == "insert" {
+            let x: int = parts[1].parse().unwrap_or(0)
+            if t.contains(x) {
+                println("dup")
+            } else {
+                t.root = t.ins(t.root, x)
+                println("ok")
+            }
+        } else if cmd == "contains" {
+            let x: int = parts[1].parse().unwrap_or(0)
+            if t.contains(x) {
+                println("yes")
+            } else {
+                println("no")
+            }
+        } else if cmd == "delete" {
+            let x: int = parts[1].parse().unwrap_or(0)
+            if t.contains(x) {
+                t.root = t.del(t.root, x)
+                println("ok")
+            } else {
+                println("missing")
+            }
+        } else if cmd == "inorder" {
+            if t.root < 0 {
+                println("<empty>")
+            } else {
+                t.out = []
+                t.walk(t.root)
+                let strs: Vec<string> = t.out.map(|v| "${v}")
+                println(strs.join(" "))
+            }
+        } else if cmd == "height" {
+            println("${t.height(t.root)}")
+        } else if cmd == "min" {
+            if t.root < 0 {
+                println("empty")
+            } else {
+                println("${t.keys[t.min_node(t.root) as usize]}")
+            }
+        } else if cmd == "max" {
+            if t.root < 0 {
+                println("empty")
+            } else {
+                println("${t.keys[t.max_node(t.root) as usize]}")
+            }
+        }
+    }
+}

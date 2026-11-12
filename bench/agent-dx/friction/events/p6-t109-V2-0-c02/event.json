@@ -1,0 +1,16 @@
+{
+  "id": "p6-t109-V2-0-c02",
+  "pilot": "pilot6",
+  "task": "t109_spiral",
+  "arm": "V2",
+  "arm_name": "interpreted-first+verify",
+  "trial": 0,
+  "call": 2,
+  "verb": "run",
+  "mode": "default",
+  "exit": 1,
+  "command": "wj run --verify main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

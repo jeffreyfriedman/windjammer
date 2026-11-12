@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> main.rs:22:22
+   |
+22 |                 j += i as i32;
+error[E0277]: cannot add-assign `i32` to `i64`
+   --> main.rs:22:19
+    |
+ 22 |                 j += i as i32;
+    = note: this error originates in the macro `add_assign_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+warning: `windjammer` (bin "

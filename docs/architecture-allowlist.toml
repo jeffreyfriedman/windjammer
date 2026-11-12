@@ -89,7 +89,6 @@
 "parser->intrinsics src/parser/interpolated_string_expression_parser.rs" = 1
 "parser->intrinsics src/parser/intrinsic_lowering.rs" = 3
 "stdlib_scanner->analyzer src/stdlib_scanner.rs" = 17
-"stdlib_scanner->cargo_toml src/stdlib_scanner.rs" = 1
 "stdlib_scanner->codegen src/stdlib_scanner.rs" = 9
 "test_utils->parser src/test_utils.rs" = 2
 "type_classification->analyzer src/type_classification.rs" = 1
@@ -164,7 +163,7 @@
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2245
-"src/analyzer/signature_registry.rs" = 2519
+"src/analyzer/signature_registry.rs" = 2511
 "src/analyzer/string_optimization.rs" = 2201
 "src/auto_clone.rs" = 2210
 "src/codegen/rust/call_signature_resolution.rs" = 3294
@@ -180,7 +179,7 @@
 "src/codegen/rust/stdlib_method_traits.rs" = 2430
 "src/codegen/rust/string_utilities.rs" = 2038
 "src/compiler/multipass_bare_pass_demotion.rs" = 4051
-"src/stdlib_scanner.rs" = 2153
+"src/stdlib_scanner.rs" = 2083
 
 [long_functions]
 "src/analyzer/function_analysis.rs::analyze_function" = 649
@@ -189,7 +188,7 @@
 "src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 512
 "src/analyzer/string_optimization.rs::expr_uses_param_in_string_ref_context" = 373
 "src/auto_clone.rs::collect_usages_from_expression" = 394
-"src/bin/wj_cli_cmds.rs::run" = 311
+"src/bin/wj_cli_cmds.rs::run" = 307
 "src/build_utils/module_generation.rs::generate_mod_file_recursive" = 500
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 476
@@ -234,8 +233,8 @@
 "src/compiler/library_copy_registry.rs::collect_global_enum_variant_types_for_library" = 359
 "src/compiler/library_multipass.rs::build_library_multipass" = 1398
 "src/file_compilation_pipeline.rs::compile_file_impl" = 401
-"src/interpreter/builtins/option.rs::register" = 313
-"src/interpreter/builtins/seq.rs::register_vec" = 357
+"src/interpreter/builtins/option.rs::register" = 306
+"src/interpreter/builtins/seq.rs::register_vec" = 354
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 301
 "src/parser/call_expression_parser.rs::parse_postfix_chain" = 459

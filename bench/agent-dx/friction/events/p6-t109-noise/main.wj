@@ -1,0 +1,97 @@
+use std::fs
+use std::process
+
+fn fail() {
+    println("error")
+    process::exit(1)
+}
+
+fn parse_all(line: string) -> Option<Vec<int>> {
+    let mut out: Vec<int> = []
+    for tok in line.split_whitespace() {
+        match tok.parse::<int>() {
+            Ok(v) => out.push(v),
+            Err(_) => return None,
+        }
+    }
+    Some(out)
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let lines: Vec<string> = text.lines().collect()
+    if lines.len() == 0 {
+        fail()
+        return
+    }
+    let first = match parse_all(lines[0]) {
+        Some(v) => v,
+        None => {
+            fail()
+            return
+        }
+    }
+    if first.len() != 2 || first[0] < 1 || first[1] < 1 {
+        fail()
+        return
+    }
+    let r = first[0]
+    let c = first[1]
+    if (lines.len() as int) < r + 1 {
+        fail()
+        return
+    }
+    let mut grid: Vec<Vec<int>> = []
+    let mut i = 0
+    while i < r {
+        let row = match parse_all(lines[(i + 1) as usize]) {
+            Some(v) => v,
+            None => {
+                fail()
+                return
+            }
+        }
+        if (row.len() as int) != c {
+            fail()
+            return
+        }
+        grid.push(row)
+        i += 1
+    }
+    let mut res: Vec<string> = []
+    let mut top = 0
+    let mut bot = r - 1
+    let mut left = 0
+    let mut right = c - 1
+    while top <= bot && left <= right {
+        let mut j = left
+        while j <= right {
+            res.push("${grid[top as usize][j as usize]}")
+            j += 1
+        }
+        top += 1
+        j = top
+        while j <= bot {
+            res.push("${grid[j as usize][right as usize]}")
+            j += 1
+        }
+        right -= 1
+        if top <= bot {
+            j = right
+            while j >= left {
+                res.push("${grid[bot as usize][j as usize]}")
+                j -= 1
+            }
+            bot -= 1
+        }
+        if left <= right {
+            j = bot
+            while j >= top {
+                res.push("${grid[j as usize][left as usize]}")
+                j -= 1
+            }
+            left += 1
+        }
+    }
+    println(res.join(" "))
+}

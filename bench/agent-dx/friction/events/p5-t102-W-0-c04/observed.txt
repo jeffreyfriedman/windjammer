@@ -1,0 +1,5 @@
+main.wj: 45 lines, 150 words
+gone: cannot read
+report:
+main.wj 45 150
+gone -

@@ -54,7 +54,11 @@ fn module_file_usize_counter_must_not_cast_as_usize() {
     let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("MultiFile lib.rs:\n{rs}");
-    let bad = rs.contains("i as usize") || rs.contains("(i as usize)");
+    // `count`'s `i` is a declared `usize`: it is never cast. `find_in_order`'s `i` is returned as an `i32`, so it is an
+    // `i32` (its class has that exact width) and converts where it indexes (NUM-USIZE-TO-INT at the index); the bug was
+    // a usize counter compared as `(i as usize) < len`.
+    let count_fn = rs.split("fn find_in_order").next().unwrap_or("");
+    let bad = count_fn.contains("i as usize") || rs.contains("(i as usize) <");
     assert!(
         !bad,
         "RED: usize counter emitted as usize:\n{rs}"

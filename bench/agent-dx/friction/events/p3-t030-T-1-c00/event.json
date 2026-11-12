@@ -1,0 +1,16 @@
+{
+  "id": "p3-t030-T-1-c00",
+  "pilot": "pilot3",
+  "task": "t030_bank_ledger",
+  "arm": "T",
+  "arm_name": "tiny-pack-only",
+  "trial": 1,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "compiler-bug",
+  "reason": "raw rustc error on the generated Rust; message shape of a known drift class"
+}

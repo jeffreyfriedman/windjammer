@@ -1,0 +1,110 @@
+use std::fs
+
+fn all_digits(s: string) -> bool {
+    if s.len() == 0 {
+        return false
+    }
+    for c in s.chars() {
+        if c < '0' || c > '9' {
+            return false
+        }
+    }
+    true
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut bad = 0
+    let mut names: Vec<string> = []
+    let mut counts: Vec<int> = []
+    let mut totals: Vec<int> = []
+    let mut au: Vec<int> = []
+    let mut aa: Vec<string> = []
+    let mut an: Vec<int> = []
+    for line in text.lines() {
+        let mut parts: Vec<string> = []
+        for p in line.split_whitespace() {
+            parts.push(p)
+        }
+        if parts.len() != 3 {
+            bad += 1
+            continue
+        }
+        if !all_digits(parts[2]) {
+            bad += 1
+            continue
+        }
+        let secs: int = parts[2].parse::<int>().unwrap_or(0)
+        let mut ui: int = -1
+        let mut i = 0
+        while i < names.len() {
+            if names[i] == parts[0] {
+                ui = i as int
+            }
+            i += 1
+        }
+        if ui < 0 {
+            names.push(parts[0])
+            counts.push(0)
+            totals.push(0)
+            ui = (names.len() as int) - 1
+        }
+        let u = ui as usize
+        counts[u] = counts[u] + 1
+        totals[u] = totals[u] + secs
+        let mut found = false
+        let mut j = 0
+        while j < au.len() {
+            if au[j] == ui && aa[j] == parts[1] {
+                an[j] = an[j] + 1
+                found = true
+            }
+            j += 1
+        }
+        if !found {
+            au.push(ui)
+            aa.push(parts[1])
+            an.push(1)
+        }
+    }
+    let mut order: Vec<int> = []
+    let mut k = 0
+    while k < names.len() {
+        order.push(k as int)
+        k += 1
+    }
+    let mut x = 1
+    while x < order.len() {
+        let mut y = x
+        while y > 0 {
+            let a = order[y - 1] as usize
+            let b = order[y] as usize
+            let swap = totals[b] > totals[a] || (totals[b] == totals[a] && names[b] < names[a])
+            if swap {
+                order[y - 1] = b as int
+                order[y] = a as int
+                y -= 1
+            } else {
+                y = 0
+            }
+        }
+        x += 1
+    }
+    for oi in order {
+        let u = oi as usize
+        let mut best = ""
+        let mut bc = 0
+        let mut j = 0
+        while j < au.len() {
+            if au[j] == oi {
+                if an[j] > bc || (an[j] == bc && aa[j] < best) {
+                    bc = an[j]
+                    best = aa[j]
+                }
+            }
+            j += 1
+        }
+        println("${names[u]} ${counts[u]} ${totals[u]} ${best}")
+    }
+    println("malformed: ${bad}")
+}

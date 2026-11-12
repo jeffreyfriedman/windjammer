@@ -1,0 +1,8 @@
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("a", 1)
+    let r = m.remove("a")
+    println("${r.unwrap_or(-1)} ${m.len()} ${m.remove("zz").is_none()}")
+}

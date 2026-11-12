@@ -1,21 +1,21 @@
 # Known divergences between the language spec and the compiled backend (spec oracle, scripts/wj/spec_oracle.wj).
-# Shrink-only: a line is `case-id | walker=A resolved=B compiled=C | reason (finding in docs/drift/spec-findings.md)`.
+# Shrink-only: a line is `case-id | walker=A resolved=B compiled=C | reason (finding in docs/drift/spec-findings.md) | owner: STREAM`. Every line names an owner stream (docs/testing/DRIFT.md).
 # Every listed case passes under the tree walker and the resolved engine and does not build compiled. The drift gate
 # (`spec` step) fails on a divergence not listed here, on a listed one whose shape changed, and on a listed one that no
 # longer diverges (delete the line when you fix it). New lines need DRIFT_ALLOW_GROWTH=1 and a finding.
-spec::attributes/SPEC-ATTR-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
-spec::attributes/SPEC-ATTR-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
-spec::closures/SPEC-CLOS-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::closures/SPEC-CLOS-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): Box<dyn Fn> closure type emitted with zero parameters; i32/i64 mix in a capturing closure
-spec::collections/SPEC-COLL-005 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::collections/SPEC-COLL-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::collections/SPEC-COLL-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A (second round): integer widths: Vec<i64> collected from i32 / usize iterators
-spec::concurrency/SPEC-CONC-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
-spec::concurrency/SPEC-CONC-002 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
-spec::concurrency/SPEC-CONC-003 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
-spec::concurrency/SPEC-CONC-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
-spec::items/SPEC-ITEM-010 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::modules/SPEC-MOD-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): a module-level pub const is not emitted
-spec::stdlib/SPEC-STD-002 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::traits/SPEC-TRT-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::traits/SPEC-TRT-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): trait implemented for string / int: receiver and impl type mismatch in the emitted Rust
+spec::attributes/SPEC-ATTR-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link | owner: runtime-surface
+spec::attributes/SPEC-ATTR-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link | owner: runtime-surface
+spec::closures/SPEC-CLOS-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program | owner: codegen-types
+spec::closures/SPEC-CLOS-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): Box<dyn Fn> closure type emitted with zero parameters; i32/i64 mix in a capturing closure | owner: codegen-types
+spec::collections/SPEC-COLL-005 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program | owner: codegen-types
+spec::collections/SPEC-COLL-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program | owner: codegen-types
+spec::collections/SPEC-COLL-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A (second round): integer widths: Vec<i64> collected from i32 / usize iterators | owner: numeric-width
+spec::concurrency/SPEC-CONC-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link | owner: runtime-surface
+spec::concurrency/SPEC-CONC-002 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link | owner: runtime-surface
+spec::concurrency/SPEC-CONC-003 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link | owner: runtime-surface
+spec::concurrency/SPEC-CONC-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link | owner: runtime-surface
+spec::items/SPEC-ITEM-010 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program | owner: codegen-types
+spec::modules/SPEC-MOD-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): a module-level pub const is not emitted | owner: codegen-types
+spec::stdlib/SPEC-STD-002 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program | owner: codegen-types
+spec::traits/SPEC-TRT-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program | owner: codegen-types
+spec::traits/SPEC-TRT-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): trait implemented for string / int: receiver and impl type mismatch in the emitted Rust | owner: codegen-types

@@ -1,0 +1,155 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 42,
+  "status": "pass",
+  "total": 42
+ },
+ "final_source": "use std::collections::BTreeMap;\nuse std::io::{self, Read, Write};\n\nstruct Account {\n    balance: u64,\n    journal: Vec<String>,\n}\n\nstruct Out {\n    buf: String,\n    error: bool,\n}\n\nimpl Out {\n    fn line(&mut self, s: impl AsRef<str>) {\n        let s = s.as_ref();\n        if s.starts_with(\"error:\") {\n            self.error = true;\n        }\n        self.buf.push_str(s);\n        self.buf.push('\\n');\n    }\n}\n\nconst BAD: &str = \"error: bad command\";\n\nfn parse_amount(s: &str) -> Option<u64> {\n    if s.is_empty() || s.len() > 9 || !s.bytes().all(|b| b.is_ascii_digit()) {\n        return None;\n    }\n    s.parse().ok()\n}\n\n// Callers must have checked that both accounts exist and that funds suffice.\nfn move_funds(accounts: &mut BTreeMap<String, Account>, from: &str, to: &str, amt: u64) {\n    let src = accounts.get_mut(from).unwrap();\n    src.balance -= amt;\n    src.journal.push(format!(\"out {} to {}\", amt, to));\n    let dst = accounts.get_mut(to).unwrap();\n    dst.balance += amt;\n    dst.journal.push(format!(\"in {} from {}\", amt, from));\n}\n\nfn main() {\n    let mut input = String::new();\n    io::stdin().read_to_string(&mut input).unwrap();\n\n    let mut out = Out {\n        buf: String::new(),\n        error: false,\n    };\n    let mut accounts: BTreeMap<String, Account> = BTreeMap::new();\n    let mut ious: Vec<(String, String, u64)> = Vec::new();\n\n    for line in input.lines() {\n        if line.is_empty() {\n            continue;\n        }\n        let f: Vec<&str> = line.split(' ').collect();\n        match f.as_slice() {\n            [\"open\", name, amt] => {\n                let name = *name;\n                match parse_amount(amt) {\n                    None => out.line(BAD),\n                    Some(_) if accounts.contains_key(name) => {\n                        out.line(format!(\"error: account exists {}\", name))\n                    }\n                    Some(v) => {\n                        accounts.insert(\n                            name.to_string(),\n                            Account {\n                                balance: v,\n                                journal: vec![format!(\"open {}\", v)],\n                            },\n                        );\n                    }\n                }\n            }\n            [\"transfer\", from, to, amt] => {\n                let (from, to) = (*from, *to);\n                match parse_amount(amt) {\n                    Some(v) if v >= 1 => {\n                        if !accounts.contains_key(from) {\n                            out.line(format!(\"error: unknown account {}\", from));\n                        } else if !accounts.contains_key(to) {\n                            out.line(format!(\"error: unknown account {}\", to));\n                        } else if from == to {\n                            out.line(\"error: self transfer\");\n                        } else if accounts[from].balance < v {\n                            out.line(format!(\"error: overdraft {}\", from));\n                        } else {\n                            move_funds(&mut accounts, from, to, v);\n                        }\n                    }\n                    _ => out.line(BAD),\n                }\n            }\n            [\"iou\", debtor, creditor, amt] => {\n                let (d, c) = (*debtor, *creditor);\n                match parse_amount(amt) {\n                    Some(v) if v >= 1 => {\n                        if !accounts.contains_key(d) {\n                            out.line(format!(\"error: unknown account {}\", d));\n                        } else if !accounts.contains_key(c) {\n                            out.line(format!(\"error: unknown account {}\", c));\n                        } else if d == c {\n                            out.line(\"error: self transfer\");\n                        } else {\n                            ious.push((d.to_string(), c.to_string(), v));\n                        }\n                    }\n                    _ => out.line(BAD),\n                }\n            }\n            [\"balance\", name] => match accounts.get(*name) {\n                Some(a) => out.line(format!(\"{}: {}\", name, a.balance)),\n                None => out.line(format!(\"error: unknown account {}\", name)),\n            },\n            [\"all\"] => {\n                if accounts.is_empty() {\n                    out.line(\"(no accounts)\");\n                }\n                for (name, a) in &accounts {\n                    out.line(format!(\"{}: {}\", name, a.balance));\n                }\n            }\n            [\"history\", name] => match accounts.get(*name) {\n                Some(a) => {\n                    for e in &a.journal {\n                        out.line(e);\n                    }\n                }\n                None => out.line(format!(\"error: unknown account {}\", name)),\n            },\n            [\"settle\"] => {\n                let book = std::mem::take(&mut ious);\n                let mut net: BTreeMap<String, i64> = BTreeMap::new();\n                for (d, c, v) in &book {\n                    *net.entry(d.clone()).or_insert(0) -= *v as i64;\n                    *net.entry(c.clone()).or_insert(0) += *v as i64;\n                }\n\n                let mut steps = 0;\n                loop {\n                    // Largest debt; ties go to the smallest name (BTreeMap iterates ascending).\n                    let mut debtor: Option<(String, i64)> = None;\n                    for (n, &p) in &net {\n                        if p < 0 && debtor.as_ref().map_or(true, |(_, best)| p < *best) {\n                            debtor = Some((n.clone(), p));\n                        }\n                    }\n                    // Largest credit; ties go to the smallest name.\n                    let mut creditor: Option<(String, i64)> = None;\n                    for (n, &p) in &net {\n                        if p > 0 && creditor.as_ref().map_or(true, |(_, best)| p > *best) {\n                            creditor = Some((n.clone(), p));\n                        }\n                    }\n                    let (d, dp, c, cp) = match (debtor, creditor) {\n                        (Some((d, dp)), Some((c, cp))) => (d, dp, c, cp),\n                        _ => break,\n                    };\n\n                    let amt = (-dp).min(cp);\n                    *net.get_mut(&d).unwrap() += amt;\n                    *net.get_mut(&c).unwrap() -= amt;\n                    let amt = amt as u64;\n                    steps += 1;\n\n                    let funded = accounts[d.as_str()].balance >= amt;\n                    let suffix = if funded { \"\" } else { \" (failed: overdraft)\" };\n                    out.line(format!(\"{} pays {} {}{}\", d, c, amt, suffix));\n                    if funded {\n                        move_funds(&mut accounts, &d, &c, amt);\n                    }\n                }\n                if steps == 0 {\n                    out.line(\"nothing to settle\");\n                }\n            }\n            _ => out.line(BAD),\n        }\n    }\n\n    let mut stdout = io::stdout();\n    stdout.write_all(out.buf.as_bytes()).unwrap();\n    stdout.flush().unwrap();\n    if out.error {\n        std::process::exit(1);\n    }\n}\n",
+ "first_source": "",
+ "first_turn_input": 13085,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 42,
+  "status": "pass",
+  "total": 42
+ },
+ "invocations": [],
+ "lang": "rust",
+ "load_avg": 62.5,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "model": "haiku",
+ "n_tool_calls": 2,
+ "original_final_grade": {
+  "categories": [
+   "other"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 42
+ },
+ "original_interp_grade": {
+  "categories": [
+   "other"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 42
+ },
+ "other_seconds": 5.27,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T14:14:12",
+ "regraded": true,
+ "schema": 2,
+ "task": "t305_bank_ledger_graph",
+ "thinking_seconds": 49.659,
+ "tool_result_tokens_est": 128,
+ "tool_wait_seconds": 0,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6847,
+   "cache_write": 6236,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13085,
+   "output": 3,
+   "result_chars": 447,
+   "text_chars": 0,
+   "thinking_chars": 0,
+   "tool_input_chars": 7968,
+   "turn": 1,
+   "write_chars": 7081
+  },
+  {
+   "cache_read": 13083,
+   "cache_write": 12330,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 25415,
+   "output": 8,
+   "result_chars": 0,
+   "text_chars": 1143,
+   "thinking_chars": 0,
+   "tool_input_chars": 0,
+   "turn": 2,
+   "write_chars": 0
+  }
+ ],
+ "usage": {
+  "api_seconds": 49.659,
+  "cost_usd": 0.0101049,
+  "denied_commands": [],
+  "is_error": false,
+  "model_usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationEphemeral1hInputTokens": 18566,
+    "cacheCreationEphemeral5mInputTokens": 0,
+    "cacheCreationInputTokens": 18566,
+    "cacheReadInputTokens": 19930,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.0101049,
+    "inputTokens": 4,
+    "maxOutputTokens": 128000,
+    "outputTokens": 12384,
+    "provider": "firstParty",
+    "thinkingTokens": 9199,
+    "webSearchRequests": 0
+   }
+  },
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.rs` in the working directory. It compiles with `rustc --edition 2021` and produces the expected output for both examples, including the exit status 1 in each case.\n\nBehaviour I chose where the spec left room:\n\n- **Parsing:** lines are split on single spaces, and empty lines are skipped. Any amount that is not 1\u20139 digits, or is 0 where at least 1 is required, prints `e",
+  "split": {
+   "cache_read": 19930,
+   "cache_write": 18566,
+   "fresh": 4,
+   "output": 12384
+  },
+  "subtype": "success",
+  "tokens_in": 38500,
+  "tokens_out": 12384,
+  "turns": 3
+ },
+ "verify_calls": 0,
+ "verify_calls_to_green": null,
+ "verify_used": false,
+ "wall_seconds": 54.93,
+ "wj_version": ""
+}

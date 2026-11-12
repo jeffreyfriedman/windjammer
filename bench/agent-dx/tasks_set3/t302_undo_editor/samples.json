@@ -1,0 +1,16 @@
+[
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 hello world\ninsert 1 bye\nswap 0 1\nprint\nundo\nprint\ndelete 5\n",
+  "stdout": "0: bye\n1: hello world\n0: hello world\n1: bye\nerror: bad index\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 a\ninsert 1 b\nreplace 0 z\nundo\nundo\nredo\nprint\ninsert 0 q\nredo\nprint\n",
+  "stdout": "0: a\n1: b\nerror: nothing to redo\n0: q\n1: a\n2: b\n"
+ }
+]

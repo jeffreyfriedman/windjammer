@@ -1,0 +1,14 @@
+error[E0308]: mismatched types
+    --> main.rs:13:29
+     |
+  13 |     for c in t.chars().skip(start) {
+error[E0308]: mismatched types
+  --> main.rs:74:17
+   |
+49 | /             if t == String::from("+") || t == String::from("-") || t == String::from("*") || t == String::from("/") {
+51 | |                     return String::from("error: underflow");
+...  |
+74 | |                 String::from("error: token")
+   | |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `()`, found `String`
+74 | |                 String::from("error: token")
+   | |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ex

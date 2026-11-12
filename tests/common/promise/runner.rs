@@ -56,18 +56,66 @@ fn subst(s: &str, w: &Path) -> String {
     s.replace("{w}", w.to_str().unwrap()).replace("{bin_dir}", &bin_dir).replace("{root}", env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Extra environment for cases that need the host toolchain (cargo/rustc) on PATH.
+/// The host toolchain, resolved ONCE from the test process's real environment (the sandbox isolates HOME, so
+/// rustup would otherwise find no toolchain): PATH, the real RUSTUP_HOME / CARGO_HOME (env, else under the
+/// real HOME) and RUSTUP_TOOLCHAIN (env, else the active toolchain). `Err` is the single message to show.
+fn host_toolchain() -> &'static Result<Vec<(&'static str, String)>, String> {
+    static T: std::sync::OnceLock<Result<Vec<(&'static str, String)>, String>> = std::sync::OnceLock::new();
+    T.get_or_init(|| {
+        let mut env = vec![("PATH", std::env::var("PATH").unwrap_or_default())];
+        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok().map(std::path::PathBuf::from);
+        for (k, dot) in [("RUSTUP_HOME", ".rustup"), ("CARGO_HOME", ".cargo")] {
+            let v = std::env::var(k).ok().or_else(|| {
+                home.as_ref().map(|h| h.join(dot)).filter(|p| p.is_dir()).map(|p| p.to_string_lossy().into_owned())
+            });
+            if let Some(v) = v {
+                env.push((k, v));
+            }
+        }
+        for k in ["CARGO_TARGET_DIR", "CARGO_BUILD_JOBS"] {
+            if let Ok(v) = std::env::var(k) {
+                env.push((k, v));
+            }
+        }
+        let tc = std::env::var("RUSTUP_TOOLCHAIN").ok().or_else(|| {
+            let mut c = std::process::Command::new("rustup");
+            c.args(["show", "active-toolchain"]).current_dir(env!("CARGO_MANIFEST_DIR"));
+            let out = c.output().ok().filter(|o| o.status.success())?;
+            String::from_utf8_lossy(&out.stdout).split_whitespace().next().map(str::to_string)
+        });
+        if let Some(tc) = tc {
+            env.push(("RUSTUP_TOOLCHAIN", tc));
+        }
+        // Prove it works the way the cases will use it: isolated HOME, only this environment.
+        let iso = std::env::temp_dir();
+        let probe = std::process::Command::new("cargo").arg("--version").env_clear().envs(env.iter().map(|(k, v)| (*k, v.as_str()))).env("HOME", &iso).output();
+        match probe {
+            Ok(o) if o.status.success() => Ok(env),
+            Ok(o) => Err(format!(
+                "no usable Rust toolchain for the cargo-backed acceptance cases: `cargo --version` failed with an isolated HOME \
+                 (RUSTUP_HOME={:?}, CARGO_HOME={:?}, RUSTUP_TOOLCHAIN={:?}). Set RUSTUP_HOME/CARGO_HOME or RUSTUP_TOOLCHAIN, or run the \
+                 cases without WJ_PROMISES_CARGO.\n{}",
+                env.iter().find(|(k, _)| *k == "RUSTUP_HOME").map(|x| &x.1),
+                env.iter().find(|(k, _)| *k == "CARGO_HOME").map(|x| &x.1),
+                env.iter().find(|(k, _)| *k == "RUSTUP_TOOLCHAIN").map(|x| &x.1),
+                String::from_utf8_lossy(&o.stderr).trim()
+            )),
+            Err(e) => Err(format!("no usable Rust toolchain for the cargo-backed acceptance cases: cannot run `cargo` ({e}); put it on PATH")),
+        }
+    })
+}
+
+/// `Err(one message)` when cargo-backed cases cannot run on this host; call once before running them.
+pub fn require_toolchain() -> Result<(), String> {
+    host_toolchain().as_ref().map(|_| ()).map_err(|e| e.clone())
+}
+
+/// Extra environment for cases that need the host toolchain (cargo/rustc).
 fn toolchain_env(case: &Case) -> Vec<(&'static str, String)> {
     if case.needs.is_none() {
         return Vec::new();
     }
-    let mut env = vec![("PATH", std::env::var("PATH").unwrap_or_default())];
-    for k in ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR", "CARGO_BUILD_JOBS"] {
-        if let Ok(v) = std::env::var(k) {
-            env.push((k, v));
-        }
-    }
-    env
+    host_toolchain().as_ref().cloned().unwrap_or_default()
 }
 
 /// Runs one case; `Err` explains which expectation failed.

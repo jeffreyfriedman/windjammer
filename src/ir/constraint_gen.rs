@@ -1172,6 +1172,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 };
                 self.cs.add_because(Constraint::IsNumeric(idx_var), tagged("NUM-INDEX"));
                 self.index_uses.push(idx_var);
+                self.index_conversion_site(object, index, idx_var);
                 self.cs.add_because(
                     Constraint::PrefersUsize(idx_var),
                     origin("NUM-USIZE", "an index: an index class unless a width is declared", &index.location()),

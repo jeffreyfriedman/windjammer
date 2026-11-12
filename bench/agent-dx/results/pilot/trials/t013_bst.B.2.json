@@ -5,7 +5,7 @@
  "arm_name": "compiled-first",
  "diag_samples": [
   "               ^\n    |\nhelp: remove these parentheses\n    |\n125 -                                     right[(parent as usize)] = child;\n125 +                                     right[parent as usize] = child;\n    |\n\nerror[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`\n    --> main.rs:11:67\n     |\n  11 |         let parts: Vec<String> = line.trim().split(\" \").collect::<Vec<String>>();\n     |                                                         -------   ^^^^^^^^^^^ value of type `Vec<std::string::String>` cannot be built from",
-  "Running <ws> (target: rust)\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpeZ1wys\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpeZ1wys\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^"
+  "Running <ws> (target: rust)\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmpeZ1wys\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"{TMP}/.tmpeZ1wys\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^"
  ],
  "diagnostic_categories": {
   "other": 1,

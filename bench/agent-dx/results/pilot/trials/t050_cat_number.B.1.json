@@ -5,7 +5,7 @@
  "arm_name": "compiled-first",
  "diag_samples": [
   "error: unexpected argument '-n' found\n\n  tip: to pass '-n' as a value, use '-- -n'\n\nUsage: wj run [OPTIONS] [PATH] [ARGS]...\n\nFor more information, try '--help'.\n",
-  "Running <ws> (target: rust)\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmphekxTG\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmphekxTG\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^"
+  "Running <ws> (target: rust)\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmphekxTG\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"{TMP}/.tmphekxTG\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^"
  ],
  "diagnostic_categories": {
   "other": 1,
