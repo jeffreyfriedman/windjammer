@@ -161,7 +161,7 @@ measured by `D-WIDTH-OWNERS` / `D-OWN-STAGES` and this ratchet.
 
 | rule (site) | the solver hands back when ... | retired by |
 |---|---|---|
-| index-use hold (`ir/numeric_facts.rs` `held_classes`, `index_uses`) | an index use sits in a class that resolved to a width other than `usize` (needs a conversion at the index) | C4: NUM-USIZE-TO-INT at the index, as already done at index sources |
+| index-use hold (`ir/numeric_facts.rs` `held_classes`, `index_uses`) | an index use sits in a class that resolved to a width other than `usize` (needs a conversion at the index) | **retired for sequence indexes (C4, wt/width-10)**: `v[k]` on a `Vec`/`VecDeque`/list/text is converted at the index (`v[k as usize]`, NUM-USIZE-TO-INT); slice bounds and map lookups still hold |
 | unbound-name hold (`held_classes`, `var_map.locals` not in `binding_vars`) | a class contains a name the walk met without a binding: a closure parameter or a global | **retired for closure parameters (C2, wt/c2)**: closure parameters are bindings (NUM-CLOSURE); a typed module constant of any file of a library is modelled (NUM-DECLARED); globals remain |
 | width-conflict hold (`result.width_conflicts`, c4-regress) | two exact integer widths meet in one class | C4: a conversion fact at the meeting point, or a diagnostic when the program is wrong |
 | negated-unsigned hold (`unmodelled.negated_literals`, c4-regress) | a negated literal sits in an unsigned class | C4: a diagnostic (the program is wrong), never a silent legacy width |

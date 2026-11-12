@@ -1215,7 +1215,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.assignment_int_target_type = Some(Type::Custom("usize".into()));
         }
         self.in_index_context = true;
-        let mut idx_str = self.generate_expression(index);
+        let mut idx_str = crate::codegen::rust::solver_widths::bare_index_conversion(self.generate_expression(index));
         self.in_index_context = prev_index_ctx;
         self.assignment_int_target_type = prev_index_assign_int;
 
