@@ -16,7 +16,7 @@ const SURFACE: &str = include_str!("../../std/rust_core.wji");
 const ENUMERABLE: &str = include_str!("../../std/enumerable.wj");
 
 /// One declared method: the generics of its type and of the method, the parameter types (no receiver), the result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct Entry {
     type_generics: Vec<String>,
     method_generics: Vec<String>,
@@ -37,11 +37,31 @@ pub struct MethodSig {
 }
 
 /// The parsed surface, keyed by (type, method).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(from = "SurfaceRepr", into = "SurfaceRepr")]
 pub struct CoreSurface {
     table: BTreeMap<(String, String), Entry>,
     /// The enumerable methods every sequence has (`std/enumerable.wj`, trait `Enumerable<T>`), by method name.
     enumerable: BTreeMap<String, Entry>,
+}
+
+/// The stored form of a [`CoreSurface`]: JSON keys are strings, so the (type, method) table is a list of pairs.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct SurfaceRepr {
+    table: Vec<((String, String), Entry)>,
+    enumerable: BTreeMap<String, Entry>,
+}
+
+impl From<CoreSurface> for SurfaceRepr {
+    fn from(s: CoreSurface) -> Self {
+        SurfaceRepr { table: s.table.into_iter().collect(), enumerable: s.enumerable }
+    }
+}
+
+impl From<SurfaceRepr> for CoreSurface {
+    fn from(r: SurfaceRepr) -> Self {
+        CoreSurface { table: r.table.into_iter().collect(), enumerable: r.enumerable }
+    }
 }
 
 impl CoreSurface {

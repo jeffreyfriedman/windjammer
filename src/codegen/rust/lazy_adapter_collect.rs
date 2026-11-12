@@ -14,7 +14,7 @@ impl<'ast> CodeGenerator<'ast> {
         if !crate::type_classification::type_is_vec_container(declared) || value_str.ends_with(">()") {
             return;
         }
-        let yields_iterator = CoreSurface::parse()
+        let yields_iterator = self.core_surface()
             .declared(ITERATOR, method)
             .and_then(|(_, _, _, ret)| ret)
             .is_some_and(|ret| surface_type_name(&ret).is_some_and(|head| head.eq(ITERATOR)));

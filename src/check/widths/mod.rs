@@ -24,6 +24,9 @@ use walk::{Sig, Walker};
 pub fn generated_rust(path: &Path) -> Option<String> {
     let source = std::fs::read_to_string(path).ok()?;
     let file = path.to_string_lossy().to_string();
+    if let Some(done) = super::moves::take_generated(&file, &source) {
+        return done;
+    }
     let tokens = crate::lexer::Lexer::new(&source).tokenize_with_locations();
     let program = crate::parser::Parser::new_with_source(tokens, file, source.clone()).parse().ok()?;
     super::moves::generate(&program)

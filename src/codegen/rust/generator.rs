@@ -23,7 +23,7 @@ pub(crate) fn owned_type_to_ownership_mode(
 }
 
 pub struct CodeGenerator<'ast> {
-    pub(crate) indent_level: usize,
+    pub(crate) indent_level: usize, pub(crate) core_surface: std::cell::OnceCell<crate::ir::stdlib_tables::CoreSurface>, // parsed on first use, once per generator
     pub(crate) signature_registry: SignatureRegistry,
     pub(crate) in_wasm_bindgen_impl: bool,
     pub(crate) in_trait_impl: bool, // true if currently generating code for a trait implementation
@@ -593,7 +593,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
         let extern_fn_names = registry.collect_all_extern_names();
         CodeGenerator {
-            indent_level: 0,
+            indent_level: 0, core_surface: std::cell::OnceCell::new(),
             signature_registry: registry,
             in_wasm_bindgen_impl: false,
             in_trait_impl: false,

@@ -22,7 +22,7 @@ pub fn analysis_dir() -> PathBuf {
     super::cache_root().join("analysis")
 }
 
-/// The scanned runtime signature layer (`<cache root>/registry`, a handful of entries: one per compiler build).
+/// The scanned runtime signature layer (`<cache root>/registry`: the runtime layer and the stdlib tables, one entry each per compiler build).
 pub fn registry_dir() -> PathBuf {
     super::cache_root().join("registry")
 }
@@ -118,8 +118,8 @@ pub fn prune(dir: &Path, max: usize, force: bool, report: &mut super::PruneRepor
     freed
 }
 
-/// Entries kept in the registry directory (newest win).
-pub const REGISTRY_MAX_ENTRIES: usize = 16;
+/// Entries kept in the registry directory (newest win): two tables per compiler build, so sixteen builds.
+pub const REGISTRY_MAX_ENTRIES: usize = 32;
 
 /// The scanned runtime layer as a store for `analyzer::LayerStore`.
 pub struct RegistryStore {

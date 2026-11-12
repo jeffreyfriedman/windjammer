@@ -115,7 +115,7 @@ digraph deps {
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
-  "analyzer" -> "parser" [label="134"];
+  "analyzer" -> "parser" [label="140"];
   "analyzer" -> "stdlib_scanner" [label="3"];
   "analyzer" -> "stdlib_surface" [label="1"];
   "analyzer" -> "test_utils" [label="1"];
@@ -230,7 +230,7 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="401"];
+  "codegen" -> "ir" [label="404"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "parser" [label="706"];
@@ -255,7 +255,7 @@ digraph deps {
   "compiler" -> "decorator_registry" [label="1"];
   "compiler" -> "embedded_assets" [label="2"];
   "compiler" -> "inference" [label="1"];
-  "compiler" -> "ir" [label="14"];
+  "compiler" -> "ir" [label="16"];
   "compiler" -> "lexer" [label="4"];
   "compiler" -> "linter" [label="2"];
   "compiler" -> "metadata" [label="48"];
@@ -350,13 +350,13 @@ digraph deps {
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_display" [label="2"];
   "intrinsics" -> "lexer" [label="1"];
-  "ir" -> "analyzer" [label="51"];
+  "ir" -> "analyzer" [label="52"];
   "ir" -> "auto_clone" [label="1"];
   "ir" -> "codegen" [label="51",color=red,fontcolor=red];
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];
   "ir" -> "intrinsics" [label="1"];
-  "ir" -> "lexer" [label="23"];
-  "ir" -> "parser" [label="94"];
+  "ir" -> "lexer" [label="24"];
+  "ir" -> "parser" [label="96"];
   "ir" -> "resolve" [label="9"];
   "ir" -> "source_map" [label="6"];
   "ir" -> "type_classification" [label="31"];
