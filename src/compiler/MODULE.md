@@ -11,9 +11,9 @@ In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` met
 - `compilation_pipeline.rs` and `library_multipass.rs` are large; function-length ratchets apply.
 - `std_stubs.rs`: the `std/<module>.wj` stubs of a build (always re-analysed, never overriding declared runtime formals).
 - `rust_surface_metadata.rs`: Rust crate signature surfaces (`rust/<crate>.wji`, ADR-0026) become `metadata.json` under `.wj-cache/rust-surfaces/<crate>/` and join the external-metadata paths, so every build mode borrows what the crate borrows.
-- `ir/value_formal_fixed_point.rs` (used by `library_multipass.rs` and the single-file path) makes callers and callees
-  agree on value-formal modes (convergence O4): after each IR lowering round the solved modes are published to the
-  registry and lowering repeats until none changes.
+- `value_formal_fixed_point.rs` makes callers and callees agree on value-formal modes (convergence O4): after each IR
+  lowering round the solved modes are published to the registry and lowering repeats until none changes. Single-file
+  builds run the same rounds over their one program (`attach_ir_module_if_missing`).
 - `multipass_bare_pass_demotion.rs` contains ownership post-fixes that belong to the solver (WP 9). A standard-library function's formals are the runtime's: bare-pass demotion never touches them (`server_serve(address: String, ..)`).
 
 ## Owns

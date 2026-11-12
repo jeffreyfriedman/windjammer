@@ -11,6 +11,7 @@ mod declaration_stub_registry;
 mod dependency_resolution;
 pub mod incremental;
 mod library_copy_registry;
+mod value_formal_fixed_point;
 pub(crate) mod rust_surface_metadata;
 pub mod library_multipass;
 pub mod multipass_bare_pass_demotion;
@@ -224,7 +225,10 @@ fn attach_ir_module_if_missing<'ast>(
     // Field types for the solver: cross-module structs (already on the generator) plus this file's own.
     let mut fields = codegen.struct_field_types.clone();
     fields.extend(crate::type_inference::struct_field_registry::local_struct_field_table(program));
-    let ir_module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, &codegen.signature_registry, Some(&fields));
+    // In rounds, as a library build: callers read their callees' solved value-formal and receiver modes.
+    let copy_types = codegen.copy_types_registry.clone();
+    let ir_module =
+        value_formal_fixed_point::lower_program_to_fixed_point(program, analyzed, &mut codegen.signature_registry, &fields, &copy_types);
     codegen.set_ir_module(ir_module);
 }
 
