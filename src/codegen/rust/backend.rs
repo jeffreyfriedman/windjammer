@@ -14,8 +14,8 @@ pub struct RustBackend {
     /// Where the `windjammer-runtime` crate lives, given by the driver (never guessed from a sibling
     /// checkout or a directory name). `None`: the registry release matching this compiler.
     runtime_path: Option<std::path::PathBuf>,
-    /// Where the game crates live, given by the driver. `None`: the registry.
-    game_core_path: Option<std::path::PathBuf>,
+    /// Path dependencies by crate name (`-` form), given by the driver. Absent: the registry.
+    crate_paths: std::collections::BTreeMap<String, std::path::PathBuf>,
 }
 
 fn toml_path(p: &std::path::Path) -> String {
@@ -24,7 +24,7 @@ fn toml_path(p: &std::path::Path) -> String {
 
 impl RustBackend {
     pub fn new() -> Self {
-        Self { runtime_path: None, game_core_path: None }
+        Self { runtime_path: None, crate_paths: Default::default() }
     }
 
     /// Point generated manifests at a `windjammer-runtime` checkout or the compiler's embedded copy.
@@ -33,9 +33,9 @@ impl RustBackend {
         self
     }
 
-    /// Point generated manifests at the game crates.
-    pub fn with_game_core_path(mut self, path: std::path::PathBuf) -> Self {
-        self.game_core_path = Some(path);
+    /// Point generated manifests at a local checkout of the crate `name` (`-` or `_` spelling).
+    pub fn with_crate_path(mut self, name: &str, path: std::path::PathBuf) -> Self {
+        self.crate_paths.insert(name.replace('_', "-"), path);
         self
     }
 
@@ -90,21 +90,17 @@ edition = "2021"
         for dep in deps {
             let dep_line = match dep.as_str() {
                 // Sibling-checkout layouts are never assumed: locations come from the driver.
-                "game_host_core" => match &self.game_core_path {
-                    Some(p) => format!("game-host-core = {{ path = \"{}\" }}\n", toml_path(p)),
-                    None => "game-host-core = \"*\"\n".to_string(),
-                },
-                "windjammer_app" => match &self.game_core_path {
-                    Some(p) => format!("windjammer-app = {{ path = \"{}\" }}\n", toml_path(p)),
-                    None => "windjammer-app = \"*\"\n".to_string(),
-                },
                 "windjammer_runtime" => match &self.runtime_path {
                     Some(p) => format!("windjammer-runtime = {{ path = \"{}\" }}\n", toml_path(p)),
                     None => format!("windjammer-runtime = \"{}\"\n", env!("CARGO_PKG_VERSION")),
                 },
                 _ => {
-                    // Unknown external crate, add as crates.io dependency
-                    format!("{} = \"*\"\n", dep)
+                    let name = dep.replace('_', "-");
+                    match self.crate_paths.get(&name) {
+                        Some(p) => format!("{} = {{ path = \"{}\" }}\n", name, toml_path(p)),
+                        // Unknown external crate, add as crates.io dependency
+                        None => format!("{} = \"*\"\n", name),
+                    }
                 }
             };
             cargo_toml.push_str(&dep_line);
@@ -313,7 +309,7 @@ mod tests {
     fn test_dependency_tracking_extracts_external_crates() {
         // RED: This test should fail until we implement dependency tracking
         let generated_code = r#"
-use game_host_core::prelude::*;
+use acme_core::prelude::*;
 use windjammer_runtime::test::*;
 use std::collections::HashMap;
 
@@ -326,8 +322,8 @@ fn main() {
 
         // Should extract external crates, but NOT std
         assert!(
-            deps.contains(&"game_host_core".to_string()),
-            "Should extract game_host_core"
+            deps.contains(&"acme_core".to_string()),
+            "Should extract acme_core"
         );
         assert!(
             deps.contains(&"windjammer_runtime".to_string()),
@@ -345,9 +341,9 @@ fn main() {
         // GREEN: Test that Cargo.toml includes dependencies extracted from code
         let backend = RustBackend::new()
             .with_runtime_path(std::path::PathBuf::from("/opt/wj/runtime"))
-            .with_game_core_path(std::path::PathBuf::from("/opt/wj/game-core"));
+            .with_crate_path("acme_core", std::path::PathBuf::from("/opt/wj/acme-core"));
         let generated_code = r#"
-use game_host_core::math::Vec3;
+use acme_core::math::Vec3;
 use windjammer_runtime::test::assert_eq;
 
 fn test() {}
@@ -355,10 +351,10 @@ fn test() {}
 
         let cargo_toml = backend.generate_cargo_toml_with_code(generated_code);
 
-        // Cargo.toml uses hyphens (a game engine project) not underscores
+        // Cargo.toml uses hyphens not underscores
         assert!(
-            cargo_toml.contains("game-host-core"),
-            "Cargo.toml should include game-host-core (with hyphens)"
+            cargo_toml.contains("acme-core"),
+            "Cargo.toml should include acme-core (with hyphens)"
         );
         assert!(
             cargo_toml.contains("windjammer-runtime"),
@@ -371,7 +367,7 @@ fn test() {}
 
         // Verify the actual format
         assert!(
-            cargo_toml.contains("game-host-core = { path = "),
+            cargo_toml.contains("acme-core = { path = "),
             "Should have proper dependency declaration for game-core"
         );
         assert!(
@@ -383,7 +379,7 @@ fn test() {}
     #[test]
     fn test_cargo_toml_never_assumes_a_sibling_checkout() {
         let cargo_toml = RustBackend::new().generate_cargo_toml_with_code(
-            "use game_host_core::math::Vec3;\nuse windjammer_runtime::test::assert_eq;\n",
+            "use acme_core::math::Vec3;\nuse windjammer_runtime::test::assert_eq;\n",
         );
         assert!(!cargo_toml.contains("../"), "no relative sibling paths:\n{cargo_toml}");
         assert!(!cargo_toml.contains("path = "), "no path unless the driver gave one:\n{cargo_toml}");

@@ -6,25 +6,14 @@ We release security updates for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.39.x  | :white_check_mark: |
-| 0.38.x  | :white_check_mark: |
-| < 0.38  | :x:                |
+| 0.50.x  | :white_check_mark: |
+| < 0.50  | :x:                |
 
 ## Reporting a Vulnerability
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via one of the following methods:
-
-### 1. GitHub Security Advisories (Preferred)
-
-Report vulnerabilities through [GitHub Security Advisories](https://github.com/jeffreyfriedman/windjammer/security/advisories/new).
-
-### 2. Email
-
-Send an email to: **security@windjammer.dev** (if available)
-
-Or contact the maintainer directly: **jeffrey@example.com**
+Instead, report them privately through [GitHub Security Advisories](https://github.com/jeffreyfriedman/windjammer/security/advisories/new). The advisory stays visible only to you and the maintainers until a fix ships, and we can collaborate with you on it right there.
 
 ### What to Include
 
@@ -188,7 +177,6 @@ Security advisories will be published:
 - In GitHub Security Advisories
 - In CHANGELOG.md (after fix is released)
 - In release notes
-- On security mailing lists (if established)
 
 ## Security Hall of Fame
 
@@ -201,11 +189,10 @@ We recognize security researchers who responsibly disclose vulnerabilities:
 For security-related questions that are not vulnerabilities:
 
 - Open a [GitHub Discussion](https://github.com/jeffreyfriedman/windjammer/discussions)
-- Email the maintainer
-- Join our community chat (if available)
+- Open a [GitHub issue](https://github.com/jeffreyfriedman/windjammer/issues) for general hardening ideas
 
 ---
 
-**Last Updated**: 2026-01-01  
-**Version**: 0.39.1  
-**Next Review**: 2026-02-01
+**Last Updated**: 2026-11-12  
+**Version**: 0.50  
+**Next Review**: 2027-02-01
