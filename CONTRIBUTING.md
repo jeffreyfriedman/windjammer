@@ -50,7 +50,7 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 ### Prerequisites
 
 - Rust 1.90+ (`rust-version` in `Cargo.toml`) (install via [rustup](https://rustup.rs/))
-- Git
+- Git 2.25 or newer, and Python 3.8 or newer (a few test oracles shell out to `python3`; the tests are kept working on these minimums, and the repository can be cloned anywhere, into a directory with any name)
 - A code editor (VS Code with rust-analyzer recommended)
 
 ### Getting Started
@@ -91,6 +91,7 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 - **Check no test file is orphaned**: `scripts/wj/check_orphan_tests.wj`
 - **Run specific test**: `cargo test --release --test all -- test_name`
 - **Run with output**: `cargo test --release --test all -- test_name -- --nocapture`
+- **Portability gates**: `cargo test --test portability_checkout_layout_gate --test recorded_corpus_location_free_gate`, then `cargo test --test untracked_files_gate` after the suite (no untracked files left behind)
 - **Run benchmarks**: `cargo bench`
 - **Architecture fitness**: `cargo test --release --test all architecture` (see `docs/ARCHITECTURE_CI.md`)
 
