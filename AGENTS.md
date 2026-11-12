@@ -76,6 +76,12 @@ scripts/merge_gate.sh           # build, fmt, architecture, docs-truth, promises
 scripts/merge_gate.sh --full    # + cargo-backed cases, all backends, 6x determinism, whole-suite ratchet
 ```
 
+## Release scorecard
+
+"Is it ready?" is answered by [docs/RELEASE_SCORECARD.md](docs/RELEASE_SCORECARD.md): every criterion a number against a
+fixed threshold, regenerated weekly by `wj run scripts/wj/release_scorecard.wj -- --write` ([docs/ROUTINES.md](docs/ROUTINES.md)).
+Criteria that need a build read `results/*.json` written by the PC verification flow ([results/README.md](results/README.md)).
+
 ## Scripts
 
 Repository tooling is written in Windjammer (`scripts/wj/`, run with `wj run scripts/wj/<name>.wj`; it uses the packages in
