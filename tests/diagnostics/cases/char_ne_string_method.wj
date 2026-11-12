@@ -1,0 +1,22 @@
+// expect: WJ0003
+// `text.chars()` is declared `Iterator<char>` (std/rust_core.wji): each `ch` is a `char`, so `!=` against text is rejected,
+// and so is an ordering comparison with the string on the left.
+// oracle: check
+fn count(text: string) -> int {
+    let mut n = 0
+    for c in text.chars() {
+        if c != "x" {
+//~@17+3 ERROR WJ0003 expected `char`, found `string`
+            n += 1
+        }
+        if "a" <= c {
+//~@12+3 ERROR WJ0003 expected `char`, found `string`
+            n += 1
+        }
+    }
+    n
+}
+
+fn main() {
+    println("${count("axb")}")
+}

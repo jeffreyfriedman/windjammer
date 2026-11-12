@@ -1,0 +1,17 @@
+error[WJ0003]: mismatched types: expected `char`, found `string` in comparison
+  --> char_ne_string_method.wj:8:17
+  |
+8 |         if c != "x" {
+  |                 ^^^ expected `char`, found `string`
+  = help: a `char` is compared with a char literal in single quotes, for example `ch == '?'`
+  = fix (auto-fixable): compare with the char literal 'x'
+  = explain: wj explain WJ0003
+
+error[WJ0003]: mismatched types: expected `char`, found `string` in comparison
+  --> char_ne_string_method.wj:12:12
+   |
+12 |         if "a" <= c {
+   |            ^^^ expected `char`, found `string`
+  = help: a `char` is compared with a char literal in single quotes, for example `ch == '?'`
+  = fix (auto-fixable): compare with the char literal 'a'
+  = explain: wj explain WJ0003

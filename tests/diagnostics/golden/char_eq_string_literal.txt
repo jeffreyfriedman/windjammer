@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected `char`, found `string` in comparison
+  --> char_eq_string_literal.wj:9:18
+  |
+9 |         if ch == "?" {
+  |                  ^^^ expected `char`, found `string`
+  = help: a `char` is compared with a char literal in single quotes, for example `ch == '?'`
+  = fix (auto-fixable): compare with the char literal '?'
+  = explain: wj explain WJ0003
