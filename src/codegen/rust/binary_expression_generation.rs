@@ -1405,6 +1405,31 @@ impl<'ast> CodeGenerator<'ast> {
             right_str = deref_if_borrowed_bool(right, &right_str, self);
         }
 
+        // An adapter closure's parameter declared two references deep (`filter(|n| ..)` on `v.iter()`: `&&i64`)
+        // has no operator impls in Rust. A comparison takes the Copy value under it (`**n > 4`); arithmetic on a
+        // primitive also takes one reference (`impl Rem<i64> for &i64`), so one level is enough there (`*n % 2`).
+        if is_arithmetic || is_comparison {
+            left_str = self.deref_adapter_closure_param(left, left_str, is_comparison);
+            right_str = self.deref_adapter_closure_param(right, right_str, is_comparison);
+        }
+        // `text[a..b] + rest`: Rust's `+` on text takes an owned `String` on the left, so the slice is copied.
+        if matches!(op, BinaryOp::Add)
+            && (self.is_text_slice_expr(left) || self.is_str_slice_local(left))
+            && !crate::codegen::rust::string_utilities::already_owned_string_expr(&left_str)
+        {
+            left_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&left_str);
+        }
+        // A borrowed `&str` local (a `text[a..b]` slice) compared with an owned `string` local: Rust compares
+        // `&str` with `&str`, so the owned side is viewed as one (`act < best.as_str()`).
+        if is_comparison {
+            let (l_slice, r_slice) = (self.is_str_slice_local(left), self.is_str_slice_local(right));
+            if l_slice && !r_slice && self.is_owned_text_local(right) {
+                right_str = format!("{right_str}.as_str()");
+            } else if r_slice && !l_slice && self.is_owned_text_local(left) {
+                left_str = format!("{left_str}.as_str()");
+            }
+        }
+
         if is_arithmetic && self.in_call_argument_generation {
             if let Some(ref aft) = self.assignment_float_target_type {
                 if crate::codegen::rust::type_classification_utilities::is_float_type(aft) {
@@ -1569,5 +1594,40 @@ pub fn pause_ms(ms: int) {
                 && !generated.contains("(now as i32)< deadline"),
             "timestamp_millis loop must not compare i32 now to i64 deadline:\n{generated}"
         );
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `n` (or a written `*n`) where `n` is an adapter closure parameter whose declared type is at least two
+    /// references deep over a Copy type: dereferenced to the value for a comparison, to one reference for
+    /// arithmetic (never fewer `*` than the operand already has).
+    fn deref_adapter_closure_param(&self, expr: &Expression<'ast>, generated: String, to_value: bool) -> String {
+        let name = match expr {
+            Expression::Identifier { name, .. } => name,
+            Expression::Unary { op: UnaryOp::Deref, operand, .. } => match &**operand {
+                Expression::Identifier { name, .. } => name,
+                _ => return generated,
+            },
+            _ => return generated,
+        };
+        let Some(&depth) = self.idiom.adapter_closure_param_depth.get(name.as_str()) else { return generated };
+        let Some(ty) = self.local_var_types.get(name.as_str()) else { return generated };
+        let (declared_depth, value) = crate::codegen::rust::method_call_expression_generation::reference_depth(ty);
+        if depth < 2 || declared_depth != depth || !self.is_type_copy(value) || generated.trim_start_matches('*') != name.as_str() {
+            return generated;
+        }
+        let needed = if to_value { depth } else { depth - 1 };
+        if generated.len() - name.len() >= needed {
+            return generated;
+        }
+        format!("{}{}", "*".repeat(needed), name)
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// A local whose type is a borrowed `&str` (a binding of a `text[a..b]` slice).
+    fn is_str_slice_local(&self, e: &Expression<'ast>) -> bool {
+        matches!(e, Expression::Identifier { .. })
+            && self.infer_expression_type(e).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
     }
 }

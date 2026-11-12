@@ -1,0 +1,9 @@
+// Reading an element of a `Vec<T>` parameter by value copies it out of the list: the generic needs `T: Clone`.
+// expect: x 3
+fn first<T>(v: Vec<T>) -> T {
+    v[0]
+}
+
+fn main() {
+    println("${first(["x", "y"])} ${first([3, 4])}")
+}

@@ -283,32 +283,6 @@ fn extraction_keeps_hidden_lines_and_expectations() {
 // bug is present and fails once it is fixed, which is the cue to delete the repro and the known-gaps row.
 // ---------------------------------------------------------------------------------------------
 
-#[test]
-fn known_gap_generic_copy_out_of_list_fails_compiled() {
-    let _g = compiled_lock();
-    let repro = real().root.join("tests/book_repros/generic_largest_needs_clone.wj");
-    let wj = env!("CARGO_BIN_EXE_wj");
-    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
-    assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).trim() == "9", "the interpreter runs the repro");
-    let compiled = compiled_cmd(wj).arg(&repro).output().unwrap();
-    let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
-    assert!(!compiled.status.success() && text.contains("WJ0015"), "the compiled gap is fixed: delete tests/book_repros/generic_largest_needs_clone.wj, this test and its docs/known-gaps.md row\n{text}");
-}
-
-#[test]
-fn known_gap_idioms_fail_compiled() {
-    let _g = compiled_lock();
-    let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_find_closure.wj", "WJ0003")] {
-        let repro = real().root.join("tests/book_repros").join(file);
-        let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
-        assert!(interp.status.success(), "{file}: the interpreter runs the repro");
-        let compiled = compiled_cmd(wj).arg(&repro).output().unwrap();
-        let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
-        assert!(!compiled.status.success() && text.contains(code), "{file}: the compiled gap is fixed: delete the repro, its entry here and its docs/known-gaps.md text\n{text}");
-    }
-}
-
 /// A finding from writing the book, fixed: `join()` on a thread handle returns the closure's result
 /// (`JoinHandle<T>` and `thread::spawn` in std/rust_core.wji), so the `unwrap_or` literal is that `int` and the
 /// compiled program runs (it stopped with WJ0003: the literal was typed i32 against the joined i64).

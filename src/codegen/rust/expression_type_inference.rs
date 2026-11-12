@@ -745,7 +745,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Array { elements, .. } => {
                 let elem = elements
                     .first()
-                    .and_then(|e| self.infer_expression_type(e))?;
+                    .and_then(|e| self.infer_expression_type(e).or_else(|| self.struct_literal_type(e)))?;
                 Some(Type::Array(Box::new(elem), elements.len()))
             }
             // TDD FIX: Macro invocations return known types
@@ -764,7 +764,7 @@ impl<'ast> CodeGenerator<'ast> {
                     "vec" => {
                         // `let v = vec![1.0, 2.0]` must register `Vec<Float>` so `v[i]` knows the
                         // element is Copy and we do not emit `&v[i]` (E0308) or `*&v[i]` (E0614).
-                        let elem_ty = args.first().and_then(|e| self.infer_expression_type(e));
+                        let elem_ty = args.first().and_then(|e| self.infer_expression_type(e).or_else(|| self.struct_literal_type(e)));
                         elem_ty.map(|t| Type::Vec(Box::new(t)))
                     }
                     _ => None,
@@ -1116,5 +1116,26 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Option(inner) => Some(*inner),
             _ => None,
         }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The type a struct literal builds (`User { .. }`: `User`), for a struct this file declares without type
+    /// parameters: the element type of an unannotated list of such literals (`let users = [User { .. }]`).
+    pub(in crate::codegen::rust) fn struct_literal_type(&self, e: &Expression) -> Option<Type> {
+        let Expression::StructLiteral { name, .. } = e else { return None };
+        let declared = self.struct_field_types.contains_key(name.as_str()) && self.user_declared_struct_names.contains(name.as_str());
+        (declared && !self.generic_user_struct_names.contains(name.as_str())).then(|| Type::Custom(name.clone()))
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `text[a..b]` on a `string` (the desugared slice form): Rust slices it to a borrowed `&str`.
+    pub(in crate::codegen::rust) fn is_text_slice_expr(&self, e: &Expression) -> bool {
+        let Expression::MethodCall { object, .. } = e else { return false };
+        Self::let_value_borrows_text(e)
+            && self.infer_expression_type(object).is_some_and(|t| {
+                crate::codegen::rust::types::is_windjammer_text_type(crate::codegen::rust::collection_detection::peel_type_reference(&t))
+            })
     }
 }
