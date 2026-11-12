@@ -648,7 +648,6 @@ impl<'ast> CodeGenerator<'ast> {
                     self.collect_target_type = Some(t.clone());
                 }
 
-                // Auto-convert &str to String if type is String
                 let mut value_str = { let v = self.generate_expression(value); self.copy_if_read_again(value, v) };
 
                 self.collect_target_type = prev_collect_target;
@@ -659,6 +658,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = old_ctx;
                 self.coerce_string_literals_to_owned = old_coerce_lit;
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                self.collect_declared_list_from_adapter(value, t, &mut value_str);
                 self.convert_usize_into_declared_int(&mut value_str, value, t);
 
                 // Convert string literals OR identifiers to String when target is String
@@ -1096,7 +1096,6 @@ impl<'ast> CodeGenerator<'ast> {
                     self.collect_target_type = Some(t.clone());
                 }
 
-                // Auto-convert &str to String if type is String
                 let mut value_str = self.generate_untyped_let_value(value);
 
                 self.collect_target_type = prev_collect_target;
@@ -1105,6 +1104,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.assignment_float_target_type = prev_assign_float;
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                self.collect_declared_list_from_adapter(value, t, &mut value_str);
                 self.convert_usize_into_declared_int(&mut value_str, value, t);
                 let is_string_type = matches!(t, Type::String)
                     || matches!(t, Type::Custom(name) if name == "String" || name == "string");

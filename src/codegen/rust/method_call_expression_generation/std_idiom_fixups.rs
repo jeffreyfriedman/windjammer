@@ -280,7 +280,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .any(|m| obj_str.contains(m)))
     }
 
-    fn is_collection_literal_expr(object: &Expression<'_>) -> bool {
+    pub(super) fn is_collection_literal_expr(object: &Expression<'_>) -> bool {
         matches!(object, Expression::Array { .. })
             || matches!(object, Expression::MacroInvocation { name, .. } if name == "vec")
     }
