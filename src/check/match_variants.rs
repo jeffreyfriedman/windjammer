@@ -11,7 +11,7 @@ use super::locate::{masked_ranges, Locator};
 use super::semantic::{walk_block, Index, Visitor};
 use super::std_calls::std_imports;
 use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, SourceIndex, Span};
-use crate::parser::ast::core::{EnumPatternBinding, Expression, FunctionDecl, Item, MatchArm, Pattern, Statement};
+use crate::parser::ast::core::{EnumPatternBinding, Expression, FunctionDecl, Item, MatchArm, Parameter, Pattern, Statement};
 use crate::parser::Type;
 use crate::stdlib_surface::std_functions::{self, Wrapper};
 use std::collections::{HashMap, HashSet};
@@ -213,8 +213,10 @@ impl Matches<'_, '_> {
                 Item::Function { decl, .. } => self.function(decl),
                 Item::Impl { block, .. } => block.functions.iter().for_each(|f| self.function(f)),
                 Item::Trait { decl, .. } => {
-                    for m in decl.methods.iter().filter(|m| m.body.is_some()) {
-                        self.function(m)
+                    for m in &decl.methods {
+                        if let Some(body) = &m.body {
+                            self.scope(&m.parameters, body);
+                        }
                     }
                 }
                 Item::Mod { items, .. } => self.items(items),
@@ -224,20 +226,24 @@ impl Matches<'_, '_> {
     }
 
     fn function(&mut self, f: &FunctionDecl<'_>) {
+        self.scope(&f.parameters, &f.body);
+    }
+
+    fn scope(&mut self, parameters: &[Parameter<'_>], body: &[&Statement<'_>]) {
         self.bound.clear();
         self.known.clear();
-        for p in &f.parameters {
+        for p in parameters {
             *self.bound.entry(p.name.clone()).or_default() += 1;
         }
-        walk_block(&mut Binds(&mut self.bound), &f.body);
-        for p in &f.parameters {
+        walk_block(&mut Binds(&mut self.bound), body);
+        for p in parameters {
             if let Some(w) = wrapper_of_type(&p.type_) {
                 if self.bound.get(&p.name) == Some(&1) {
                     self.known.insert(p.name.clone(), w);
                 }
             }
         }
-        walk_block(self, &f.body);
+        walk_block(self, body);
     }
 
     /// The wrapper `e` is declared to have, with what produces it (for the message).
