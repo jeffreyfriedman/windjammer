@@ -168,7 +168,7 @@ fn package_of_build_output(dir: PathBuf) -> PathBuf {
 /// Expand `${NAME}` and `${NAME:-default}` in a manifest `path`, so a location (a sibling checkout, the
 /// ecosystem) is configurable per machine instead of baked into the manifest as `../name`.
 pub fn expand_path_vars(raw: &str) -> Result<String, String> {
-    expand_path_vars_with(raw, |k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+    expand_path_vars_with(raw, |k| crate::toolchain::env::get(k).filter(|v| !v.is_empty()))
 }
 
 pub fn expand_path_vars_with(raw: &str, get: impl Fn(&str) -> Option<String>) -> Result<String, String> {
