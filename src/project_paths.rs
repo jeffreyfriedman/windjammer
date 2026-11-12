@@ -17,18 +17,29 @@ fn is_project_boundary(dir: &Path) -> bool {
 ///   1. `src` whose project dir has a manifest/`mod.wj`, or that itself holds
 ///      `mod.wj` / `lib.wj` / `main.wj`
 ///   2. Topmost directory containing mod.wj (inside the boundary)
-///   3. The file's immediate parent (standalone file fallback)
+///   3. Only when NO manifest exists above the file: the nearest ancestor directory named `src`
+///      (within `NAME_HINT_DEPTH` levels). With nothing else to go on, the name is the only structure
+///      hint, so `<dir>/src/ecs/entity.wj` keeps its `ecs/` directory in the output.
+///   4. The file's immediate parent (standalone file fallback)
 ///
-/// A directory's NAME alone never makes it a source root.
+/// Inside a project (a manifest above the file) a directory's NAME alone never makes it a source
+/// root: a checkout that happens to be called `src` holds the manifest, and the walk stops there.
 pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     let mut current = file_path;
     let mut topmost_mod_wj_dir = None;
     let mut found_project_src: Option<&Path> = None;
+    let mut nearest_named_src: Option<&Path> = None;
+    let mut hit_boundary = false;
+    let mut depth = 0;
 
     while let Some(parent) = current.parent() {
+        depth += 1;
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
             if dir_name == "src" && found_project_src.is_none() && is_project_source_dir(parent) {
                 found_project_src = Some(parent);
+            }
+            if dir_name == "src" && nearest_named_src.is_none() && depth <= NAME_HINT_DEPTH {
+                nearest_named_src = Some(parent);
             }
         }
 
@@ -37,6 +48,7 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
         }
 
         if is_project_boundary(parent) {
+            hit_boundary = true;
             break;
         }
         current = parent;
@@ -50,8 +62,18 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
         return Some(mod_wj_dir);
     }
 
+    if !hit_boundary {
+        if let Some(src) = nearest_named_src {
+            return Some(src);
+        }
+    }
+
     file_path.parent()
 }
+
+/// How many directory levels above the file a directory named `src` may sit to serve as the source root when no
+/// manifest exists.
+const NAME_HINT_DEPTH: usize = 8;
 
 /// A `src/` directory is a project source root only on content evidence:
 /// its project dir holds a manifest or `mod.wj`, or it holds `mod.wj`,
