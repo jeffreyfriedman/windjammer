@@ -83,6 +83,18 @@ fn write_tree(asset: Asset, dest: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The files of an embedded tree as `(path relative to the tree, bytes)`, straight from the binary: no directory is
+/// materialized, so this works where there is no file system (the browser playground, ADR-0034) and is the one source
+/// the materialized copy is written from.
+pub fn files(asset: Asset) -> &'static [(&'static str, &'static [u8])] {
+    asset.table()
+}
+
+/// One embedded file as text (`rel` is relative to the tree, with `/` separators).
+pub fn text(asset: Asset, rel: &str) -> Option<&'static str> {
+    asset.table().iter().find(|(p, _)| *p == rel).and_then(|(_, b)| std::str::from_utf8(b).ok())
+}
+
 /// Number of files in the embedded tree.
 pub fn file_count(asset: Asset) -> usize {
     asset.table().len()
