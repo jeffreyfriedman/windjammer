@@ -50,6 +50,7 @@ fn from_lookup_reads_every_documented_toggle() {
         ("WINDJAMMER_STDLIB", "/s"),
         ("WINDJAMMER_RUNTIME_PATH", "/r"),
         ("WJ_CRATE_PATHS", "acme_core=/g:other=/o"),
+        ("WJ_PLUGIN_PATH", "/p1:/p2"),
         ("WJ_CACHE_LOCALITY_JSON", "/c.json"),
     ]));
     assert!(!config.ir_cutover.ownership);
@@ -62,6 +63,7 @@ fn from_lookup_reads_every_documented_toggle() {
     assert_eq!(config.runtime_path, Some(PathBuf::from("/r")));
     assert_eq!(config.crate_paths.get("acme-core"), Some(&PathBuf::from("/g")));
     assert_eq!(config.crate_paths.get("other"), Some(&PathBuf::from("/o")));
+    assert_eq!(config.plugin_dirs, vec![PathBuf::from("/p1"), PathBuf::from("/p2")]);
     assert_eq!(config.cache_locality_json, Some(PathBuf::from("/c.json")));
 }
 
