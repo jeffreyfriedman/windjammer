@@ -11,7 +11,6 @@ mod declaration_stub_registry;
 mod dependency_resolution;
 pub mod incremental;
 mod library_copy_registry;
-mod value_formal_fixed_point;
 pub(crate) mod rust_surface_metadata;
 pub mod library_multipass;
 pub mod multipass_bare_pass_demotion;

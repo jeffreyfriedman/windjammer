@@ -142,6 +142,7 @@ impl<'ast> Analyzer<'ast> {
                     if is_copy {
                         self.copy_enums.insert(decl.name.clone());
                     }
+                    self.enum_variant_payloads.extend(decl.variants.iter().map(|v| (format!("{}::{}", decl.name, v.name), v.data.clone())));
                 }
                 Item::Trait { decl, .. } => {
                     // Store trait definition for later lookup
