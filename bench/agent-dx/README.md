@@ -193,7 +193,7 @@ actual cost after. On resume the guard counts settled attempts at their actual, 
 the harness keeps per trial (`<out>/<model>/work/<trial>/claude.stream.jsonl`) lets it settle them from Claude Code's own cost or the per-turn usage. A re-run trial
 never discards the money of its earlier attempts. A trial that hits the 1500 s agent timeout is recorded with `status: "timeout"`, `excluded_from_grading: true` and its
 cost (the partial stream priced at the config's table, else the per-trial cap); the report leaves it out of every metric but counts its spend. Resume re-runs it only with
-`"rerun_timeouts": true` in the config. Orphaned `claude` processes of a `kill -9` keep billing: check `pgrep -x claude` before resuming.
+`"rerun_timeouts": true` in the config. Orphaned `claude` processes of a `kill -9` keep billing: before resuming, look for orphaned trial processes by their arguments, not their name (interactive Claude Code sessions are also named `claude`): a trial process is `claude` with `-p`, `--max-budget-usd` and `--no-session-persistence`, for example `pgrep -af -- '--max-budget-usd'`.
 
 **Stopping.** When the hard cap or the projection stops a model, the harness prints `STOPPED model=... spent=... cap=... projection=...` on stderr, writes `<out>/STOPPED` and
 `<out>/final.json` (same content as the final JSON line, with `stopped`, `seed`, `hard_cap_usd`) and exits 4.
