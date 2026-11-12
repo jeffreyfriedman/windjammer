@@ -39,7 +39,7 @@ class, and its status on the current compiler. `replay.wj` (interpreted Windjamm
 | Proxy | Key (`docs/generated/measured.json`) | Direction |
 |---|---|---|
 | (a) friction events still open, per task | `cost.friction.events_open`, `cost.friction.open_per_task`, `cost.friction.open_compiler_bugs` | shrink |
-| (b) diagnostic tokens per error (bytes / 4), human and agent format | `cost.diag.tokens_per_error_human`, `cost.diag.tokens_per_error_agent` | shrink |
+| (b) tokens per error (bytes / 4), human and agent format, kept apart by source: diagnostics of `wj check` and rustc errors of the compiled build (one mean over both moves with the mix of events alone) | `cost.diag.check_tokens_per_error_{human,agent}`, `cost.diag.build_tokens_per_error_{human,agent}` | shrink, each |
 | (b) share of error codes seen in the corpus that carry a machine-applicable fix | `cost.diag.fix_coverage` | grow |
 | (c) turns to green for an automatic fix-applier (apply every fix, re-check) | `cost.fixsim.*` | grow; `new_diagnostics` = 0 |
 | (d) noise lines per compiled run (anything but the program's output and real diagnostics) | `cost.noise.lines_per_build` | shrink (target 0) |
@@ -61,7 +61,7 @@ own non-zero exit status; not friction). Events without a program keep their rec
 |---|---|---|---|---|
 | L1 | W0017: `$${` in a string is reported, with the `\$${` rewrite offered | t103 cost 3.3 to 4.0 extra turns in every Windjammer trial; on the pilot-6 mix about 0.35 turns per trial (a third of the U minus R gap) | small | done |
 | L2 | Quiet compiled run: progress only on a terminal (`WJ_PROGRESS=1` forces it), no replayed rustc warnings | about 300 tokens per compiled call in every compiled-first trial; with 1.7 calls and the context re-read on later turns, 0.5k to 1.5k input tokens per trial | small | done |
-| L3 | `--error-format agent` on `wj check` and `wj run` (and `WJ_ERROR_FORMAT=agent`): one line per diagnostic with location, code, message, first help and fix | the replay measures the token ratio per error (`cost.diag.tokens_per_error_*`); every error an agent reads, on every later turn | small | done |
+| L3 | `--error-format agent` on `wj check` and `wj run` (and `WJ_ERROR_FORMAT=agent`): one line per diagnostic with location, code, message, first help and fix | the replay measures the token ratio per error (`cost.diag.check_tokens_per_error_*`); every error an agent reads, on every later turn | small | done |
 | L4 | Fix the open compiler bugs of the corpus (`friction/open-bugs.md`) | t104 alone: 4 extra turns (compiled-first) and 9 (V2) per trial | medium to large, owner streams | tracked |
 | L5 | One command that is the whole loop: `wj run --verify` (or a new `ship` subcommand) as the single documented step, printing one compact report (interpreted result, build verdict, output comparison, test summary) and stopping before the build when the interpreted run fails | agents already chose one command (`cost.loop.v2_*`); 1 to 2 tool results per trial shorter, tool-wait lower when the first interpreted run fails | medium | proposed |
 | L6 | First-write success: the agent sheet and message wording for the top classes (this change: the `\$` line in `docs/agent/WINDJAMMER_FOR_AGENTS.md`; next: the adapter-to-`Vec` advice once corpus entry 5 is fixed or reworded) | removes a turn whenever the sheet's advice produced the failure | small each | in progress |

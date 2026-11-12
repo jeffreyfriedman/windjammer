@@ -1,1 +1,1 @@
-open-compiler-bug: WJ0003: mismatched types: expected `&HashMap<string, i64>`, found `HashMap<_, _>`
+fixed

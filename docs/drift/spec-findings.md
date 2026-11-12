@@ -106,10 +106,8 @@ shows that the run-time behaviour is right and the lint is the whole difference.
 | Case | rustc says |
 |---|---|
 | `traits/SPEC-TRT-001` | expected `String`, found `&str` |
-| `items/SPEC-ITEM-010` | expected type parameter `T`, found `&T` |
 | `traits/SPEC-TRT-004` | `V + V` in a generic function without an `Add` bound |
 | `collections/SPEC-COLL-005`, `SPEC-COLL-009` | lifetime may not live long enough |
-| `closures/SPEC-CLOS-001` | `Vec<User>` has no `filter` (an iterator adaptor on a list; the call needs `.iter()`) |
 | `types/SPEC-TYP-006` | `Ok([1])` against `Result<Vec<i64>, _>`: array where a `Vec` is expected |
 | `patterns/SPEC-PAT-009` | non-exhaustive integer range patterns: rustc does not see that the ranges and the wildcard cover `i64` |
 | `stdlib/SPEC-STD-002` | `wj build` refuses the program (W0010, `str` in a signature) while `wj run --interpret --no-lint` accepts it |

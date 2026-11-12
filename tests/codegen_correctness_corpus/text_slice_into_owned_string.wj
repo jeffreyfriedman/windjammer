@@ -1,0 +1,50 @@
+// `text[a..b]` is a borrowed slice of the text. Assigned to an owned `string` local it is copied, compared with
+// one it is compared as text, returned as a `string` it is copied, and on the left of `+` it starts an owned
+// string. A map key from a loop over the keys is a reference to the text, copied the same way when assigned.
+// expect: best=go last=go
+// expect: B FF a
+fn digit_char(d: int) -> string {
+    let digits = "0123456789ABCDEF"
+    digits[d..d + 1]
+}
+
+fn to_base(n: int, b: int) -> string {
+    let digits = "0123456789ABCDEF"
+    let mut v = n
+    let mut out = ""
+    while v > 0 {
+        let r = v % b
+        out = digits[r..r + 1] + out
+        v = v / b
+    }
+    out
+}
+
+fn main() {
+    let keys = ["u1 stop", "u1 go", "u2 run"]
+    let mut best = ""
+    let mut last = ""
+    for k in keys {
+        if k.starts_with("u1 ") {
+            let act = k[3..k.len()]
+            if best == "" || act < best {
+                best = act
+            }
+            last = k[3..k.len()]
+        }
+    }
+    println("best=${best} last=${last}")
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("b", 2)
+    m.insert("a", 2)
+    let mut top = ""
+    let mut count = 0
+    for key in m.keys() {
+        let v = m.get(key).unwrap_or(0)
+        if v > count || (v == count && key < top) {
+            top = key
+            count = v
+        }
+    }
+    println("${digit_char(11)} ${to_base(255, 16)} ${top}")
+}

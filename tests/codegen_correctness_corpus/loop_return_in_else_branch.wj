@@ -1,0 +1,23 @@
+// A `return` in the last `else` of the last statement of a loop body leaves the function: it is not the
+// function's tail value (an earlier `if .. { continue }` in the body must not make it one).
+// expect: good 3
+// expect: bad
+fn classify(text: string) -> string {
+    let mut n = 0
+    for c in text.chars() {
+        if c == 'x' { continue }
+        if c == 'a' {
+            n = n + 1
+        } else if c == 'b' {
+            n = n + 2
+        } else {
+            return "bad"
+        }
+    }
+    "good ${n}"
+}
+
+fn main() {
+    println(classify("axb"))
+    println(classify("abz"))
+}

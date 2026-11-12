@@ -299,7 +299,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// `k` is an owned `String` local (`let k = "x"`), not yet a reference in the emitted Rust: an explicit
     /// `&k` collection-key argument must keep its `&` (`map.get(&k)`).
-    pub(super) fn is_owned_text_local(&self, operand: &Expression<'ast>) -> bool {
+    pub(in crate::codegen::rust) fn is_owned_text_local(&self, operand: &Expression<'ast>) -> bool {
         let Expression::Identifier { name, .. } = operand else {
             return false;
         };

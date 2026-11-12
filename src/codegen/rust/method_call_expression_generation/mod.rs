@@ -6,6 +6,7 @@ use crate::parser::*;
 
 mod arguments;
 mod element_closure_params;
+pub(in crate::codegen::rust) use element_closure_params::reference_depth;
 mod finalize;
 mod idiom_lowering;
 mod receiver;

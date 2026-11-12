@@ -1,1 +1,1 @@
-open-compiler-bug: WJ0020: cannot add `&std::string::string` to `string`
+fixed

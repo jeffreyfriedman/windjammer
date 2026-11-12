@@ -89,6 +89,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.struct_field_types.insert(s.name.clone(), field_types);
         self.user_declared_struct_names.insert(s.name.clone());
+        if !s.type_params.is_empty() {
+            self.generic_user_struct_names.insert(s.name.clone());
+        }
         crate::codegen::rust::recursive_struct_layout::apply_recursive_struct_boxing(
             &mut self.struct_field_types,
         );

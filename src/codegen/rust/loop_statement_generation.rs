@@ -18,6 +18,8 @@ impl<'ast> CodeGenerator<'ast> {
         let saved_local_idx = self.current_block_local_idx;
         let old_void_block = self.in_void_block;
         self.in_void_block = true;
+        // A loop body is never the function's tail: a `return` in it stays explicit.
+        let old_in_function_body = std::mem::replace(&mut self.in_function_body, false);
         for (i, stmt) in body.iter().enumerate() {
             self.current_statement_idx = self.auto_clone_counter;
             self.current_block_local_idx = i;
@@ -27,6 +29,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
         self.in_void_block = old_void_block;
+        self.in_function_body = old_in_function_body;
         self.loop_body_depth = self.loop_body_depth.saturating_sub(1);
         self.indent_level -= 1;
 
@@ -127,6 +130,8 @@ impl<'ast> CodeGenerator<'ast> {
         let saved_local_idx = self.current_block_local_idx;
         let old_void_block = self.in_void_block;
         self.in_void_block = true;
+        // A loop body is never the function's tail: a `return` in it stays explicit.
+        let old_in_function_body = std::mem::replace(&mut self.in_function_body, false);
         self.current_function_body = body.to_vec();
         for (i, stmt) in body.iter().enumerate() {
             self.current_statement_idx = self.auto_clone_counter;
@@ -138,6 +143,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
         self.in_void_block = old_void_block;
+        self.in_function_body = old_in_function_body;
         self.loop_body_depth = self.loop_body_depth.saturating_sub(1);
         self.indent_level -= 1;
 
