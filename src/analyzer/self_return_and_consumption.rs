@@ -802,15 +802,28 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Names an enum-variant pattern binds directly to a payload whose declared type (this program's enum
-    /// declaration) is Copy. A variant declared elsewhere is unknown here and binds nothing copied.
+    /// declaration) is Copy. A variant declared elsewhere is unknown here and binds nothing copied. An enum whose
+    /// every payload is Copy is itself Copy (the emitted enum derives it): its value is copied whole, so `self`
+    /// stays by value (Copy aggregates are owned formals, as in the emission contract) and nothing is listed.
     fn copy_payload_bindings(&self, pattern: &Pattern) -> Vec<String> {
         use crate::parser::ast::EnumVariantData;
         use crate::parser::EnumPatternBinding;
         let Pattern::EnumVariant(path, binding) = pattern else { return Vec::new() };
         let mut segments = path.rsplit("::");
         let (Some(variant), Some(enum_name)) = (segments.next(), segments.next()) else { return Vec::new() };
-        let Some(data) = self.enum_variant_payloads.get(&format!("{enum_name}::{variant}")) else { return Vec::new() };
+        let Some(variants) = self.enum_variant_payloads.get(enum_name) else { return Vec::new() };
         let copy = |ty: Option<&Type>| ty.is_some_and(|t| self.is_copy_type(t));
+        let payload_types = |data: &EnumVariantData| -> Vec<Type> {
+            match data {
+                EnumVariantData::Unit => Vec::new(),
+                EnumVariantData::Tuple(types) => types.clone(),
+                EnumVariantData::Struct(fields) => fields.iter().map(|(_, t)| t.clone()).collect(),
+            }
+        };
+        if variants.iter().all(|(_, data)| payload_types(data).iter().all(|t| copy(Some(t)))) {
+            return Vec::new();
+        }
+        let Some(data) = variants.iter().find(|(name, _)| name == variant).map(|(_, data)| data) else { return Vec::new() };
         match (binding, data) {
             (EnumPatternBinding::Single(name), EnumVariantData::Tuple(types)) if types.len() == 1 && copy(types.first()) => {
                 vec![name.clone()]

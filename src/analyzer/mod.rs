@@ -340,9 +340,9 @@ pub struct Analyzer<'ast> {
     variables: HashMap<String, OwnershipMode>,
     // Track enum definitions to determine if they're Copy
     copy_enums: HashSet<String>,
-    /// Declared payloads of this program's enum variants, keyed `Enum::Variant`: the types of the
-    /// values a `match` arm binds (a Copy payload is copied out of a borrowed scrutinee, not moved).
-    enum_variant_payloads: HashMap<String, crate::parser::ast::EnumVariantData>,
+    /// This program's enum declarations by name (`variant name`, payload): the types of the values a `match`
+    /// arm binds (a Copy payload is copied out of a borrowed scrutinee, not moved).
+    enum_variant_payloads: HashMap<String, Vec<(String, crate::parser::ast::EnumVariantData)>>,
     // Track struct definitions with @derive(Copy) to determine if they're Copy
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ library files.
     copy_structs: Arc<HashSet<String>>,

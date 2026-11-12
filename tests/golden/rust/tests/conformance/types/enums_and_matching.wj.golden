@@ -26,8 +26,8 @@ enum Result<T, E> {
 
 impl Shape {
 #[inline]
-fn precise_area(&self) -> i64 {
-        match *self {
+fn precise_area(self) -> i64 {
+        match self {
             Shape::Circle(r) => 314_i64 * r * r / 100_i64,
             Shape::Square(side) => side * side,
             Shape::Point => 0_i64,
