@@ -36,9 +36,44 @@ pub fn returns(module_name: &str, name: &str) -> Option<Wrapper> {
     RETURNS.iter().find(|(m, f, _)| *m == module_name && *f == name).map(|(_, _, w)| *w)
 }
 
+/// The declared return type of `std::<module>::<name>`, read from the embedded `std/<module>.wj` declaration
+/// (`fn chars(s: string) -> Vec<char>`). `None` when the module source is not embedded, the function is not declared
+/// there, or it declares no return type.
+pub fn declared_return(module_name: &str, name: &str) -> Option<crate::parser::Type> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    type Returns = HashMap<String, crate::parser::Type>;
+    static CACHE: OnceLock<Mutex<HashMap<String, Returns>>> = OnceLock::new();
+    let mut cache = CACHE.get_or_init(Default::default).lock().ok()?;
+    let returns = cache.entry(module_name.to_string()).or_insert_with(|| {
+        let asset = crate::embedded_assets::Asset::StdWj;
+        let text = crate::embedded_assets::text(asset, &format!("{module_name}.wj"))
+            .or_else(|| crate::embedded_assets::text(asset, &format!("{module_name}/mod.wj")));
+        let Some(text) = text else { return Returns::new() };
+        let tokens = crate::lexer::Lexer::new(text).tokenize_with_locations();
+        let Ok(program) = crate::parser_impl::Parser::new(tokens).parse() else { return Returns::new() };
+        program
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } => Some((decl.name.clone(), decl.return_type.clone()?)),
+                _ => None,
+            })
+            .collect()
+    });
+    returns.get(name).cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn declared_return_reads_the_std_declaration() {
+        assert_eq!(declared_return("strings", "chars"), Some(crate::parser::Type::Vec(Box::new(crate::parser::Type::Custom("char".into())))));
+        assert_eq!(declared_return("strings", "no_such_function"), None);
+        assert_eq!(declared_return("no_such_module", "chars"), None);
+    }
 
     #[test]
     fn return_wrappers_name_functions_the_table_has() {
