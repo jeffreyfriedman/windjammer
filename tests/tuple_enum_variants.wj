@@ -65,7 +65,7 @@ fn test_construction() -> i32 {
     let circle = Shape::Circle(10.0)
     let rect = Shape::Rectangle(5.0, 10.0)
     
-    return test_color_match(rgb) + test_color_match(rgba)
+    test_color_match(rgb) + test_color_match(rgba)
 }
 
 // ============================================================================
