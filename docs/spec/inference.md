@@ -130,7 +130,10 @@ It is listed so `wj explain-ownership` can name it. ADR-0001 requires it to disa
 ### SELF-READ
 **Rule.** A method that only reads `self` takes `&self`.
 **Example.** `fn get(self) -> int { self.n }` emits `fn get(&self) -> i64`.
-**Status.** Conforms.
+A `match self` whose arms use only bindings of Copy payloads (by the enum's declaration) reads too:
+`match self { Value::Float(v) => v, _ => 0.0 }` emits `&self`; the payload is copied out.
+**Status.** Conforms for enums declared in the same file; a variant declared in another file still makes the
+receiver owned when its binding is used.
 
 ### SELF-MUT
 **Rule.** A method that assigns to a field of `self`, calls a `&mut self` method on `self` or on a field of it, or

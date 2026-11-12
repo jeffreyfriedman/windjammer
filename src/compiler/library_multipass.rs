@@ -1071,7 +1071,7 @@ pub(crate) fn build_library_multipass(
     // Step 4B-a-IR: Lower converged analyses to IR using the merged global registry.
     // Cross-file call constraints resolve against final_global_registry.
     let step4b_ir_start = Instant::now();
-    let formal_scope = crate::ir::value_formal_fixed_point::FormalScope::new(&parsed_programs, &global_copy_structs);
+    let formal_scope = super::value_formal_fixed_point::FormalScope::new(&parsed_programs, &global_copy_structs);
     let mut ir_functions_by_index: Vec<Option<Vec<crate::ir::node::IrFunction>>> =
         vec![None; sources.len()];
     {
@@ -1079,7 +1079,7 @@ pub(crate) fn build_library_multipass(
         let mut pipeline = IrPipeline::new();
         let library_fields = library_field_types(&global_struct_fields, &parsed_programs);
         // Rounds until callers and callees agree on value-formal modes (value_formal_fixed_point).
-        for round in 1..=crate::ir::value_formal_fixed_point::MAX_ROUNDS {
+        for round in 1..=super::value_formal_fixed_point::MAX_ROUNDS {
             let mut ir_errors = Vec::new();
             for (i, analysis_opt) in step4b_analyses.iter().enumerate() {
                 let Some(analysis) = analysis_opt.as_ref().filter(|a| !a.analyzed_functions.is_empty()) else { continue };
@@ -1095,7 +1095,7 @@ pub(crate) fn build_library_multipass(
                 ir_functions_by_index[i] = Some(module.functions);
             }
             let published = publish_value_formals(&formal_scope, std::sync::Arc::make_mut(&mut final_global_registry), &sources, &ir_functions_by_index, &step4b_analyses);
-            if !published || round == crate::ir::value_formal_fixed_point::MAX_ROUNDS {
+            if !published || round == super::value_formal_fixed_point::MAX_ROUNDS {
                 ir_errors.iter().for_each(|e| eprintln!("{e}"));
                 break;
             }
@@ -1827,7 +1827,7 @@ fn file_field_types(library: &FieldTypes, program: &crate::parser::Program<'stat
 
 /// Publish every file's solved value-formal modes (convergence O4); true when one changed.
 fn publish_value_formals(
-    scope: &crate::ir::value_formal_fixed_point::FormalScope,
+    scope: &super::value_formal_fixed_point::FormalScope,
     registry: &mut SignatureRegistry,
     sources: &[(PathBuf, String)],
     ir_functions: &[Option<Vec<crate::ir::node::IrFunction>>],
@@ -1846,7 +1846,7 @@ fn publish_value_formals(
 /// Each file's codegen overlays its own analysis-time registry on the global one: its copies of other files'
 /// signatures must carry the published value-formal modes too.
 fn publish_into_file_registries(
-    scope: &crate::ir::value_formal_fixed_point::FormalScope,
+    scope: &super::value_formal_fixed_point::FormalScope,
     sources: &[(PathBuf, String)],
     ir_functions: &[Option<Vec<crate::ir::node::IrFunction>>],
     analyses: &mut [Option<Step4bFileAnalysis>],

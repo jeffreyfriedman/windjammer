@@ -143,8 +143,8 @@ impl FormalScope {
     }
 }
 
-/// A single-file build lowers its program the way a library build lowers each file: with the declared field
-/// types (a method on `self.inventory` is `Inventory`'s) and in rounds, publishing the solved value-formal and
+/// A single-file build (`attach_ir_module_if_missing`) lowers its program the way a library build lowers each
+/// file: in rounds, publishing the solved value-formal and
 /// receiver modes into `registry` until none changes, so a caller reads its callee's solved mode instead of the
 /// analyzer's prediction (`Merchant::add_item` forwarding `item` to `Inventory::add_item`, which stores it).
 pub(crate) fn lower_program_to_fixed_point(
