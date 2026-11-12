@@ -1911,3 +1911,5 @@ tests/drift_corpus/repros/noise_warnings_in_build_output.wj#mainerr	none
 tests/drift_corpus/repros/noise_warnings_in_build_output.wj	exit0:7:278344697	
 tests/drift_corpus/repros/try_then_method_chain.wj#mainerr	none	
 tests/drift_corpus/repros/try_then_method_chain.wj	exit0:4:19307120	
+tests/drift_corpus/repros/for_mut_variable_write_through.wj#mainerr	none	
+tests/drift_corpus/repros/for_mut_variable_write_through.wj	exit0:10:272371452	

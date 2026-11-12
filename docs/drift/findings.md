@@ -253,3 +253,16 @@ infers a width for each unannotated integer `let` from its later uses (the same 
 tag a `Lit` produced by arithmetic (`Int(_, LitComputed)`) so that `coerce` reports an overflow panic (exit 101,
 `attempt to add with overflow`) instead of `literal out of range`; this fixes the exit status but not the case where the sum
 fits in the wrong width and silently continues, so it is not a replacement for the pre-pass.
+
+### N.6 Loop variable write-through
+
+`for mut p in ps { p.x = .. }` and `for (id, mut qty) in self.items { qty = .. }` change the collection element in the compiled
+build (it iterates by `&mut` when the body changes the variable). The interpreter bound a copy. The parser drops the `mut`
+marker of a loop variable (ADR-0002 keeps it for `wj check`), so the interpreter finds the loops by analysis: a `for` over a
+place (a variable or field path) whose body assigns, assigns through or mutates a loop variable writes the variable (rebuilt from
+its pattern: identifier or tuple) back to its element after each iteration, including on `break`; `self` / a parameter looped
+that way counts as mutated (`analysis::loop_var_mutated`). Ranges, temporaries and unchanged variables are untouched, and
+the resolved engine runs such a function in the walker so all three engines agree
+(`tests/interpreter_correctness_test.rs`, drift case `repros/for_mut_variable_write_through.wj`). Two compiled-side gaps found
+on the way (the interpreter now follows the language, the compiled backend does not): `for mut q in qs { q.xs[0] = .. }` is emitted as
+`for q in &qs` (rustc E0596) and `for mut row in grid { row[0] = .. }` as `grid.iter().copied()` (E0277 on `Vec`); owner `codegen-ownership`.

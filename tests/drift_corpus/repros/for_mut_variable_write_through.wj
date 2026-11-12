@@ -1,0 +1,32 @@
+// A `mut` loop variable over a collection writes through to its element (the compiled build iterates by `&mut`);
+// a range variable is a copy. Struct element, tuple pattern in a method, range copy.
+struct P {
+    x: int,
+}
+
+struct Inv {
+    items: Vec<(int, int)>,
+}
+
+impl Inv {
+    fn add(self, n: int) {
+        for (id, mut qty) in self.items {
+            qty = qty + n
+        }
+    }
+}
+
+fn main() {
+    let mut ps = [P { x: 1 }, P { x: 2 }]
+    for mut p in ps {
+        p.x = p.x + 10
+    }
+    let mut inv = Inv { items: [(7, 1)] }
+    inv.add(2)
+    let mut total = 0
+    for mut i in 0..3 {
+        i = i * 2
+        total += i
+    }
+    println("${ps[0].x} ${ps[1].x} ${inv.items[0].1} ${total}")
+}

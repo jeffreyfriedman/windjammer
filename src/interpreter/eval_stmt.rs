@@ -306,6 +306,24 @@ impl Interpreter {
         body: &'static [&'static Statement<'static>],
         label: Option<&'static str>,
     ) -> R {
+        // `for mut p in ps` / `for (id, mut qty) in self.items`: the variable writes through to its element (the
+        // compiled build iterates by `&mut` when the body changes the variable); a range or a temporary is a copy
+        if Self::is_place_expr(iterable) && super::analysis::loop_var_mutated(self, self.scope.module, pattern, body) {
+            if let Some(place) = self.resolve_place(iterable)? {
+                if let Value::Vec(items) = place.read()? {
+                    let n = items.len();
+                    drop(items);
+                    for i in 0..n {
+                        let elem = place.proj(Proj::Index(i));
+                        let item = elem.read()?;
+                        if self.run_iteration_wb(pattern, item, body, label, Some(&elem))?.is_some() {
+                            break;
+                        }
+                    }
+                    return Ok(Value::Unit);
+                }
+            }
+        }
         let raw = self.eval_raw(iterable)?;
         // by-reference iteration: `for x in &mut v`
         let src = match raw {
@@ -360,6 +378,18 @@ impl Interpreter {
 
     /// `Some(value)` when the loop must stop (`break`), `None` to keep iterating.
     fn run_iteration(&mut self, pattern: &'static Pattern<'static>, item: Value, body: &'static [&'static Statement<'static>], label: Option<&str>) -> R<Option<Value>> {
+        self.run_iteration_wb(pattern, item, body, label, None)
+    }
+
+    /// `run_iteration`; with `elem`, the pattern's variables are stored back into that element when the body ends.
+    fn run_iteration_wb(
+        &mut self,
+        pattern: &'static Pattern<'static>,
+        item: Value,
+        body: &'static [&'static Statement<'static>],
+        label: Option<&str>,
+        elem: Option<&Place>,
+    ) -> R<Option<Value>> {
         self.push_scope();
         match pattern {
             Pattern::Identifier(n) | Pattern::MutBinding(n) => self.define(n.as_str(), item),
@@ -376,8 +406,29 @@ impl Interpreter {
             }
         }
         let r = self.exec_stmts(body);
+        if let (Some(elem), false) = (elem, matches!(&r, Err(Ctl::Err(_)))) {
+            if let Some(new) = self.rebuild_element(pattern, &elem.read()?) {
+                elem.write(new)?;
+            }
+        }
         let r = self.pop_scope(r);
         loop_exit(r, label)
+    }
+
+    /// The element a loop pattern describes, from the current values of its variables (`None`: a pattern shape
+    /// that has no write-back).
+    fn rebuild_element(&self, pat: &Pattern<'static>, old: &Value) -> Option<Value> {
+        match pat {
+            Pattern::Identifier(n) | Pattern::MutBinding(n) => self.lookup_var(n).map(|s| s.borrow().clone()),
+            Pattern::Wildcard => Some(old.clone()),
+            Pattern::Tuple(ps) => match old {
+                Value::Tuple(vs) if vs.len() == ps.len() => {
+                    ps.iter().zip(vs.iter()).map(|(p, v)| self.rebuild_element(p, v)).collect::<Option<Vec<_>>>().map(Value::tuple)
+                }
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// Materialise anything iterable.
@@ -512,3 +563,4 @@ pub(crate) fn loop_exit(r: R, my_label: Option<&str>) -> R<Option<Value>> {
         Err(e) => Err(e),
     }
 }
+
