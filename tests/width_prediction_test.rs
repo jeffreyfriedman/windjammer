@@ -199,6 +199,9 @@ fn predictions_across_the_corpora() {
             // independent oracle: rustc rejects the generated code with a type mismatch
             let rust = built_rust(f).expect("a predicted file builds");
             let err = rustc_rejects(&rust).unwrap_or_else(|| panic!("false positive, rustc accepts {rel}: {d:?}"));
+            // `windjammer_runtime` is not linked here: its E0432/E0433 do not stop type checking, so E0308 is still reported.
+            // A name defined twice in the program (E0428) would, on some rustc versions, hide it: that is a broken program.
+            assert!(!err.contains("E0428"), "{rel}: the program defines a name twice, fix the program:\n{err}");
             assert!(err.contains("E0308"), "{rel}: rustc rejects it, but not with E0308:\n{err}");
             hits.push(format!("{rel} {}", d.len()));
         }
