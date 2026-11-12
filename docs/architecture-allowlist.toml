@@ -191,7 +191,7 @@
 "src/bin/wj_cli_cmds.rs::run" = 307
 "src/build_utils/module_generation.rs::generate_mod_file_recursive" = 500
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
-"src/cargo_integration.rs::create_cargo_toml_with_deps" = 476
+"src/cargo_integration.rs::create_cargo_toml_with_deps" = 406
 "src/cli_project_build.rs::build_project_single_crate" = 456
 "src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 639
 "src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1229

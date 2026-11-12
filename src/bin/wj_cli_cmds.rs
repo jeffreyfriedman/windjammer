@@ -101,7 +101,7 @@ fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
         }
         Commands::Doctor { json, expect_head, strict } => Some(cmd_doctor(*json, *expect_head, *strict)),
         Commands::InstallDev { to, from, force, dry_run } => Some(cmd_install_dev(to.clone(), from.clone(), *force, *dry_run)),
-        Commands::SelfInstall { dry_run } => Some(windjammer::cli::self_install::execute(*dry_run)),
+        Commands::SelfInstall { dry_run } => Some(windjammer::cli::self_install::execute(*dry_run, &plugin_dirs_from_env())),
         _ => None,
     }
 }
@@ -414,13 +414,18 @@ pub fn run(cli: Cli) -> Result<()> {
     Ok(())
 }
 
+/// Extra plugin build directories, declared with a `PATH`-style `WJ_PLUGIN_PATH` (read once by `CompilerConfig::from_env`; never guessed).
+fn plugin_dirs_from_env() -> Vec<std::path::PathBuf> {
+    windjammer::compiler_config::CompilerConfig::from_env().plugin_dirs
+}
+
 /// `wj <plugin> <args>`: run an external plugin and exit with its status.
 fn cmd_plugin(plugin_args: &[String]) -> Result<()> {
     if plugin_args.is_empty() {
         anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");
     }
     // an unknown subcommand is most often a `wj` older than the one the docs describe: say which build this is
-    let exit_code = windjammer::plugin::execute_plugin(&plugin_args[0], &plugin_args[1..]).map_err(|e| {
+    let exit_code = windjammer::plugin::execute_plugin(&plugin_args[0], &plugin_args[1..], &plugin_dirs_from_env()).map_err(|e| {
         let build = windjammer::toolchain::behind::current_behind_text()
             .unwrap_or_else(|| format!("(this is {})", windjammer::toolchain::identity::current().version_line()));
         e.context(build)

@@ -61,8 +61,11 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-[INSERT CONTACT EMAIL].
+reported to the community leaders responsible for enforcement by
+opening a [GitHub issue](https://github.com/jeffreyfriedman/windjammer/issues) on the
+project tracker, or, for anything sensitive, a private
+[GitHub Security Advisory](https://github.com/jeffreyfriedman/windjammer/security/advisories/new)
+that only the maintainers can read.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
