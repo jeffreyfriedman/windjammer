@@ -54,7 +54,7 @@ pub(super) fn merge_root(
 
 /// The `.wj` source a `.wj.meta` was written for: `<project>/.wj-cache/foo/bar.wj.meta` is `<project>/src/foo/bar.wj`
 /// (or `<project>/foo/bar.wj`); a legacy `bar.wj.meta` beside its source is `bar.wj`.
-fn sidecar_source(meta: &Path) -> Option<PathBuf> {
+pub(super) fn sidecar_source(meta: &Path) -> Option<PathBuf> {
     let beside = meta.with_extension("");
     if beside.is_file() {
         return Some(beside);
