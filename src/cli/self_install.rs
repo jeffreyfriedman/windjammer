@@ -13,7 +13,8 @@ fn bin_dir() -> PathBuf {
     wj_home().join("bin")
 }
 
-pub fn execute(dry_run: bool) -> Result<()> {
+/// `plugin_dirs`: extra directories holding built plugins (the driver reads `$WJ_PLUGIN_PATH`).
+pub fn execute(dry_run: bool, plugin_dirs: &[PathBuf]) -> Result<()> {
     let verb = if dry_run { "Planning installation of" } else { "Installing" };
     println!("{}", format!("{verb} Windjammer toolchain...").cyan().bold());
     println!();
@@ -25,7 +26,7 @@ pub fn execute(dry_run: bool) -> Result<()> {
     }
 
     let installed = install_compiler_binary(&bin, dry_run)?;
-    let plugins = install_plugins(&bin, dry_run)?;
+    let plugins = install_plugins(&bin, dry_run, plugin_dirs)?;
     install_stdlib(dry_run)?;
 
     println!();
@@ -86,7 +87,7 @@ fn install_compiler_binary(bin: &Path, dry_run: bool) -> Result<usize> {
     Ok(1)
 }
 
-fn install_plugins(bin: &Path, dry_run: bool) -> Result<usize> {
+fn install_plugins(bin: &Path, dry_run: bool, plugin_dirs: &[PathBuf]) -> Result<usize> {
     let current_exe =
         std::env::current_exe().context("Failed to determine current executable path")?;
     let repo_root = find_repo_root(&current_exe);
@@ -98,9 +99,7 @@ fn install_plugins(bin: &Path, dry_run: bool) -> Result<usize> {
         vec![]
     };
     // Extra plugin build directories are declared, never guessed from sibling checkouts.
-    if let Some(dirs) = std::env::var_os("WJ_PLUGIN_PATH") {
-        plugin_search_dirs.extend(std::env::split_paths(&dirs));
-    }
+    plugin_search_dirs.extend(plugin_dirs.iter().cloned());
 
     let plugin_names = ["wj-game", "wj-lint", "wj-vgraph"];
 

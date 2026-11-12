@@ -36,6 +36,8 @@ pub struct CompilerConfig {
     /// same name; keys are stored with `-`). Set via `WJ_CRATE_PATHS=name=/dir:name2=/dir2`
     /// (entries separated like `PATH`).
     pub crate_paths: std::collections::BTreeMap<String, PathBuf>,
+    /// Extra directories holding built `wj-<plugin>` binaries (`WJ_PLUGIN_PATH`, `PATH`-style list).
+    pub plugin_dirs: Vec<PathBuf>,
     /// Run the opt-in auto-arena optimizer pass (`scratch_reuse`, ADR-0025; `WJ_AUTO_ARENA=1`).
     pub auto_arena: bool,
     /// Rust statement installing the program's capability grant at the start of `main` (ADR-0021: only when some
@@ -67,6 +69,7 @@ impl Default for CompilerConfig {
             stdlib_path: None,
             runtime_path: None,
             crate_paths: Default::default(),
+            plugin_dirs: Vec::new(),
             auto_arena: false,
             capability_install: None,
             durable_steps: Default::default(),
@@ -122,6 +125,7 @@ impl CompilerConfig {
             stdlib_path: path("WINDJAMMER_STDLIB"),
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
             crate_paths: parse_crate_paths(get("WJ_CRATE_PATHS").as_deref()),
+            plugin_dirs: get("WJ_PLUGIN_PATH").map(|v| std::env::split_paths(&v).collect()).unwrap_or_default(),
             auto_arena: on("WJ_AUTO_ARENA"),
             capability_install: None,
             durable_steps: Default::default(),
