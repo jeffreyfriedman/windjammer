@@ -3182,12 +3182,16 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let rs = map.get("substrate/lsm_engine.rs").expect("substrate/lsm_engine.rs");
+    // `seed_write` only reads `key` (OWN-READONLY), so the IR may borrow it; the call site must agree with
+    // the emitted formal either way, and the crate must compile.
+    let mem_rs = map.get("engine/memory.rs").expect("engine/memory.rs");
+    let borrowed = mem_rs.contains("key: &Key");
+    let owned_call = rs.contains("engine.seed_write(key,") || rs.contains("engine.seed_write(key.clone(),");
     assert!(
-        rs.contains("engine.seed_write(")
-            && (rs.contains("engine.seed_write(key,") || rs.contains("engine.seed_write(key.clone(),"))
-            && !rs.contains("engine.seed_write(&key,"),
-        "seed_write must pass owned Key after Key::new in recover loop. Got:\n{rs}"
+        rs.contains("engine.seed_write(") && rs.contains("engine.seed_write(&key,") == borrowed && (borrowed || owned_call),
+        "seed_write call must agree with its Key formal in the recover loop. Got:\n{mem_rs}\n{rs}"
     );
+    test.cargo_check().expect("cargo-check");
 }
 
 // ── regression: LsmEngine::put — engine.put(key, value) after using key in pending push ─────
@@ -3286,22 +3290,22 @@ pub fn run() {
     );
 
     let map = test.compile().expect("compile");
+    // `MemoryEngine::put` only reads `key` (OWN-READONLY), so the IR may borrow it; `LsmEngine::put` stores
+    // `key` in the pending write, so it stays owned. The inner call must agree with the emitted formal.
     let mem_rs = map.get("engine/memory.rs").expect("engine/memory.rs");
-    assert!(
-        mem_rs.contains("fn put(") && mem_rs.contains("key: Key"),
-        "MemoryEngine::put must keep owned Key formal. Got:\n{mem_rs}"
-    );
+    let borrowed = mem_rs.contains("key: &Key");
+    assert!(mem_rs.contains("fn put(") && (borrowed || mem_rs.contains("key: Key")), "MemoryEngine::put formal. Got:\n{mem_rs}");
     let rs = map.get("substrate/lsm_engine.rs").expect("substrate/lsm_engine.rs");
     assert!(
         rs.contains("pub fn put(") && rs.contains("key: Key"),
         "put must keep owned Key param. Got:\n{rs}"
     );
+    let owned_call = rs.contains("self.engine.put(key,") || rs.contains("self.engine.put(key.clone(),");
     assert!(
-        rs.contains("self.engine.put(")
-            && (rs.contains("self.engine.put(key,") || rs.contains("self.engine.put(key.clone(),"))
-            && !rs.contains("self.engine.put(&key,"),
-        "engine.put must receive owned Key after pending push uses key. Got:\n{rs}"
+        rs.contains("self.engine.put(") && rs.contains("self.engine.put(&key,") == borrowed && (borrowed || owned_call),
+        "engine.put must agree with MemoryEngine::put's Key formal after the pending push uses key. Got:\n{mem_rs}\n{rs}"
     );
+    test.cargo_check().expect("cargo-check");
 }
 
 // ── regression: WalWriter replay_all_records else branch — &str not String at replay_all ───
