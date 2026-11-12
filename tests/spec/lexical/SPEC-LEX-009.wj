@@ -11,6 +11,7 @@ fn main() {
     println("a$b")
     println("$$$$")
     println("$${x}")
+//~@14 WARN W0017 prints `${` literally
     println("$\{x}")
     println("${x}")
 }
