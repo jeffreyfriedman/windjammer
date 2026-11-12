@@ -45,7 +45,7 @@ mod type_checking;
 pub mod type_collector;
 mod usage_tracking;
 
-pub use signature_registry::{install_layer_store, FunctionSignature, LayerStore, SignatureRegistry};
+pub use signature_registry::{install_layer_store, shared_entry, FunctionSignature, LayerStore, SignatureRegistry};
 
 pub use cache_locality::{
     cache_locality_json_report, AccessPatternKind, AoSoACandidate, CacheLocalityAnalysis,

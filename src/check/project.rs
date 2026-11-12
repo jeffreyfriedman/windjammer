@@ -69,7 +69,7 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     // Session-shared stdlib tables, computed on the first analysis that is not reused from the memo.
     let tables = std::cell::OnceCell::new();
     // ADR-0002: local bindings changed without `mut` (WJ0051), over the whole program at once
-    out.extend(super::local_mut::run(parsed, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::compute())).clone()));
+    out.extend(super::local_mut::run(parsed, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::load_or_compute())).clone()));
     for p in parsed {
         // A file that already has errors would only add cascading analyzer noise.
         let has_errors = out
@@ -78,7 +78,7 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
         if !has_errors {
             let reused = memo.as_mut().and_then(|m| m.get(&p.file, &p.text));
             let found = reused.unwrap_or_else(|| {
-                let d = analysis_phase(p, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::compute())).clone());
+                let d = analysis_phase(p, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::load_or_compute())).clone());
                 if let Some(m) = memo.as_mut() {
                     m.put(&p.file, &p.text, &d);
                 }
