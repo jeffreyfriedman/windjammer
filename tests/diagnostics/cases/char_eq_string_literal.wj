@@ -1,0 +1,21 @@
+// expect: WJ0003
+// A `char` from `strings.chars` compared with a string literal: rustc rejects `char == &str` and the interpreter answers
+// `false` for every character. The fix is the char literal `'?'`.
+// oracle: check
+use std::strings
+
+fn main() {
+    for ch in strings.chars("a?b") {
+        if ch == "?" {
+//~@18+3 ERROR WJ0003 expected `char`, found `string`
+            println("question")
+        }
+    }
+}
+
+fn shout(text: string) {
+    for c in text.chars() {
+        println("is: ${c == "!"}")
+//~@29+3 ERROR WJ0003 expected `char`, found `string`
+    }
+}
