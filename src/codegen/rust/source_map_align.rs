@@ -79,8 +79,9 @@ fn fn_lines(lines: &[&str]) -> BTreeMap<String, Vec<usize>> {
         let mut words = t.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '('));
         while let Some(w) = words.next() {
             if w == "fn" {
-                if let Some(name) = words.next() {
-                    if !name.is_empty() && !name.starts_with('(') {
+                // The name ends at `(`: `fill(self` (Windjammer) and `fill(&mut` (Rust) are one method.
+                if let Some(name) = words.next().and_then(|w| w.split('(').next()) {
+                    if !name.is_empty() {
                         out.entry(name.to_string()).or_default().push(i);
                     }
                 }
@@ -213,6 +214,16 @@ mod tests {
         assert_eq!(wj_line(&m, 11), Some(9), "println big");
         assert_eq!(wj_line(&m, 12), Some(10), "else");
         assert_eq!(wj_line(&m, 13), Some(11), "println small");
+    }
+
+    /// A method's receiver is spelled `self` in Windjammer and `&mut self` in Rust: same method.
+    #[test]
+    fn methods_pair_across_receiver_spellings() {
+        let wj = "struct B {\n    n: int,\n}\nimpl B {\n    fn bump(self, k: int) -> int {\n        self.n = self.n + k\n        self.n\n    }\n}\n";
+        let rs = "struct B {\n    n: i64,\n}\nimpl B {\n#[inline]\nfn bump(&mut self, k: i64) -> i64 {\n        self.n = self.n + k;\n        self.n\n}\n}\n";
+        let m = map(wj, rs);
+        assert_eq!(wj_line(&m, 6), Some(5), "method decl");
+        assert_eq!(wj_line(&m, 7), Some(6), "assignment in the method body");
     }
 
     #[test]

@@ -80,12 +80,25 @@ impl<'ast> CodeGenerator<'ast> {
                 // `as` binds tighter than any binary operator: `(i + 1) as i64`, not `i + 1 as i64`.
                 if matches!(expr, Expression::Binary { .. } | Expression::Unary { .. }) {
                     format!("(({emitted}) as {t})")
+                } else if self.is_borrowed_copy_value(expr) && !emitted.starts_with('*') {
+                    // `as` does not see through a reference: a borrowed loop element `a: &i64`
+                    // converts as `*a as usize`, never `a as usize`.
+                    format!("(*{emitted} as {t})")
                 } else {
                     format!("({emitted} as {t})")
                 }
             }
             _ => emitted,
         }
+    }
+
+    /// The expression's declared or inferred type is a reference to a `Copy` value (`&i64`).
+    fn is_borrowed_copy_value(&self, expr: &Expression<'ast>) -> bool {
+        matches!(expr, Expression::Identifier { .. })
+            && matches!(
+                self.infer_expression_type(expr),
+                Some(Type::Reference(inner) | Type::MutableReference(inner)) if self.is_type_copy(&inner)
+            )
     }
 
     /// Integer width of a block tail: a tail is unified with its block's (or the function's) value, so

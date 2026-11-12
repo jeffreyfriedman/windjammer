@@ -1225,7 +1225,8 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Reference(inner) | Type::MutableReference(inner) => Some(inner.as_ref()),
                 _ => None,
             };
-            if pointee.is_some_and(|t| self.is_type_copy(t)) {
+            // A leading `*` already reads the value (the solver's `*a as usize` conversion).
+            if pointee.is_some_and(|t| self.is_type_copy(t)) && !idx_str.starts_with('*') {
                 idx_str = format!("*({idx_str})");
             }
         }
