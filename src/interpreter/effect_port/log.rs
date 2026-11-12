@@ -1,4 +1,4 @@
-//! Effect log v1 (ADR-0021 section 10): a JSON Lines file, one header then one event per line, canonical JSON
+//! Effect log v2 (ADR-0021 section 10; v2 added the capability grants to the header): a JSON Lines file, one header then one event per line, canonical JSON
 //! (sorted keys) so two logs of the same run diff cleanly. Payloads over `BLOB_LIMIT` bytes live in `LOG.blobs/<sha256>`.
 
 use serde_json::{json, Value as Json};
@@ -6,6 +6,10 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 pub const BLOB_LIMIT: usize = 64 * 1024;
+
+/// The log format this build writes and reads: the header's `wj_effect_log` field. Format 2 records the `--allow`
+/// grants of the recording in `grants`, so a replay re-applies them without flags (ADR-0035).
+pub const LOG_VERSION: u64 = 2;
 
 /// Everything that determines a run besides the program text and the effects it asked for.
 #[derive(Clone, Debug, PartialEq)]
@@ -18,6 +22,8 @@ pub struct Header {
     pub rng_seed: u64,
     pub deterministic_time: bool,
     pub args: Vec<String>,
+    /// The `--allow EFFECT[=RESOURCE]` grants the recorded run had (`--allow-network` as its two grants).
+    pub grants: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -76,7 +82,7 @@ pub fn digest(bytes: &[u8]) -> String {
 
 pub fn header_line(h: &Header) -> String {
     canon(&json!({
-        "wj_effect_log": 1,
+        "wj_effect_log": LOG_VERSION,
         "program": h.program,
         "compiler": h.compiler,
         "sched_seed": h.sched_seed,
@@ -85,6 +91,7 @@ pub fn header_line(h: &Header) -> String {
         "rng_seed": h.rng_seed,
         "det_time": h.deterministic_time,
         "args": h.args,
+        "grants": h.grants,
     }))
 }
 
@@ -118,14 +125,27 @@ pub fn event_line(e: &Event, log: &Path) -> std::io::Result<String> {
     ))
 }
 
-pub fn read_log(path: &Path) -> Result<(Header, Vec<Event>), String> {
+/// The header of the log at `path` (the first line), refusing a log of another format.
+pub fn read_header(path: &Path) -> Result<Header, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read effect log {}: {e}", path.display()))?;
-    let mut lines = text.lines();
-    let head: Json = serde_json::from_str(lines.next().ok_or("the effect log is empty")?).map_err(|e| format!("bad log header: {e}"))?;
-    if head["wj_effect_log"] != 1 {
-        return Err(format!("{} is not an effect log of version 1", path.display()));
+    parse_header(path, text.lines().next())
+}
+
+fn parse_header(path: &Path, first: Option<&str>) -> Result<Header, String> {
+    let head: Json = serde_json::from_str(first.ok_or("the effect log is empty")?).map_err(|e| format!("bad log header: {e}"))?;
+    match head["wj_effect_log"].as_u64() {
+        Some(LOG_VERSION) => {}
+        Some(old) if old < LOG_VERSION => {
+            return Err(format!(
+                "{} is an effect log of format {old}, written before the header recorded capability grants; this wj reads format {LOG_VERSION}. Record the run again with `wj run --record`",
+                path.display()
+            ))
+        }
+        Some(newer) => return Err(format!("{} is an effect log of format {newer}, newer than this wj reads (format {LOG_VERSION}); update wj", path.display())),
+        None => return Err(format!("{} is not an effect log (its first line has no `wj_effect_log` version)", path.display())),
     }
-    let header = Header {
+    let strings = |k: &str| -> Vec<String> { head[k].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default() };
+    Ok(Header {
         program: head["program"].as_str().unwrap_or("").to_string(),
         compiler: head["compiler"].as_str().unwrap_or("").to_string(),
         sched_seed: head["sched_seed"].as_u64().unwrap_or(0),
@@ -133,8 +153,15 @@ pub fn read_log(path: &Path) -> Result<(Header, Vec<Event>), String> {
         hash_seed: head["hash_seed"].as_u64().unwrap_or(0),
         rng_seed: head["rng_seed"].as_u64().unwrap_or(0),
         deterministic_time: head["det_time"].as_bool().unwrap_or(false),
-        args: head["args"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default(),
-    };
+        args: strings("args"),
+        grants: strings("grants"),
+    })
+}
+
+pub fn read_log(path: &Path) -> Result<(Header, Vec<Event>), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read effect log {}: {e}", path.display()))?;
+    let mut lines = text.lines();
+    let header = parse_header(path, lines.next())?;
     let mut events = Vec::new();
     for (n, line) in lines.enumerate() {
         if line.trim().is_empty() {
@@ -218,5 +245,26 @@ mod tests {
         let e = Event { seq: 7, task: 2, effect: "fs.read".into(), op: "fs::read \"x\"".into(), args: json!({"b": [1, {"z": null, "a": "\u{e9}\n"}], "a": 1.5}), result: json!({"ok": true, "n": -3}), vt_ns: 42 };
         let want = old(&json!({ "seq": e.seq, "task": e.task, "effect": e.effect, "op": e.op, "args": e.args, "result": e.result, "vt_ns": e.vt_ns }));
         assert_eq!(event_line(&e, Path::new("/tmp/none.wjlog")).unwrap(), want);
+    }
+
+    #[test]
+    fn a_header_round_trips_with_its_grants_and_an_old_one_is_refused() {
+        let h = Header {
+            program: "p".into(),
+            compiler: "c".into(),
+            sched_seed: 3,
+            sim_seed: None,
+            hash_seed: 4,
+            rng_seed: 5,
+            deterministic_time: false,
+            args: vec!["a".into()],
+            grants: vec!["fs.read".into(), "env.read=HOME".into()],
+        };
+        let path = Path::new("x.wjlog");
+        assert_eq!(parse_header(path, Some(&header_line(&h))).unwrap(), h);
+        let old = r#"{"args":[],"compiler":"0.50.0","det_time":false,"hash_seed":0,"program":"x","rng_seed":1,"sched_seed":0,"sim_seed":null,"wj_effect_log":1}"#;
+        let e = parse_header(path, Some(old)).unwrap_err();
+        assert!(e.contains("format 1") && e.contains("wj run --record"), "{e}");
+        assert!(parse_header(path, Some(r#"{"a":1}"#)).unwrap_err().contains("not an effect log"));
     }
 }
