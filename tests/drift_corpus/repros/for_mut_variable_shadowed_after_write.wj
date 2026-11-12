@@ -1,0 +1,11 @@
+// The write-back of a `mut` loop variable is the binding the `for` introduced: `row[1] += 1` writes through it,
+// while the later `let row = 0` is a new binding of the body and writes nothing back (compiled: `flat` is 3 5).
+fn main() {
+    let mut flat = [[1, 2], [3, 4]]
+    for mut row in flat {
+        row[1] += 1
+        let row = 0
+        println("${row}")
+    }
+    println("${flat[0][1]} ${flat[1][1]}")
+}
