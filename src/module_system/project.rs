@@ -140,9 +140,10 @@ pub fn resolve_run_target(path: Option<&Path>, cwd: &Path, bin: Option<&str>) ->
     let from = start.unwrap_or_else(|| cwd.to_path_buf());
     let root = find_manifest_dir(&from).ok_or_else(|| {
         format!(
-            "could not find `{}` in {} or any parent directory (pass a .wj file or a directory with main.wj)",
+            "could not find `{}` in {} or any parent directory (pass a .wj file or a directory with main.wj)\nhelp: run `wj new <name>` to create a project, add a `{}` containing `[package]` and `name = \"<name>\"` to this directory, or run a single file with `wj run path/to/main.wj`",
             MANIFEST,
-            from.display()
+            from.display(),
+            MANIFEST
         )
     })?;
     let bins = bin_targets(&root);
@@ -177,6 +178,16 @@ mod tests {
         let p = root.join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, s).unwrap();
+    }
+
+    #[test]
+    fn missing_manifest_names_the_file_and_says_what_to_create() {
+        let d = tempfile::tempdir().unwrap();
+        let r = d.path().canonicalize().unwrap();
+        let e = resolve_run_target(None, &r, None).unwrap_err();
+        assert!(e.contains("could not find `wj.toml` in"), "{e}");
+        let help = e.lines().find_map(|l| l.strip_prefix("help: ")).expect("a help line");
+        assert!(help.contains("wj new") && help.contains("`wj.toml`") && help.contains("wj run path/to/main.wj"), "{e}");
     }
 
     #[test]
