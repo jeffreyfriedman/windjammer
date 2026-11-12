@@ -468,7 +468,9 @@ impl<'ast> CodeGenerator<'ast> {
             .call_arg_expected_type
             .as_ref()
             .is_some_and(crate::type_classification::type_is_vec_container);
+        // A struct field declared as a fixed array (`sh: [f32; 9]`) keeps the array literal, also inside a list literal.
         if !elements.is_empty()
+            && self.struct_array_field_element_type().is_none()
             && (self.array_literal_as_list
                 || self.struct_field_expects_vec()
                 || arg_expects_vec
@@ -814,7 +816,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 field_type,
                                 arg_ty.as_ref(),
                             );
-                            self.convert_usize_into_declared_int(&mut expr_str, expr, field_type);
+                            self.convert_into_declared_field(&mut expr_str, expr, field_type);
                         }
                     }
                 }

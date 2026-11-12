@@ -1,0 +1,17 @@
+// expect: 9 0 1.5
+// A local bound to a list literal stored into a field declared `[f32; 9]` becomes that array, and an array literal for
+// such a field inside a list literal stays an array (both were emitted as `Vec<f32>`).
+struct Probe {
+    sh: [f32; 9],
+    w: f32,
+}
+
+fn make(w: f32) -> Probe {
+    let sh = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    Probe { sh: sh, w: w }
+}
+
+fn main() {
+    let ps = [make(1.5), Probe { sh: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], w: 0.5 }]
+    println("${ps[0].sh.len()} ${ps[0].sh[3]} ${ps[0].w}")
+}

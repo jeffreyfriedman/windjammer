@@ -15,4 +15,3 @@ Programs: `events/<id>/main.wj`; minimal repros of the pilot-6 classes are in `d
 | `p3-t034-T-0-c00` | traits | trait used as a type | WJ0034: a trait cannot be used as a plain type |
 | `p3-t050-F-0-c00` | std-surface | `len` on a split iterator | WJ0015: no method `len` found for `std::str::Split<'a, P>` |
 | `p4-t013-K-0-c00` | ownership | use after move the interpreter accepts | WJ0007: value `t` is used after it was moved |
-| `p6par-t104-V2-1-c00` | widths | integer width | WJ0003: mismatched types: expected `uint`, found `int` |

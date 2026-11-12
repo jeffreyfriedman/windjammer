@@ -192,3 +192,15 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 }
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The operand is an integer by a fact, not a guess: a cast to a declared integer type, or a value the solver gave an
+    /// integer width. Legacy float classes never apply to it (`whole * 10 + (b - 48) as i32` printed
+    /// `(whole * 10) as f32 + ..`).
+    pub(in crate::codegen::rust) fn is_declared_integer_operand(&self, expr: &Expression<'ast>) -> bool {
+        if let Expression::Cast { type_, .. } = expr {
+            return crate::ir::solver::is_integer_type(&crate::ir::node::parser_type_to_base_type(type_));
+        }
+        self.solver_operand_width(expr).is_some_and(|b| crate::ir::solver::is_integer_type(&b))
+    }
+}

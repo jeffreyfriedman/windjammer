@@ -1,0 +1,26 @@
+// expect: 42.5
+// `whole * 10 + (b - 48) as i32` adds two integers: a cast to a declared integer type is never a float operand
+// (it was emitted `(whole * 10_i32) as f32 + (b - 48_u32) as i32`).
+fn digit_at(s: string, i: u32) -> u32 {
+    s.as_bytes()[i as usize] as u32
+}
+
+fn parse_num(line: string) -> f32 {
+    let len = line.len() as u32
+    let mut i: u32 = 0
+    let mut whole = 0
+    while i < len {
+        let b = digit_at(line, i)
+        if b < 48 || b > 57 {
+            break
+        }
+        whole = whole * 10 + (b - 48) as i32
+        i = i + 1
+    }
+    let frac = 0.5
+    whole as f32 + frac
+}
+
+fn main() {
+    println("${parse_num("42")}")
+}

@@ -142,6 +142,9 @@ corpus_tests!(
     collect_after_map_item_type,
     substring_tail_value,
     text_slice_in_every_position,
+    slice_bounds_from_find_index,
+    int_cast_operand_not_promoted_to_float,
+    list_literal_local_into_array_field,
 );
 
 // ------------------------------------------------------------------ generated programs
