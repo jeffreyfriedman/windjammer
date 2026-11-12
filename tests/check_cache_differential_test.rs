@@ -63,7 +63,8 @@ fn per_file_memo_is_used_for_unchanged_files_only() {
             .expect("memo file written under .wj-cache");
         let mut v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&memo).unwrap()).unwrap();
         let planted = windjammer::diagnostics::Diagnostic::error("WJ9999", "planted memo entry");
-        let key = main.display().to_string();
+        // stored keys are project-relative (`{PROJECT_ROOT}/src/main.wj`), never absolute
+        let key = v["entries"].as_object().unwrap().keys().find(|k| k.ends_with("main.wj")).expect("main.wj entry").clone();
         v["entries"][&key][1].as_array_mut().expect("main.wj entry").push(serde_json::to_value(&planted).unwrap());
         std::fs::write(&memo, v.to_string()).unwrap();
         write(d.path(), &[("src/dep.wj".into(), format!("{DEP}// touched\n"))]);

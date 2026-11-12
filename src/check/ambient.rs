@@ -37,9 +37,10 @@ pub fn fingerprint(depth: usize) -> Option<String> {
     files.sort();
     files.dedup();
     let mut h = Sha256::new();
-    part(&mut h, cwd.display().to_string().as_bytes());
+    // Paths under the working directory are hashed relative to it (the working directory itself is not an input
+    // beyond the sidecars it holds), so a copied or moved checkout keeps its cache entries.
     for f in &files {
-        part(&mut h, f.display().to_string().as_bytes());
+        part(&mut h, f.strip_prefix(&cwd).unwrap_or(f).display().to_string().as_bytes());
         part(&mut h, &std::fs::read(f).unwrap_or_default());
     }
     Some(format!("{:x}", h.finalize()))
