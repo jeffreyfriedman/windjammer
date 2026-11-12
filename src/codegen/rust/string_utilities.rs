@@ -143,7 +143,7 @@ pub fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
 /// Generated Rust already produces an owned `String` (no second conversion pass).
 pub fn already_owned_string_expr(expr_str: &str) -> bool {
     let mut s = expr_str.trim();
-    while let Some(inner) = s.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+    while let Some(inner) = strip_enclosing_parens(s) {
         s = inner.trim();
     }
     // Redundant `String::from("…").to_string()` is still owned — treat as owned so
@@ -161,14 +161,30 @@ pub fn already_owned_string_expr(expr_str: &str) -> bool {
         || s == "String::new()"
 }
 
+/// The inside of `( .. )` when the opening parenthesis is closed by the last character: `(a).f(b)` is not wrapped
+/// (its first `(` closes before the end), so stripping its ends would garble it into `a).f(b`.
+pub fn strip_enclosing_parens(s: &str) -> Option<&str> {
+    let inner = s.strip_prefix('(')?.strip_suffix(')')?;
+    let mut depth = 0i32;
+    for c in inner.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+    (depth == 0).then_some(inner)
+}
+
 /// Idempotent: coerce a generated expression to owned `String` without `.to_string()` leakage.
 pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
     let mut s = expr_str.trim().to_string();
-    while let Some(inner) = s
-        .strip_prefix('(')
-        .and_then(|x| x.strip_suffix(')'))
-        .map(|x| x.trim().to_string())
-    {
+    while let Some(inner) = strip_enclosing_parens(&s).map(|x| x.trim().to_string()) {
         s = inner;
     }
     // P3.329: strip shared refs before owning — `&parts[i].to_string()` is still `&String`.
