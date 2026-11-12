@@ -37,6 +37,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
         match crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields)
             .or_else(|| self.local_struct_field_type(object, expr, fields))
+            .or_else(|| match expr {
+                // `m.metallic` where `m` is a loop element or a method result of a declared struct type.
+                Expression::FieldAccess { field, .. } => self.declared_field_type(&self.static_type(object)?, field),
+                _ => None,
+            })
             .map(|ty| parser_type_to_base_type(&ty))
             .filter(|b| *b != BaseType::Inferred)
         {
@@ -202,8 +207,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         };
         self.call_targets.push(qualified.clone());
 
-        let sig = self
-            .resolve_callee_signature(&qualified, arguments.len())
+        // A receiver whose static type is a user type the name-based receiver inference does not see (a local bound to
+        // a method result, an operator expression, a loop element): the method is that type's.
+        let typed = receiver_type.is_none().then(|| self.user_receiver_type(object)).flatten();
+        let sig = typed
+            .and_then(|t| self.resolve_callee_signature(&format!("{t}::{method}"), arguments.len()))
+            .or_else(|| self.resolve_callee_signature(&qualified, arguments.len()))
             .or_else(|| {
                 // Runtime-std `json::to_string` must not fall back to the first
                 // `*::to_string` method-index hit (often MutBorrowed self).
@@ -504,8 +513,26 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     }
                 }
                 let receiver = self.static_type(object)?;
-                let sig = self.core_surface?.method_signature(&receiver, method, type_args.as_deref().unwrap_or(&[]))?;
-                sig.ret.filter(|t| !contains_generic(t))
+                if let Some(sig) = self.core_surface.and_then(|s| s.method_signature(&receiver, method, type_args.as_deref().unwrap_or(&[]))) {
+                    return sig.ret.filter(|t| !contains_generic(t));
+                }
+                // A method of a user type: its declared return type (`self.dir.normalize()` is a `Vec3`).
+                self.user_method_return(&receiver, method, arguments.len())
+            }
+            // `(a + b) * 0.5` on a user type: the operator impl's declared result.
+            Expression::Binary { left, op, .. } => self.operator_impl_result(op, left),
+            Expression::FieldAccess { object, field, .. } => {
+                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+                crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields)
+                    .or_else(|| self.declared_field_type(&self.static_type(object)?, field))
+            }
+            // `nodes[i]` where `nodes` is a local `Vec<Node>`: a `Node`.
+            Expression::Index { object, index, .. } if !matches!(index, Expression::Range { .. }) => {
+                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+                crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields).or_else(|| match strip_refs(&self.static_type(object)?) {
+                    Type::Vec(e) | Type::Array(e, _) => Some(strip_refs(e).clone()).filter(|t| !contains_unfixed(t)),
+                    _ => None,
+                })
             }
             Expression::Call { function, arguments, .. } => {
                 let name = Self::extract_callee_name(function)?;
@@ -522,6 +549,46 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 crate::ir::expr_static_type::declared_type_of(other, &self.analyzed.decl, fields)
             }
         }
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// The declared type of field `field` of a struct-typed value (`None` for a field the struct table does not
+    /// declare, or a receiver that is not a struct).
+    pub(super) fn declared_field_type(&self, receiver: &Type, field: &str) -> Option<Type> {
+        let base = crate::ir::receiver_type::type_to_struct_base(receiver)?;
+        let fields = self.struct_field_types?;
+        let ty = crate::type_inference::struct_field_registry::lookup_struct_field_map(fields, &base, &HashMap::new(), &HashMap::new())?
+            .get(field)?;
+        Some(strip_refs(ty).clone()).filter(|t| !contains_generic(t))
+    }
+
+    /// The user type (not a core surface type) an expression statically has: the struct a method on it belongs to.
+    pub(super) fn user_receiver_type(&self, object: &Expression<'ast>) -> Option<String> {
+        let t = self.static_type(object)?;
+        let t = strip_refs(&t);
+        if !matches!(t, Type::Custom(_)) || crate::typing::core_surface::surface_type_name(t).is_some() {
+            return None;
+        }
+        crate::ir::receiver_type::type_to_struct_base(t)
+    }
+
+    /// The declared return type of method `method` of a user type (a homonym with no unique signature: `None`).
+    pub(super) fn user_method_return(&self, receiver: &Type, method: &str, arg_count: usize) -> Option<Type> {
+        let base = crate::ir::receiver_type::type_to_struct_base(receiver)?;
+        let ret = self.resolve_callee_signature(&format!("{base}::{method}"), arg_count)?.return_type.clone()?;
+        let ret = match ret {
+            Type::Custom(n) if n == "Self" => Type::Custom(base),
+            other => other,
+        };
+        Some(ret).filter(|t| !contains_generic(t) && *t != Type::Infer)
+    }
+}
+
+fn strip_refs(t: &Type) -> &Type {
+    match t {
+        Type::Reference(i) | Type::MutableReference(i) => strip_refs(i),
+        other => other,
     }
 }
 
@@ -655,6 +722,18 @@ fn is_float_literal_tree(e: &Expression<'_>) -> bool {
 }
 
 /// A type with a part no receiver or turbofish fixed (a generic, or an inferred `_`).
+/// The element a `for` loop over a value of type `t` binds, when the type declares it fully (`Vec<T>`, `[T; N]`, a
+/// set or an `Iterator<T>`; through references).
+pub(super) fn sequence_element(t: &Type) -> Option<Type> {
+    let elem = match t {
+        Type::Reference(x) | Type::MutableReference(x) => return sequence_element(x),
+        Type::Vec(x) | Type::Array(x, _) => (**x).clone(),
+        Type::Parameterized(n, xs) if xs.len() == 1 && crate::typing::core_surface::is_element_container(n) => xs[0].clone(),
+        _ => return None,
+    };
+    Some(elem).filter(|e| !contains_unfixed(e))
+}
+
 pub(super) fn contains_unfixed(t: &Type) -> bool {
     match t {
         Type::Infer => true,

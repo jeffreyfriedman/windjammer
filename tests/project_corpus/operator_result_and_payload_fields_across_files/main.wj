@@ -1,0 +1,40 @@
+// A user type's operator impls and methods declared in another file: `(b.lo + b.hi) * 0.5` takes the impl's `f32`,
+// `(p - q).length()` is an `f32`, and a literal beside a field of a `Some(s)` binding of an imported struct is an `f32`.
+// Expected by hand: centre (1, 2, 3); length of (3, 4, 0) is 5; slot 0 has w 2.5, slot 5 is absent (w 0).
+// expect: 1 2 3
+// expect: 5
+// expect: 2.5 0
+mod geom
+
+use geom::P3
+use geom::Bounds
+use geom::Slot
+
+fn centre(b: Bounds) -> P3 {
+    (b.lo + b.hi) * 0.5
+}
+
+fn width_of(slots: Vec<Slot>, i: usize) -> f32 {
+    let mut w = 0.0
+    match geom::find_slot(slots, i) {
+        Some(s) => {
+            w = s.w
+        },
+        None => {
+            w = 0.0
+        },
+    }
+    w
+}
+
+fn main() {
+    let b = Bounds { lo: P3 { x: 0.0, y: 0.0, z: 0.0 }, hi: P3 { x: 2.0, y: 4.0, z: 6.0 } }
+    let c = centre(b)
+    println("${c.x} ${c.y} ${c.z}")
+    let p = P3 { x: 4.0, y: 6.0, z: 1.0 }
+    let q = P3 { x: 1.0, y: 2.0, z: 1.0 }
+    let d = (p - q).length()
+    println("${d}")
+    let slots = [Slot { w: 2.5 }]
+    println("${width_of(slots, 0)} ${width_of([Slot { w: 1.0 }], 5)}")
+}

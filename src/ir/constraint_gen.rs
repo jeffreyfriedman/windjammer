@@ -855,7 +855,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Statement::Match { value, arms, .. } => {
                 let value_var = self.walk_expression(value);
-                let _ = self.walk_match_arms(value_var, arms);
+                let _ = self.walk_match_arms(value_var, value, arms);
             }
 
             Statement::For {
@@ -879,7 +879,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.cs.add_because(Constraint::TypeEquals(loop_var, s), tagged("TY-UNIFY"));
                 } else {
                     let it = self.walk_expression(iterable);
+                    let element = self.surface_shape(iterable).and_then(|t| numeric::sequence_element(&t));
                     let loop_var = self.bind_pattern(pattern);
+                    if let (Some(t), Pattern::Identifier(_) | Pattern::MutBinding(_)) = (element, pattern) {
+                        // `for line in text.lines()`: the loop variable has the declared element type (`&str`).
+                        self.var_static_types.insert(loop_var, t);
+                    }
                     self.type_loop_element(loop_var, it, iterable);
                 }
                 self.walk_statements(body);
@@ -1210,7 +1215,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Expression::Array { elements, .. } => self.walk_collection_literal(elements),
 
-            Expression::MacroInvocation { args, delimiter, is_repeat, .. } => self.walk_macro(args, delimiter, *is_repeat),
+            Expression::MacroInvocation { name, args, delimiter, is_repeat, .. } => self.walk_macro(name, args, delimiter, *is_repeat),
 
             Expression::TryOp { expr, .. } => {
                 let inner = self.walk_expression(expr);
@@ -1292,7 +1297,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Statement::Match { value, arms, .. } => {
                 let value_var = self.walk_expression(value);
-                self.walk_match_arms(value_var, arms)
+                self.walk_match_arms(value_var, value, arms)
             }
             Statement::Loop { body, .. } => vec![self.walk_loop(body)],
             other => {

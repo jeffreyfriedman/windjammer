@@ -1,0 +1,24 @@
+// `assert_eq(a, b)` compares two values of one type, like `a == b`: a literal compared with an `f32` field or an
+// `i32` method result takes that width. Before the fix the literal was emitted as `1.5_f64` / `3_i64`.
+pub struct Probe {
+    pub level: f32,
+    pub hits: i32,
+}
+
+impl Probe {
+    pub fn ratio(self) -> f32 {
+        self.level / 2.0
+    }
+    pub fn count(self) -> i32 {
+        self.hits
+    }
+}
+
+fn main() {
+    let p = Probe { level: 3.0, hits: 3 }
+    assert_eq(p.level, 3.0)
+    assert_eq(p.ratio(), 1.5)
+    assert_eq(p.count(), 3)
+    assert_ne(p.level, 2.0)
+    println("ok")
+}
