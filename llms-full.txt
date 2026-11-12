@@ -693,12 +693,13 @@ Usage: wj replay [OPTIONS] <LOG PROGRAM>...
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `<PATHS>` | LOG PROGRAM |  | `LOG PROGRAM`: an effect log written by `wj run --record` and the program it recorded; with --simulate, only `PROGRAM` |
-| `--script` | FILE |  | Debugger commands, one per line (`break LINE`, `continue`, `step [N]`, `back [N]`, `print NAME`, `locals`, `where`); `-` or no script reads them from standard input |
+| `--script` | FILE |  | Debugger commands, one per line (`break LINE [if EXPR]`, `continue`, `step [N]`, `next`, `finish`, `back [N]`, `print EXPR`, `watch NAME`, `locals`, `where`); `-` or no script reads them from standard input |
 | `--json` | JSON |  | Print the events as JSON Lines, one object per line (for agents and scripts) |
 | `--simulate` | SIMULATE |  | Debug the run of the deterministic simulated world instead of a recorded one (as `wj run --simulate`) |
 | `--seed` | N | 1 | With --simulate: the seed of the world |
 | `--faults` | RATE | 0 | With --simulate: probability (0 to 1) that a file or network call fails |
 | `--allow` | EFFECT[=RESOURCE] |  | Grant a capability as the recording did, `EFFECT[=RESOURCE]` (repeatable); nothing is performed either way |
+| `--at-effect` | K |  | Start stopped at the statement that answers the K-th event of the journal (K counts from 1; a recorded run only) |
 
 ### `wj reduce`
 

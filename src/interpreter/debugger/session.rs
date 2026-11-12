@@ -25,6 +25,8 @@ pub struct SessionSpec {
     /// `--allow` grants, as for the recording.
     pub allow: Vec<String>,
     pub script: Vec<super::script::Line>,
+    /// `--at-effect K`: start at the statement that answers the K-th event of the journal (1-based).
+    pub at_effect: Option<u64>,
 }
 
 /// One fresh interpreter, set up as `wj run` would set it up for this source, in the walker with machine code off.
@@ -51,7 +53,15 @@ fn prepare(spec: &SessionSpec) -> Result<Interpreter, String> {
 }
 
 /// Run the session; the events in order. `Err` is a setup failure (an unreadable journal, say).
-pub fn run(spec: SessionSpec) -> Result<Vec<Json>, String> {
+pub fn run(mut spec: SessionSpec) -> Result<Vec<Json>, String> {
+    // a replay re-applies the grants the recording had, as well as any `--allow` given now
+    if let Source::Log(log) = &spec.source {
+        for grant in super::super::effect_port::log::read_header(log)?.grants {
+            if !spec.allow.contains(&grant) {
+                spec.allow.push(grant);
+            }
+        }
+    }
     with_big_stack(move || run_here(&spec))
 }
 
@@ -59,6 +69,9 @@ fn run_here(spec: &SessionSpec) -> Result<Vec<Json>, String> {
     let root = spec.entry.parent().map(Path::to_path_buf).unwrap_or_default();
     let root = std::fs::canonicalize(&root).unwrap_or(root);
     let mut d = Box::new(Debugger::new(spec.script.clone(), root));
+    if let Some(k) = spec.at_effect {
+        d.start_at_effect(k);
+    }
     loop {
         d.begin_execution();
         let mut it = prepare(spec)?;
@@ -75,6 +88,11 @@ fn run_here(spec: &SessionSpec) -> Result<Vec<Json>, String> {
         if d.script_ended {
             return Ok(d.events);
         }
+        d.probe_finished(it.events_answered())?;
+        if d.restart.is_some() {
+            continue;
+        }
+        let ok = r.is_ok();
         let (code, message) = match r {
             Ok(v) => {
                 let code = main_result_code(&mut it, &v);
@@ -84,6 +102,9 @@ fn run_here(spec: &SessionSpec) -> Result<Vec<Json>, String> {
             Err(e) => (exit_code_for(&e), (!matches!(e.kind, ErrorKind::Exit(_))).then(|| e.render())),
         };
         d.flush_output(&it);
+        if ok {
+            d.report_returned(&mut it);
+        }
         let mut ev = json!({ "event": "exited", "code": code, "steps": d.step });
         if let Some(m) = message {
             ev["message"] = json!(m);
