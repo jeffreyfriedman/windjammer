@@ -33,7 +33,7 @@ fn main() {
     for e in ["start", "pause", "bogus", "resume", "stop"] {
         s = next(s, e.clone());
         if e != "bogus" {
-            let _ = trail.push(name(s));
+            trail.push(name(s));
         }
     }
     println!("{}", trail.join(" -> "));

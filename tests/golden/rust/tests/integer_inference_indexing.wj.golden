@@ -18,7 +18,7 @@ pub fn test_integer_arithmetic_then_indexing() {
     let adjusted = offset + 1_i32;
     if adjusted < count {
         let val = nums[adjusted as usize];
-        let _ = assert!(val == 30_i64, "Should index correctly");
+        assert!(val == 30_i64, "Should index correctly");
     }
 }
 

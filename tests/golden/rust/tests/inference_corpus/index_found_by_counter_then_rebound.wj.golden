@@ -12,8 +12,8 @@ fn tally(names: Vec<String>) -> Vec<i64> {
             k += 1;
         }
         if idx < 0_i64 {
-            let _ = areas.push(n);
-            let _ = total.push(0_i64);
+            areas.push(n);
+            total.push(0_i64);
             idx = (areas.len() - 1_usize) as i64;
         }
         total[idx as usize] += 1;

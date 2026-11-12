@@ -24,7 +24,7 @@ fn risky(n: i64) -> i64 {
         })
     };
     if n > 0_i64 {
-        let _ = panic!("boom");
+        panic!("boom");
     }
     n
 }

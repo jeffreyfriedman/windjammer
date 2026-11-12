@@ -142,6 +142,11 @@ impl Intrinsic {
         )
     }
 
+    /// Declared result is `()`: a statement-position call needs no `let _ =` discard.
+    pub fn returns_unit(self) -> bool {
+        self.is_print() || matches!(self, Intrinsic::Assert | Intrinsic::AssertEq | Intrinsic::AssertNe)
+    }
+
     /// Index of the (optional) message / template argument.
     pub fn message_arg_index(self) -> Option<usize> {
         match self {

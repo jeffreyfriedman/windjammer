@@ -31,20 +31,20 @@ fn tokenize(src: &str) -> Vec<Token> {
                 n = n * 10_i64 + chars[i].to_digit(10).unwrap_or(0) as i64;
                 i += 1;
             }
-            let _ = toks.push(Token::Num(n));
+            toks.push(Token::Num(n));
             continue;
         }
         if c == '+' {
-            let _ = toks.push(Token::Plus);
+            toks.push(Token::Plus);
         }
         if c == '*' {
-            let _ = toks.push(Token::Star);
+            toks.push(Token::Star);
         }
         if c == '(' {
-            let _ = toks.push(Token::LParen);
+            toks.push(Token::LParen);
         }
         if c == ')' {
-            let _ = toks.push(Token::RParen);
+            toks.push(Token::RParen);
         }
         i += 1;
     }
