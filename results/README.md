@@ -48,7 +48,7 @@ map to.
 ```
 export WJ_ECOSYSTEM=/path/to/windjammer-ecosystem   # packages of scripts/wj/wj.toml, and the live ecosystem counts
 wj run --interpret --allow "fs.read=$WJ_ECOSYSTEM/**" scripts/wj/release_scorecard.wj -- --write
-wj run --interpret scripts/wj/release_scorecard.wj -- --check      # CI: page and JSON match the definition
+wj run --interpret --allow "fs.read=$WJ_ECOSYSTEM/**" scripts/wj/release_scorecard.wj -- --check      # CI: page and JSON match the definition
 wj run --interpret scripts/wj/release_scorecard.wj -- --selftest   # fixtures: every criterion turns RED, GREEN, STALE, MISSING
 ```
 

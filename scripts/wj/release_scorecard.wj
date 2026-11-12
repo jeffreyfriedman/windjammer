@@ -4,6 +4,7 @@
 //   wj run scripts/wj/release_scorecard.wj -- --write      also rewrite docs/RELEASE_SCORECARD.md and docs/generated/release_scorecard.json
 //   wj run scripts/wj/release_scorecard.wj -- --check      the page and JSON on disk match the definition and each other (what CI runs)
 //   wj run scripts/wj/release_scorecard.wj -- --selftest   fixtures prove every criterion can turn RED, GREEN, STALE and MISSING
+//   With WJ_ECOSYSTEM set, add --allow "fs.read=$WJ_ECOSYSTEM/**" to any of these (the sibling checkout is read).
 //
 // Options: --root DIR (repository, default .), --results DIR (default <root>/results), --now EPOCH, --max-age DAYS (8).
 //
