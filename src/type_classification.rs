@@ -806,6 +806,44 @@ mod tests {
     }
 }
 
+/// Whether a free function's first formal `param` can take `receiver`: the same type constructor, or a formal
+/// (or receiver) whose head is not a concrete type (a type parameter, `Self`, `impl Trait`).
+pub fn first_formal_accepts_receiver(param: &crate::parser::Type, receiver: &crate::parser::Type) -> bool {
+    use crate::parser::Type as T;
+    fn head(t: &T) -> Option<String> {
+        let name = match t {
+            T::Reference(inner) | T::MutableReference(inner) => return head(inner),
+            T::Vec(_) | T::Array(..) => "Vec",
+            T::Option(_) => "Option",
+            T::Result(..) => "Result",
+            T::String => "String",
+            T::Bool => "bool",
+            T::Int | T::Int32 | T::Uint | T::Float => "number",
+            T::Tuple(_) => "tuple",
+            T::Custom(n) | T::Parameterized(n, _) => {
+                let base = n.split('<').next().unwrap_or(n);
+                let leaf = base.rsplit("::").next().unwrap_or(base);
+                match leaf {
+                    "Self" => return None,
+                    "string" | "str" | "String" => "String",
+                    "vec" | "Vec" => "Vec",
+                    "bool" | "char" => leaf,
+                    "int" | "uint" | "float" => "number",
+                    l if is_primitive_type_name(l) => "number",
+                    l if l.len() == 1 && l.chars().all(|c| c.is_ascii_uppercase()) => return None,
+                    l => l,
+                }
+            }
+            _ => return None,
+        };
+        Some(name.to_string())
+    }
+    match (head(param), head(receiver)) {
+        (Some(p), Some(r)) => p == r,
+        _ => true,
+    }
+}
+
 /// Rust primitive scalar type names (`i64`, `f32`, `char`, ...): `i64::from_str_radix` is a type path, not a module path.
 pub fn is_primitive_type_name(name: &str) -> bool {
     matches!(

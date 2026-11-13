@@ -376,7 +376,7 @@ impl IntInference {
             .filter(|(func_name, (params, _))| {
                 func_name.split("::").last() == Some(method)
                     && (params.len() == arg_count + 1 || params.len() == arg_count)
-                    && Self::key_may_be_method_of(func_name, &receiver_type)
+                    && Self::key_may_be_method_of(func_name, params, arg_count, &receiver_type)
             })
             .map(|(_, sig)| sig);
         let first = candidates.next()?;
@@ -388,25 +388,32 @@ impl IntInference {
 
     /// A suffix candidate `Owner::method` can be the method a receiver of type `receiver` calls only when `Owner` is
     /// that type (or the receiver is a type parameter, reached through a bound): `Panel::width(w: i32)` is not the
-    /// `width` of a `RailItem`.
-    fn key_may_be_method_of(func_name: &str, receiver: &Type) -> bool {
+    /// `width` of a `RailItem`. A candidate with no type owner (`len`, `list::len`) is a free function: it is a
+    /// method only when it declares the receiver as its first formal (`fn len<T>(xs: Vec<T>)` of a sequence), so
+    /// `fn len(c: List)` is not the `len` of an `int`.
+    fn key_may_be_method_of(func_name: &str, params: &[Type], arg_count: usize, receiver: &Type) -> bool {
         fn peel(t: &Type) -> &Type {
             match t {
                 Type::Reference(inner) | Type::MutableReference(inner) => peel(inner),
                 other => other,
             }
         }
-        let Some((owner_path, _)) = func_name.rsplit_once("::") else { return true };
-        let owner = owner_path.rsplit("::").next().unwrap_or(owner_path);
+        let owner = func_name.rsplit_once("::").map(|(path, _)| path.rsplit("::").next().unwrap_or(path));
+        let owner_is_type = owner.is_some_and(|o| {
+            o.chars().next().is_some_and(|c| c.is_ascii_uppercase()) || crate::type_classification::is_primitive_type_name(o)
+        });
+        if !owner_is_type {
+            return params.len() == arg_count + 1 && crate::type_classification::first_formal_accepts_receiver(&params[0], receiver);
+        }
+        let owner = owner.unwrap_or_default();
         let receiver_name = match peel(receiver) {
             Type::Custom(n) | Type::Parameterized(n, _) => n.as_str(),
-            Type::Generic(_) => return true,
             _ => return true,
         };
         let leaf = receiver_name.split('<').next().unwrap_or(receiver_name);
         let leaf = leaf.rsplit("::").next().unwrap_or(leaf);
         let type_param = leaf.len() == 1 && leaf.chars().all(|c| c.is_ascii_uppercase());
-        type_param || !owner.chars().next().is_some_and(|c| c.is_ascii_uppercase()) || owner == leaf
+        type_param || owner == leaf
     }
 
     fn builtin_option_method_signature(

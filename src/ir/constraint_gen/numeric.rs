@@ -212,7 +212,18 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ) {
                     None
                 } else {
-                    self.resolve_callee_signature(method, arguments.len())
+                    // A method call names a method, or a free function declaring the receiver as its first formal
+                    // (`fn flatten<T>(xs: Vec<Vec<T>>)`): never `fn len(c: List)` for an `int` receiver.
+                    self.resolve_callee_signature(method, arguments.len()).filter(|s| {
+                        s.has_self_receiver
+                            || receiver_type.as_deref().is_none_or(|ty| {
+                                s.param_types.len() == arguments.len() + 1
+                                    && crate::type_classification::first_formal_accepts_receiver(
+                                        &s.param_types[0],
+                                        &crate::parser::Type::Custom(ty.to_string()),
+                                    )
+                            })
+                    })
                 }
             })
             .cloned();
