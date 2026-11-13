@@ -289,7 +289,9 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     let mut out = Vec::new();
     use crate::analyzer::{Analyzer, SignatureRegistry};
     let mut analyzer = Analyzer::new();
+    crate::debug_env::phase("check-analyzer-new");
     let sigs = SignatureRegistry::new();
+    crate::debug_env::phase("check-analyzer-sigs");
     let analysis = analyzer.analyze_program_with_global_signatures(&p.program, &sigs);
     crate::debug_env::phase("check-analyzer");
     match analysis {

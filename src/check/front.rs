@@ -148,7 +148,7 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
                 }),
         );
     }
-    if let Err(msg) = crate::analyzer::Analyzer::new().check_forbidden_rust_patterns(&p.program) {
+    if let Err(msg) = crate::analyzer::forbidden_rust_patterns(&p.program) {
         out.push(forbidden(&msg, &ix));
     }
     crate::debug_env::phase("check-forbidden");
