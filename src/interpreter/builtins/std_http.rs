@@ -155,14 +155,90 @@ fn real_request(method: &str, url: &str, body: Option<&str>, opts: &ReqOpts) -> 
         payload.len()
     );
     stream.write_all(req.as_bytes()).map_err(io_error)?;
+    read_response(&mut stream, method)
+}
+
+/// Read one HTTP/1.1 response: the head, then a body framed by `Content-Length`, by chunks, or by the end of the
+/// connection. A server may keep the connection open whatever the request asked (`Connection: close` is a request,
+/// chromedriver answers and waits), so the body is never read to the end of a connection that framed it.
+pub(super) fn read_response(stream: &mut impl Read, method: &str) -> Result<ResponseObj, String> {
     let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).map_err(io_error)?;
-    let split = raw.windows(4).position(|w| w == b"\r\n\r\n").ok_or("malformed HTTP response")?;
+    let split = loop {
+        if let Some(p) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+            break p;
+        }
+        if !read_more(stream, &mut raw)? {
+            return Err("malformed HTTP response".into());
+        }
+    };
     let head = String::from_utf8_lossy(&raw[..split]).to_string();
     let mut lines = head.lines();
     let status: u16 = lines.next().and_then(|l| l.split_whitespace().nth(1)).and_then(|c| c.parse().ok()).ok_or("malformed status line")?;
-    let headers = lines.filter_map(|l| l.split_once(':')).map(|(k, v)| (k.trim().to_string(), v.trim().to_string())).collect();
-    Ok(ResponseObj { status, headers, body: raw[split + 4..].to_vec() })
+    let headers: Vec<(String, String)> = lines.filter_map(|l| l.split_once(':')).map(|(k, v)| (k.trim().to_string(), v.trim().to_string())).collect();
+    let header = |name: &str| headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str());
+    let mut rest = raw.split_off(split + 4);
+    let body = if method.eq_ignore_ascii_case("HEAD") || status / 100 == 1 || status == 204 || status == 304 {
+        Vec::new()
+    } else if header("transfer-encoding").is_some_and(|v| v.to_ascii_lowercase().contains("chunked")) {
+        dechunk(stream, rest)?
+    } else if let Some(len) = header("content-length").and_then(|v| v.parse::<usize>().ok()) {
+        while rest.len() < len {
+            if !read_more(stream, &mut rest)? {
+                break;
+            }
+        }
+        rest.truncate(len);
+        rest
+    } else {
+        while read_more(stream, &mut rest)? {}
+        rest
+    };
+    Ok(ResponseObj { status, headers, body })
+}
+
+/// Append what the stream has next; `false` at its end.
+fn read_more(stream: &mut impl Read, buf: &mut Vec<u8>) -> Result<bool, String> {
+    let mut chunk = [0u8; 8192];
+    let n = stream.read(&mut chunk).map_err(io_error)?;
+    buf.extend_from_slice(&chunk[..n]);
+    Ok(n > 0)
+}
+
+/// A chunked body (`have`: what was already read after the head), up to the last chunk and its trailers.
+fn dechunk(stream: &mut impl Read, mut have: Vec<u8>) -> Result<Vec<u8>, String> {
+    let mut body = Vec::new();
+    let mut at = 0;
+    loop {
+        let line_end = loop {
+            if let Some(p) = have[at..].windows(2).position(|w| w == b"\r\n") {
+                break at + p;
+            }
+            if !read_more(stream, &mut have)? {
+                return Err("malformed chunked HTTP body".into());
+            }
+        };
+        let size_text = String::from_utf8_lossy(&have[at..line_end]).to_string();
+        let size = usize::from_str_radix(size_text.split(';').next().unwrap_or("").trim(), 16).map_err(|_| "malformed chunk size".to_string())?;
+        at = line_end + 2;
+        if size == 0 {
+            // trailers end with an empty line
+            loop {
+                if have[at..].starts_with(b"\r\n") || have[at..].windows(4).any(|w| w == b"\r\n\r\n") {
+                    return Ok(body);
+                }
+                if !read_more(stream, &mut have)? {
+                    return Ok(body);
+                }
+            }
+        }
+        while have.len() < at + size + 2 {
+            if !read_more(stream, &mut have)? {
+                return Err("malformed chunked HTTP body".into());
+            }
+        }
+        body.extend_from_slice(&have[at..at + size]);
+        at += size + 2;
+    }
 }
 
 /// A request under construction: `http.request(method, url)` then `.header` / `.body` / `.timeout_secs`, then `.send()`.

@@ -138,6 +138,18 @@ fn mutant_step() -> Step {
     }
 }
 
+// A step's output without the staleness line every `wj` command repeats (it would stand in for the step's summary
+// line; the gate states staleness once, at its start).
+fn report_lines(text: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for line in strings.split_lines(text) {
+        if !line.starts_with("wj: this wj ") {
+            out.push(line)
+        }
+    }
+    out
+}
+
 // The staleness line `wj` prints (behind its checkout's compiler sources), or "". A probe that fails for any other
 // reason is reported as such: "cannot tell" never passes for "current".
 fn stale_line(wj: string) -> string {
@@ -161,7 +173,7 @@ fn wj_step(name: string, wj: string, args: string) -> Step {
     let t0 = now()
     match sh("${wj} run --interpret ${args} 2>&1") {
         Ok(r) => {
-            let last = strings.split_lines(strings.trim(r.stdout))
+            let last = report_lines(strings.trim(r.stdout))
             let summary = if last.len() > 0 { last[0] } else { "" }
             Step { name: name, cases: "", verdict: if r.status == 0 { "pass" } else { "FAIL" }, secs: now() - t0, detail: if r.status == 0 { "" } else { r.stdout } }
         },
@@ -200,7 +212,7 @@ fn fuzz_step(wj: string, long: bool) -> Step {
     if ok {
         match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${rows} ${FUZZ_LEDGER} --min-cases ${if long { "1000" } else { "120" }} 2>&1") {
             Ok(r) => {
-                let first = strings.split_lines(r.stdout)
+                let first = report_lines(r.stdout)
                 if first.len() > 0 {
                     cases = first[0]
                 }
@@ -306,7 +318,7 @@ fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step
     if ok {
         match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} ${if prune { "--prune" } else { "" }} ${adopt_arg} 2>&1") {
             Ok(r) => {
-                let first = strings.split_lines(r.stdout)
+                let first = report_lines(r.stdout)
                 if first.len() > 0 {
                     cases = first[0]
                 }
@@ -432,7 +444,7 @@ fn spec_step(wj: string, compiled: string) -> Step {
         }
         match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${rows} ${ledger} --min-cases ${SPEC_MIN_CASES} ${base_arg} 2>&1") {
             Ok(r) => {
-                let first = strings.split_lines(r.stdout)
+                let first = report_lines(r.stdout)
                 if first.len() > 0 {
                     cases = first[0]
                 }

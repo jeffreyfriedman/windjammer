@@ -779,7 +779,9 @@ where
     F: Fn(&Request) -> ServerResponse + Clone + Send + Sync + 'static,
 {
     crate::caps::net_listen(addr);
-    let router = Router::new().get("/*path", move |req: Request| handler(&req));
+    // `/*path` needs a non-empty tail: `/` is its own route, so the handler sees every path (a file server's index)
+    let root = handler.clone();
+    let router = Router::new().get("/", move |req: Request| root(&req)).get("/*path", move |req: Request| handler(&req));
     serve(addr, router)
 }
 

@@ -1,0 +1,11 @@
+// `http::ServerResponse.headers` is a map in the runtime (`HashMap<String, String>`) and in the interpreter; the
+// declaration said `Vec<(string, string)>`, so `push` passed `wj check` and failed in both engines. Declared as the
+// map it is, `insert` is the one spelling that builds and runs in both (findings/game: http-serverresponse-headers).
+use std::http
+
+fn main() {
+    let mut r = http::ServerResponse::new(200, "")
+    r.headers.insert("content-type", "application/wasm")
+    r.headers.insert("x-a", "1")
+    println("${r.headers.len()} ${r.status} ${r.body.len()}")
+}

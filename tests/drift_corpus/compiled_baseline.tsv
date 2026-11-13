@@ -1935,3 +1935,5 @@ tests/drift_corpus/repros/struct_field_read_moves_literal_to_i32.wj#mainerr	none
 tests/drift_corpus/repros/struct_field_read_moves_literal_to_i32.wj	exit1:0:17	
 tests/drift_corpus/repros/index_countdown_usize_underflow.wj#mainerr	none	
 tests/drift_corpus/repros/index_countdown_usize_underflow.wj	exit101:10:498312895	
+tests/drift_corpus/repros/http_server_response_headers_map.wj#mainerr	none	
+tests/drift_corpus/repros/http_server_response_headers_map.wj	exit0:8:655597287	

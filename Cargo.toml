@@ -211,6 +211,11 @@ path = "tests/interpreter_fast_paths_test.rs"
 name = "fallbacks"
 path = "tests/interpreter_fallbacks_test.rs"
 
+# std::http servers and the client's response framing in the interpreter: cargo test --release --test http_server
+[[test]]
+name = "http_server"
+path = "tests/interpreter_http_server_test.rs"
+
 # Programs the compiled build rejects or fails do not pass interpreted: cargo test --release --test compiled_agreement
 [[test]]
 name = "compiled_agreement"
