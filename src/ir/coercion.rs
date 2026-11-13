@@ -218,7 +218,26 @@ fn emitted_rust_closure_value(expr: &str) -> bool {
 
 fn strip_rust_ref_expr(expr: &str) -> &str {
     let trimmed = expr.trim();
-    let inner = if trimmed.starts_with('(') && trimmed.ends_with(')') {
+    // the outer parentheses must be one group: `(&x).to_vec()` starts with `(` and ends with `)` but is not wrapped
+    let wraps_all = trimmed.starts_with('(') && trimmed.ends_with(')') && {
+        let mut depth = 0i32;
+        let mut closes_at_end = true;
+        for (i, c) in trimmed.char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 && i + 1 != trimmed.len() {
+                        closes_at_end = false;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        closes_at_end
+    };
+    let inner = if wraps_all {
         trimmed[1..trimmed.len() - 1].trim()
     } else {
         trimmed
