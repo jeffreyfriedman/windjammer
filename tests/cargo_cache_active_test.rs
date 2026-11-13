@@ -30,12 +30,24 @@ fn aggressive(force: bool) -> PruneOptions {
     PruneOptions { aggressive: true, auto_low_disk: true, force, ..PruneOptions::default() }
 }
 
+/// The prune reads its cache root from `WJ_CARGO_TARGET_ROOT`, and it must be an empty private root (the test force-prunes
+/// it). Setting that variable here would move every other test's builds into this small scratch, so the body runs in a
+/// child process that alone sees it.
 #[test]
 fn a_prune_skips_trees_that_builds_hold_and_recent_files() {
-    let _scr = Scratch::new("cache-active");
-    let root = _scr.path().to_path_buf();
+    let scr = Scratch::new("cache-active");
+    let root = scr.join("root");
+    scratch::run_ignored_test_in_child(module_path!(), "prune_guards_body", &[("WJ_CARGO_TARGET_ROOT", root.as_os_str())]);
+}
+
+#[test]
+#[ignore = "child body of a_prune_skips_trees_that_builds_hold_and_recent_files"]
+fn prune_guards_body() {
+    if !scratch::in_test_child() {
+        return;
+    }
+    let root = std::path::PathBuf::from(std::env::var_os("WJ_CARGO_TARGET_ROOT").expect("root from the parent"));
     let _ = fs::remove_dir_all(&root);
-    std::env::set_var("WJ_CARGO_TARGET_ROOT", &root);
     let verify = cargo_cache::target_dir(TargetKind::Verify);
     let shared = cargo_cache::target_dir(TargetKind::Shared);
 
