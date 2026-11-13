@@ -118,6 +118,11 @@ pub fn behind_text(id: &Identity, head: &Head) -> Option<String> {
     ))
 }
 
+/// The content key of the sources in `checkout` (the digest build.rs bakes into a binary built from them).
+pub fn checkout_inputs_key(checkout: &Path) -> String {
+    content_key::inputs_key(checkout)
+}
+
 /// One line when this binary was built from other sources than `checkout` holds now: the content key it was built
 /// from differs from the checkout's (build_support/content_key.rs, the same digest build.rs bakes in). Exact and
 /// git-free. To stay off the hot path, the digest is computed only when an input file is newer than the build.
