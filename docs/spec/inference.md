@@ -82,6 +82,14 @@ the local is the parameter's value, changed in place, so a borrow would need a c
 **Status.** Diverges in one shape (D-OWN-STORE-ASSIGN): storing through a field assignment, `h.tag = n`, demotes `n`
 to `&str` and copies inside, while `push(n)` keeps `n` owned and moves.
 
+### OWN-OPAQUE-RECEIVER
+**Rule.** A by-value parameter whose declared type Windjammer has no declaration for (a type from a Rust crate: not a
+std or runtime type, not a struct of this crate or of a dependency, not a type parameter), and that receives a method
+no signature describes, keeps its declared owned mode: the method may consume it.
+**Example.** `fn show(base: RailItem, on: bool) -> RailItem { base.active(on) }` emits `base: RailItem`, not
+`base: &RailItem` (which `RailItem::active(self, ..)` rejects).
+**Status.** Conforms.
+
 ### OWN-COPY-SEED
 **Rule.** Parameters of Copy type (numbers, `bool`, `char`, structs and enums all of whose fields are Copy) are passed
 by value unless the body mutates them (then `&mut`).

@@ -187,7 +187,7 @@ fn test_mock_tracking() {
     let tracker = windjammer_runtime::mock::MockTracker::new();
     tracker.record_call("query", vec!["SELECT *".to_string()]);
     tracker.record_call("query", vec!["INSERT".to_string()]);
-    assert_eq!(tracker.call_count("query"), 2_usize);
+    assert_eq!(tracker.call_count("query"), 2);
     tracker.verify_called("query");
 }
 

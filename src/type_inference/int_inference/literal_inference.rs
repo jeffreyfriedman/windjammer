@@ -376,6 +376,7 @@ impl IntInference {
             .filter(|(func_name, (params, _))| {
                 func_name.split("::").last() == Some(method)
                     && (params.len() == arg_count + 1 || params.len() == arg_count)
+                    && Self::key_may_be_method_of(func_name, &receiver_type)
             })
             .map(|(_, sig)| sig);
         let first = candidates.next()?;
@@ -383,6 +384,29 @@ impl IntInference {
             return None;
         }
         Some((substitute(first.0.clone()), first.1.clone()))
+    }
+
+    /// A suffix candidate `Owner::method` can be the method a receiver of type `receiver` calls only when `Owner` is
+    /// that type (or the receiver is a type parameter, reached through a bound): `Panel::width(w: i32)` is not the
+    /// `width` of a `RailItem`.
+    fn key_may_be_method_of(func_name: &str, receiver: &Type) -> bool {
+        fn peel(t: &Type) -> &Type {
+            match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => peel(inner),
+                other => other,
+            }
+        }
+        let Some((owner_path, _)) = func_name.rsplit_once("::") else { return true };
+        let owner = owner_path.rsplit("::").next().unwrap_or(owner_path);
+        let receiver_name = match peel(receiver) {
+            Type::Custom(n) | Type::Parameterized(n, _) => n.as_str(),
+            Type::Generic(_) => return true,
+            _ => return true,
+        };
+        let leaf = receiver_name.split('<').next().unwrap_or(receiver_name);
+        let leaf = leaf.rsplit("::").next().unwrap_or(leaf);
+        let type_param = leaf.len() == 1 && leaf.chars().all(|c| c.is_ascii_uppercase());
+        type_param || !owner.chars().next().is_some_and(|c| c.is_ascii_uppercase()) || owner == leaf
     }
 
     fn builtin_option_method_signature(

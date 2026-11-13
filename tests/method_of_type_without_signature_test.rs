@@ -14,7 +14,8 @@
 //! A method call on a receiver whose type is declared (`base: RailItem`) but has no Windjammer signature (a type
 //! from a Rust crate) names `RailItem::active`, never the `active` of another type. Here `ui.wj` declares two
 //! `active(self, id: string)` builders; the call `base.active(on)` with a `bool` must not borrow their `string`
-//! formal (`on.to_string()`).
+//! formal (`on.to_string()`), and `base.width(3)` must not take `Panel::width(w: i32)`'s width (`3_i32`). The
+//! receiver `base: RailItem` stays owned: a method no declaration describes may consume it.
 //!
 //! Oracle: rustc compiles the generated crate with the real Rust `RailItem` (whose `active` takes `bool`) appended,
 //! and the program prints what the source says. The project is built through the multi-file path, where the other
@@ -32,6 +33,7 @@ pub struct Panel { pub id: string }
 impl Panel {
     pub fn new() -> Panel { Panel { id: "" } }
     pub fn active(self, id: string) -> Panel { Panel { id: id } }
+    pub fn width(self, w: i32) -> Panel { Panel { id: self.id } }
 }
 "#;
 
@@ -49,6 +51,10 @@ pub fn show_bound(base: RailItem) -> RailItem {
     item
 }
 
+pub fn sized(base: RailItem) -> RailItem {
+    base.width(3)
+}
+
 fn main() {
     let t = Tabs::new().active("home")
     let p = Panel::new().active("side")
@@ -61,9 +67,10 @@ const RAIL_ITEM_RS: &str = r#"
 pub struct RailItem { pub on: bool }
 impl RailItem {
     pub fn active(self, on: bool) -> RailItem { RailItem { on } }
+    pub fn width(self, _w: i64) -> RailItem { self }
 }
 #[allow(dead_code)]
-fn exercise() -> bool { show_bound(show(RailItem { on: false }, true)).on }
+fn exercise() -> bool { sized(show_bound(show(RailItem { on: false }, true))).on }
 "#;
 
 #[test]
@@ -88,6 +95,8 @@ fn method_on_type_without_signature_keeps_its_bool_argument() {
         main_rs.contains("base.active(on)") && !main_rs.contains("on.to_string()"),
         "`base.active(on)` must pass the bool as is\n{main_rs}"
     );
+    // `Panel::width(w: i32)` is another type's method: the literal keeps its own width, not `3_i32`.
+    assert!(main_rs.contains("base.width(3)") && !main_rs.contains("3_i32"), "{main_rs}");
 
     fs::write(out.join("main.rs"), format!("{main_rs}{RAIL_ITEM_RS}")).unwrap();
     let exe = tmp.path().join("prog");

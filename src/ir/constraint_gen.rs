@@ -19,6 +19,7 @@ use crate::analyzer::{AnalyzedFunction, FunctionSignature, OwnershipMode, Signat
 pub(crate) mod numeric;
 #[path = "constraint_gen/stored.rs"]
 mod stored;
+mod opaque_receiver;
 #[path = "constraint_gen/structure.rs"]
 mod structure;
 use numeric::{emit_numeric_class_constraint, is_int_literal_tree, literal_rule, literal_to_base_type};
