@@ -1,0 +1,24 @@
+// expect: WJ0003
+// `& ^ |` bind looser than comparisons in Windjammer (SPEC-EXPR-001): `x & 1 == 0` is `x & (1 == 0)`.
+fn low_bit_clear(x: int) -> bool {
+    x & 1 == 0
+//~@5+1 ERROR WJ0003 mismatched types: `&` binds looser than `==`
+}
+
+fn mask_on_the_right(x: int) -> bool {
+    0 == x & 1
+//~@14+1 ERROR WJ0003 mismatched types: `&` binds looser than `==`
+}
+
+// No report: the grouping is explicit, or both sides of the bitwise operator are bools.
+fn grouped(x: int) -> bool {
+    (x & 1) == 0
+}
+
+fn flags(flag: bool, x: int) -> bool {
+    flag & x == 3
+}
+
+fn main() {
+    println("${low_bit_clear(4)} ${mask_on_the_right(4)} ${grouped(4)} ${flags(true, 3)}")
+}

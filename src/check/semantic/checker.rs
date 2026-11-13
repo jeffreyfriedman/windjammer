@@ -829,6 +829,64 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             self.cx.out.push(d);
         }
         self.char_against_string(left, op, right, l.map(|k| k.0), r.map(|k| k.0));
+        self.bitwise_around_comparison(left, op, right);
+    }
+
+    /// Integer-typed operand, judged from declarations and literals only (`None` when unsure).
+    fn is_int_operand(&self, e: &Expression<'_>) -> bool {
+        use crate::parser::BinaryOp as B;
+        match e {
+            Expression::Binary { left, op: B::Shl | B::Shr, .. } => self.is_int_operand(left),
+            Expression::Binary { left, op: B::Add | B::Sub | B::Mul | B::Div | B::Mod | B::BitAnd | B::BitOr | B::BitXor, right, .. } => {
+                self.is_int_operand(left) && self.is_int_operand(right)
+            }
+            other => self.kind_of(other).is_some_and(|k| k.0 == Kind::Int),
+        }
+    }
+
+    /// `x & 1 == 0`: Windjammer binds `& ^ |` looser than comparisons (SPEC-EXPR-001), so this is `x & (1 == 0)`, an
+    /// integer combined with a `bool`. Reported only when the other operand of the bitwise operator and an operand
+    /// of the comparison are both integers by declaration, so a deliberate `flag & x == 3` (bool, bool) is silent.
+    fn bitwise_around_comparison(&mut self, left: &Expression<'_>, op: crate::parser::BinaryOp, right: &Expression<'_>) {
+        use crate::parser::BinaryOp as B;
+        let Some(sym) = (match op { B::BitAnd => Some("&"), B::BitXor => Some("^"), B::BitOr => Some("|"), _ => None }) else { return };
+        let is_cmp = |o: &B| matches!(o, B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge);
+        // (integer side, comparison operands, comparison on the right?)
+        let (int_side, a, b, cmp_right, cmp_op) = match (left, right) {
+            (l, Expression::Binary { left: a, op: cop, right: b, .. }) if is_cmp(cop) => (l, *a, *b, true, *cop),
+            (Expression::Binary { left: a, op: cop, right: b, .. }, r) if is_cmp(cop) => (r, *a, *b, false, *cop),
+            _ => return,
+        };
+        if !self.is_int_operand(int_side) || !(self.is_int_operand(a) || self.is_int_operand(b)) {
+            return;
+        }
+        let cmp_sym = match cmp_op { B::Eq => "==", B::Ne => "!=", B::Lt => "<", B::Le => "<=", B::Gt => ">", _ => ">=" };
+        let mut d = Diagnostic::error(
+            "WJ0003",
+            format!("mismatched types: `{sym}` binds looser than `{cmp_sym}` in Windjammer, so an integer is combined with a `bool`"),
+        );
+        // the operand next to the operator, then the whole group when the source is plain
+        let near = if cmp_right { (int_side, a) } else { (b, int_side) };
+        let first_span = self.operand_span(near.0);
+        let last_span = self.operand_span(near.1);
+        if let Some(sp) = self.operand_span(int_side) {
+            d = d.at(sp.with_label(format!("`{sym}` is applied to the result of `{cmp_sym}`")));
+        }
+        if let (Some(fs), Some(ls)) = (first_span, last_span) {
+            let text = self.cx.loc.ix.text();
+            let between = text.get(fs.byte_end..ls.byte_start).unwrap_or("");
+            if fs.byte_end <= ls.byte_start && between.trim() == sym {
+                let whole = self.cx.loc.ix.span(fs.byte_start, ls.byte_end);
+                let group = &text[fs.byte_start..ls.byte_end];
+                let mut fix = replace_fix(&whole, &format!("({group})"), format!("group the `{sym}` first: ({group})"));
+                fix.applicability = Applicability::MachineApplicable;
+                d = d.with_fix(fix);
+            }
+        }
+        let shown = if cmp_right { format!("(… {sym} …) {cmp_sym} …") } else { format!("… {cmp_sym} (… {sym} …)") };
+        self.cx.out.push(d.with_help(format!(
+            "in Windjammer `&`, `^` and `|` bind looser than comparisons, so write the grouping you mean, for example {shown}"
+        )));
     }
 
     /// `ch == "?"` with `ch` a `char`: rustc rejects comparing `char` with `&str`, and the interpreter answers `false`.
