@@ -69,6 +69,9 @@ retired instructions (-19.6%, macOS counter); the PC's callgrind counts 763.7M -
 commits. Kernel islands 21,304 -> 1,304. The second round put map lookups and inserts into machine code (hashmap
 537M -> 315M, -41%; net 0.76 vs QuickJS, was 1.49) and took the local-mut analysis off programs without bindings
 (startup 120M -> 105M). Geometric means at the second round's head: 0.33 vs QuickJS, 0.66 vs Lua, 0.17 vs CPython.
+The fourth round stored the registry's runtime layer as bincode (startup 76.8M -> 69.1M), hashed map keys a word
+per round (hashmap -3.9%) and gave call-free closures a copy of their free names instead of a reference per name
+per call (closures -11.4%; the third round's attempt to reuse the references cost +3.2% and was not kept).
 The third round took startup to 76.8M (no generated Rust for a file with nothing to predict, -20M; chained fixups,
 -4M before `main`) and created closures without a walker island (kernel islands 1,304 -> 404).
 Net ratios subtract each side's own startup; a startup gain that the kernels do not share (they all bind names)
@@ -81,8 +84,8 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | Rung | Metric | Now | Target | Gate |
 |---|---|---|---|---|
 | P0 | every kernel and startup counted, outputs checked, fallbacks ledgered | done | stays done | `interp_instr.wj --check` (+3%), `cargo test --release --test fallbacks` |
-| P1 | worst kernel, net vs QuickJS | 1.24 (closures; hashmap 1.49 -> 0.76) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
-| P2 | startup instructions (`hello`) | per counter: retired (macOS) 76.8M (was 119M, then 104.6M); callgrind (PC) 83.3M at the second round (recorded in `instr_baseline.json`). By phase (`WJ_PHASES=1`, retired): before main 25.2M (a trivial Rust binary 8.3M; CoreFoundation 6.5M), stdlib signature registry 19.6M (runtime-layer JSON 13.2M, stdlib meta 4.9M, boundary 1.5M), numeric 5.7M, analyzer 4.7M, calls 4.5M, moves 3.8M (was 26.6M), the interpreter 2.6M | <= 60M (next: the registry as a zero-parse layout read lazily, then CoreFoundation off the run path), then <= 25M | `instr_baseline.json` `startup` |
+| P1 | worst kernel, net vs QuickJS | 1.12 (closures: 1.24 -> 1.12 after copying call-free closures' free names; hashmap 1.49 -> 0.76) | <= 1.0 | , baseline shrink-only |
+| P2 | startup instructions () | per counter: retired (macOS) 69.1M (was 119M, 104.6M, 76.8M); callgrind (PC) 83.3M at the second round. By phase (, retired): before main 24.6M (a trivial Rust binary 8.3M; CoreFoundation 6.5M), registry 11.8M (runtime layer 5.8M, binary since the fourth round, was 13.7M as JSON; stdlib meta 4.0M, mostly merging, not parsing: caching it parsed saved 1M and was not kept), numeric 5.7M, analyzer 5.1M, calls 4.6M, moves 3.8M, the interpreter 2.6M | <= 60M (next: CoreFoundation off the run path, a dependency decision for chrono/notify/reqwest; then the numeric and calls checks' fixed setup), then <= 25M |   |
 | P3 | worst kernel, net vs Lua 5.5 | 3.53 (hashmap, was 6.89) | <= 1.0 | `--refs` |
 | P4 | islands and refused loops in kernels | 404 islands (was 21,304, then 1,304), 3 refused loops | 0 in any hot loop | `bench/interp/fallbacks.tsv` (exact) |
 | P5 | geometric mean, net vs Node (V8) | 2.5 to 2.8 (V8's own count varies by run) | <= 1.0 (JIT class) | `--refs` |
