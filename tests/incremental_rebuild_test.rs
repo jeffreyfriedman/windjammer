@@ -217,7 +217,7 @@ fn test_compute_reanalysis_set_all_dirty_without_meta() {
     let _ = parsers;
 
     let graph = DependencyGraph::build(&sources, &programs, &src);
-    let set = compute_reanalysis_set(&sources, &src, dir.path(), 0, &graph);
+    let set = compute_reanalysis_set(&sources, &src, dir.path(), &dir.path().join("cache"), 0, &graph);
     assert_eq!(set.len(), 1);
 }
 

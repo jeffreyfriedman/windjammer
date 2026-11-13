@@ -7,11 +7,13 @@ use std::path::{Path, PathBuf};
 /// Compute the set of file indices that need re-analysis.
 ///
 /// Includes dirty files plus any transitive importers when incremental tracing is enabled.
-/// Uses `dep_epoch` for fingerprint comparison to match the epoch written during codegen.
+/// Uses `dep_epoch` for fingerprint comparison to match the epoch written during codegen. `cache_root` is the shared
+/// cache root (manifest-less trees keep their `.wj.meta` entries under it).
 pub fn compute_reanalysis_set(
     sources: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
+    cache_root: &Path,
     dep_epoch: u64,
     dependency_graph: &super::dependency_graph::DependencyGraph,
 ) -> HashSet<usize> {
@@ -43,6 +45,7 @@ pub fn compute_reanalysis_set(
             &output_file,
             src_base,
             output,
+            cache_root,
             dep_epoch,
         ) {
             // clean — skip reanalysis for this file

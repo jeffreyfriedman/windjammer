@@ -93,8 +93,9 @@ impl UnifiedNumericInference {
         self.float_collector.set_debug_source(source);
     }
 
-    pub fn set_source_root(&mut self, root: &std::path::Path) {
-        self.float_collector.set_source_root(root);
+    /// `cache_root`: the shared cache root (`CompilerConfig::cache_root`).
+    pub fn set_source_root(&mut self, root: &std::path::Path, cache_root: &std::path::Path) {
+        self.float_collector.set_source_root(root, cache_root);
     }
 
     pub fn set_global_function_signatures(

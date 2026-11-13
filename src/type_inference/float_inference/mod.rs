@@ -67,8 +67,8 @@ pub struct FloatInference {
     file_name_to_id: HashMap<String, usize>,
     /// Next file ID to assign
     next_file_id: usize,
-    /// Source root for resolving metadata file paths
-    source_root: Option<std::path::PathBuf>,
+    /// Source root for resolving metadata file paths, and the shared cache root (manifest-less trees cache under it)
+    source_root: Option<(std::path::PathBuf, std::path::PathBuf)>,
     /// Current impl block type (for resolving `self` field access)
     current_impl_type: Option<String>,
     /// Variable element types: var_name → element_type (for Vec<T>, HashMap<K,V>)
@@ -217,9 +217,9 @@ impl FloatInference {
         }
     }
 
-    /// Set source root for resolving metadata file paths
-    pub fn set_source_root(&mut self, path: &std::path::Path) {
-        self.source_root = Some(path.to_path_buf());
+    /// Set source root for resolving metadata file paths, with the shared cache root (`CompilerConfig::cache_root`)
+    pub fn set_source_root(&mut self, path: &std::path::Path, cache_root: &std::path::Path) {
+        self.source_root = Some((path.to_path_buf(), cache_root.to_path_buf()));
     }
 
     /// Pre-populate struct field types from other modules in the same project

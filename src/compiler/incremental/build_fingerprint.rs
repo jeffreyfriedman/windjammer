@@ -124,27 +124,31 @@ pub fn compute_fingerprint_with_dep_epoch_and_output(
     }
 }
 
+/// `cache_root`: the shared cache root (manifest-less trees keep their `.wj.meta` entries under it).
 pub fn fingerprint_matches_cached(
     source: &str,
     source_path: &Path,
+    cache_root: &Path,
     dep_roots: &[std::path::PathBuf],
 ) -> bool {
-    fingerprint_matches(source_path, &compute_fingerprint(source, dep_roots))
+    fingerprint_matches(source_path, cache_root, &compute_fingerprint(source, dep_roots))
 }
 
 pub fn fingerprint_matches_cached_with_dep_epoch(
     source: &str,
     source_path: &Path,
+    cache_root: &Path,
     dep_epoch: u64,
 ) -> bool {
     fingerprint_matches(
         source_path,
+        cache_root,
         &compute_fingerprint_with_dep_epoch(source, dep_epoch),
     )
 }
 
-fn fingerprint_matches(source_path: &Path, current: &SourceFingerprint) -> bool {
-    let meta_path = crate::metadata::meta_cache_path(source_path);
+fn fingerprint_matches(source_path: &Path, cache_root: &Path, current: &SourceFingerprint) -> bool {
+    let meta_path = crate::metadata::meta_cache_path(source_path, cache_root);
     let Ok(content) = std::fs::read_to_string(&meta_path) else {
         return false;
     };
@@ -168,8 +172,8 @@ fn output_hash_matches(output_path: &Path, cached_output_hash: u64) -> bool {
     hash_output(&content) == cached_output_hash
 }
 
-fn cached_output_hash(source_path: &Path) -> Option<u64> {
-    let meta_path = crate::metadata::meta_cache_path(source_path);
+fn cached_output_hash(source_path: &Path, cache_root: &Path) -> Option<u64> {
+    let meta_path = crate::metadata::meta_cache_path(source_path, cache_root);
     let content = std::fs::read_to_string(&meta_path).ok()?;
     let meta = serde_json::from_str::<crate::metadata::ModuleMetadata>(&content).ok()?;
     meta.analysis_fingerprint.map(|fp| fp.output_hash)
@@ -192,15 +196,16 @@ pub fn is_codegen_cache_valid(
     source: &str,
     source_path: &Path,
     output_path: &Path,
+    cache_root: &Path,
     dep_roots: &[std::path::PathBuf],
 ) -> bool {
     if !output_path.exists() {
         return false;
     }
-    if !fingerprint_matches_cached(source, source_path, dep_roots) {
+    if !fingerprint_matches_cached(source, source_path, cache_root, dep_roots) {
         return false;
     }
-    match cached_output_hash(source_path) {
+    match cached_output_hash(source_path, cache_root) {
         Some(h) if h != 0 => output_hash_matches(output_path, h),
         _ => is_output_mtime_fresh(source_path, output_path),
     }
@@ -211,15 +216,16 @@ pub fn is_codegen_cache_valid_with_dep_epoch(
     source: &str,
     source_path: &Path,
     output_path: &Path,
+    cache_root: &Path,
     dep_epoch: u64,
 ) -> bool {
     if !output_path.exists() {
         return false;
     }
-    if !fingerprint_matches_cached_with_dep_epoch(source, source_path, dep_epoch) {
+    if !fingerprint_matches_cached_with_dep_epoch(source, source_path, cache_root, dep_epoch) {
         return false;
     }
-    match cached_output_hash(source_path) {
+    match cached_output_hash(source_path, cache_root) {
         Some(h) if h != 0 => output_hash_matches(output_path, h),
         _ => is_output_mtime_fresh(source_path, output_path),
     }
