@@ -63,6 +63,8 @@ pub struct CompilerConfig {
     pub liveness_mutation_always_move: bool,
     /// Release builds let integer arithmetic wrap (`wj build --unchecked-arithmetic`); off by default (SPEC-NUM-002).
     pub unchecked_arithmetic: bool,
+    /// Print resident memory per build phase and the work counters (`wj build --mem-report`, `WJ_MEM_REPORT=1`).
+    pub mem_report: bool,
 }
 
 impl Default for CompilerConfig {
@@ -86,6 +88,7 @@ impl Default for CompilerConfig {
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: false,
             unchecked_arithmetic: false,
+            mem_report: false,
         }
     }
 }
@@ -142,7 +145,14 @@ impl CompilerConfig {
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: get("WJ_LIVENESS_MUTATION").is_some_and(|v| v == "always-move"),
             unchecked_arithmetic: false,
+            mem_report: truthy("WJ_MEM_REPORT"),
         }
+    }
+
+    /// Turn the memory report on (`--mem-report`); `WJ_MEM_REPORT=1` already did when set.
+    pub fn with_mem_report(mut self, on: bool) -> Self {
+        self.mem_report |= on;
+        self
     }
 
     pub fn with_ir_cutover(mut self, ir_cutover: IrCutoverConfig) -> Self {

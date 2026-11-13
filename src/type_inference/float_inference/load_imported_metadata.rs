@@ -47,7 +47,7 @@ impl FloatInference {
                                         }
                                     }
                                     if !field_map.is_empty() {
-                                        self.struct_field_types.insert(ty_name.clone(), field_map);
+                                        std::sync::Arc::make_mut(&mut self.struct_field_types).insert(ty_name.clone(), field_map);
                                     }
                                 }
                                 // Load function signatures (shared helper with int inference)
@@ -56,7 +56,7 @@ impl FloatInference {
                                         meta_dir,
                                     )
                                 {
-                                    self.function_signatures.insert(func_name, sig);
+                                    std::sync::Arc::make_mut(&mut self.function_signatures).insert(func_name, sig);
                                 }
                                 continue; // Handled, skip .wj.meta lookup
                             }
@@ -166,7 +166,7 @@ impl FloatInference {
                                     .as_ref()
                                     .and_then(|s| ModuleMetadata::deserialize_type(s));
 
-                                self.function_signatures
+                                std::sync::Arc::make_mut(&mut self.function_signatures)
                                     .insert(func_name, (params, return_type));
                             }
                             // TDD FIX: Load struct field types for cross-module float inference
@@ -181,7 +181,7 @@ impl FloatInference {
                                     }
                                 }
                                 if !field_map.is_empty() {
-                                    self.struct_field_types.insert(struct_name, field_map);
+                                    std::sync::Arc::make_mut(&mut self.struct_field_types).insert(struct_name, field_map);
                                 }
                             }
                             found_metadata = true;

@@ -96,6 +96,7 @@ Usage: wj build [OPTIONS] <FILE>
 | `--metadata` | NAME=PATH |  | External crate metadata for cross-crate type inference (NAME=PATH, repeatable) |
 | `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
 | `--ir-shadow-validate` | IR_SHADOW_VALIDATE |  | Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate) |
+| `--mem-report` | MEM_REPORT |  | Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines |
 
 ## `wj run`
 

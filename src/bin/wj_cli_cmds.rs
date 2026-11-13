@@ -144,7 +144,7 @@ pub fn run(cli: Cli) -> Result<()> {
             no_generate_cargo_toml,
             metadata,
             json,
-            ir_shadow_validate,
+            ir_shadow_validate, mem_report,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             windjammer::cli::build::execute(
@@ -152,7 +152,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 output.as_deref(),
                 release,
                 &target,
-                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic },
+                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic, mem_report },
                 check,
                 raw_errors,
                 fix,

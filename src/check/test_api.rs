@@ -16,3 +16,9 @@ pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
     let Ok(program) = crate::parser::Parser::new_with_source(tokens, file.clone(), source.clone()).parse() else { return Vec::new() };
     super::moves::predict(&program, &source, &file)
 }
+
+/// Remove the cross-checkout analysis store installed with `shared_cache::install_for` (tests/shared_analysis_cache_test.rs
+/// restores the process state after each case; `wj` installs it once and never removes it).
+pub fn uninstall_shared_cache() {
+    *super::shared_cache::CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}

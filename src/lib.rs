@@ -42,6 +42,7 @@ pub mod intrinsics;
 pub mod ir;
 pub mod lexer;
 pub mod linter;
+pub mod mem_report; // `wj build --mem-report`: RSS per pipeline phase
 pub mod metadata;
 pub mod module_system;
 pub mod optimizer;

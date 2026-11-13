@@ -1,0 +1,10 @@
+[package]
+name = "mem-meter-gen"
+version = "0.1.0"
+edition = "2025"
+
+# The generator writes N module files under the output directory given on the command line
+# (relative to this directory). Generated sources are named by suffix, so the grant says so.
+[capabilities]
+fs.read = ["./**"]
+fs.write = ["./**", "./**/*.wj"]

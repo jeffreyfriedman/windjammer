@@ -12,6 +12,8 @@
 //! - **backend**: Backend trait implementation
 
 pub mod aosoa_transform;
+pub mod enum_variant_table;
+pub mod trait_owned_string_write_back;
 pub mod arm_string_analysis;
 pub mod assignment_statement_generation;
 pub mod ast_utilities;

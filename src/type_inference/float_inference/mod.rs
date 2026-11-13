@@ -49,7 +49,8 @@ pub struct FloatInference {
     /// Errors detected during inference
     pub errors: Vec<String>,
     /// Function signature registry: name → (param_types, return_type)
-    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
+    /// Shared between per-file clones (library builds clone the prepared state per file); written via make_mut.
+    function_signatures: std::sync::Arc<std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>>,
     /// Variable assignment tracking: variable name → initial value ExprId
     var_assignments: HashMap<String, ExprId>,
     /// Variable type tracking: variable name → explicit Type (for let x: Type = ...)
@@ -57,7 +58,8 @@ pub struct FloatInference {
     /// Sequential ID counter for generating unique ExprIds
     next_seq_id: usize,
     /// Struct field types: struct_name → field_name → Type
-    struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Shared between per-file clones; written via make_mut.
+    struct_field_types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
     /// THE WINDJAMMER WAY: Cache ExprIds by location to ensure same expression = same ID
     /// Key: (file_id, line, col), Value: the first ExprId assigned to that location
     expr_id_cache: HashMap<(usize, usize, usize), ExprId>,
@@ -102,11 +104,11 @@ impl FloatInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: std::collections::BTreeMap::new(),
+            function_signatures: Default::default(),
             var_assignments: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
-            struct_field_types: HashMap::new(),
+            struct_field_types: Default::default(),
             expr_id_cache: HashMap::new(),
             source_root: None,
             current_impl_type: None,
@@ -136,7 +138,7 @@ impl FloatInference {
             } else {
                 sig.param_types.clone()
             };
-            self.function_signatures
+            std::sync::Arc::make_mut(&mut self.function_signatures)
                 .insert(name.clone(), (param_types, sig.return_type.clone()));
         }
     }
@@ -213,7 +215,7 @@ impl FloatInference {
         signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
     ) {
         for (key, value) in signatures {
-            self.function_signatures.insert(key, value);
+            std::sync::Arc::make_mut(&mut self.function_signatures).insert(key, value);
         }
     }
 
@@ -229,7 +231,7 @@ impl FloatInference {
         field_types: &HashMap<String, HashMap<String, Type>>,
     ) {
         for (struct_name, fields) in field_types {
-            self.struct_field_types
+            std::sync::Arc::make_mut(&mut self.struct_field_types)
                 .insert(struct_name.clone(), fields.clone());
         }
     }

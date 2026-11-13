@@ -23,7 +23,7 @@ impl FloatInference {
                 let param_types: Vec<Type> =
                     decl.parameters.iter().map(|p| p.type_.clone()).collect();
 
-                self.function_signatures
+                std::sync::Arc::make_mut(&mut self.function_signatures)
                     .insert(decl.name.clone(), (param_types, decl.return_type.clone()));
             }
             Item::Impl { block, .. } => {
@@ -38,7 +38,7 @@ impl FloatInference {
 
                     // Register as "TypeName::method_name"
                     let full_name = format!("{}::{}", type_name, func_decl.name);
-                    self.function_signatures
+                    std::sync::Arc::make_mut(&mut self.function_signatures)
                         .insert(full_name, (param_types, func_decl.return_type.clone()));
                 }
             }
@@ -53,7 +53,7 @@ impl FloatInference {
                         .filter(|(k, _)| !before.contains(*k))
                         .map(|(k, v)| (format!("{name}::{k}"), v.clone()))
                         .collect();
-                    self.function_signatures.extend(added);
+                    std::sync::Arc::make_mut(&mut self.function_signatures).extend(added);
                 }
             }
             _ => {}

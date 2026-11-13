@@ -60,13 +60,15 @@ pub struct IntInference {
     pub inferred_types: HashMap<ExprId, IntType>,
     constraints: Vec<IntConstraint>,
     pub errors: Vec<String>,
-    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
+    /// Shared between per-file clones (library builds clone the prepared state per file); written via make_mut.
+    function_signatures: std::sync::Arc<std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>>,
     var_assignments: HashMap<String, ExprId>,
     /// Element expr ids of `let v = vec![…]` / `[…]` so later `push`/`insert` args share that width.
     var_collection_elements: HashMap<String, Vec<ExprId>>,
     var_types: HashMap<String, Type>,
     next_seq_id: usize,
-    struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Shared between per-file clones; written via make_mut.
+    struct_field_types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
     /// Library multipass: module path for the current `.wj` file (`dialogue/examples` → `["dialogue","examples"]`).
     current_file_module_path: Vec<String>,
     /// For each bare struct name, all module prefixes where that name is defined (disambiguate duplicates).
@@ -98,12 +100,12 @@ impl IntInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: std::collections::BTreeMap::new(),
+            function_signatures: Default::default(),
             var_assignments: HashMap::new(),
             var_collection_elements: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1,
-            struct_field_types: HashMap::new(),
+            struct_field_types: Default::default(),
             current_file_module_path: Vec::new(),
             struct_defining_module_paths: HashMap::new(),
             imported_type_registry_keys: HashMap::new(),
@@ -134,7 +136,7 @@ impl IntInference {
             } else {
                 sig.param_types.clone()
             };
-            self.function_signatures
+            std::sync::Arc::make_mut(&mut self.function_signatures)
                 .insert(name.clone(), (param_types, sig.return_type.clone()));
         }
     }
@@ -159,7 +161,7 @@ impl IntInference {
     ) {
         // TDD FIX: Merge instead of replace to preserve stdlib HashMap/Vec methods
         for (key, value) in signatures {
-            self.function_signatures.insert(key, value);
+            std::sync::Arc::make_mut(&mut self.function_signatures).insert(key, value);
         }
     }
 
@@ -168,7 +170,7 @@ impl IntInference {
         field_types: &HashMap<String, HashMap<String, Type>>,
     ) {
         for (struct_name, fields) in field_types {
-            self.struct_field_types
+            std::sync::Arc::make_mut(&mut self.struct_field_types)
                 .insert(struct_name.clone(), fields.clone());
         }
     }
@@ -224,7 +226,7 @@ impl IntInference {
             for (func_name, sig) in
                 crate::metadata::load_function_signatures_from_metadata(meta_dir)
             {
-                self.function_signatures.insert(func_name, sig);
+                std::sync::Arc::make_mut(&mut self.function_signatures).insert(func_name, sig);
             }
         }
     }
@@ -432,7 +434,7 @@ impl IntInference {
                 for field in &decl.fields {
                     field_map.insert(field.name.clone(), field.field_type.clone());
                 }
-                self.struct_field_types.insert(key, field_map);
+                std::sync::Arc::make_mut(&mut self.struct_field_types).insert(key, field_map);
             }
             Item::Mod { name, items, .. } => {
                 let mut next = module_prefix.to_vec();
@@ -502,7 +504,7 @@ impl IntInference {
             Item::Function { decl, .. } => {
                 let param_types: Vec<Type> =
                     decl.parameters.iter().map(|p| p.type_.clone()).collect();
-                self.function_signatures
+                std::sync::Arc::make_mut(&mut self.function_signatures)
                     .insert(decl.name.clone(), (param_types, decl.return_type.clone()));
             }
             Item::Impl { block, .. } => {
@@ -514,7 +516,7 @@ impl IntInference {
                         .map(|p| p.type_.clone())
                         .collect();
                     let full_name = format!("{}::{}", type_name, func_decl.name);
-                    self.function_signatures
+                    std::sync::Arc::make_mut(&mut self.function_signatures)
                         .insert(full_name, (param_types, func_decl.return_type.clone()));
                 }
             }
@@ -523,7 +525,7 @@ impl IntInference {
                 // payload from the declaration (`int` → i64), not default to i32.
                 for variant in &decl.variants {
                     if let crate::parser::EnumVariantData::Tuple(payload) = &variant.data {
-                        self.function_signatures.insert(
+                        std::sync::Arc::make_mut(&mut self.function_signatures).insert(
                             format!("{}::{}", decl.name, variant.name),
                             (payload.clone(), Some(Type::Custom(decl.name.clone()))),
                         );

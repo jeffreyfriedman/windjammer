@@ -8,7 +8,7 @@
 "src/analyzer/optimization_detectors/struct_mapping_detection.rs" = 1
 "src/analyzer/program_initialization.rs" = 2
 "src/analyzer/self_dispatch_for_loops.rs" = 1
-"src/analyzer/signature_registry.rs" = 25
+"src/analyzer/signature_registry.rs" = 12
 "src/analyzer/trait_analysis.rs" = 1
 "src/codegen/portable/env.rs" = 4
 "src/codegen/portable/flatten.rs" = 6

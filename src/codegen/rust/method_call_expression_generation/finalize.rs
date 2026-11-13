@@ -514,7 +514,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 arg_expr,
                                 &mut arg_str,
                                 receiver_type_name.as_deref(),
-                                Some(&self.enum_variant_types),
+                                Some(self.enum_variant_types.as_map()),
                             );
                         }
                     }

@@ -11,7 +11,7 @@ mod file_cache;
 mod fix;
 mod front;
 mod test_api;
-pub use test_api::compiler_identity_of;
+pub use test_api::{compiler_identity_of, uninstall_shared_cache};
 pub mod moves;
 pub mod locate;
 pub mod local_mut;

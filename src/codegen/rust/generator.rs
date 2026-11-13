@@ -327,7 +327,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) stdlib_method_signatures:
         std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>>,
     // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types Enables string literal to String coercion in enum variant constructors
-    pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
+    pub(crate) enum_variant_types: crate::codegen::rust::enum_variant_table::EnumVariantTable,
     /// Stdlib type name → fully-qualified Rust path (`HttpMethod` → `windjammer_runtime::http::HttpMethod`).
     /// Used when string→unit-enum coercion must emit without a sibling `use`.
     pub(crate) stdlib_type_rust_paths: std::collections::HashMap<String, String>,
@@ -738,7 +738,7 @@ impl<'ast> CodeGenerator<'ast> {
             method_signatures_by_type: std::collections::HashMap::new(),
             stdlib_method_signatures:
                 crate::codegen::rust::stdlib_method_signatures::init_stdlib_method_signatures(),
-            enum_variant_types: std::collections::HashMap::new(),
+            enum_variant_types: Default::default(),
             stdlib_type_rust_paths: std::collections::HashMap::new(),
             enum_variant_struct_fields: std::collections::HashMap::new(),
             library_source_root: None,
@@ -4393,21 +4393,7 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         // Key form is `Enum::Variant` — all payloads empty ⇒ unit-only Copy enum.
-        let mut saw = false;
-        for (key, payloads) in &self.enum_variant_types {
-            let key_enum = key
-                .rsplit_once("::")
-                .map(|(e, _)| e)
-                .unwrap_or(key.as_str());
-            let key_base = key_enum.rsplit("::").next().unwrap_or(key_enum);
-            if key_base == base || key_enum == enum_name || key_enum == name {
-                saw = true;
-                if !payloads.is_empty() {
-                    return false;
-                }
-            }
-        }
-        saw
+        self.enum_variant_types.unit_only(name, enum_name, base).unwrap_or(false)
     }
 
     /// True when `name` is a scalar Copy pass-by-value binding (`i64`, `bool`, …),

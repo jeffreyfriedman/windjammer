@@ -84,6 +84,9 @@ unstable_arenas = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
 # ownership/effect/taint as first-class types, and multi-target safety encodings.
 safety_typed_ir = []
+# Dev-only heap profiling of the wj binary (dhat): `cargo build --release --features cli,dhat-heap --bin wj`, then any
+# `wj ...` run writes dhat-heap.json in its working directory (view it with dhat's DHAT viewer). Never in releases.
+dhat-heap = ["dep:dhat"]
 # Backend conformance soak mode: 5,000 generated programs instead of 200 (tests/backend_conformance_test.rs).
 conformance_soak = []
 # Opt-in test suite targets: `cargo test --features parser_tests`, etc.
@@ -148,6 +151,7 @@ salsa = "0.24"
 tempfile = { version = "3.10", optional = true }
 syntect = { version = "5.2", optional = true }
 env_logger = { version = "0.11", optional = true }
+dhat = { version = "0.3", optional = true }
 
 # Host-only dependencies: C code (ring, SQLite) or dynamic loading that the browser playground's
 # wasm32-unknown-unknown build cannot link (ADR-0034). Native builds see exactly the same dependency set.
@@ -543,6 +547,11 @@ opt-level = 3
 [[test]]
 name = "build_speed_gate"
 path = "tests/build_speed_gate.rs"
+
+# Build memory meter (shrink-only ratchet) and output identity vs a baseline wj: cargo test --release --test library_build_memory
+[[test]]
+name = "library_build_memory"
+path = "tests/library_build_memory.rs"
 
 [[test]]
 name = "build_output_golden"

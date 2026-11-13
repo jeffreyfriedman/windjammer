@@ -38,7 +38,7 @@ struct Installed<'a>(#[allow(dead_code)] std::sync::MutexGuard<'a, ()>);
 
 impl Drop for Installed<'_> {
     fn drop(&mut self) {
-        shared_cache::uninstall();
+        windjammer::check::uninstall_shared_cache();
     }
 }
 

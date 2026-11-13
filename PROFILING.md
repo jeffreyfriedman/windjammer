@@ -60,3 +60,27 @@ let _zone = windjammer_runtime::profiling::tracy_zone("my_scope");
 ```
 
 Use the same `tracy` feature on `windjammer-runtime` as for generated games.
+
+# Profiling the compiler's memory
+
+`wj build --mem-report` (or `WJ_MEM_REPORT=1`) prints the build's resident memory at every pipeline phase to
+stderr, one line each:
+
+```text
+[wj-mem] t_ms=1234 rss_mib=412 peak_mib=530 phase=Step 3 total
+```
+
+`rss_mib` is the current resident set and `peak_mib` the high-water mark (Linux: `/proc/self/status`; macOS:
+the task's basic info; elsewhere the peak from `getrusage`). Per-file loops also report every 25 files, and the
+last line is `phase=build end`. The format is stable; `windjammer::mem_report::parse_line` reads it back.
+
+For an allocation profile, build the dev-only heap profiler into `wj` and run any command:
+
+```bash
+cargo build --release --features cli,dhat-heap --bin wj
+target/release/wj build src/mod.wj --output gen --library --no-cargo --module-file   # writes dhat-heap.json
+```
+
+Open `dhat-heap.json` in the DHAT viewer (`dh_view.html` from Valgrind, or the online copy) to see which
+allocation sites hold the peak. The memory meter for library builds is `cargo test --release --test
+library_build_memory` (synthetic library, shrink-only ratchet in `tests/mem_meter/ratchet.toml`).

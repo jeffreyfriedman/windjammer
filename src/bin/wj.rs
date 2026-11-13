@@ -17,7 +17,15 @@ mod wj_cli_cmds;
 use clap::Parser;
 use wj_cli_args::Cli;
 
+// Dev-only heap profiling (`--features dhat-heap`): every allocation is recorded and dhat-heap.json is written
+// to the working directory when wj exits.
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap();
     // `wj --version` / `-V`: identity line (commit, date, dirty flag, profile, build date), before clap and
     // before any other work.
     if matches!(std::env::args().nth(1).as_deref(), Some("--version" | "-V")) && std::env::args().len() == 2 {

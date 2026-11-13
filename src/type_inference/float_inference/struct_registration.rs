@@ -11,7 +11,7 @@ impl FloatInference {
                 for field in &decl.fields {
                     field_map.insert(field.name.clone(), field.field_type.clone());
                 }
-                self.struct_field_types.insert(key, field_map);
+                std::sync::Arc::make_mut(&mut self.struct_field_types).insert(key, field_map);
             }
             Item::Enum { decl, .. } => {
                 use crate::parser::EnumVariantData;
@@ -24,9 +24,9 @@ impl FloatInference {
                         for (name, ty) in fields {
                             field_map.insert(name.clone(), ty.clone());
                         }
-                        self.struct_field_types
+                        std::sync::Arc::make_mut(&mut self.struct_field_types)
                             .insert(variant_key, field_map.clone());
-                        self.struct_field_types.insert(qualified_key, field_map);
+                        std::sync::Arc::make_mut(&mut self.struct_field_types).insert(qualified_key, field_map);
                     }
                 }
             }
