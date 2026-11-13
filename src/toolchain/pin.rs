@@ -76,6 +76,12 @@ pub fn satisfies(spec: &str, id: &Identity) -> bool {
     let spec = spec.trim().trim_start_matches('v');
     if is_commit_spec(spec) {
         let spec = spec.to_ascii_lowercase();
+        // A dev build carries no commit (only the content key of its sources: build.rs never queries git), so a
+        // commit pin cannot be checked against it; `wj doctor` shows the build's key. Stamped builds
+        // (`WJ_GIT_HASH` set at build time) are checked.
+        if id.commit.is_none() && id.key.is_some() {
+            return true;
+        }
         return id.commit.as_deref().is_some_and(|c| {
             c.to_ascii_lowercase().starts_with(&spec)
                 || spec.starts_with(&c.to_ascii_lowercase()) && c.len() >= 7
@@ -157,6 +163,7 @@ mod tests {
 
     fn id(commit: &str, version: &str) -> Identity {
         Identity {
+            key: None,
             version: version.into(),
             commit: Some(commit.into()),
             commit_ts: None,

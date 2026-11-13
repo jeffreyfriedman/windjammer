@@ -1,4 +1,5 @@
-//! Build identity of this `wj`: crate version, commit, commit date, dirty flag, profile, build date.
+//! Build identity of this `wj`: crate version, the content key of its sources, profile, build date, and a commit
+//! only when the build stamped one (`WJ_GIT_HASH` set by a release/CI build).
 //!
 //! Values come from `build.rs`. The commit date is the only time value that may influence generated output;
 //! the wall-clock build date (`WJ_BUILD_TS`) is read here and nowhere else (gate:
@@ -9,7 +10,8 @@ use super::timefmt::{iso_date, iso_datetime, parse_iso_date};
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const COMMIT: &str = env!("WJ_GIT_HASH");
 const COMMIT_TS: &str = env!("WJ_GIT_TS");
-const DIRTY: &str = env!("WJ_GIT_DIRTY");
+/// Digest of the build's source inputs (build_support/content_key.rs `inputs_key`).
+pub const INPUTS_KEY: &str = env!("WJ_INPUTS_KEY");
 pub const PROFILE: &str = env!("WJ_BUILD_PROFILE");
 const BUILD_TS: &str = env!("WJ_BUILD_TS");
 
@@ -17,6 +19,8 @@ const BUILD_TS: &str = env!("WJ_BUILD_TS");
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
     pub version: String,
+    /// The sources' content key (full, or the prefix `--version` shows); `None` for binaries that predate it.
+    pub key: Option<String>,
     /// Full commit hash, or a prefix when parsed from `--version` text; `None` for binaries that predate stamping.
     pub commit: Option<String>,
     /// Commit date as unix seconds (midnight UTC when parsed from text).
@@ -30,9 +34,10 @@ pub fn current() -> Identity {
     let known = COMMIT != "unknown";
     Identity {
         version: VERSION.to_string(),
+        key: Some(INPUTS_KEY.to_string()),
         commit: known.then(|| COMMIT.to_string()),
         commit_ts: COMMIT_TS.parse().ok().filter(|t| *t > 0),
-        dirty: DIRTY == "true",
+        dirty: false,
         profile: Some(PROFILE.to_string()),
         build_ts: BUILD_TS.parse().ok().filter(|t| *t > 0),
     }
@@ -46,7 +51,13 @@ impl Identity {
         }
     }
 
-    /// `wj --version` text: `wj 0.50.0 (commit 2b6db230c4a1 2026-11-02, clean, release, built 2026-11-02T10:11:12Z)`.
+    /// The source key as `--version` shows it (ten hex digits).
+    pub fn short_key(&self) -> Option<&str> {
+        self.key.as_deref().map(|k| &k[..k.len().min(10)])
+    }
+
+    /// `wj --version` text: `wj 0.50.0+3fa91c20d4 (commit unknown unknown, clean, release, built 2026-11-02T10:11:12Z)`
+    /// (the commit only when the build stamped one).
     pub fn version_line(&self) -> String {
         let date = self
             .commit_ts
@@ -56,9 +67,13 @@ impl Identity {
             .build_ts
             .map(iso_datetime)
             .unwrap_or_else(|| "unknown".into());
+        let version = match self.short_key() {
+            Some(k) => format!("{}+{k}", self.version),
+            None => self.version.clone(),
+        };
         format!(
             "wj {} (commit {} {}, {}, {}, built {})",
-            self.version,
+            version,
             self.short(),
             date,
             if self.dirty { "dirty" } else { "clean" },
@@ -71,6 +86,7 @@ impl Identity {
         serde_json::json!({
             "name": "wj",
             "version": self.version,
+            "inputs_key": self.key,
             "commit": self.commit,
             "commit_short": self.commit.as_ref().map(|_| self.short()),
             "commit_date": self.commit_ts.map(iso_date),
@@ -94,8 +110,13 @@ pub fn parse_version_line(text: &str) -> Option<Identity> {
     if version.is_empty() || !version.starts_with(|c: char| c.is_ascii_digit()) {
         return None;
     }
+    let (version, key) = match version.split_once('+') {
+        Some((v, k)) => (v, Some(k.to_string())),
+        None => (version, None),
+    };
     let mut id = Identity {
         version: version.to_string(),
+        key,
         commit: None,
         commit_ts: None,
         dirty: false,
@@ -144,6 +165,7 @@ mod tests {
     fn sample() -> Identity {
         Identity {
             version: "0.50.0".into(),
+            key: Some("3fa91c20d4ffffffffffffffffffffff".into()),
             commit: Some("2b6db230c4a1ffffffffffffffffffffffffffff".into()),
             commit_ts: Some(1_787_961_600),
             dirty: true,
@@ -156,8 +178,10 @@ mod tests {
     fn version_line_round_trips() {
         let id = sample();
         let line = id.version_line();
-        assert_eq!(line, "wj 0.50.0 (commit 2b6db230c4a1 2026-08-29, dirty, release, built 2026-08-29T10:39:59Z)");
+        assert_eq!(line, "wj 0.50.0+3fa91c20d4 (commit 2b6db230c4a1 2026-08-29, dirty, release, built 2026-08-29T10:39:59Z)");
         let back = parse_version_line(&line).unwrap();
+        assert_eq!(back.version, "0.50.0");
+        assert_eq!(back.key.as_deref(), Some("3fa91c20d4"));
         assert_eq!(back.commit.as_deref(), Some("2b6db230c4a1"));
         assert_eq!(back.commit_ts, id.commit_ts);
         assert!(back.dirty);

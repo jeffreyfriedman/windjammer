@@ -72,14 +72,22 @@ pub fn input_files(root: &Path) -> Vec<String> {
     files
 }
 
-/// The build key of the tree at `root` for one toolchain configuration (`rustc -vV` output, target triple, profile,
-/// enabled features in any order).
-pub fn content_key(root: &Path, rustc_version: &str, target: &str, profile: &str, features: &[String]) -> String {
+/// The digest of the input files under `root` alone (relative paths and bytes): what `wj --version` shows and what
+/// the staleness check compares with a checkout.
+pub fn inputs_key(root: &Path) -> String {
     let mut d = Digest::new();
     for f in input_files(root) {
         d.field(f.as_bytes());
         d.field(&std::fs::read(root.join(&f)).unwrap_or_default());
     }
+    d.hex()
+}
+
+/// The build key of the tree at `root` for one toolchain configuration (`rustc -vV` output, target triple, profile,
+/// enabled features in any order): the inputs key plus the toolchain.
+pub fn content_key(root: &Path, rustc_version: &str, target: &str, profile: &str, features: &[String]) -> String {
+    let mut d = Digest::new();
+    d.field(inputs_key(root).as_bytes());
     let mut features: Vec<&String> = features.iter().collect();
     features.sort();
     for s in [rustc_version, target, profile] {
