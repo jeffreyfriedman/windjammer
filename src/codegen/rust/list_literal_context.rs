@@ -109,6 +109,11 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Slot types of the tuples a list type holds: `Vec<(string, int)>` (also under `Result` / `Option`) gives `[string, int]`.
     pub(in crate::codegen::rust) fn list_element_tuple_slots(list: &Type) -> Option<Vec<Type>> {
+        // a body-inferred borrow makes the formal `&Vec<(..)>`: the literal still builds the list
+        let list = match list {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
         let list = match list {
             Type::Result(ok, _) => ok.as_ref(),
             Type::Option(inner) => inner.as_ref(),
