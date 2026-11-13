@@ -80,6 +80,32 @@ pub fn shared_cache_dir(name: &str) -> PathBuf {
     d
 }
 
+/// Run one `#[ignore]`d test of this very test binary in a child process with `envs` set only there, and fail with its
+/// output unless it passed. For tests that must point a process-global setting (`WJ_CARGO_TARGET_ROOT`) at a private
+/// directory: `std::env::set_var` in the shared test process would send every concurrent and later build of every
+/// other test there too (one such root grew to 3.4 GB of real cargo targets and outlived its scratch directory).
+/// `name` is the test function's name inside the calling module (`module_path!()` supplies the module).
+pub fn run_ignored_test_in_child(module: &str, name: &str, envs: &[(&str, &std::ffi::OsStr)]) {
+    // `all::cargo_cache_active_test` in the consolidated binary, the crate name alone in a standalone one
+    let filter = module.split_once("::").map_or(name.to_string(), |(_, m)| format!("{m}::{name}"));
+    let mut c = std::process::Command::new(std::env::current_exe().expect("test binary"));
+    c.args([filter.as_str(), "--exact", "--ignored", "--nocapture", "--test-threads=1"]).env(CHILD_MARKER, "1");
+    for (k, v) in envs {
+        c.env(k, v);
+    }
+    let out = c.output().expect("run test child");
+    let text = format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(out.status.success() && text.contains("1 passed"), "child test {filter} failed:\n{text}");
+}
+
+/// Set in the child that [`run_ignored_test_in_child`] starts; the `#[ignore]`d body returns at once without it, so a
+/// plain `--ignored` run never changes the shared process's settings.
+pub const CHILD_MARKER: &str = "WJ_TEST_CHILD";
+
+pub fn in_test_child() -> bool {
+    std::env::var_os(CHILD_MARKER).is_some()
+}
+
 /// Is a process with this id running? (`/proc` where it exists, else `kill -0`.) A pid we cannot tell about counts as alive.
 fn process_alive(pid: u32) -> bool {
     if Path::new("/proc/self").exists() {
