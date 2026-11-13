@@ -148,6 +148,7 @@ digraph deps {
   "cargo_toml" -> "package" [label="1"];
   "check" -> "analyzer" [label="3"];
   "check" -> "codegen" [label="1"];
+  "check" -> "compiler_config" [label="1"];
   "check" -> "diagnostics" [label="30"];
   "check" -> "embedded_assets" [label="3"];
   "check" -> "fuzzy_matcher" [label="4"];
@@ -251,7 +252,7 @@ digraph deps {
   "compiler" -> "build_utils" [label="3"];
   "compiler" -> "cargo_toml" [label="4"];
   "compiler" -> "codegen" [label="39"];
-  "compiler" -> "compiler_config" [label="4"];
+  "compiler" -> "compiler_config" [label="5"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
   "compiler" -> "debug_env" [label="4"];
@@ -261,7 +262,7 @@ digraph deps {
   "compiler" -> "ir" [label="16"];
   "compiler" -> "lexer" [label="4"];
   "compiler" -> "linter" [label="2"];
-  "compiler" -> "metadata" [label="48"];
+  "compiler" -> "metadata" [label="47"];
   "compiler" -> "module_system" [label="2"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
@@ -333,7 +334,7 @@ digraph deps {
   "ide_analysis" -> "ir" [label="1"];
   "ide_analysis" -> "lexer" [label="1"];
   "ide_analysis" -> "linter" [label="1"];
-  "ide_analysis" -> "metadata" [label="1"];
+  "ide_analysis" -> "metadata" [label="2"];
   "ide_analysis" -> "parser" [label="4"];
   "ide_analysis" -> "type_display" [label="1"];
   "inference" -> "parser" [label="9"];
@@ -365,7 +366,7 @@ digraph deps {
   "ir" -> "source_map" [label="6"];
   "ir" -> "type_classification" [label="31"];
   "ir" -> "type_display" [label="2"];
-  "ir" -> "type_inference" [label="8"];
+  "ir" -> "type_inference" [label="9"];
   "ir" -> "typing" [label="25"];
   "lexer" -> "type_classification" [label="1",color=red,fontcolor=red];
   "linter" -> "analyzer" [label="4"];
@@ -376,10 +377,10 @@ digraph deps {
   "linter" -> "parser" [label="34"];
   "linter" -> "source_map" [label="4"];
   "linter" -> "type_classification" [label="1"];
-  "metadata" -> "analyzer" [label="32"];
+  "metadata" -> "analyzer" [label="36"];
   "metadata" -> "codegen" [label="5"];
   "metadata" -> "compiler" [label="5",color=red,fontcolor=red];
-  "metadata" -> "parser" [label="24"];
+  "metadata" -> "parser" [label="29"];
   "metadata" -> "type_classification" [label="2"];
   "module_system" -> "config" [label="1"];
   "module_system" -> "project_paths" [label="1"];
