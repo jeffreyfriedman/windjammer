@@ -44,12 +44,6 @@ fn setup() -> tempfile::TempDir {
     d
 }
 
-fn has_key() -> bool {
-    // a build of unknown origin (no content key) caches nothing: nothing to test
-    let out = Command::new(env!("CARGO_BIN_EXE_wj")).arg("--version").output().unwrap();
-    !String::from_utf8_lossy(&out.stdout).contains("unknown")
-}
-
 #[test]
 fn an_unchanged_program_replays_the_stored_check_and_a_changed_input_checks_again() {
     let d = setup();
@@ -57,10 +51,6 @@ fn an_unchanged_program_replays_the_stored_check_and_a_changed_input_checks_agai
     let first = run(dir, dir, &[], &[]);
     assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
     assert_eq!(String::from_utf8_lossy(&first.stdout), "2\n");
-    if !has_key() {
-        assert!(entries(dir).is_empty(), "a build without a content key stores nothing");
-        return;
-    }
     assert!(!entries(dir).is_empty(), "the clean check is stored");
     let again = run(dir, dir, &[], &[]);
     assert_eq!(again.stdout, first.stdout);
@@ -102,9 +92,6 @@ fn an_unchanged_program_replays_the_stored_check_and_a_changed_input_checks_agai
 /// solved again.
 #[test]
 fn literal_widths_are_stored_by_content_and_used_on_a_repeat_run() {
-    if !has_key() {
-        return;
-    }
     let d = tempfile::tempdir().unwrap();
     let dir = d.path();
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drift_corpus/repros/index_countdown_usize_underflow.wj")).unwrap();
