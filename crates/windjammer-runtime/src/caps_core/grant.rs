@@ -365,7 +365,7 @@ impl Grant {
                 if c.generation != now || !fresh {
                     c.allowed.clear();
                     c.generation = now;
-                    c.stamp = Some(std::time::Instant::now());
+                    c.stamp = if cfg!(target_arch = "wasm32") { None } else { Some(std::time::Instant::now()) };
                 }
                 if c.allowed.contains(res) {
                     return Ok(());

@@ -6,5 +6,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;
 
-#[cfg(target_arch = "wasm32")]
+// Browser bindings need the `wasm` feature (wasm-bindgen, web-sys); a wasm32 build without it
+// (the engine core, `default-features = false`) has no platform module.
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 pub mod wasm;
