@@ -8,6 +8,16 @@
 use crate::codegen::rust::IrCutoverConfig;
 use std::path::PathBuf;
 
+/// The compiler's identity for every cache: its version plus the build key `build.rs` bakes in, a digest of all build
+/// inputs by content (build_support/content_key.rs: sources, std, embedded assets, manifests, build script, rustc,
+/// target, profile, features). A constant of the build: no executable path, mtime, git state or clock, and no runtime
+/// cost. `None` only for a build without the key (never from this crate's build script). Every cache asks this one
+/// function (`check::shared_cache::compiler_key`, `compiler::incremental::compiler_build_identity`).
+pub fn compiler_key() -> Option<String> {
+    let key = option_env!("WJ_BUILD_KEY")?;
+    (!key.is_empty()).then(|| format!("{}+{key}", env!("CARGO_PKG_VERSION")))
+}
+
 /// Behavior-affecting compiler settings. Build once at the driver edge and pass down.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerConfig {
