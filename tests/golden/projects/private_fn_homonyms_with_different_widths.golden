@@ -1,0 +1,85 @@
+// ==== ledger.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn cell(row: &Vec<String>, index: usize) -> String {
+    if index < row.len() {
+        row[index].clone()
+    } else {
+        String::from("-")
+    }
+}
+
+#[inline]
+pub fn first(row: &Vec<String>) -> String {
+    cell(row, 0_usize)
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod ledger;
+pub mod parse;
+
+// Re-export public items
+pub use ledger::*;
+pub use parse::*;
+// ==== main.rs ====
+use self::parse::Mapping;
+mod parse;
+mod ledger;
+fn main() {
+    let row = vec!["2026-01-02".to_string(), "12".to_string()];
+    let m = Mapping { date_col: 0_i64, amount_col: 1_i64 };
+    println!("{} {} {}", parse::date_of(&row, m), parse::amount_of(&row, Mapping { date_col: 0_i64, amount_col: 1_i64 }), ledger::first(&row));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod ledger;
+pub mod parse;
+
+// Re-export public items
+pub use ledger::*;
+pub use parse::*;
+// ==== parse.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Mapping {
+    pub date_col: i64,
+    pub amount_col: i64,
+}
+impl Mapping {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(16);
+        __bytes.extend_from_slice(&self.date_col.to_ne_bytes());
+        __bytes.extend_from_slice(&self.amount_col.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[inline]
+pub fn cell(cells: &Vec<String>, idx: i64) -> String {
+    if idx < (cells.len() as i64) {
+        cells[idx as usize].clone()
+    } else {
+        String::new()
+    }
+}
+
+#[inline]
+pub fn date_of(cells: &Vec<String>, mapping: Mapping) -> String {
+    cell(cells, mapping.date_col)
+}
+
+#[inline]
+pub fn amount_of(cells: &Vec<String>, mapping: Mapping) -> String {
+    cell(cells, mapping.amount_col)
+}
+
