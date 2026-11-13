@@ -797,17 +797,21 @@ impl<'ast> CodeGenerator<'ast> {
         let lookup = lookup_callee.as_ref();
         let import_alias_resolved = self.import_fn_alias_map.contains_key(callee_name);
         let simple = lookup.rsplit("::").next().unwrap_or(lookup);
+        // Lexical scope: a bare call of a function this file declares names that function; a global entry under
+        // the same bare key that declares another function belongs to another module.
+        let own = if receiver_type_name.is_none() { self.own_file_definition(callee_name) } else { None };
+        let same_function = |s: &crate::analyzer::FunctionSignature| own.as_ref().is_none_or(|o| o.declares_same_function(s));
         let mut sig = if receiver_type_name.is_none() && !callee_name.contains("::") {
             let from_global = self
                 .global_signature_registry
                 .as_ref()
-                .and_then(|g| g.get_signature(lookup).cloned());
+                .and_then(|g| g.get_signature(lookup).filter(|s| same_function(s)).cloned());
             let from_global_simple = if import_alias_resolved {
                 None
             } else {
                 self.global_signature_registry
                     .as_ref()
-                    .and_then(|g| g.get_signature(simple).cloned())
+                    .and_then(|g| g.get_signature(simple).filter(|s| same_function(s)).cloned())
             };
             let from_reg = registry.get_signature(lookup).cloned();
             let from_local = local_sig.cloned();
@@ -945,6 +949,7 @@ impl<'ast> CodeGenerator<'ast> {
                     ]
                 };
             for challenger in challengers {
+                let challenger = challenger.filter(|s| same_function(s));
                 upgraded =
                     crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
                         upgraded, challenger, pidx,
@@ -1062,7 +1067,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if let Some(global) = self.global_signature_registry.as_ref() {
-            if let Some(global_sig) = global.get_signature(callee_name) {
+            if let Some(global_sig) = global.get_signature(callee_name).filter(|s| same_function(s)) {
                 let global_idx = global_sig.arg_param_index(arg_index);
                 let method_registry_owned = crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
                     callee_name,
@@ -1185,7 +1190,8 @@ impl<'ast> CodeGenerator<'ast> {
             let stdlib = SignatureRegistry::stdlib();
             let std_sig = stdlib
                 .get_signature(callee_name)
-                .or_else(|| stdlib.get_signature(lookup));
+                .or_else(|| stdlib.get_signature(lookup))
+                .filter(|s| same_function(s));
             if let Some(std_sig) = std_sig {
                 let std_idx = std_sig.arg_param_index(arg_index);
                 if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
@@ -1607,6 +1613,11 @@ impl<'ast> CodeGenerator<'ast> {
                 &mut sig,
                 Some(&map_qualified),
             );
+        }
+        // Lexical identity is final: the refreshes above read bare-name keys, and a same-named function of another
+        // module (`draft(string, string)` beside this file's `draft(int, int)`) is never this call's callee.
+        if let Some(own) = own.as_ref().filter(|o| !o.declares_same_function(&sig)) {
+            sig = own.clone();
         }
         if receiver_type_name.is_none() && !self.is_import_alias_cross_crate_call(callee_name) {
             sig =

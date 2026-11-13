@@ -1,0 +1,9 @@
+use crate::ports::AuditSink
+use crate::ports::AuditDraft
+use crate::ports::Posted
+pub struct MemAudit {}
+impl AuditSink for MemAudit {
+    fn append(self, scope: string, event: AuditDraft) -> Result<Posted, string> {
+        Ok(Posted { id: scope.len() as int + event.note.len() as int })
+    }
+}

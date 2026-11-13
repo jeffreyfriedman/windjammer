@@ -127,4 +127,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
     }
+
+    /// The signature of the function this file declares at top level as `name`, when a bare call `name(..)` names
+    /// it (lexical scope beats every other module): not inside an inline `mod`, not an impl's sibling method. The
+    /// file's registry holds its own definitions under their bare names (`keep_own_definitions`).
+    pub(crate) fn own_file_definition(&self, name: &str) -> Option<crate::analyzer::FunctionSignature> {
+        if name.contains("::")
+            || !self.current_module_path.is_empty()
+            || self.bare_call_is_sibling_method(name)
+            || !self.idiom.file_scope_fn_names.contains(name)
+            || !self.signature_registry.has_signature_locally(name)
+        {
+            return None;
+        }
+        self.signature_registry.get_signature(name).filter(|s| !s.has_self_receiver).cloned()
+    }
 }
