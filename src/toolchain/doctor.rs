@@ -190,7 +190,7 @@ pub fn diagnose(i: &Inputs) -> Vec<Problem> {
                 message: format!("{} does not run: {e}", b.resolved.display()),
                 fix: vec![refresh.clone()],
             }),
-            (Some(id), _) if id.commit.is_none() => problems.push(Problem {
+            (Some(id), _) if id.commit.is_none() && id.key.is_none() => problems.push(Problem {
                 kind: "stale",
                 message: format!(
                     "{} (wj {}) predates build identity stamping, so its age cannot be known",
@@ -393,6 +393,23 @@ fn newest_in_checkout(c: &Path) -> Option<i64> {
 pub fn expect_head(path_env: &str) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let checkout = stale::enclosing_checkout(&cwd).ok_or("not inside a windjammer checkout")?;
+    let (found, resolved) = find_on_path(path_env)
+        .into_iter()
+        .next()
+        .ok_or("no `wj` on PATH")?;
+    let id = probe(&resolved)?;
+    let fix = format!("cd {} && cargo build --release --bin wj && target/release/wj install-dev", checkout.display());
+    // An unstamped build is compared by the content key of its sources (exact, git-free).
+    if id.commit.is_none() {
+        let key = id.short_key().ok_or_else(|| format!("{} predates build identity stamping", found.display()))?;
+        let theirs = super::behind::checkout_inputs_key(&checkout);
+        return if theirs.starts_with(key) {
+            Ok(format!("{} is built from this checkout's sources {key}", found.display()))
+        } else {
+            Err(format!("{} is built from sources {key} but this checkout's are {}.\n  fix: {fix}", found.display(), &theirs[..10]))
+        };
+    }
+    let commit = id.commit.clone().unwrap_or_default();
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(&checkout)
@@ -400,15 +417,6 @@ pub fn expect_head(path_env: &str) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
     let head = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    let (found, resolved) = find_on_path(path_env)
-        .into_iter()
-        .next()
-        .ok_or("no `wj` on PATH")?;
-    let id = probe(&resolved)?;
-    let commit = id
-        .commit
-        .clone()
-        .ok_or_else(|| format!("{} predates build identity stamping", found.display()))?;
     if head.starts_with(&commit) {
         Ok(format!(
             "{} is built from HEAD {}",
@@ -417,11 +425,10 @@ pub fn expect_head(path_env: &str) -> Result<String, String> {
         ))
     } else {
         Err(format!(
-            "{} is built from {} but HEAD is {}.\n  fix: cd {} && cargo build --release --bin wj && target/release/wj install-dev",
+            "{} is built from {} but HEAD is {}.\n  fix: {fix}",
             found.display(),
             id.short(),
-            &head[..12],
-            checkout.display()
+            &head[..head.len().min(12)],
         ))
     }
 }
