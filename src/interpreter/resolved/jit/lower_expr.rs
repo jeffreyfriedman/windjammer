@@ -61,6 +61,12 @@ impl Lo<'_, '_> {
 
     fn expr_in(&mut self, e: E) -> Option<Val> {
         Some(match e {
+            Expression::Literal { value: Literal::Int(i), location } => match self.it.literal_width_at(location.as_ref()) {
+                // a literal the compiled program types (`2_usize`) has that width in machine code too
+                Some(t) if int_ok(t) => Val { v: self.k(*i), ty: Ty::Int(t), k: None },
+                Some(_) => return None,
+                None => self.literal(&Literal::Int(*i))?,
+            },
             Expression::Literal { value, .. } => self.literal(value)?,
             Expression::Identifier { name, .. } => match self.lookup(name)?.clone() {
                 Bind::Var(id) => Val::of(self.b.use_var(self.vars[id].var), self.vars[id].ty),

@@ -1933,3 +1933,5 @@ tests/drift_corpus/repros/str_array_element_in_owned_branch.wj#mainerr	none
 tests/drift_corpus/repros/str_array_element_in_owned_branch.wj	exit1:0:17	
 tests/drift_corpus/repros/struct_field_read_moves_literal_to_i32.wj#mainerr	none	
 tests/drift_corpus/repros/struct_field_read_moves_literal_to_i32.wj	exit1:0:17	
+tests/drift_corpus/repros/index_countdown_usize_underflow.wj#mainerr	none	
+tests/drift_corpus/repros/index_countdown_usize_underflow.wj	exit101:10:498312895	
