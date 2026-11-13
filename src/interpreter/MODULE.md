@@ -53,13 +53,8 @@ programs whose AST can give a literal another width than `int`). Nothing else fr
 ## Entry points
 `runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `Interpreter::{new, new_capturing, run, run_checked}`.
 
-## Intrinsics
-Names come only from `crate::intrinsics::Intrinsic`; do not register them in `builtins/`. Panic text mirrors rustc; unmodelled
-shapes return `unsupported` (exit 2). A user item or local of the same name shadows the intrinsic. New one: registry, then an arm in `eval_intrinsic`.
-
-## Extending the stdlib: `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in `builtins/*.rs`.
+## Intrinsics and stdlib
+Intrinsic names come only from `crate::intrinsics::Intrinsic` (never register them in `builtins/`); panic text mirrors rustc; unmodelled shapes return `unsupported` (exit 2); a user item or local of the same name shadows one. New one: registry, then an arm in `eval_intrinsic`. Stdlib: `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in `builtins/*.rs`.
 ## Test (`tests/interpreter_engine_parity_test.rs`: both engines on every corpus; `scripts/wj/interp_bench.wj`: speed ratchet; `scripts/wj/interp_instr.wj`: instruction-count ratchet; `tests/interpreter_fallbacks_test.rs`: the resolved engine's slower paths (`Fallbacks`: islands, walker calls, deopts, refused/abandoned/exited machine-code loops) held to `bench/interp/fallbacks.tsv`; `tests/interpreter_compiled_agreement_test.rs`: reduced repros the compiled build rejects or fails must not pass interpreted)
-- `interpreter_semantics_test` hand-derived Rust semantics; `interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests; stdout, exit status and normalised stderr)
-- `interpreter_cli_test`, `interpreter_concurrency_test`, `interpreter_std_modules_test` (Python oracles), `interpreter_rust_parity_test` (rustc oracle)
-- `interpreter_features` every registry entry's probe behaves as registered; `interpreter_projects` multi-file fixtures + module fuzzer (`WJ_PROJECT_COMPILED=1` adds cargo)
-- `interpreter_hash_order_test` (`--hash-seed` gate), `interpreter_http_server_test`, `interpreter_config_db_test`; `interpreter_jit_{differential,caps,loops}_test` (machine code vs the walker; `WJ_JIT_LOOP_HOT=0` enters every loop)
+- Oracles: `interpreter_semantics_test` (hand-derived Rust), `interpreter_differential_test` (Python models and compiled Rust; stdout, exit status, normalised stderr), `interpreter_rust_parity_test` (rustc), `interpreter_std_modules_test` (Python)
+- Surfaces: `interpreter_cli_test`, `interpreter_concurrency_test`, `interpreter_features` (every registry probe), `interpreter_projects` (multi-file fixtures + module fuzzer; `WJ_PROJECT_COMPILED=1` adds cargo), `interpreter_hash_order_test`, `interpreter_http_server_test`, `interpreter_config_db_test`, `interpreter_jit_{differential,caps,loops}_test` (`WJ_JIT_LOOP_HOT=0` enters every loop)
