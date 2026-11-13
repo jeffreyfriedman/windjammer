@@ -9,6 +9,7 @@ mod compilation_pipeline;
 mod converged_module_signatures;
 mod declaration_stub_registry;
 mod dependency_resolution;
+mod path_dep_metadata;
 pub mod incremental;
 mod library_copy_registry;
 mod value_formal_fixed_point;

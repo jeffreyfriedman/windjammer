@@ -195,6 +195,14 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
                 break;
             }
         }
+        // No metadata.json: a dependency with Windjammer sources is analyzed from them (never guessed).
+        if found.is_none() {
+            match super::path_dep_metadata::derive(&key, &dep_root) {
+                Some(Ok(root)) => found = Some(root),
+                Some(Err(e)) => eprintln!("error: {e}; its call sites have no signatures"),
+                None => {}
+            }
+        }
         // Ecosystem `path = "…/build"` often has generated `lib.rs` and no metadata.json.
         if found.is_none() {
             for candidate in &candidates {
