@@ -150,3 +150,29 @@ fn cache_entries_of_another_key_are_ignored_not_errors() {
     let verdict = |o: &std::process::Output| String::from_utf8_lossy(&o.stdout).split(" (").next().unwrap_or_default().to_string();
     assert_eq!(verdict(&clean), verdict(&planted));
 }
+
+#[test]
+fn build_rs_never_queries_or_watches_git() {
+    // A commit, a checkout or `git status` must never rerun build.rs: that recompiled the library on every commit.
+    // Release builds stamp a commit through the `WJ_GIT_HASH` environment variable instead (read only when set).
+    let build = std::fs::read_to_string(root().join("build.rs")).unwrap();
+    for forbidden in ["git_command", "\"rev-parse\"", "\"status\"", "--git-path", ".git/"] {
+        assert!(!build.contains(forbidden), "build.rs uses `{forbidden}`: the toolchain identity must not depend on git");
+    }
+    let watched: Vec<&str> = build.lines().filter_map(|l| l.split("cargo:rerun-if-changed=").nth(1)).collect();
+    for w in &watched {
+        assert!(!w.contains(".git") && !w.contains("{p}"), "build.rs watches a git path: {w}");
+    }
+    assert!(build.contains("cargo:rerun-if-env-changed={var}"), "the commit stamp is an environment input");
+}
+
+#[test]
+fn version_shows_the_source_key() {
+    let out = Command::new(WJ).arg("--version").output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.split_whitespace().nth(1).unwrap_or_default().to_string();
+    let (version, key) = first.split_once('+').expect("`wj --version` prints <version>+<source key>");
+    assert_eq!(version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(key.len(), 10, "{text}");
+    assert_eq!(key, &content_key::inputs_key(&root())[..10], "the binary under test is not built from this checkout's sources");
+}
