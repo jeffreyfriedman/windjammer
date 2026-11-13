@@ -211,6 +211,11 @@ path = "tests/interpreter_fast_paths_test.rs"
 name = "fallbacks"
 path = "tests/interpreter_fallbacks_test.rs"
 
+# Programs the compiled build rejects or fails do not pass interpreted: cargo test --release --test compiled_agreement
+[[test]]
+name = "compiled_agreement"
+path = "tests/interpreter_compiled_agreement_test.rs"
+
 # The calls a build-slot gate makes, interpreted: cargo test --release --test slot_gate
 [[test]]
 name = "slot_gate"

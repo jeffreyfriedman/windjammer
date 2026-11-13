@@ -63,6 +63,11 @@ wj startup) / (reference kernel - reference startup). Below 1.0 means Windjammer
 Startup (`fn main() { println("hello") }`, the default `wj run` path, check included): wj 119, Lua 11, QuickJS 14,
 CPython 136, Node 214.
 
+The first rungs of this ADR's own work moved nbody: loop entry checks the cached classification in place, and a
+call with an inferred `&mut` parameter is compiled instead of running as a walker island. nbody 905M -> 728M
+instructions, net 0.63 vs QuickJS and 1.03 vs Lua; kernel islands 21,304 -> 1,304 (geometric means 0.33 vs
+QuickJS, 0.66 vs Lua).
+
 The integer kernels (fib30, loop5m, structs) already run as machine code and beat every interpreter; the gaps are
 the kernels whose hot loops still leave machine code: closures (a walker island per iterator chain), hashmap (both
 loops refused), nbody (an island per call of `advance`, plus loop-entry cost), strings (islands, loops refused).
@@ -73,7 +78,7 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | P1 | worst kernel, net vs QuickJS | 1.47 (hashmap) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
 | P2 | startup instructions | 119M | <= 60M, then <= 25M | `instr_baseline.json` `startup` |
 | P3 | worst kernel, net vs Lua 5.5 | 6.89 (hashmap) | <= 1.0 | `--refs` |
-| P4 | islands and refused loops in kernels | 21,304 islands, 6 refused loops | 0 in any hot loop | `bench/interp/fallbacks.tsv` (exact) |
+| P4 | islands and refused loops in kernels | 1,304 islands (was 21,304), 6 refused loops | 0 in any hot loop | `bench/interp/fallbacks.tsv` (exact) |
 | P5 | geometric mean, net vs Node (V8) | 2.49 | <= 1.0 (JIT class) | `--refs` |
 | P6 | a kernel suite of real programs (JSON, regex, a game tick, a parser) | not yet | added, counted, P1-P5 apply | new kernels in `bench/interp/` |
 
@@ -87,6 +92,7 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | C3 | fuzz divergences | 0 | 0 | `tests/drift_corpus/fuzz_divergences.txt` |
 | C4 | fuzz throughput (generated cases checked, walker vs resolved) | 154 cases in 14 s wall at load 50 (about 11 per second) | 10x, so the long seed range (`--fuzz-long`) runs on every merge | `drift_gate.wj` step `fuzz` |
 | C5 | readiness R2 (no silent divergence) and R5 (diagnostics agree) | 98.5% and 95.1% | 100% | `docs/generated/interp_readiness.json` |
+| C6b | integer widths: an unsuffixed literal gets the width the numeric solver gives it in the compiled program (ADR-0028 `literal_widths`), so a `usize` counter underflows interpreted exactly where it panics compiled | the interpreter keeps a literal's width open (`IntTy::Lit`); a countdown `while i >= 0 && ..` that indexes a `Vec` ends at -1 interpreted and panics compiled | the interpreter reads the solver's per-function `literal_widths` (needs `crate::ir` among its allowed imports and the solver in `wj run`'s check, paid in startup instructions, P2) | a drift corpus case per width class; `interp_instr.wj` for the startup cost |
 | C6 | engines agree with each other | walker == resolved == machine code on every corpus program | stays | `engine_parity`, `fast_paths`, `fallbacks`, jit differential tests |
 
 ## Ladder 3: developer experience
