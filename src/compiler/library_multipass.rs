@@ -1709,6 +1709,7 @@ fn run_parallel_numeric_inference(
                 crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
                     .unwrap_or_default();
             local.set_current_file_module_path(file_module);
+            local.register_own_functions(&parsed_programs[i]);
             local.collect_program_constraints(&parsed_programs[i]);
             local
         })

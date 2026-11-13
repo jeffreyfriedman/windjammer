@@ -97,6 +97,13 @@ impl UnifiedNumericInference {
         self.float_collector.set_source_root(root);
     }
 
+    /// See [`crate::type_inference::IntInference::register_own_functions`]: before a file's constraints are collected,
+    /// its own functions are the signatures of its bare calls.
+    pub fn register_own_functions<'ast>(&mut self, program: &crate::parser::Program<'ast>) {
+        self.float_collector.register_own_functions(program);
+        self.int_collector.register_own_functions(program);
+    }
+
     pub fn set_global_function_signatures(
         &mut self,
         sigs: &HashMap<String, (Vec<Type>, Option<Type>)>,

@@ -1,0 +1,48 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod rows;
+
+// Re-export public items
+pub use rows::*;
+// ==== main.rs ====
+use self::rows::KIND_ROW;
+mod rows;
+#[inline]
+fn is_row_key(prefix_len: usize, key: &Vec<u8>) -> bool {
+    key.len() == prefix_len + 8_usize
+}
+
+fn main() {
+    let keys: Vec<Vec<u8>> = vec![vec![1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8, 8_u8, 9_u8, 10_u8], vec![1_u8, 2_u8, 3_u8]];
+    let prefix_len: usize = 2_usize;
+    let mut n: usize = 0_usize;
+    let mut i: usize = 0_usize;
+    while i < keys.len() {
+        if is_row_key(prefix_len, &keys[i]) {
+            n += 1;
+        }
+        i += 1;
+    }
+    println!("{} {} {}", n, KIND_ROW, rows::is_row_key(5_u8));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod rows;
+
+// Re-export public items
+pub use rows::*;
+// ==== rows.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub const KIND_ROW: u8 = 1_u8;
+
+#[inline]
+pub fn is_row_key(k: u8) -> bool {
+    k >= 4_u8
+}
+
