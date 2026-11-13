@@ -24,6 +24,87 @@ use crate::source_map::Location;
 use crate::ir::explain::emitted::{parse_emitted, EmittedMode};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+
+/// A store for facts that are functions of one parsed file, injected by the driver (`cli::run_dev`): `key` covers
+/// the file's name, text and renames; the store adds everything else the result depends on (the compiler build by
+/// content, the baked stdlib, the working directory, the `WJ_*` environment, the `.wj.meta` sidecars `program`'s
+/// `use`s can reach) and never answers when any of it changed.
+pub trait FactStore: Send + Sync {
+    fn get(&self, key: &str, program: &crate::parser::Program<'static>) -> Option<String>;
+    fn put(&self, key: &str, program: &crate::parser::Program<'static>, text: &str);
+}
+
+static FACT_STORE: Mutex<Option<Arc<dyn FactStore>>> = Mutex::new(None);
+
+/// Content key of each parsed file (by the name it was parsed under): its text and the renames applied.
+static PARSED: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+pub fn install_fact_store(store: Arc<dyn FactStore>) {
+    *FACT_STORE.lock().unwrap_or_else(|e| e.into_inner()) = Some(store);
+}
+
+/// Record what `file` was parsed from (`loader::parse_source_renaming`); a later parse of it replaces the entry.
+pub(crate) fn note_parsed(file: &str, source: &str, renames: &HashMap<String, String>) {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    let mut part = |b: &[u8]| {
+        h.update((b.len() as u64).to_le_bytes());
+        h.update(b);
+    };
+    part(b"wj-literal-widths 1");
+    part(file.as_bytes());
+    part(source.as_bytes());
+    let mut r: Vec<(&String, &String)> = renames.iter().collect();
+    r.sort();
+    for (a, b) in r {
+        part(a.as_bytes());
+        part(b.as_bytes());
+    }
+    let key = format!("{:x}", h.finalize());
+    PARSED.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(file.to_string(), key);
+}
+
+fn parsed_key(file: &str) -> Option<String> {
+    PARSED.lock().unwrap_or_else(|e| e.into_inner()).as_ref()?.get(file).cloned()
+}
+
+/// `solve_literal_widths` through the injected store: `file` is the name `program` was parsed under.
+fn stored_literal_widths(program: &'static crate::parser::Program<'static>, file: &str) -> Option<LiteralWidths> {
+    let store = FACT_STORE.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let key = store.as_ref().and_then(|_| parsed_key(file));
+    if let (Some(store), Some(key)) = (&store, &key) {
+        if let Some(w) = store.get(key, program).and_then(|t| decode_widths(&t)) {
+            return w;
+        }
+    }
+    let w = width_sensitive(program).then(|| solve_literal_widths(program)).flatten();
+    if let (Some(store), Some(key)) = (&store, &key) {
+        store.put(key, program, &encode_widths(w.as_ref()));
+    }
+    w
+}
+
+/// `widths` as text: `-` for no answer (the analysis failed or did not run), else `line:col:width` lines.
+fn encode_widths(widths: Option<&LiteralWidths>) -> String {
+    let Some(w) = widths else { return "-".to_string() };
+    let mut v: Vec<(&(usize, usize), &IntTy)> = w.iter().collect();
+    v.sort();
+    v.iter().map(|((l, c), t)| format!("{l}:{c}:{}\n", t.name())).collect()
+}
+
+fn decode_widths(text: &str) -> Option<Option<LiteralWidths>> {
+    if text == "-" {
+        return Some(None);
+    }
+    let mut out = LiteralWidths::new();
+    for line in text.lines() {
+        let mut it = line.split(':');
+        let (l, c, t) = (it.next()?.parse().ok()?, it.next()?.parse().ok()?, IntTy::from_name(it.next()?)?);
+        out.insert((l, c), t);
+    }
+    Some(Some(out))
+}
 
 /// Per function (`name`, or `Type::name` for a method): the parameters compiled code takes by `&mut`.
 pub(crate) type MutRefParams = HashMap<String, HashSet<String>>;
@@ -253,7 +334,8 @@ impl Interpreter {
         let state = match key.and_then(|k| self.lit_widths_by_program.get(&k).cloned()) {
             Some(s) => s,
             None => {
-                let s = match program.filter(|p| width_sensitive(p)).and_then(solve_literal_widths) {
+                let file = self.modules.get(m).map(|x| x.file.to_string_lossy().to_string()).unwrap_or_default();
+                let s = match program.and_then(|p| stored_literal_widths(p, &file)) {
                     Some(w) if !w.is_empty() => LitWidths::Known(Rc::new(w)),
                     _ => LitWidths::Open,
                 };

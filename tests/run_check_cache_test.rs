@@ -14,6 +14,7 @@ const MARK: &str = "@@stored-outcome@@";
 fn run(dir: &Path, cwd: &Path, extra: &[&str], env: &[(&str, &str)]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_wj"));
     c.current_dir(cwd).arg("run").arg("--interpret").args(extra).arg(dir.join("prog.wj"));
+    c.env_remove("WJ_PHASES");
     c.env("WJ_CARGO_TARGET_ROOT", dir.join("cache"));
     for (k, v) in env {
         c.env(k, v);
@@ -60,7 +61,7 @@ fn an_unchanged_program_replays_the_stored_check_and_a_changed_input_checks_agai
         assert!(entries(dir).is_empty(), "a build without a content key stores nothing");
         return;
     }
-    assert_eq!(entries(dir).len(), 1, "the clean check is stored");
+    assert!(!entries(dir).is_empty(), "the clean check is stored");
     let again = run(dir, dir, &[], &[]);
     assert_eq!(again.stdout, first.stdout);
     assert_eq!(again.stderr, first.stderr, "a hit prints exactly what the check printed");
@@ -94,4 +95,37 @@ fn an_unchanged_program_replays_the_stored_check_and_a_changed_input_checks_agai
     let refused = run(dir, dir, &[], &[]);
     assert!(!refused.status.success(), "a refused program is never stored");
     assert_eq!(entries(dir).len(), n);
+}
+
+/// The solver's literal widths the interpreter reads (ADR-0038 C6b) are stored with the checks: a repeat run uses the
+/// stored widths (an entry rewritten to "no widths" changes the behaviour, so it was read), and an edited file is
+/// solved again.
+#[test]
+fn literal_widths_are_stored_by_content_and_used_on_a_repeat_run() {
+    if !has_key() {
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let dir = d.path();
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drift_corpus/repros/index_countdown_usize_underflow.wj")).unwrap();
+    std::fs::write(dir.join("prog.wj"), &src).unwrap();
+    let first = run(dir, dir, &[], &[]);
+    assert!(!first.status.success(), "the usize countdown panics as compiled: {}", String::from_utf8_lossy(&first.stderr));
+    let facts: Vec<_> = entries(dir).into_iter().filter(|p| std::fs::read_to_string(p).unwrap().contains(":usize")).collect();
+    assert_eq!(facts.len(), 1, "the literal widths are stored");
+    let again = run(dir, dir, &[], &[]);
+    assert_eq!((again.status.code(), &again.stdout, &again.stderr), (first.status.code(), &first.stdout, &first.stderr));
+
+    // the stored widths are what the run uses: without them the countdown ends at -1 and does not panic
+    let text = std::fs::read_to_string(&facts[0]).unwrap();
+    let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    v["stderr"] = serde_json::Value::String("-".into());
+    std::fs::write(&facts[0], v.to_string()).unwrap();
+    let forged = run(dir, dir, &[], &[]);
+    assert!(forged.status.success(), "the forged entry was read");
+
+    // an edit is a new key: solved again, the panic is back
+    std::fs::write(dir.join("prog.wj"), format!("{src}\n// edited\n")).unwrap();
+    let edited = run(dir, dir, &[], &[]);
+    assert!(!edited.status.success(), "an edited file is solved again");
 }

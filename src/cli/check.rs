@@ -53,6 +53,28 @@ fn share_registry_layer() {
     });
 }
 
+/// Facts the interpreter computes about one file with the compiler's analysis (literal widths), kept next to the
+/// cached checks (`<cache root>/runs`, `check/run_cache.rs`).
+pub fn share_run_facts() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| crate::interpreter::compiled_facts::install_fact_store(std::sync::Arc::new(RunFacts)));
+}
+
+struct RunFacts;
+
+impl crate::interpreter::compiled_facts::FactStore for RunFacts {
+    fn get(&self, key: &str, _program: &crate::parser::Program<'static>) -> Option<String> {
+        let text = crate::cargo_cache::entries::read(&crate::cargo_cache::entries::runs_dir(), &check::run_cache::fact_key(key)?)?;
+        check::run_cache::decode(&text)
+    }
+    fn put(&self, key: &str, program: &crate::parser::Program<'static>, text: &str) {
+        let (Some(key), Some(entry)) = (check::run_cache::fact_key(key), check::run_cache::encode_fact(program, text)) else { return };
+        let runs = crate::cargo_cache::entries::runs_dir();
+        let _ = std::fs::create_dir_all(&runs);
+        crate::cargo_cache::entries::write(&runs, &key, &entry, crate::cargo_cache::entries::RUNS_MAX_ENTRIES);
+    }
+}
+
 struct RegistryDir(crate::cargo_cache::entries::RegistryStore);
 
 impl crate::analyzer::LayerStore for RegistryDir {
