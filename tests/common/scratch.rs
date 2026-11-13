@@ -130,6 +130,10 @@ fn reap_dead_scratch() {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
             let Some(rest) = name.strip_prefix("wj-") else { continue };
+            // wj-meta* is the shared crate-metadata cache (global_meta_cache_dir), never test scratch
+            if rest.starts_with("meta") {
+                continue;
+            }
             let mut parts = rest.rsplitn(3, '-');
             let (Some(n), Some(pid), Some(_tag)) = (parts.next(), parts.next(), parts.next()) else { continue };
             let (Ok(_), Ok(pid)) = (n.parse::<u32>(), pid.parse::<u32>()) else { continue };
