@@ -6652,6 +6652,11 @@ impl<'ast> CodeGenerator<'ast> {
                 .or_else(|| sig.param_types.get(pidx))
                 .is_some_and(crate::codegen::rust::type_casting::type_is_usize)
         };
+        // A function this file declares is its own contract: the bare key may hold another module's private
+        // homonym (`cell(row, index: usize)` beside this file's `cell(cells, idx: int)`), which is not this callee.
+        if self.own_file_definition(callee_name).is_some() {
+            return false;
+        }
         for reg in [
             self.global_signature_registry.as_deref(),
             Some(&self.signature_registry),
