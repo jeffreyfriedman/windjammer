@@ -43,12 +43,14 @@ pub(crate) struct Ctx {
     pub(crate) row_credit: i64,
     /// Field accesses machine code made through a row view (added to `FastHits::rowview`).
     pub(crate) row_hits: i64,
+    /// Whether the last `map_get` found its key (read by machine code after the call).
+    pub(crate) found: i64,
 }
 
 impl Ctx {
     pub(crate) fn new(it: *mut Interpreter, base: usize, plan: *const super::lower::Plan, reg: *const crate::interpreter::resolved::osr::Reg) -> Ctx {
         let (rows, row_tbls) = (Default::default(), Default::default());
-        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0 }
+        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, found: 0 }
     }
 }
 
@@ -70,6 +72,7 @@ pub(crate) const VIEW_AT: i32 = std::mem::offset_of!(Ctx, views) as i32;
 pub(crate) const VIEW_STORES: i32 = std::mem::offset_of!(Ctx, view_stores) as i32;
 pub(crate) const ROW_AT: i32 = std::mem::offset_of!(Ctx, rows) as i32;
 pub(crate) const ROW_HITS: i32 = std::mem::offset_of!(Ctx, row_hits) as i32;
+pub(crate) const FOUND: i32 = std::mem::offset_of!(Ctx, found) as i32;
 
 /// The key of a view: the local's slot and the stored element type (never 0).
 pub(crate) fn view_key(slot: usize, t: Ty) -> i64 {
@@ -361,6 +364,54 @@ pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) ->
         unsafe { (*(*c).it).fast.packed += 1 };
     }
     r
+}
+
+/// The key machine code passes a map helper: the integer at its static type, as the walker's value.
+fn int_key(k: i64, kt: i64) -> Option<crate::interpreter::value::Key> {
+    let super::kinds::Ty::Int(t) = from_code(kt)? else { return None };
+    Some(crate::interpreter::value::Key(Value::Int(int_value(k, t), t)))
+}
+
+/// `m.get(&k)` of a map local (`mapfast::MapGet`'s lookup): the value's bits at type `want` and `Ctx::found`.
+/// Fails, changing nothing, when the local holds no map or the value is not a scalar of type `want`.
+pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64, want: i64) -> i64 {
+    let mut found = 0;
+    let r = unsafe {
+        with_slot(c, slot, |v| {
+            peek(v, |v| match v {
+                Value::Map(km) => match km.get(&int_key(k, kt)?) {
+                    None => Some(0),
+                    Some(x) => {
+                        let b = bits(x, from_code(want)?)?;
+                        found = 1;
+                        Some(b)
+                    }
+                },
+                _ => None,
+            })
+        })
+    };
+    // SAFETY: as in `with_slot`.
+    unsafe { (*c).found = found };
+    r
+}
+
+/// `m.insert(k, x)` statement of a map local (`mapfast::insert_stmt`): the map made unique, the key and the
+/// value stored as the walker's values. Fails, changing nothing, when the local holds no map.
+pub(crate) unsafe extern "C" fn map_insert(c: *mut Ctx, slot: i64, k: i64, kt: i64, x: i64, xt: i64) -> i64 {
+    unsafe {
+        with_slot(c, slot, |v| {
+            let key = int_key(k, kt)?;
+            let x = value(x, from_code(xt)?);
+            poke(v, |v| match v {
+                Value::Map(km) => {
+                    Rc::make_mut(km).insert(key, x);
+                    Some(0)
+                }
+                _ => None,
+            })
+        })
+    }
 }
 
 /// `v.len()` of a `Vec`.

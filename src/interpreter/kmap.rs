@@ -141,6 +141,14 @@ impl KMap {
         self.len() == 0
     }
 
+    /// One of the values (the same one for the same contents), for machine code's guess at their type.
+    pub fn any_value(&self) -> Option<&Value> {
+        match &self.store {
+            Store::Tree(t) => t.values().next(),
+            Store::Table(t) => t.values().next().map(|(_, v)| v),
+        }
+    }
+
     pub fn get(&self, k: &Key) -> Option<&Value> {
         match &self.store {
             Store::Tree(t) => t.get(k),
