@@ -1,3 +1,5 @@
+#[path = "build_support/content_key.rs"]
+mod content_key;
 #[path = "build_support/identity_key.rs"]
 mod identity_key;
 #[path = "build_support/stable_build.rs"]
@@ -210,13 +212,32 @@ fn emit_toolchain_identity() {
             now
         }
     };
-    // content identity of the compiler source (no clock, no path): key of the cross-checkout analysis cache
-    println!("cargo:rustc-env=WJ_BUILD_KEY={key}");
+    // The compiler's identity for every cache: a digest of all build inputs (content only: no git state, no path, no
+    // clock; build_support/content_key.rs). A copy of the binary, another checkout or a touched file keeps it.
+    println!("cargo:rustc-env=WJ_BUILD_KEY={}", build_content_key());
     println!("cargo:rustc-env=WJ_GIT_HASH={hash}");
     println!("cargo:rustc-env=WJ_GIT_TS={commit_ts}");
     println!("cargo:rustc-env=WJ_GIT_DIRTY={dirty}");
     println!("cargo:rustc-env=WJ_BUILD_PROFILE={profile}");
     println!("cargo:rustc-env=WJ_BUILD_TS={build_ts}");
+}
+
+/// [`content_key::content_key`] of this build: the manifest tree, the compiler (`rustc -vV`), target, profile and
+/// enabled features. Watches exactly the content inputs.
+fn build_content_key() -> String {
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    for rel in content_key::INPUTS {
+        println!("cargo:rerun-if-changed={rel}");
+    }
+    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".into());
+    let version = std::process::Command::new(rustc)
+        .arg("-vV")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    let env = |k: &str| std::env::var(k).unwrap_or_default();
+    let features: Vec<String> = std::env::vars().filter_map(|(k, _)| k.strip_prefix("CARGO_FEATURE_").map(str::to_string)).collect();
+    content_key::content_key(std::path::Path::new(&manifest), &version, &env("TARGET"), &env("PROFILE"), &features)
 }
 
 fn main() {
