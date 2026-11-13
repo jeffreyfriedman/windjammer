@@ -1,0 +1,13 @@
+{
+ "retired:Darwin-arm64": {
+  "closures": 890457413,
+  "fib30": 211223072,
+  "hashmap": 522255062,
+  "loop5m": 366251841,
+  "nbody": 727840865,
+  "sieve": 613873963,
+  "startup": 118789432,
+  "strings": 435154870,
+  "structs": 183579818
+ }
+}

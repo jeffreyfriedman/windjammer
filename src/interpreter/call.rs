@@ -781,6 +781,7 @@ impl Interpreter {
 
     /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
     pub(crate) fn call_func_walk(&mut self, f: &Rc<FuncDef>, args: Vec<Value>, self_val: Option<Value>, targs: &[Type], expected: Option<Type>) -> R {
+        self.fallback.walkercall += self.engine_resolved as u64;
         if f.decorators.iter().any(|d| d.name == "durable") {
             return self.call_durable(f, args, self_val, targs, expected); // journaled steps (ADR-0021 E4), tree-walked
         }

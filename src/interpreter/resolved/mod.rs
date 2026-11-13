@@ -118,6 +118,7 @@ impl Interpreter {
             }
             Ok(true) => self.run_body(f, c, base),
             Ok(false) => {
+                self.fallback.deopt += 1;
                 let args = self.deopt_args(c, base, own);
                 return self.call_func_walk(f, args, None, &[], None);
             }
@@ -186,6 +187,7 @@ impl Interpreter {
                 }
             },
             Ok(false) => {
+                self.fallback.deopt += 1;
                 let args = self.deopt_args(c, base, own);
                 return self.call_func_walk(f, args, None, &[], None).and_then(|v| typed::unbox(v, t));
             }
