@@ -567,6 +567,17 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         Some(strip_refs(ty).clone()).filter(|t| !contains_generic(t))
     }
 
+    /// Binds a `for` pattern. `for line in text.lines()`: a plain loop binding has the declared element type of the
+    /// sequence (`&str`), read before the binding exists (`for x in x` names the outer `x`).
+    pub(super) fn bind_loop_pattern(&mut self, pattern: &Pattern<'ast>, iterable: &Expression<'ast>) -> ConstraintVar {
+        let element = self.surface_shape(iterable).and_then(|t| sequence_element(&t));
+        let loop_var = self.bind_pattern(pattern);
+        if let (Some(t), Pattern::Identifier(_) | Pattern::MutBinding(_)) = (element, pattern) {
+            self.var_static_types.insert(loop_var, t);
+        }
+        loop_var
+    }
+
     /// The user type (not a core surface type) an expression statically has: the struct a method on it belongs to.
     pub(super) fn user_receiver_type(&self, object: &Expression<'ast>) -> Option<String> {
         let t = self.static_type(object)?;
@@ -592,12 +603,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             })
         };
         let by_identity = path.and_then(|p| {
-            [format!("{p}::{member}"), format!("crate::{p}::{member}")].into_iter().find_map(|k| registry.get_signature(&k))
+            [format!("{p}::{member}"), format!("crate::{p}::{member}")].into_iter().find_map(|k| registry.lookup_method(&k))
         });
         let bare = self.resolve_callee_signature(&format!("{leaf}::{member}"), arg_count);
-        // The bare key is the converged view when it declares the same function; a homonym type's method is not.
+        // The bare key is the converged view when it declares the same formals and result (C3 identity); a homonym type's
+        // method is not.
         match (by_identity, bare) {
-            (Some(id), Some(b)) if !b.declares_same_function(id) => Some(id),
+            (Some(id), Some(b)) if (&b.formal_param_types, &b.return_type) != (&id.formal_param_types, &id.return_type) => Some(id),
             (id, b) => b.or(id),
         }
     }

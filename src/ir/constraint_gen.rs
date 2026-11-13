@@ -880,12 +880,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.cs.add_because(Constraint::TypeEquals(loop_var, s), tagged("TY-UNIFY"));
                 } else {
                     let it = self.walk_expression(iterable);
-                    let element = self.surface_shape(iterable).and_then(|t| numeric::sequence_element(&t));
-                    let loop_var = self.bind_pattern(pattern);
-                    if let (Some(t), Pattern::Identifier(_) | Pattern::MutBinding(_)) = (element, pattern) {
-                        // `for line in text.lines()`: the loop variable has the declared element type (`&str`).
-                        self.var_static_types.insert(loop_var, t);
-                    }
+                    let loop_var = self.bind_loop_pattern(pattern, iterable);
                     self.type_loop_element(loop_var, it, iterable);
                 }
                 self.loop_writes_scope(Some(location));
