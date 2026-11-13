@@ -216,6 +216,29 @@ fn emitted_rust_closure_value(expr: &str) -> bool {
         || (t.starts_with('(') && (t.contains("move ||") || t.contains("||") || t.contains('|')))
 }
 
+/// The expression without one pair of outer parentheses, when that pair wraps the whole text (`(a + b)` yes,
+/// `(&x).to_vec()` no).
+fn strip_wrapping_parens(text: &str) -> &str {
+    let t = text.trim();
+    if !(t.starts_with('(') && t.ends_with(')')) {
+        return text;
+    }
+    let mut depth = 0i32;
+    for (i, c) in t.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 && i + 1 != t.len() {
+                    return text;
+                }
+            }
+            _ => {}
+        }
+    }
+    t[1..t.len() - 1].trim()
+}
+
 fn strip_rust_ref_expr(expr: &str) -> &str {
     let trimmed = expr.trim();
     // the outer parentheses must be one group: `(&x).to_vec()` starts with `(` and ends with `)` but is not wrapped
@@ -304,10 +327,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         };
         // Owned / force-owned formals: strip both `&T` and `&mut T` (dogfood)` into `mut deps: AppDeps`).
         if is_ref {
-            let inner = inner
-                .strip_prefix('(')
-                .and_then(|s| s.strip_suffix(')'))
-                .unwrap_or(inner);
+            let inner = strip_wrapping_parens(inner);
             if inner.starts_with('*') {
                 *coerced = inner.to_string();
             } else if is_copy_base(&expected.base) && !matches!(expected.base, BaseType::Custom(_))
