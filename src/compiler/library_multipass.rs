@@ -1369,6 +1369,7 @@ pub(crate) fn build_library_multipass(
                 }
             }
             codegen.set_output_file(&analysis.output_file);
+            codegen.set_module_roots(output, src_base.as_path());
             codegen.set_source_file(file);
             codegen.set_library_source_root(src_base.clone());
             codegen.set_type_defining_modules((*type_defining_modules_arc).clone());

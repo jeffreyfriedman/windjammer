@@ -65,6 +65,13 @@ pub(crate) fn derive(key: &str, dep_root: &Path) -> Option<Result<PathBuf, Strin
     }
     let out = crate::cargo_cache::cache_root().join("path-deps").join(format!("{key}-{}", fingerprint(&source_dir, &canonical, &files)));
     if out.join("metadata.json").is_file() {
+        let index = crate::cargo_cache::path_dep_crate_index(&source_dir);
+        if std::fs::read_to_string(&index).ok().as_deref() != Some(&out.display().to_string()) {
+            if let Some(parent) = index.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::write(&index, out.display().to_string());
+        }
         return Some(Ok(out));
     }
     IN_PROGRESS.with(|p| p.borrow_mut().push(canonical.clone()));
@@ -78,6 +85,13 @@ pub(crate) fn derive(key: &str, dep_root: &Path) -> Option<Result<PathBuf, Strin
         &crate::compiler_config::CompilerConfig::default(),
     );
     IN_PROGRESS.with(|p| p.borrow_mut().retain(|d| d != &canonical));
+    if built.is_ok() && out.join("Cargo.toml").is_file() {
+        let index = crate::cargo_cache::path_dep_crate_index(&source_dir);
+        if let Some(parent) = index.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&index, out.display().to_string());
+    }
     Some(match built {
         Ok(()) if out.join("metadata.json").is_file() => Ok(out),
         Ok(()) => Err(format!("path dependency `{key}` ({}): its sources produced no metadata.json", dep_root.display())),

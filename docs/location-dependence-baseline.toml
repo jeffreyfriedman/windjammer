@@ -1,0 +1,11 @@
+# Filesystem probes and file-name reads per file in src/codegen (tests/location_dependence_ratchet_test.rs).
+# May only shrink. Total: 19
+
+[location_probes]
+"src/codegen/portable/lower/intrinsics.rs" = 1
+"src/codegen/rust/function_generation_prepare.rs" = 2
+"src/codegen/rust/generator.rs" = 2
+"src/codegen/rust/import_generation/mod.rs" = 1
+"src/codegen/rust/import_generation/module_position.rs" = 5
+"src/codegen/rust/import_generation/use_statement_generation.rs" = 3
+"src/codegen/rust/program_generation.rs" = 5

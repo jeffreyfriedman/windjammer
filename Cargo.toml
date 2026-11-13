@@ -250,6 +250,11 @@ path = "tests/convergence_gates_test.rs"
 name = "identity_corpus"
 path = "tests/identity_corpus_test.rs"
 
+# Filesystem probes / file-name reads in src/codegen may only shrink (decide from declarations): cargo test --release --test location_dependence_ratchet
+[[test]]
+name = "location_dependence_ratchet"
+path = "tests/location_dependence_ratchet_test.rs"
+
 # Convergence gates for multi-file projects (golden Rust, rustc on the crate, interpreter vs compiled): cargo test --release --test project_gates
 [[test]]
 name = "project_gates"

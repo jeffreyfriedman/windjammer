@@ -340,6 +340,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) global_signature_registry: Option<std::sync::Arc<SignatureRegistry>>,
     /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
     pub(crate) library_source_root: Option<std::path::PathBuf>,
+    /// Root directory of the generated module tree (the build's output directory), named by the driver.
+    pub(crate) output_root: Option<std::path::PathBuf>,
+    /// Root of the source module tree the generated tree mirrors, named by the driver.
+    pub(crate) module_source_root: Option<std::path::PathBuf>,
     /// Maps locally defined type names to Rust module paths (multiple entries when names collide).
     pub(crate) type_defining_modules: std::collections::HashMap<String, Vec<Vec<String>>>,
     /// `(parent_module, symbol)` → child module segment defining that symbol (multipass FFI layout).
@@ -742,6 +746,8 @@ impl<'ast> CodeGenerator<'ast> {
             stdlib_type_rust_paths: std::collections::HashMap::new(),
             enum_variant_struct_fields: std::collections::HashMap::new(),
             library_source_root: None,
+            output_root: None,
+            module_source_root: None,
             global_signature_registry: None,
             type_defining_modules: std::collections::HashMap::new(),
             extern_submodule_qualifiers: std::collections::HashMap::new(),
@@ -2372,6 +2378,13 @@ impl<'ast> CodeGenerator<'ast> {
     /// Set the output file path for source mapping
     pub fn set_output_file(&mut self, path: impl Into<std::path::PathBuf>) {
         self.current_output_file = path.into();
+    }
+
+    /// Name the generated tree's root (output directory) and the source tree it mirrors: module positions are read
+    /// from these, never from directory names.
+    pub fn set_module_roots(&mut self, output_root: impl Into<std::path::PathBuf>, source_root: impl Into<std::path::PathBuf>) {
+        self.output_root = Some(output_root.into());
+        self.module_source_root = Some(source_root.into());
     }
 
     /// Set whether this generator is producing module code (vs entry point)
