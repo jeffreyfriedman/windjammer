@@ -34,6 +34,7 @@ use wj_json_doc::dumps
 const BENCH: string = "bench/interp"
 const BASELINE: string = "bench/interp/instr_baseline.json"
 const STARTUP: string = "bench/interp/startup/hello.wj"
+const AGENT_LOOP: string = "bench/interp/startup/agent_loop.wj"
 const SLACK_PCT: int = 3
 
 struct Count {
@@ -191,6 +192,10 @@ fn main() {
     // startup: the smallest program through the default `wj run` path
     let hello = measure(c, quote(wj) + " run --no-lint " + quote(cwd + "/" + STARTUP), runs + 2, "hello\n", "startup")
     counts = with(counts, "startup", from_int(hello as i64))
+    // the agent loop (ADR-0038 ladder 3): a typical 200-line program, check and run, as an agent runs it after an edit
+    let agent_expected = fs::read_to_string("${BENCH}/expected/agent_loop.out") ?? ""
+    let agent = measure(c, quote(wj) + " run " + quote(cwd + "/" + AGENT_LOOP), runs, agent_expected, "agent_loop")
+    counts = with(counts, "agent_loop", from_int(agent as i64))
     let mut refs = object()
     // each reference tool's own startup (bench/interp/startup/hello.*), subtracted for the net ratios
     let mut ref_start: Vec<(string, string, int)> = Vec::new()
