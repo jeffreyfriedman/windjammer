@@ -9,15 +9,20 @@
 
 use super::{FunctionSignature, SignatureRegistry};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 const FORMAT: u32 = 1;
 
-/// Where entries live: opaque text under a 64-digit hex key. `put` must be atomic for readers.
+/// Where entries live: opaque text (or bytes) under a 64-digit hex key. `put` must be atomic for readers.
 pub trait LayerStore: Send + Sync {
     fn get(&self, key: &str) -> Option<String>;
     fn put(&self, key: &str, text: &str);
+    /// The entry as bytes (a binary table); a store without byte entries has none.
+    fn get_bytes(&self, _key: &str) -> Option<Vec<u8>> {
+        None
+    }
+    fn put_bytes(&self, _key: &str, _bytes: &[u8]) {}
 }
 
 /// The store and the key of the compiler build it serves.
@@ -54,6 +59,48 @@ struct Snapshot {
     runtime_non_copy_types: BTreeSet<String>,
     runtime_non_clone_types: BTreeSet<String>,
     taint_sanitizer_callees: BTreeSet<String>,
+}
+
+/// The stored runtime layer read back: `Snapshot`'s fields in its order, each in the collection type the registry
+/// keeps (a set or a map is a length and its items in bincode, whatever collection wrote it), so loading builds the
+/// registry's own collections directly. Written sorted (from `Snapshot`), so one build always stores the same bytes.
+#[derive(serde::Deserialize)]
+struct Stored {
+    signatures: BTreeMap<String, FunctionSignature>,
+    type_collision_keys: HashSet<String>,
+    ownership_collision_keys: HashSet<String>,
+    method_index: HashMap<String, Vec<String>>,
+    trait_method_keys: HashSet<String>,
+    trait_impl_method_keys: HashSet<String>,
+    runtime_std_modules: HashSet<String>,
+    runtime_std_rust_stems: HashMap<String, String>,
+    runtime_type_modules: HashMap<String, String>,
+    runtime_exported_types: HashMap<String, Vec<String>>,
+    runtime_type_fields: HashMap<String, Vec<(String, String)>>,
+    runtime_non_copy_types: HashSet<String>,
+    runtime_non_clone_types: HashSet<String>,
+    taint_sanitizer_callees: HashSet<String>,
+}
+
+impl Stored {
+    fn into_registry(self) -> SignatureRegistry {
+        let mut r = SignatureRegistry::empty();
+        r.signatures = self.signatures;
+        r.type_collision_keys = self.type_collision_keys;
+        r.ownership_collision_keys = self.ownership_collision_keys;
+        r.method_index = self.method_index;
+        r.trait_method_keys = self.trait_method_keys;
+        r.trait_impl_method_keys = self.trait_impl_method_keys;
+        r.runtime_std_modules = self.runtime_std_modules;
+        r.runtime_std_rust_stems = self.runtime_std_rust_stems;
+        r.runtime_type_modules = self.runtime_type_modules;
+        r.runtime_exported_types = self.runtime_exported_types;
+        r.runtime_type_fields = self.runtime_type_fields;
+        r.runtime_non_copy_types = self.runtime_non_copy_types;
+        r.runtime_non_clone_types = self.runtime_non_clone_types;
+        r.taint_sanitizer_callees = self.taint_sanitizer_callees;
+        r
+    }
 }
 
 impl Snapshot {
@@ -97,11 +144,13 @@ impl Snapshot {
 }
 
 /// The populated runtime layer: loaded from the shared store when it has this build's entry, else scanned (and stored).
+/// Stored as bincode (`runtime-layer-bin`): loading is a length-prefixed read into the registry's collections, no
+/// text to parse (the JSON entry cost 13M instructions, the most expensive phase of a small program's start).
 pub(super) fn scanned_runtime_layer() -> SignatureRegistry {
-    let shared = shared_entry("runtime-layer");
+    let shared = shared_entry("runtime-layer-bin");
     if let Some((store, key)) = &shared {
-        if let Some(snap) = store.get(key).and_then(|text| serde_json::from_str::<Snapshot>(&text).ok()) {
-            return snap.into_registry();
+        if let Some(stored) = store.get_bytes(key).and_then(|bytes| bincode::deserialize::<Stored>(&bytes).ok()) {
+            return stored.into_registry();
         }
     }
     let mut runtime = SignatureRegistry::empty();
@@ -111,8 +160,8 @@ pub(super) fn scanned_runtime_layer() -> SignatureRegistry {
         return runtime;
     }
     if let Some((store, key)) = &shared {
-        if let Ok(text) = serde_json::to_string(&Snapshot::of(&runtime)) {
-            store.put(key, &text);
+        if let Ok(bytes) = bincode::serialize(&Snapshot::of(&runtime)) {
+            store.put_bytes(key, &bytes);
         }
     }
     runtime
@@ -137,4 +186,23 @@ mod tests {
     }
 
     type HashSetOfStrings = std::collections::HashSet<String>;
+
+    /// The binary entry a process loads is the scanned layer: written from `Snapshot`, read as `Stored`, every
+    /// table equal (and the signatures in the same order), and one scan always writes the same bytes.
+    #[test]
+    fn the_binary_layer_reads_back_as_the_scanned_layer() {
+        let mut scanned = SignatureRegistry::empty();
+        crate::stdlib_scanner::populate_runtime_signatures(&mut scanned).expect("scan");
+        let bytes = bincode::serialize(&Snapshot::of(&scanned)).unwrap();
+        let back = bincode::deserialize::<Stored>(&bytes).unwrap().into_registry();
+        assert_eq!(bincode::serialize(&Snapshot::of(&back)).unwrap(), bytes, "a round trip writes the same bytes");
+        assert_eq!(format!("{:?}", back.signatures), format!("{:?}", scanned.signatures));
+        let sorted = |s: &HashSetOfStrings| -> Vec<String> { let mut v: Vec<String> = s.iter().cloned().collect(); v.sort(); v };
+        assert_eq!(sorted(&back.runtime_non_copy_types), sorted(&scanned.runtime_non_copy_types));
+        assert_eq!(sorted(&back.trait_method_keys), sorted(&scanned.trait_method_keys));
+        assert_eq!(back.runtime_type_fields.len(), scanned.runtime_type_fields.len());
+        let mut again = SignatureRegistry::empty();
+        crate::stdlib_scanner::populate_runtime_signatures(&mut again).expect("scan");
+        assert_eq!(bincode::serialize(&Snapshot::of(&again)).unwrap(), bytes, "one build stores the same bytes");
+    }
 }

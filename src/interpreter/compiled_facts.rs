@@ -9,8 +9,18 @@
 //! `explain-ownership` uses).
 //!
 //! Computed once per module, and only for programs that reassign a parameter.
+//!
+//! Integer widths (ADR-0028, ADR-0038 rung C6b): an unsuffixed integer literal is `int` unless the numeric solver
+//! fixes another width for it (an index counter is `usize`), and the generated Rust prints that width
+//! (`let mut i = 2_usize`). The interpreter gives the literal the same width, so `i - 1` at 0 panics with
+//! Rust's overflow message where the compiled program does. The widths are the solver's published facts
+//! (`IrFunction::literal_widths`, analyzer and IR pipeline in-process, no codegen), computed once per module
+//! and only when the module evaluates its first unsuffixed integer literal; `int` stays the interpreter's
+//! open literal width (`IntTy::Lit`).
 
 use super::engine::{FuncDef, Interpreter};
+use super::int::IntTy;
+use crate::source_map::Location;
 use crate::ir::explain::emitted::{parse_emitted, EmittedMode};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -34,7 +44,228 @@ fn compute(program: &'static crate::parser::Program<'static>) -> Option<MutRefPa
     )
 }
 
+/// Solver widths of a module's unsuffixed integer literals other than `int`, by source position (line, column).
+pub(crate) type LiteralWidths = HashMap<(usize, usize), IntTy>;
+
+/// What the interpreter knows about a module's literal widths.
+#[derive(Clone, Default)]
+pub(crate) enum LitWidths {
+    #[default]
+    Unknown,
+    /// Analysis failed, or every literal is `int`.
+    Open,
+    Known(Rc<LiteralWidths>),
+}
+
+fn int_width(b: &crate::ir::safety_type::BaseType) -> Option<IntTy> {
+    use crate::ir::safety_type::BaseType as B;
+    Some(match b {
+        B::I8 => IntTy::I8,
+        B::I16 => IntTy::I16,
+        B::I32 => IntTy::I32,
+        B::I128 => IntTy::I128,
+        B::U8 => IntTy::U8,
+        B::U16 => IntTy::U16,
+        B::U32 => IntTy::U32,
+        B::U64 => IntTy::U64,
+        B::U128 => IntTy::U128,
+        B::Usize => IntTy::Usize,
+        B::Isize => IntTy::Isize,
+        _ => return None, // `int` (i64) stays the open literal width; floats are not integer literals
+    })
+}
+
+/// The solver's literal widths for `program` (`None`: the analysis failed). The analyzer and the IR pipeline the
+/// code generator runs (`ir::context::analyze_and_lower`), with the session's stdlib tables from the shared store.
+fn solve_literal_widths(program: &'static crate::parser::Program<'static>) -> Option<LiteralWidths> {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let module = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut analyzer = crate::analyzer::Analyzer::new();
+        analyzer.check_forbidden_rust_patterns(program).ok()?;
+        let (analyzed, registry, _) = analyzer.analyze_program(program).ok()?;
+        let tables = std::sync::Arc::new(crate::ir::stdlib_tables::StdlibTables::load_or_compute());
+        let fields = crate::type_inference::struct_field_registry::local_struct_field_table(program);
+        Some(crate::ir::IrPipeline::new().with_stdlib_tables(tables).lower_to_ir(&analyzed, &registry, Some(&fields)))
+    }));
+    std::panic::set_hook(previous);
+    let module = module.ok()??;
+    let mut out = LiteralWidths::new();
+    for f in &module.functions {
+        for (k, b) in &f.literal_widths {
+            if let Some(t) = int_width(b) {
+                out.insert(*k, t);
+            }
+        }
+    }
+    Some(out)
+}
+
+/// Std methods whose signature has a `usize` (an index, a length, a count): an argument or a result of one puts
+/// the integers it meets in the solver's `usize` class.
+const USIZE_METHODS: &[&str] = &[
+    "len", "get", "get_mut", "remove", "insert", "swap", "swap_remove", "nth", "truncate", "split_at", "split_off", "resize",
+    "with_capacity", "reserve", "repeat", "rotate_left", "rotate_right", "capacity", "position", "rposition", "find", "rfind",
+    "count", "skip", "take", "step_by", "chunks", "windows",
+];
+
+/// Integer widths other than `int`, as type names.
+const WIDTHS: &[&str] = &["i8", "i16", "i32", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize", "uint"];
+
+/// Does a declared type name an integer width other than `int` (anywhere inside it)?
+fn has_width(t: &crate::parser::Type) -> bool {
+    let text = format!("{t:?}");
+    WIDTHS.iter().any(|w| text.split(|c: char| !c.is_ascii_alphanumeric()).any(|word| word == *w || word.eq_ignore_ascii_case(w)))
+}
+
+/// Can the solver give one of `program`'s literals a width other than `int`? Only where a declared type names
+/// another width, or an index, a cast or a std method with a `usize` in its signature appears (anything this walk
+/// does not know counts as one, so the analysis is skipped only for programs that certainly have none).
+/// Programs without one never pay for it.
+fn width_sensitive(program: &crate::parser::Program<'_>) -> bool {
+    use crate::parser::Item;
+    fn func(f: &crate::parser::FunctionDecl<'_>) -> bool {
+        f.parameters.iter().any(|p| has_width(&p.type_)) || f.return_type.as_ref().is_some_and(has_width) || f.body.iter().any(|s| stmt(s))
+    }
+    fn items(list: &[Item<'_>]) -> bool {
+        list.iter().any(|i| match i {
+            Item::Function { decl, .. } => func(decl),
+            Item::Impl { block, .. } => block.functions.iter().any(func),
+            Item::Mod { items: inner, .. } => items(inner),
+            Item::Const { value, type_, .. } | Item::Static { value, type_, .. } => has_width(type_) || expr(value),
+            Item::Struct { decl, .. } => decl.fields.iter().any(|f| has_width(&f.field_type)) || decl.tuple_fields.as_ref().is_some_and(|ts| ts.iter().any(has_width)),
+            Item::Use { .. } | Item::BoundAlias { .. } => false,
+            _ => true,
+        })
+    }
+    fn block(list: &[&crate::parser::Statement<'_>]) -> bool {
+        list.iter().any(|s| stmt(s))
+    }
+    fn stmt(s: &crate::parser::Statement<'_>) -> bool {
+        use crate::parser::Statement as S;
+        match s {
+            S::Let { value, else_block, type_, .. } => type_.as_ref().is_some_and(has_width) || expr(value) || else_block.as_deref().is_some_and(block),
+            S::Const { value, type_, .. } | S::Static { value, type_, .. } => has_width(type_) || expr(value),
+            S::Assignment { target, value, .. } => expr(target) || expr(value),
+            S::Return { value, .. } => matches!(value, Some(v) if expr(v)),
+            S::Expression { expr: e, .. } => expr(e),
+            S::If { condition, then_block, else_block, .. } => expr(condition) || block(then_block) || else_block.as_deref().is_some_and(block),
+            S::Match { value, arms, .. } => expr(value) || arms.iter().any(|a| a.guard.is_some_and(expr) || expr(a.body)),
+            S::For { iterable, body, .. } => expr(iterable) || block(body),
+            S::While { condition, body, .. } => expr(condition) || block(body),
+            S::Loop { body, .. } | S::Thread { body, .. } | S::Async { body, .. } => block(body),
+            S::Break { value, .. } => matches!(value, Some(v) if expr(v)),
+            S::Continue { .. } | S::Use { .. } => false,
+            _ => true,
+        }
+    }
+    fn expr(e: &crate::parser::Expression<'_>) -> bool {
+        use crate::parser::Expression as E;
+        match e {
+            E::Index { .. } | E::Cast { .. } => true,
+            E::MethodCall { method, .. } if USIZE_METHODS.contains(&method.as_str()) => true,
+            E::Literal { .. } | E::Identifier { .. } => false,
+            E::Binary { left, right, .. } | E::Range { start: left, end: right, .. } => expr(left) || expr(right),
+            E::Unary { operand: x, .. } | E::FieldAccess { object: x, .. } | E::TryOp { expr: x, .. } | E::Closure { body: x, .. } => expr(x),
+            E::Call { function, arguments, .. } => expr(function) || arguments.iter().any(|(_, a)| expr(a)),
+            E::MethodCall { object, arguments, .. } => expr(object) || arguments.iter().any(|(_, a)| expr(a)),
+            E::StructLiteral { fields, .. } => fields.iter().any(|(_, f)| expr(f)),
+            E::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| expr(k) || expr(v)),
+            E::Tuple { elements, .. } | E::Array { elements, .. } | E::MacroInvocation { args: elements, .. } => elements.iter().any(|x| expr(x)),
+            E::Block { statements, .. } => block(statements),
+            _ => true,
+        }
+    }
+    items(&program.items)
+}
+
+/// An unsuffixed integer literal's value at width `t` (the lexer keeps a literal above `i64::MAX` as its bit
+/// pattern, which a `u64`/`usize` reads back, as the suffixed literal does).
+pub(crate) fn int_literal(i: i64, t: IntTy) -> crate::interpreter::value::Value {
+    match t {
+        IntTy::U64 | IntTy::Usize | IntTy::U128 => crate::interpreter::value::Value::Int(i as u64 as i128, t),
+        _ => crate::interpreter::value::Value::Int(i as i128, t),
+    }
+}
+
 impl Interpreter {
+    /// The width the compiled program gives the unsuffixed integer literal at `loc` in `module`, when it is not
+    /// `int` (`None`: an open `int` literal).
+    pub(crate) fn literal_width(&mut self, module: usize, loc: Option<&Location>) -> Option<IntTy> {
+        let loc = loc?;
+        if !self.literal_widths_on {
+            return None;
+        }
+        let state = match self.lit_widths.get(module) {
+            Some(LitWidths::Unknown) | None => self.compute_literal_widths(module),
+            Some(s) => s.clone(),
+        };
+        match state {
+            LitWidths::Known(m) => m.get(&(loc.line, loc.column)).copied(),
+            _ => None,
+        }
+    }
+
+    /// All of `module`'s literal widths (`None`: every literal is `int`, or the analysis failed).
+    pub(crate) fn literal_widths_of(&mut self, module: usize) -> Option<Rc<LiteralWidths>> {
+        if !self.literal_widths_on {
+            return None;
+        }
+        let state = match self.lit_widths.get(module) {
+            Some(LitWidths::Unknown) | None => self.compute_literal_widths(module),
+            Some(s) => s.clone(),
+        };
+        match state {
+            LitWidths::Known(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// `literal_width` for a literal known only by its location (machine-code lowering): the module whose file it is.
+    pub(crate) fn literal_width_at(&mut self, loc: Option<&Location>) -> Option<IntTy> {
+        let l = loc?;
+        let module = self.modules.iter().position(|m| m.file == l.file)?;
+        self.literal_width(module, loc)
+    }
+
+    fn compute_literal_widths(&mut self, module: usize) -> LitWidths {
+        let state = self.compute_literal_widths_in(module);
+        if self.lit_widths.len() <= module {
+            self.lit_widths.resize(module + 1, LitWidths::Unknown);
+        }
+        self.lit_widths[module] = state.clone();
+        state
+    }
+
+    fn compute_literal_widths_in(&mut self, module: usize) -> LitWidths {
+        // an overlay module (function-body `use`) reads its file's program through `fallback`
+        let mut m = module;
+        let program = loop {
+            if let Some(p) = self.programs.get(&m) {
+                break Some(*p);
+            }
+            match self.modules.get(m).and_then(|x| x.fallback) {
+                Some(f) => m = f,
+                None => break None,
+            }
+        };
+        let key = program.map(|p| p as *const _ as usize);
+        let state = match key.and_then(|k| self.lit_widths_by_program.get(&k).cloned()) {
+            Some(s) => s,
+            None => {
+                let s = match program.filter(|p| width_sensitive(p)).and_then(solve_literal_widths) {
+                    Some(w) if !w.is_empty() => LitWidths::Known(Rc::new(w)),
+                    _ => LitWidths::Open,
+                };
+                if let Some(k) = key {
+                    self.lit_widths_by_program.insert(k, s.clone());
+                }
+                s
+            }
+        };
+        state
+    }
+
     /// Does compiled code take parameter `param` of `f` by `&mut`? `None`: no fact (the module was not
     /// loaded from a program, the analysis failed, or it does not know the function).
     pub(crate) fn compiled_mut_ref(&mut self, f: &FuncDef, param: &str) -> Option<bool> {

@@ -1,0 +1,82 @@
+// Map lookups and inserts in machine-code loops (`jit/lower_map.rs`): a `let` of a `match m.get(&k)`, a statement
+// `match` whose arm runs one statement, `Some(_)`/`_` arms, a value of another width than the one speculated, a
+// key the map does not hold, an overflow inside an arm (the whole `match` resumes in the closures), and a map with
+// string keys (outside machine code).
+use std::collections::HashMap
+
+fn counts(n: int) -> HashMap<int, int> {
+    let mut m: HashMap<int, int> = HashMap::new()
+    let mut i = 0
+    while i < n {
+        let k = (i * 31) % 97
+        let c = match m.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        m.insert(k, c + 1)
+        i += 1
+    }
+    m
+}
+
+fn main() {
+    let m = counts(5000)
+    let mut best = 0
+    let mut hits = 0
+    let mut misses = 0
+    let mut j = 0
+    while j < 120 {
+        match m.get(&j) {
+            Some(v) => {
+                if *v > best {
+                    best = *v
+                }
+            }
+            None => {
+                misses += 1
+            }
+        }
+        match m.get(&j) {
+            Some(_) => {
+                hits += 1
+            }
+            _ => {}
+        }
+        j += 1
+    }
+    println("${m.len()} ${best} ${hits} ${misses}")
+
+    // values of mixed widths: the speculated width fails, the closures run the statement
+    let mut w: HashMap<int, int> = HashMap::new()
+    w.insert(0, 5)
+    let six: int = 6
+    w.insert(1, six)
+    let mut total = 0
+    let mut q = 0
+    while q < 400 {
+        let x = match w.get(&(q % 3)) {
+            Some(v) => *v,
+            None => 1,
+        }
+        total = total + x
+        w.insert(q % 3, x + 1)
+        q += 1
+    }
+    println("${total} ${w.len()}")
+
+    // an overflow inside an arm: the panic comes from the closure engine's run of the whole `match`
+    let mut big: HashMap<int, int> = HashMap::new()
+    big.insert(0, 9223372036854775000)
+    let mut acc = 0
+    let mut r = 0
+    while r < 300 {
+        match big.get(&0) {
+            Some(v) => {
+                acc = *v + r * 4
+            }
+            None => {}
+        }
+        r += 1
+    }
+    println("${acc}")
+}

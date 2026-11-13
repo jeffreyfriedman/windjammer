@@ -1,6 +1,6 @@
 // The drift gate: one command that fails when the interpreter and the compiled output disagree.
 //
-//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--fuzz-long] [--check-env] [--prune] [--compiled recorded|live|skip]
+//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--fuzz-short] [--allow-stale] [--check-env] [--prune] [--compiled recorded|live|skip]
 //
 // Steps (docs/testing/DRIFT.md):
 //   selftest   the ledger comparer and the corpus tokens, against planted divergences
@@ -12,12 +12,13 @@
 //              broken in a debug build, changes a program whose output the compiled build fixes; restored, it prints it again
 //   crate-host Rust crate calls (ADR-0031): interpreted == compiled on the interop projects, panics, replay, grants
 //   spec       the language spec as an oracle: tests/spec cases under walker, resolved and compiled (spec_oracle.wj)
-//   fuzz       a short seeded run of the generators on seeds nobody tuned the engines to (walker vs resolved, no cargo, about
-//              half a minute); every divergence is in tests/drift_corpus/fuzz_divergences.txt or the gate fails. `--fuzz-long`
-//              runs a wider seed range (opt-in, minutes) against the same ledger
+//   fuzz       the generators on seeds nobody tuned the engines to (walker vs resolved, no cargo), all programs of a run in one
+//              `wj run --pair-list` process (ADR-0038 C4): the long seed range by default (about 15 s), `--fuzz-short` its
+//              prefix; every divergence is in tests/drift_corpus/fuzz_divergences.txt or the gate fails
 //   corpus     (plus 40 generated value-kind x position programs, drift_gen.wj) ecosystem tests + value-position programs: walker, resolved and compiled agree, or the
 //              divergence is in tests/drift_corpus/known_divergences.txt (a shrink-only ledger)
-// `--fast` skips the cargo steps (selftest, fuzz, corpus and spec only). WJ_CARGO_WRAPPER prefixes every cargo and
+// `--fast` skips the cargo steps (selftest, fuzz, corpus and spec only) and prints how many it skipped. A `wj` older than
+// this checkout's compiler sources fails the gate (STALE) unless `--allow-stale`. WJ_CARGO_WRAPPER prefixes every cargo and
 // compiled run (a build-slot gate); DRIFT_BASE_REF (default: the current branch's upstream, else the merge-base with origin/HEAD) names the ref the ledger may only
 // shrink against. Exit status 1 when any step fails.
 use std::env
@@ -137,11 +138,42 @@ fn mutant_step() -> Step {
     }
 }
 
+// A step's output without the staleness line every `wj` command repeats (it would stand in for the step's summary
+// line; the gate states staleness once, at its start).
+fn report_lines(text: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for line in strings.split_lines(text) {
+        if !line.starts_with("wj: this wj ") {
+            out.push(line)
+        }
+    }
+    out
+}
+
+// The staleness line `wj` prints (behind its checkout's compiler sources), or "". A probe that fails for any other
+// reason is reported as such: "cannot tell" never passes for "current".
+fn stale_line(wj: string) -> string {
+    match sh("${wj} check scripts/wj/drift_gate.wj 2>&1 >/dev/null") {
+        Ok(r) => {
+            for line in strings.split_lines(r.stdout) {
+                if line.contains("older than this checkout") || line.contains("is not built from this checkout") {
+                    return line
+                }
+            }
+            if r.status != 0 {
+                return "cannot tell whether ${wj} is current: `wj check` exited ${r.status}: ${strings.trim(r.stdout)}"
+            }
+            ""
+        },
+        Err(e) => "cannot tell whether ${wj} is current: ${e}",
+    }
+}
+
 fn wj_step(name: string, wj: string, args: string) -> Step {
     let t0 = now()
     match sh("${wj} run --interpret ${args} 2>&1") {
         Ok(r) => {
-            let last = strings.split_lines(strings.trim(r.stdout))
+            let last = report_lines(strings.trim(r.stdout))
             let summary = if last.len() > 0 { last[0] } else { "" }
             Step { name: name, cases: "", verdict: if r.status == 0 { "pass" } else { "FAIL" }, secs: now() - t0, detail: if r.status == 0 { "" } else { r.stdout } }
         },
@@ -163,7 +195,8 @@ fn fuzz_step(wj: string, long: bool) -> Step {
     let mut ok = true
     let mut detail = ""
     let mut cases = ""
-    let cmd = "${wj} run --interpret scripts/wj/drift_gen.wj ${wj} ${run_dir}/gen ${run_dir}/gen.tsv --seeds ${gen_seeds} --no-rustc > /dev/null 2>&1 && ${wj} run --interpret scripts/wj/drift_probes.wj ${wj} ${run_dir}/probes ${run_dir}/probes.tsv --seeds ${probe_seeds} --no-rustc > /dev/null 2>&1 && cat ${run_dir}/gen.tsv ${run_dir}/probes.tsv > ${rows}"
+    // `--pair`: both engines on every program in one process (ADR-0038 C4)
+    let cmd = "${wj} run --interpret scripts/wj/drift_gen.wj ${wj} ${run_dir}/gen ${run_dir}/gen.tsv --seeds ${gen_seeds} --no-rustc --pair > /dev/null 2>&1 && ${wj} run --interpret scripts/wj/drift_probes.wj ${wj} ${run_dir}/probes ${run_dir}/probes.tsv --seeds ${probe_seeds} --no-rustc --pair > /dev/null 2>&1 && cat ${run_dir}/gen.tsv ${run_dir}/probes.tsv > ${rows}"
     match sh(cmd) {
         Ok(r) => {
             if r.status != 0 {
@@ -179,7 +212,7 @@ fn fuzz_step(wj: string, long: bool) -> Step {
     if ok {
         match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${rows} ${FUZZ_LEDGER} --min-cases ${if long { "1000" } else { "120" }} 2>&1") {
             Ok(r) => {
-                let first = strings.split_lines(r.stdout)
+                let first = report_lines(r.stdout)
                 if first.len() > 0 {
                     cases = first[0]
                 }
@@ -285,7 +318,7 @@ fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step
     if ok {
         match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} ${if prune { "--prune" } else { "" }} ${adopt_arg} 2>&1") {
             Ok(r) => {
-                let first = strings.split_lines(r.stdout)
+                let first = report_lines(r.stdout)
                 if first.len() > 0 {
                     cases = first[0]
                 }
@@ -411,7 +444,7 @@ fn spec_step(wj: string, compiled: string) -> Step {
         }
         match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${rows} ${ledger} --min-cases ${SPEC_MIN_CASES} ${base_arg} 2>&1") {
             Ok(r) => {
-                let first = strings.split_lines(r.stdout)
+                let first = report_lines(r.stdout)
                 if first.len() > 0 {
                     cases = first[0]
                 }
@@ -437,7 +470,8 @@ fn main() {
     let mut prune = false
     let mut adopt = ""
     let mut fast = false
-    let mut fuzz_long = false
+    let mut fuzz_long = true
+    let mut allow_stale = false
     let mut compiled = "recorded"
     let mut i = 1
     while i < args.len() {
@@ -455,6 +489,10 @@ fn main() {
             fast = true
         } else if args[i] == "--fuzz-long" {
             fuzz_long = true
+        } else if args[i] == "--fuzz-short" {
+            fuzz_long = false
+        } else if args[i] == "--allow-stale" {
+            allow_stale = true
         } else if args[i] == "--compiled" {
             compiled = args[i + 1]
             i += 1
@@ -483,6 +521,16 @@ fn main() {
         println("wj: ${wj}")
         return
     }
+    // a `wj` built before the compiler sources it is judged against would measure the wrong compiler: refuse it
+    // loudly (`--allow-stale` runs it anyway and says so in the result)
+    let stale = stale_line(wj)
+    if stale != "" {
+        println("drift gate: STALE ${stale}")
+        if !allow_stale {
+            println("drift gate: FAIL (the wj under test is older than this checkout's compiler sources; rebuild it, or pass --allow-stale)")
+            process.exit(1)
+        }
+    }
     let mut steps: Vec<Step> = Vec::new()
     steps.push(wj_step("selftest", wj, "scripts/wj/drift_selftest.wj ${wj}"))
     if !fast {
@@ -505,6 +553,14 @@ fn main() {
         }
     }
     println(plain(t, "  "))
+    // steps this run did not take are counted, never left out silently
+    let skipped = if fast { 6 } else { 0 }
+    if skipped > 0 {
+        println("drift gate: SKIPPED ${skipped} step(s) (--fast: the cargo steps parity, fast-paths, jit-loops, packed-vec, crate-host, builtin-mutants)")
+    }
+    if stale != "" {
+        println("drift gate: STALE binary allowed by --allow-stale: the result is about that build, not this checkout")
+    }
     for s in steps {
         if s.detail != "" {
             println("--- ${s.name}")

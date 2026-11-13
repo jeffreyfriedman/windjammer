@@ -25,6 +25,7 @@ mod lower;
 mod lower_expr;
 mod lower_struct;
 mod lower_rows;
+mod lower_map;
 pub(crate) mod osr;
 mod rt;
 mod rows;
@@ -255,6 +256,8 @@ struct Tr<'a> {
     fns: HashMap<&'static str, FuncRef>,
     /// The current block already ended (after `return`): further code goes to a dead block.
     ended: bool,
+    /// Literals of the function's module the compiled program types other than `int` (`compiled_facts.rs`).
+    wide: Option<std::rc::Rc<crate::interpreter::compiled_facts::LiteralWidths>>,
 }
 
 fn translate(
@@ -281,7 +284,8 @@ fn translate(
     let p = b.block_params(entry).to_vec();
     let n = f.params.len();
     let (depth, status) = (p[n], p[n + 1]);
-    let mut tr = Tr { b, scopes: vec![Vec::new()], depth, status, fns, ended: false };
+    let wide = it.literal_widths_of(f.module);
+    let mut tr = Tr { b, scopes: vec![Vec::new()], depth, status, fns, ended: false, wide };
     // recursion budget
     let too_deep = tr.b.ins().icmp_imm(IntCC::SignedGreaterThan, depth, MAX_DEPTH);
     tr.bail_if(too_deep);
@@ -448,7 +452,15 @@ impl Tr<'_> {
 
     fn expr(&mut self, e: E) -> Option<T> {
         Some(match e {
-            Expression::Literal { value: Literal::Int(i), .. } => T::Int(self.b.ins().iconst(types::I64, *i)),
+            // an integer function computes in `int`: a literal the compiled program types otherwise keeps it in the closures
+            Expression::Literal { value: Literal::Int(i), location } => {
+                if let (Some(w), Some(l)) = (&self.wide, location) {
+                    if w.contains_key(&(l.line, l.column)) {
+                        return None;
+                    }
+                }
+                T::Int(self.b.ins().iconst(types::I64, *i))
+            }
             Expression::Literal { value: Literal::IntSuffixed(i, s), .. } if s == "i64" => T::Int(self.b.ins().iconst(types::I64, *i)),
             Expression::Identifier { name, .. } => T::Int(self.b.use_var(self.var(name)?)),
             Expression::Unary { op: UnaryOp::Neg, operand, .. } if !matches!(operand, Expression::Range { .. }) => {

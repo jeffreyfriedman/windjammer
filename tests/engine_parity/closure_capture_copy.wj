@@ -1,0 +1,24 @@
+// Compiled closures whose body is one call-free expression take a copy of their free names' values at each call
+// (`resolved/closure.rs`, `closurecopy`): a name changed between calls is seen changed, a name holding a
+// reference takes the walker, and a body with a call keeps the reference.
+fn main() {
+    let mut r: int = 2
+    let scale = |x: int| x * r
+    let mut total: int = 0
+    let mut i: int = 0
+    while i < 5 {
+        total += scale(i)
+        r += 1
+        i += 1
+    }
+    println("${total} ${r}")
+    let v: Vec<int> = [1, 2, 3]
+    let mut k: int = 10
+    let adds: Vec<int> = v.map(|x| x + k).collect()
+    k = 20
+    let again: Vec<int> = v.map(|x| x + k).collect()
+    println("${adds:?} ${again:?}")
+    let name = "ab"
+    let lens: Vec<int> = v.map(|x| x + name.len() as int).collect()
+    println("${lens:?}")
+}
