@@ -565,6 +565,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// A bare call names a free function: never a method of the same name (a trait's `list_webhooks(self, ..)`
     /// beside a free `list_webhooks(deps, ..)`), and nothing at all when a parameter or local shadows the name.
     fn resolve_free_callee_signature(&self, name: &str, arg_count: usize) -> Option<&FunctionSignature> {
+        let name = name.strip_prefix("crate::").unwrap_or(name); // `crate::ffi::f(..)` is the function `ffi::f`
         let local = !name.contains("::") && (self.param_vars.contains_key(name) || self.scopes.iter().any(|s| s.contains_key(name)));
         let registry = self.registry.filter(|_| !local)?;
         let scoped = registry.scoped_key(&self.analyzed.module_path, name);
