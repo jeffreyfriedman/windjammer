@@ -1,12 +1,12 @@
 {
  "callgrind:Linux-x86_64": {
-  "closures": 873053018,
+  "closures": 871481677,
   "fib30": 185343692,
-  "hashmap": 518314676,
+  "hashmap": 283723392,
   "loop5m": 303673955,
   "nbody": 624427028,
   "sieve": 584860169,
-  "startup": 83282193,
+  "startup": 49665975,
   "strings": 398889277,
   "structs": 142495650
  },
