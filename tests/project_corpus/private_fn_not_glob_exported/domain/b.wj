@@ -1,0 +1,9 @@
+fn cell(s: string) -> string {
+    s
+}
+pub fn b_pub(s: string) -> string {
+    cell(s)
+}
+pub fn parse(cell: string) -> int {
+    cell.len() as int
+}

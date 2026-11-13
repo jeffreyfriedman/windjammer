@@ -66,7 +66,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
         // BUT NOT if we're in a trait implementation (trait methods cannot have visibility modifiers)
         let has_export = func.decorators.iter().any(|d| d.name == "export");
+        // SPEC-MOD-006: a free function without `pub` is private to its module. In a library build it stays
+        // private in the Rust too, so the parent's `pub use module::*` does not export (and collide on) its name.
+        let private_free_fn = self.is_module && !self.in_impl_block && !func.is_pub && !has_export;
         if !self.in_trait_impl
+            && !private_free_fn
             && (func.is_pub || self.in_wasm_bindgen_impl || self.is_module || has_export)
         {
             output.push_str("pub ");

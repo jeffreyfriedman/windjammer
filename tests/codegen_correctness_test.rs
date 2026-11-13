@@ -138,6 +138,7 @@ corpus_tests!(
     substring_tail_value,
     text_slice_in_every_position,
     string_as_bytes_to_vec_formal,
+    vec_macro_tuple_string_slots,
 );
 
 // ------------------------------------------------------------------ generated programs
