@@ -136,10 +136,9 @@ impl<'ast> CodeGenerator<'ast> {
             || !self.current_module_path.is_empty()
             || self.bare_call_is_sibling_method(name)
             || !self.idiom.file_scope_fn_names.contains(name)
-            || !self.signature_registry.has_signature_locally(name)
         {
             return None;
         }
-        self.signature_registry.get_signature(name).filter(|s| !s.has_self_receiver).cloned()
+        self.signature_registry.own_definition(name).filter(|s| !s.has_self_receiver).cloned()
     }
 }
