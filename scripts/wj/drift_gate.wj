@@ -138,18 +138,22 @@ fn mutant_step() -> Step {
     }
 }
 
-// The staleness line `wj` prints (behind its checkout's compiler sources), or "".
+// The staleness line `wj` prints (behind its checkout's compiler sources), or "". A probe that fails for any other
+// reason is reported as such: "cannot tell" never passes for "current".
 fn stale_line(wj: string) -> string {
-    match sh("${wj} check --no-lint scripts/wj/drift_gate.wj 2>&1 >/dev/null") {
+    match sh("${wj} check scripts/wj/drift_gate.wj 2>&1 >/dev/null") {
         Ok(r) => {
             for line in strings.split_lines(r.stdout) {
                 if line.contains("older than this checkout") || line.contains("is not built from this checkout") {
                     return line
                 }
             }
+            if r.status != 0 {
+                return "cannot tell whether ${wj} is current: `wj check` exited ${r.status}: ${strings.trim(r.stdout)}"
+            }
             ""
         },
-        Err(_) => "",
+        Err(e) => "cannot tell whether ${wj} is current: ${e}",
     }
 }
 
