@@ -65,9 +65,17 @@ impl Hasher for Fx {
     fn finish(&self) -> u64 {
         self.0
     }
+    /// Eight bytes per round (a string key costs one multiply per word, not per byte), the tail as one word.
     fn write(&mut self, bytes: &[u8]) {
-        for b in bytes {
-            self.0 = (self.0.rotate_left(5) ^ *b as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+        let mut words = bytes.chunks_exact(8);
+        for w in &mut words {
+            self.write_u64(u64::from_le_bytes(w.try_into().expect("eight bytes")));
+        }
+        let rest = words.remainder();
+        if !rest.is_empty() {
+            let mut last = [0u8; 8];
+            last[..rest.len()].copy_from_slice(rest);
+            self.write_u64(u64::from_le_bytes(last) ^ ((rest.len() as u64) << 56));
         }
     }
     fn write_u64(&mut self, n: u64) {
@@ -76,6 +84,16 @@ impl Hasher for Fx {
     fn write_u128(&mut self, n: u128) {
         self.write_u64(n as u64);
         self.write_u64((n >> 64) as u64);
+    }
+    // the enum discriminant of `HKey` and a string's terminator: one round each, not a byte loop
+    fn write_u8(&mut self, n: u8) {
+        self.write_u64(n as u64);
+    }
+    fn write_usize(&mut self, n: usize) {
+        self.write_u64(n as u64);
+    }
+    fn write_isize(&mut self, n: isize) {
+        self.write_u64(n as u64);
     }
 }
 
