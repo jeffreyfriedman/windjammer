@@ -602,9 +602,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 (!self.analyzed.module_path.is_empty()).then(|| format!("{}::{leaf}", self.analyzed.module_path.join("::")))
             })
         };
-        let by_identity = path.and_then(|p| {
-            [format!("{p}::{member}"), format!("crate::{p}::{member}")].into_iter().find_map(|k| registry.lookup_method(&k))
-        });
+        let by_identity = path.and_then(|p| registry.member_of_type_path(&p, member));
         let bare = self.resolve_callee_signature(&format!("{leaf}::{member}"), arg_count);
         // The bare key is the converged view when it declares the same formals and result (C3 identity); a homonym type's
         // method is not.
