@@ -1,1 +1,1 @@
-{"generated_epoch": "@NOW@", "commit": "x", "values": {"engine_native_build_errors":0,"web_stage":2,"playground_parity_failures":0}}
+{"schema": 1, "generated_epoch": "@NOW@", "commit": "x", "web_plan": "docs/web-plan.md", "values": {"engine_native_build_errors":0,"web_stage":2,"playground_parity_failures":0}}
