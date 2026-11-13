@@ -121,6 +121,9 @@ fn path_dependency_without_metadata_is_read_from_its_sources() {
     wj(&["build", "src", "--no-cargo", "--module-file", "-o", "../app_gen"], &t.join("app"));
     let page = fs::read_to_string(t.join("app_gen/page.rs")).unwrap();
     assert!(page.contains(".width(\"100%\")") && !page.contains("String::from(\"100%\")"), "the dependency's `w: &str` must be read, not guessed:\n{page}");
+    // `use sizing::..` names the declared dependency, even with the dependency's directory (`sizing/`) beside the
+    // build output (`app_gen/`).
+    assert!(page.contains("use sizing::panel::Panel;") && !page.contains("crate::sizing"), "{page}");
 
     // Same consumer code as with the dependency's own metadata (built beforehand).
     let built = tempfile::tempdir().unwrap();
@@ -132,11 +135,7 @@ fn path_dependency_without_metadata_is_read_from_its_sources() {
 
     // rustc oracle: the dependency's crate, the consumer against it, and a program using both.
     rustc(&["--crate-type", "lib", "--crate-name", "sizing", "sizing_gen/lib.rs", "-o", "libsizing.rlib"], b, "the dependency");
-    // The consumer's modules spell the dependency `crate::sizing::..` here; `extern crate` at the root names it so
-    // rustc judges the calls (the import spelling is not what this test checks).
-    let lib = fs::read_to_string(b.join("app_gen/lib.rs")).unwrap().replace("pub mod page;", "#[path = \"app_gen/page.rs\"] pub mod page;");
-    write(b, "app_lib.rs", &format!("extern crate sizing;\n{lib}"));
-    rustc(&["--crate-type", "lib", "--crate-name", "app", "app_lib.rs", "--extern", "sizing=libsizing.rlib", "-o", "libapp.rlib"], b, "the consumer");
+    rustc(&["--crate-type", "lib", "--crate-name", "app", "app_gen/lib.rs", "--extern", "sizing=libsizing.rlib", "-o", "libapp.rlib"], b, "the consumer");
     write(
         b,
         "main.rs",
@@ -147,7 +146,7 @@ fn path_dependency_without_metadata_is_read_from_its_sources() {
     assert_eq!(String::from_utf8_lossy(&run.stdout), "width:100%;hi width:5px; n 1\n");
 }
 
-/// A dependency whose sources cannot be analyzed is named in an error, never silently replaced by guessed formals.
+/// A dependency whose sources cannot be analyzed stops the build with an error naming it, never guessed formals.
 #[test]
 fn unanalyzable_path_dependency_is_reported_by_name() {
     let tmp = tempfile::tempdir().unwrap();
@@ -163,4 +162,5 @@ fn unanalyzable_path_dependency_is_reported_by_name() {
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("path dependency `broken`"), "the dependency must be named:\n{stderr}");
+    assert!(!out.status.success(), "a dependency without signatures stops the build (fail closed)");
 }
