@@ -5077,8 +5077,8 @@ impl<'ast> CodeGenerator<'ast> {
             // (Rust auto-copies). Never emit `*owned` — that E0614s when `owned`
             // is already a value local (IR may have stripped `&` already).
             let mut s = arg_str.trim().to_string();
-            if s.starts_with('(') && s.ends_with(')') {
-                let inner = s[1..s.len() - 1].trim().to_string();
+            if let Some(wrapped) = crate::codegen::rust::string_analysis::strip_enclosing_parens(&s) {
+                let inner = wrapped.trim().to_string();
                 if inner.starts_with('&') || inner.starts_with("&mut ") {
                     s = inner;
                 }
@@ -5087,9 +5087,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let inner = crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str);
         // Parenthesized unary refs from expression codegen: `(&x)`.
-        let inner = if arg_str.trim().starts_with('(') && arg_str.trim().ends_with(')') {
-            let peeled = arg_str.trim();
-            let mid = peeled[1..peeled.len() - 1].trim();
+        let inner = if let Some(mid) = crate::codegen::rust::string_analysis::strip_enclosing_parens(arg_str.trim()).map(str::trim) {
             if mid.starts_with('&') || mid.starts_with("&mut ") {
                 crate::codegen::rust::expression_utilities::borrow_base_expr(mid)
             } else {
@@ -7759,8 +7757,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let mut s = coerced.trim().to_string();
         loop {
-            if s.starts_with('(') && s.ends_with(')') {
-                let inner = s[1..s.len() - 1].trim().to_string();
+            if let Some(wrapped) = crate::codegen::rust::string_analysis::strip_enclosing_parens(&s) {
+                let inner = wrapped.trim().to_string();
                 if inner.starts_with('&') || inner.starts_with("&mut ") {
                     s = inner;
                     continue;
@@ -7993,8 +7991,8 @@ impl<'ast> CodeGenerator<'ast> {
             let before = coerced.trim().to_string();
             let mut s = before.clone();
             loop {
-                if s.starts_with('(') && s.ends_with(')') {
-                    let inner = s[1..s.len() - 1].trim().to_string();
+                if let Some(wrapped) = crate::codegen::rust::string_analysis::strip_enclosing_parens(&s) {
+                    let inner = wrapped.trim().to_string();
                     if inner.starts_with('&') || inner.starts_with("&mut ") {
                         s = inner;
                         continue;
