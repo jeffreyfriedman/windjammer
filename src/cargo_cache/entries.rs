@@ -27,6 +27,43 @@ pub fn registry_dir() -> PathBuf {
     super::cache_root().join("registry")
 }
 
+/// Analysis metadata of manifest-less trees (`<cache root>/meta/<tree key>/…/*.wj.meta`, `metadata::global_meta_cache_dir`).
+pub fn meta_dir() -> PathBuf {
+    super::cache_root().join("meta")
+}
+
+/// Tree directories kept in the meta cache (newest win).
+pub const META_MAX_TREES: usize = 2048;
+
+/// Drop meta-cache tree directories older than [`MAX_AGE`] and the oldest beyond `max_trees`. A tree written within the
+/// last hour may belong to a running build and is kept unless `force`.
+pub fn prune_meta_trees(dir: &Path, max_trees: usize, force: bool, report: &mut super::PruneReport) -> u64 {
+    let now = SystemTime::now();
+    let Ok(rd) = fs::read_dir(dir) else { return 0 };
+    let mut trees: Vec<(SystemTime, PathBuf)> = rd
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .map(|e| (e.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH), e.path()))
+        .collect();
+    trees.sort();
+    let over = trees.len().saturating_sub(max_trees);
+    let mut freed = 0;
+    for (i, (t, p)) in trees.iter().enumerate() {
+        let age = now.duration_since(*t).unwrap_or_default();
+        if !force && age < STALE_TMP {
+            continue;
+        }
+        if age > MAX_AGE || i < over {
+            let size = super::dir_size(p);
+            if fs::remove_dir_all(p).is_ok() {
+                freed += size;
+                report.removed_paths.push(p.clone());
+            }
+        }
+    }
+    freed
+}
+
 pub fn verdicts_dir() -> PathBuf {
     super::cache_root().join("verdicts")
 }

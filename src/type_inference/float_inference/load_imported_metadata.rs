@@ -155,8 +155,10 @@ impl FloatInference {
                         std::path::PathBuf::from(".wj-cache").join(candidate)
                     };
 
-                    if let Ok(meta_json) = std::fs::read_to_string(&full_meta_path) {
-                        if let Ok(meta) = serde_json::from_str::<ModuleMetadata>(&meta_json) {
+                    if let Some(meta) =
+                        crate::metadata::read_current_module_meta(&full_meta_path, self.source_root.as_deref())
+                    {
+                        {
                             // Load all function signatures from metadata
                             for (func_name, sig) in meta.functions {
                                 // Convert serialized types back to Type enum

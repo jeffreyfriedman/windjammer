@@ -96,14 +96,14 @@ pub fn meta_cache_path(source_file: &Path) -> PathBuf {
     projectless_meta_path(source_file)
 }
 
-/// Directory holding analysis metadata for manifest-less trees: `wj-meta` under the OS temp dir (honours
-/// `TMPDIR`). It is a cache: losing it costs a cold build, never correctness.
+/// Directory holding analysis metadata for manifest-less trees: `<cache root>/meta` (`cargo_cache::cache_root`, shared by
+/// every checkout of this user, pruned by `wj cache prune`). It is a cache: losing it costs a cold build, never correctness.
 pub fn global_meta_cache_dir() -> PathBuf {
-    // the browser playground (ADR-0034) has no temp dir (std panics there); its cache reads and writes just fail
+    // the browser playground (ADR-0034) has no cache root; its cache reads and writes just fail
     if cfg!(target_arch = "wasm32") {
         return PathBuf::from("/wj-meta");
     }
-    std::env::temp_dir().join("wj-meta")
+    crate::cargo_cache::entries::meta_dir()
 }
 
 /// The module root of a manifest-less tree. Climb out of module directories (a directory holding
@@ -131,11 +131,52 @@ fn projectless_root(start: &Path) -> PathBuf {
 }
 
 fn projectless_cache_root(start: &Path) -> PathBuf {
+    global_meta_cache_dir().join(projectless_tree_key(&projectless_root(start)))
+}
+
+/// The cache key of a manifest-less tree, from its content and never from where it lives: the sorted relative paths
+/// and source hashes of the `.wj` files under `root`. The same tree in two locations shares its entries; an edit to
+/// any file starts a fresh entry.
+pub(crate) fn projectless_tree_key(root: &Path) -> String {
     use sha2::{Digest, Sha256};
-    let root = projectless_root(start);
-    let h = Sha256::digest(root.to_string_lossy().as_bytes());
-    let key: String = h.iter().take(8).map(|b| format!("{b:02x}")).collect();
-    global_meta_cache_dir().join(key)
+    let mut files = Vec::new();
+    collect_wj_sources(root, root, 0, &mut files);
+    files.sort();
+    let mut h = Sha256::new();
+    for (rel, text_hash) in &files {
+        h.update(rel.as_bytes());
+        h.update([0]);
+        h.update(text_hash);
+    }
+    h.finalize().iter().take(8).map(|b| format!("{b:02x}")).collect()
+}
+
+fn collect_wj_sources(root: &Path, dir: &Path, depth: usize, out: &mut Vec<(String, Vec<u8>)>) {
+    use sha2::{Digest, Sha256};
+    const SKIP: [&str; 5] = ["target", ".git", ".wj-cache", "build", "node_modules"];
+    if depth > 8 || out.len() > 4096 {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if p.is_dir() {
+            if !SKIP.contains(&name.as_str()) {
+                collect_wj_sources(root, &p, depth + 1, out);
+            }
+        } else if name.ends_with(".wj") {
+            if let (Ok(rel), Ok(bytes)) = (p.strip_prefix(root), std::fs::read(&p)) {
+                let rel = rel.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/");
+                out.push((rel, Sha256::digest(&bytes).to_vec()));
+            }
+        }
+    }
+}
+
+/// The directory peer sources of a cache entry live under: the project root, or the manifest-less tree root.
+pub(crate) fn peer_source_base(source_root: &Path) -> PathBuf {
+    find_project_root(source_root).unwrap_or_else(|| projectless_root(source_root))
 }
 
 fn projectless_meta_path(source_file: &Path) -> PathBuf {

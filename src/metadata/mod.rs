@@ -104,6 +104,19 @@ pub fn merge_wj_meta_signatures_from_dir(
     root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
 ) {
+    merge_wj_meta_signatures_from_dir_reaching(root, None, registry);
+}
+
+/// [`merge_wj_meta_signatures_from_dir`] for a build that reaches only the modules its sources name: `uses` are the
+/// path segments of the current file's `use` / `mod` declarations. Peer sidecars of modules the build does not reach
+/// (directly or through the reached modules' own `use` declarations) are ignored. `None`: every current peer.
+pub fn merge_wj_meta_signatures_from_dir_reaching(
+    root: &Path,
+    uses: Option<std::collections::BTreeSet<String>>,
+    registry: &mut crate::analyzer::SignatureRegistry,
+) {
+    let scope = sidecar_policy::PeerScope::new(root, uses);
+    let prev = PEER_SCOPE.with(|c| c.replace(Some(scope)));
     let mut copy_structs = Vec::new();
     let mut all_struct_fields = HashMap::new();
     let cache_root = crate_metadata::meta_cache_root(root);
@@ -123,6 +136,53 @@ pub fn merge_wj_meta_signatures_from_dir(
     );
     load_project_root_metadata(root, registry, &mut copy_structs, &mut all_struct_fields);
     type_metadata::infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
+    PEER_SCOPE.with(|c| *c.borrow_mut() = prev);
+}
+
+/// The cached sidecar at `path` when it is current (fingerprinted by this compiler, its source under `source_root`'s
+/// tree unchanged since): the read used by callers that look a module's entry up directly.
+pub fn read_current_module_meta(path: &Path, source_root: Option<&Path>) -> Option<ModuleMetadata> {
+    let meta: ModuleMetadata = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let scoped = PEER_SCOPE.with(|c| c.borrow().is_none()) && source_root.is_some();
+    if scoped {
+        let scope = sidecar_policy::PeerScope::new(source_root?, None);
+        PEER_SCOPE.with(|c| *c.borrow_mut() = Some(scope));
+    }
+    let current = wj_meta_is_current(path, &meta);
+    if scoped {
+        PEER_SCOPE.with(|c| *c.borrow_mut() = None);
+    }
+    current.then_some(meta)
+}
+
+/// Run `f` (metadata merges for the build of `program`, whose sources live under `source_root`) reading only the peer
+/// sidecars that build reaches: modules named by `program`'s `use` / `mod` declarations, closed over the reached peers'.
+pub fn with_peers_reached_by<R>(source_root: &Path, program: &crate::parser::Program, f: impl FnOnce() -> R) -> R {
+    let scope = sidecar_policy::PeerScope::new(source_root, Some(use_segments(program)));
+    let prev = PEER_SCOPE.with(|c| c.replace(Some(scope)));
+    let out = f();
+    PEER_SCOPE.with(|c| *c.borrow_mut() = prev);
+    out
+}
+
+/// The identifiers a file's `use` and `mod` declarations name (`use crate::geo::shapes::{Circle}` names `crate`, `geo`,
+/// `shapes`, `Circle`): the seed of peer reachability.
+pub fn use_segments(program: &crate::parser::Program) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for item in &program.items {
+        match item {
+            crate::parser::Item::Use { path, .. } => {
+                for seg in path {
+                    sidecar_policy::identifiers(seg, &mut out);
+                }
+            }
+            crate::parser::Item::Mod { name, .. } => {
+                out.insert(name.clone());
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Same as `merge_wj_meta_signatures_from_dir` but also populates the analyzer with Copy struct info.
@@ -334,13 +394,17 @@ fn load_project_root_metadata(
     }
 }
 
-/// A `.wj.meta` sidecar is analysis output, never an input to be trusted blindly: one written by a
-/// different compiler build, or for different source text than the sibling `.wj` now holds, is stale and
-/// ignored (otherwise `wj build` and `wj explain-ownership` can answer differently for the same file).
-/// Sidecars without a fingerprint (stdlib/hand-authored metadata) are always accepted.
+/// A `.wj.meta` sidecar is analysis output, never an input to be trusted blindly. A cached sidecar is used only when it
+/// carries a fingerprint, was written by this compiler (same binary content), and its source still exists with the
+/// text it was written for; anything else (no fingerprint, another compiler, an edited or deleted source) is stale
+/// and ignored, so a cache can never change what a clean build emits. The compiler's own embedded `stdlib_meta/` is
+/// read from memory and does not pass through here.
 fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
-    let Some(fp) = &meta.analysis_fingerprint else {
+    if TRUSTED_SIDECAR_DIR.with(|c| c.get()) {
         return true;
+    }
+    let Some(fp) = &meta.analysis_fingerprint else {
+        return false;
     };
     if fp.compiler_version != crate::compiler::incremental::compiler_build_identity() {
         return false;
@@ -348,10 +412,9 @@ fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
     match sidecar_policy::sidecar_source(path) {
         Some(source_path) => match std::fs::read_to_string(&source_path) {
             Ok(source) => fp.content_hash == crate::compiler::incremental::hash_source(&source),
-            Err(_) => true,
+            Err(_) => false,
         },
-        // the source is not on disk beside the cache (a shipped dependency): nothing to compare against
-        None => true,
+        None => false,
     }
 }
 
@@ -364,6 +427,8 @@ thread_local! {
     static OWN_META_PATHS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
     /// What the crate metadata of the root being merged declares (see `sidecar_policy`).
     static DECLARED: std::cell::RefCell<Option<sidecar_policy::Declared>> = const { std::cell::RefCell::new(None) };
+    /// The build being fed by peer sidecars: where their sources live and which modules it reaches.
+    static PEER_SCOPE: std::cell::RefCell<Option<sidecar_policy::PeerScope>> = const { std::cell::RefCell::new(None) };
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -403,6 +468,9 @@ fn merge_single_wj_meta_file(
         return;
     };
     if !wj_meta_is_current(path, &mod_meta) {
+        return;
+    }
+    if !PEER_SCOPE.with(|c| c.borrow().as_ref().is_none_or(|scope| scope.reaches(path))) {
         return;
     }
     let mut mod_meta = mod_meta;
@@ -666,7 +734,13 @@ pub fn write_module_meta_cache(source_file: &Path, meta: &ModuleMetadata) -> std
     if let Some(parent) = meta_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Ok(json) = serde_json::to_string_pretty(meta) {
+    // Lists are sets: written sorted so a rewrite of the same analysis yields the same bytes.
+    let mut meta = meta.clone();
+    for list in [&mut meta.copy_structs, &mut meta.non_copy_structs] {
+        list.sort();
+        list.dedup();
+    }
+    if let Ok(json) = serde_json::to_string_pretty(&meta) {
         crate::compiler::write_if_changed(&meta_path, &json)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
     }
