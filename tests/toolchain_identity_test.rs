@@ -1,5 +1,10 @@
-//! Gates: `wj --version` and `wj version --json` report the identity the binary was built with, checked
-//! against git itself (an independent oracle), and the wall-clock build date never reaches generated output.
+//! Gates: `wj --version` and `wj version --json` report the identity the binary was built with, checked against
+//! the checkout's sources (the content key recomputed here from the files), and the wall-clock build date never
+//! reaches generated output. The binary carries a commit only when its build stamped one (`WJ_GIT_HASH`).
+
+#[allow(dead_code)]
+#[path = "../build_support/content_key.rs"]
+mod content_key;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -20,18 +25,6 @@ fn wj(args: &[&str]) -> (String, i32) {
     )
 }
 
-fn git(args: &[&str]) -> Option<String> {
-    let o = Command::new("git")
-        .arg("-C")
-        .arg(root())
-        .args(args)
-        .output()
-        .ok()?;
-    o.status
-        .success()
-        .then(|| String::from_utf8_lossy(&o.stdout).trim().to_string())
-}
-
 fn json() -> serde_json::Value {
     let (out, code) = wj(&["version", "--json"]);
     assert_eq!(code, 0);
@@ -45,67 +38,34 @@ fn version_flag_reports_every_identity_field() {
     let line = out.trim_end();
     assert_eq!(out.lines().count(), 1, "{out}");
     let j = json();
-    assert!(
-        line.starts_with(&format!("wj {} (commit ", env!("CARGO_PKG_VERSION"))),
-        "{line}"
-    );
-    assert!(
-        line.contains(&format!("commit {}", j["commit_short"].as_str().unwrap())),
-        "{line}"
-    );
-    assert!(line.contains(j["commit_date"].as_str().unwrap()), "{line}");
-    assert!(
-        line.contains(if j["dirty"].as_bool().unwrap() {
-            ", dirty,"
-        } else {
-            ", clean,"
-        }),
-        "{line}"
-    );
-    assert!(
-        line.contains(&format!(", {}, built ", j["profile"].as_str().unwrap())),
-        "{line}"
-    );
+    let key = j["inputs_key"].as_str().expect("the build's source key");
+    assert!(line.starts_with(&format!("wj {}+{} (commit ", env!("CARGO_PKG_VERSION"), &key[..10])), "{line}");
+    match j["commit_short"].as_str() {
+        Some(c) => assert!(line.contains(&format!("commit {c} {}", j["commit_date"].as_str().unwrap())), "{line}"),
+        None => assert!(line.contains("commit unknown unknown"), "an unstamped build names no commit: {line}"),
+    }
+    assert!(line.contains(&format!(", {}, built ", j["profile"].as_str().unwrap())), "{line}");
     assert!(line.contains(j["build_date"].as_str().unwrap()), "{line}");
     let (short, _) = wj(&["-V"]);
     assert_eq!(short, out);
 }
 
 #[test]
-fn identity_matches_git_when_built_from_a_checkout() {
-    let Some(head) = git(&["rev-parse", "HEAD"]) else {
-        return;
-    };
+fn identity_matches_the_sources_when_built_from_a_checkout() {
     let j = json();
     assert_eq!(j["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(
-        j["commit"].as_str().unwrap(),
-        head,
-        "the binary must report the commit it was built from"
+        j["inputs_key"].as_str().unwrap(),
+        content_key::inputs_key(&root()),
+        "the binary must report the sources it was built from"
     );
-    let ts: i64 = git(&["log", "-1", "--format=%ct"])
-        .unwrap()
-        .parse()
-        .unwrap();
-    assert_eq!(j["commit_timestamp"].as_i64().unwrap(), ts);
-    let dirty = !git(&["status", "--porcelain", "--untracked-files=no"])
-        .unwrap()
-        .is_empty();
-    assert_eq!(
-        j["dirty"].as_bool().unwrap(),
-        dirty,
-        "dirty flag must reflect tracked changes"
-    );
-    let profile = if cfg!(debug_assertions) {
-        "debug"
-    } else {
-        "release"
-    };
+    match std::env::var("WJ_GIT_HASH") {
+        Ok(h) if !h.is_empty() => assert_eq!(j["commit"].as_str(), Some(h.as_str())),
+        _ => assert!(j["commit"].is_null(), "a commit appears only when the build stamps one: {j}"),
+    }
+    let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
     assert_eq!(j["profile"], profile);
-    assert!(
-        j["build_timestamp"].as_i64().unwrap() >= ts,
-        "built before it was committed?"
-    );
+    assert!(j["build_timestamp"].as_i64().unwrap() > 0);
 }
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {

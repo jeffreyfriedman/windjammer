@@ -10,6 +10,9 @@
 //! cannot be read. `WJ_CHECKOUT_HEAD=<sha>[@<unix seconds>]` stands in for the checkout's HEAD (tests).
 
 use super::identity::Identity;
+
+#[path = "../../build_support/content_key.rs"]
+mod content_key;
 use super::timefmt::iso_datetime;
 use std::path::{Path, PathBuf};
 
@@ -114,16 +117,51 @@ pub fn behind_text(id: &Identity, head: &Head) -> Option<String> {
     ))
 }
 
-/// The checkout enclosing the current directory (or this executable), and the line for it, if behind.
+/// The content key of the sources in `checkout` (the digest build.rs bakes into a binary built from them).
+pub fn checkout_inputs_key(checkout: &Path) -> String {
+    content_key::inputs_key(checkout)
+}
+
+/// One line when this binary was built from other sources than `checkout` holds now: the content key it was built
+/// from differs from the checkout's (build_support/content_key.rs, the same digest build.rs bakes in). Exact and
+/// git-free. To stay off the hot path, the digest is computed only when an input file is newer than the build.
+pub fn key_behind_text(id: &Identity, checkout: &Path) -> Option<String> {
+    let mine = id.key.as_deref()?;
+    let newest = content_key::input_files(checkout)
+        .iter()
+        .filter_map(|f| std::fs::metadata(checkout.join(f)).and_then(|m| m.modified()).ok())
+        .filter_map(|t| t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64))
+        .max()?;
+    if id.build_ts.is_some_and(|built| newest <= built) {
+        return None;
+    }
+    let theirs = content_key::inputs_key(checkout);
+    if theirs.starts_with(mine) || mine.starts_with(theirs.as_str()) {
+        return None;
+    }
+    let built = id.build_ts.map(iso_datetime).unwrap_or_else(|| "unknown".into());
+    Some(format!(
+        "wj: this wj (sources {}, built {built}) is not built from this checkout's sources ({}); run `wj install-dev --from <fresh build>` (for example `cargo build --release --bin wj && target/release/wj install-dev`)",
+        &mine[..mine.len().min(10)],
+        &theirs[..10]
+    ))
+}
+
+/// The checkout enclosing the current directory (or this executable), and the line for it, if behind: by commit
+/// for a build stamped with one, else by the content key of the sources.
 pub fn current_behind_text() -> Option<String> {
     let checkout = std::env::current_dir()
         .ok()
         .and_then(|d| super::stale::enclosing_checkout(&d))
         .or_else(|| std::env::current_exe().ok().and_then(|e| super::stale::enclosing_checkout(&e)))?;
-    behind_text(&super::identity::current(), &checkout_head(&checkout)?)
+    let id = super::identity::current();
+    if id.commit.is_some() {
+        return behind_text(&id, &checkout_head(&checkout)?);
+    }
+    key_behind_text(&id, &checkout)
 }
 
-/// Print the line to stderr when this `wj` runs inside a compiler checkout whose HEAD is newer.
+/// Print the line to stderr when this `wj` runs inside a compiler checkout it was not built from.
 pub fn warn_if_behind() {
     if let Some(line) = current_behind_text() {
         eprintln!("{line}");
@@ -136,6 +174,7 @@ mod tests {
 
     fn id(commit: &str, ts: i64) -> Identity {
         Identity {
+            key: None,
             version: "0.50.0".into(),
             commit: Some(commit.into()),
             commit_ts: Some(ts),

@@ -40,7 +40,11 @@ pub fn is_downgrade(new: &Identity, old: &Identity) -> bool {
 }
 
 fn same_build(a: &Identity, b: &Identity) -> bool {
-    a.commit.is_some() && a.commit == b.commit && a.dirty == b.dirty && a.build_ts == b.build_ts
+    let same_source = match (&a.key, &b.key) {
+        (Some(x), Some(y)) => x == y && a.commit == b.commit,
+        _ => a.commit.is_some() && a.commit == b.commit && a.dirty == b.dirty,
+    };
+    same_source && a.build_ts == b.build_ts
 }
 
 pub fn install(src: &Path, dest: &Path, force: bool, dry_run: bool) -> Result<Installed, String> {
@@ -159,6 +163,7 @@ mod tests {
 
     fn id(ts: Option<i64>) -> Identity {
         Identity {
+            key: None,
             version: "0.50.0".into(),
             commit: Some("abc".into()),
             commit_ts: ts,
