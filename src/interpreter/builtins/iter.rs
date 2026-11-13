@@ -126,6 +126,11 @@ fn register_adaptors(r: &mut Registry) {
 fn register_consumers(r: &mut Registry) {
     r.pure(Kind::Iter, "len", |it, v, _| {
         let s = it_of(it, v)?;
+        if let Some(t) = proto::inexact_type(&s) {
+            return Err(crate::interpreter::error::semantic(format!(
+                "no method named `len` found for `{t}` (it has no exact size in the compiled program): count it with `.count()`, or call `strings.chars(text).len()`"
+            )));
+        }
         proto::exact_len(&s).map(Value::usize).ok_or_else(|| unsupported("`len()` on an iterator without a known exact size"))
     });
     r.pure(Kind::Iter, "is_empty", |it, v, _| {

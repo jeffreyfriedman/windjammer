@@ -23,16 +23,38 @@ pub(crate) fn select_files<'a>(
 }
 
 /// Add `#[test]` to generated functions (unless codegen already did) and append runner
-/// wrappers for associated-function tests, which Rust cannot run directly.
-pub(crate) fn mark_tests(mut rust_code: String, tests: &[TestFunction]) -> String {
+/// wrappers for associated-function tests, which Rust cannot run directly. With `cwd` (the package root),
+/// every test first makes it the working directory: cargo runs the harness from its scratch crate, and a
+/// test reading `README.md` must see the package's file, as `wj test --interpret` does.
+pub(crate) fn mark_tests(mut rust_code: String, tests: &[TestFunction], cwd: Option<&std::path::Path>) -> String {
+    let enter = cwd.map(|d| format!("\n    let _ = ::std::env::set_current_dir({:?});", d.to_string_lossy())).unwrap_or_default();
     let mut wrappers = String::new();
     for test in tests {
         match &test.scope {
-            TestScope::Assoc(ty) => wrappers.push_str(&assoc_wrapper(ty, &test.name)),
-            _ => rust_code = mark_free_function(rust_code, &test.name),
+            TestScope::Assoc(ty) => wrappers.push_str(&assoc_wrapper(ty, &test.name, &enter)),
+            _ => {
+                rust_code = mark_free_function(rust_code, &test.name);
+                rust_code = enter_body(rust_code, &test.name, &enter);
+            }
         }
     }
     rust_code.push_str(&wrappers);
+    rust_code
+}
+
+/// Put `enter` at the start of free test function `name`'s body.
+fn enter_body(rust_code: String, name: &str, enter: &str) -> String {
+    if enter.is_empty() {
+        return rust_code;
+    }
+    for sig in [format!("pub fn {name}()"), format!("fn {name}()")] {
+        if let Some(pos) = rust_code.find(&sig) {
+            if let Some(open) = rust_code[pos..].find('{') {
+                let at = pos + open + 1;
+                return format!("{}{}{}", &rust_code[..at], enter, &rust_code[at..]);
+            }
+        }
+    }
     rust_code
 }
 
@@ -63,8 +85,8 @@ fn preceded_by_test_attribute(before: &str) -> bool {
     false
 }
 
-fn assoc_wrapper(ty: &str, name: &str) -> String {
-    format!("\n#[test]\nfn __assoc_{ty}_{name}() {{\n    {ty}::{name}();\n}}\n")
+fn assoc_wrapper(ty: &str, name: &str, enter: &str) -> String {
+    format!("\n#[test]\nfn __assoc_{ty}_{name}() {{{enter}\n    {ty}::{name}();\n}}\n")
 }
 
 /// `lib.rs` for the harness crate: declares exactly the modules that were compiled.
@@ -107,6 +129,22 @@ mod tests {
     }
 
     #[test]
+    fn every_test_enters_the_package_root_first() {
+        let tests = vec![
+            TestFunction { name: "test_free".into(), file: PathBuf::new(), scope: TestScope::TopLevel },
+            TestFunction { name: "test_assoc".into(), file: PathBuf::new(), scope: TestScope::Assoc("Suite".into()) },
+        ];
+        let code = "fn helper() {\n}\n\nfn test_free() {\n    helper();\n}\n".to_string();
+        let out = mark_tests(code, &tests, Some(std::path::Path::new("/pkg/root")));
+        let enter = "let _ = ::std::env::set_current_dir(\"/pkg/root\");";
+        assert!(out.contains(&format!("#[test]\nfn test_free() {{\n    {enter}\n    helper();")), "{out}");
+        assert!(out.contains(&format!("fn __assoc_Suite_test_assoc() {{\n    {enter}\n    Suite::test_assoc();")), "{out}");
+        assert!(!out.contains(&format!("fn helper() {{\n    {enter}")), "{out}");
+        let plain = mark_tests("fn test_free() {\n}\n".to_string(), &tests[..1], None);
+        assert!(!plain.contains("set_current_dir"), "{plain}");
+    }
+
+    #[test]
     fn marks_free_functions_once_and_wraps_assoc_tests() {
         let tests = vec![
             TestFunction {
@@ -120,11 +158,11 @@ mod tests {
                 scope: TestScope::Assoc("Suite".into()),
             },
         ];
-        let out = mark_tests("pub fn test_free() {}\nimpl Suite { fn test_assoc() {} }\n".into(), &tests);
+        let out = mark_tests("pub fn test_free() {}\nimpl Suite { fn test_assoc() {} }\n".into(), &tests, None);
         assert!(out.contains("#[test]\npub fn test_free()"));
         assert!(!out.contains("#[test]\nfn test_assoc()"));
         assert!(out.contains("Suite::test_assoc();"));
-        let again = mark_tests(out.clone(), &tests[..1]);
+        let again = mark_tests(out.clone(), &tests[..1], None);
         assert_eq!(again.matches("#[test]\npub fn test_free()").count(), 1);
     }
 
@@ -136,6 +174,6 @@ mod tests {
             scope: TestScope::TopLevel,
         }];
         let src = "#[test]\n\n#[inline]\npub fn test_smoke() {}\n";
-        assert_eq!(mark_tests(src.into(), &tests), src);
+        assert_eq!(mark_tests(src.into(), &tests, None), src);
     }
 }
