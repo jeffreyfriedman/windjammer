@@ -4,6 +4,7 @@ mod checker;
 mod declared;
 mod elements;
 mod index;
+mod iterators;
 mod mismatch;
 mod rules;
 mod std_methods;

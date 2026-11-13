@@ -5,6 +5,7 @@
 
 use super::elements::{self, Scope};
 use super::index::{is_std_name, FileNames, Index};
+use super::iterators;
 use super::mismatch::check_literal;
 use super::rules::{self, Kind};
 use super::visit::{walk_block, walk_expr, walk_pattern, Visitor};
@@ -157,7 +158,8 @@ impl Cx<'_, '_> {
             }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types, scalars, .. } = col;
+        let Collect { names, counts, let_types, scalars, iter_locals, .. } = col;
+        let iter_locals: HashSet<String> = iter_locals.into_iter().filter(|n| counts.get(n).copied().unwrap_or(0) == 1).collect();
         let scalars: HashMap<String, (Kind, bool)> = scalars
             .into_iter()
             .filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1)
@@ -171,6 +173,7 @@ impl Cx<'_, '_> {
         let mut ck = Checker::new(self, &names, typed, self_ty.map(str::to_string));
         ck.ret_ty = ret.cloned();
         ck.scalars = scalars;
+        ck.iter_locals = iter_locals;
         walk_block(&mut ck, body);
         if let (Some(Statement::Expression { expr, .. }), Some(ty)) = (body.last().map(|s| &**s), ret) {
             ck.wrapper_mismatch(ty, expr, " in return value");
@@ -200,6 +203,8 @@ struct Collect<'i> {
     let_types: HashMap<String, String>,
     /// `let x: int = ..` / `let s = "lit"`: scalar kind and whether it was declared.
     scalars: HashMap<String, (Kind, bool)>,
+    /// Bindings initialised with a std iterator (`let parts = "a,b".split(",")`), by the std declaration.
+    iter_locals: HashSet<String>,
 }
 
 impl<'i> Collect<'i> {
@@ -213,6 +218,7 @@ impl<'i> Collect<'i> {
             counts: HashMap::new(),
             let_types: HashMap::new(),
             scalars: HashMap::new(),
+            iter_locals: HashSet::new(),
         }
     }
 
@@ -272,6 +278,12 @@ impl Visitor for Collect<'_> {
                         }
                     }
                 }
+            }
+        }
+        if let Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_: None, value, .. } = s {
+            let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
+            if iterators::yields_iterator(value, &text, &self.iter_locals) {
+                self.iter_locals.insert(n.clone());
             }
         }
         if let Statement::Let {
@@ -348,6 +360,7 @@ struct Checker<'c, 'a, 'o> {
     self_ty: Option<String>,
     ret_ty: Option<Type>,
     scalars: HashMap<String, (Kind, bool)>,
+    iter_locals: HashSet<String>,
     skip: HashSet<usize>,
     macro_locs: Vec<SourceLocation>,
 }
@@ -366,6 +379,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             self_ty,
             ret_ty: None,
             scalars: HashMap::new(),
+            iter_locals: HashSet::new(),
             skip: HashSet::new(),
             macro_locs: Vec::new(),
         }
@@ -561,9 +575,30 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         self.cx.out.push(d);
     }
 
+    /// `parts.contains("a")` where `parts` is a std iterator (`"a,b".split(",")`) and the std declaration gives `contains`
+    /// to lists only (WJ0015).
+    fn list_method_on_iterator(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
+        if !iterators::lists_only(method) {
+            return;
+        }
+        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
+        if !iterators::yields_iterator(object, &text, &self.iter_locals) {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0015", format!("no method `{method}` found for an iterator"));
+        let span = self.cx.loc.word(&self.effective(loc), method).or_else(|| self.cx.loc.first_use(method));
+        if let Some(sp) = span {
+            d = d.at(sp.with_label("an iterator has no such method"));
+        }
+        self.cx.out.push(d.with_help(format!(
+            "`split`, `lines`, `chars` and the adapters give an iterator, and `{method}` belongs to lists: call `.collect()` first, then `{method}` on the list"
+        )));
+    }
+
     /// `x.m()` where `x` is known to be a user struct/enum: `m` must exist on it (WJ0015).
     fn method_call(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
         self.unknown_anywhere(object, method, loc);
+        self.list_method_on_iterator(object, method, loc);
         let Expression::Identifier { name, .. } = object else { return };
         let ty = if name == "self" { self.self_ty.clone() } else { self.typed.get(name).cloned() };
         let Some(ty) = ty else { return };
