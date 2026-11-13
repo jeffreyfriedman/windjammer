@@ -277,7 +277,9 @@ struct Router {
 
 struct ServerResponse {
     status: u16,
-    headers: Vec<(string, string)>,
+    // The runtime's `ServerResponse.headers` is a `HashMap<String, String>` (windjammer-runtime http.rs), and so is the
+    // interpreter's: `r.headers.insert(k, v)` is the spelling that builds and runs in both.
+    headers: HashMap<string, string>,
     body: string,
     binary_body: Option<Vec<u8>>,
 }
@@ -384,12 +386,18 @@ impl Request {
 
 // ServerResponse - Build Responses
 
+fn content_type(value: string) -> HashMap<string, string> {
+    let mut h = HashMap::new()
+    h.insert("Content-Type", value)
+    h
+}
+
 impl ServerResponse {
     // Match windjammer-runtime: status is Windjammer `int` (i64); field stays u16.
     fn new(status: int, body: string) -> ServerResponse {
         ServerResponse {
             status: status as u16,
-            headers: [],
+            headers: HashMap::new(),
             body: body,
             binary_body: None,
         }
@@ -399,7 +407,7 @@ impl ServerResponse {
         ServerResponse {
             status: 200,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -407,7 +415,7 @@ impl ServerResponse {
     fn json(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: [("Content-Type", "application/json")],
+            headers: content_type("application/json"),
             body: body,
             binary_body: None,
         }
@@ -417,7 +425,7 @@ impl ServerResponse {
         ServerResponse {
             status: 200,
             body: "",
-            headers: [("Content-Type", "application/json")],
+            headers: content_type("application/json"),
             binary_body: None,
         }
     }
@@ -426,7 +434,7 @@ impl ServerResponse {
         ServerResponse {
             status: 201,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -435,7 +443,7 @@ impl ServerResponse {
         ServerResponse {
             status: 204,
             body: "",
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -444,7 +452,7 @@ impl ServerResponse {
         ServerResponse {
             status: 400,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -453,7 +461,7 @@ impl ServerResponse {
         ServerResponse {
             status: 401,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -462,7 +470,7 @@ impl ServerResponse {
         ServerResponse {
             status: 403,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -471,7 +479,7 @@ impl ServerResponse {
         ServerResponse {
             status: 413,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -480,7 +488,7 @@ impl ServerResponse {
         ServerResponse {
             status: 429,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -489,7 +497,7 @@ impl ServerResponse {
         ServerResponse {
             status: 503,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -498,7 +506,7 @@ impl ServerResponse {
         ServerResponse {
             status: 404,
             body: "Not Found",
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -506,7 +514,7 @@ impl ServerResponse {
     fn error(status: int, message: string) -> ServerResponse {
         ServerResponse {
             status: status as u16,
-            headers: [("Content-Type", "text/plain")],
+            headers: content_type("text/plain"),
             body: message,
             binary_body: None,
         }
@@ -515,7 +523,7 @@ impl ServerResponse {
     fn binary(status: int, data: Vec<u8>) -> ServerResponse {
         ServerResponse {
             status: status as u16,
-            headers: [],
+            headers: HashMap::new(),
             body: "",
             binary_body: Some(data),
         }
@@ -524,7 +532,7 @@ impl ServerResponse {
     fn html(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: [("Content-Type", "text/html")],
+            headers: content_type("text/html"),
             body: body,
             binary_body: None,
         }
@@ -534,7 +542,7 @@ impl ServerResponse {
         ServerResponse {
             status: 500,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
@@ -543,7 +551,7 @@ impl ServerResponse {
         ServerResponse {
             status: status,
             body: body,
-            headers: [],
+            headers: HashMap::new(),
             binary_body: None,
         }
     }
