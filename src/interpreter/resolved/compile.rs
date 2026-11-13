@@ -60,6 +60,8 @@ pub(super) struct Cx<'a> {
     loop_depth: usize,
     /// Locals a `let` declared with a builtin map or set type (`builtin_collection`).
     collections: Vec<usize>,
+    /// Compiling a closure body (its closures keep the walker's island: they need the call's type parameters).
+    pub(super) closure_body: bool,
 }
 
 impl Cx<'_> {
@@ -190,7 +192,7 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
     if has_self {
         boxed.insert(0);
     }
-    let unit = Unit { module: f.module, ret: f.ret, self_ty: f.self_ty.clone(), tail_hint: tail_hint(f) };
+    let unit = Unit { module: f.module, ret: f.ret, self_ty: f.self_ty.clone(), tail_hint: tail_hint(f), closure_body: false };
     fixpoint(it, &unit, boxed, |cx| compile_with(cx, f))
 }
 
@@ -200,6 +202,8 @@ pub(super) struct Unit {
     pub(super) ret: Option<&'static Type>,
     pub(super) self_ty: Option<Rc<str>>,
     pub(super) tail_hint: bool,
+    /// The unit is a closure body (see `Cx::closure_body`).
+    pub(super) closure_body: bool,
 }
 
 /// Compile with `body` until slot typing and boxing are stable: a conflicting write poisons a typed
@@ -224,6 +228,7 @@ pub(super) fn fixpoint<T>(it: &mut Interpreter, u: &Unit, mut boxed: HashSet<usi
             reg: Rc::new(Reg::default()),
             loop_depth: 0,
             collections: Vec::new(),
+            closure_body: u.closure_body,
         };
         let r = body(&mut cx);
         cx.reg.finish(&cx.slot_ty, cx.boxed);

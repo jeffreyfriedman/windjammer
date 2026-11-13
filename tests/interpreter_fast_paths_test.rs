@@ -21,7 +21,7 @@ const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/nbody.wj", &["vecresolve", "rowview", "placeargs"]),
     ("tests/engine_parity/jit_row_views.wj", &["rowview"]),
     ("bench/interp/strings.wj", &["pushfmt", "lenfast"]),
-    ("bench/interp/closures.wj", &["closureenv", "closurescope"]),
+    ("bench/interp/closures.wj", &["closureenv", "closurescope", "closurecreate"]),
     ("tests/engine_parity/str_fast.wj", &["fmt", "pushstr", "pushfmt"]),
     ("tests/engine_parity/jit_loop_inline.wj", &["inline"]),
     ("tests/engine_parity/map_get_match.wj", &["mapget", "mapins", "unboxed"]),

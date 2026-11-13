@@ -663,6 +663,8 @@ pub(crate) struct FastHits {
     pub(crate) placeargs: u64,
     /// Map lookups and inserts lowered to machine code (`jit/lower_map.rs`, counted when a unit is compiled).
     pub(crate) mapjit: u64,
+    /// Closures a compiled function created without a walker island (`resolved/closure.rs::create`).
+    pub(crate) closurecreate: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,
