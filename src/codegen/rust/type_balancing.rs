@@ -108,8 +108,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
         );
 
-        let mut lc = self.float_class_for_binary_operand(left);
-        let mut rc = self.float_class_for_binary_operand(right);
+        let mut lc = self.float_class_for_binary_operand(left).filter(|_| !self.is_declared_integer_operand(left));
+        let mut rc = self.float_class_for_binary_operand(right).filter(|_| !self.is_declared_integer_operand(right));
 
         // GUARD: Non-scalar types (Vec3, Color, etc.) must NEVER be cast to f32/f64.
         // Float inference may classify expressions involving these types as F32 due to

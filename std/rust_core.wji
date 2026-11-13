@@ -9,7 +9,7 @@
 // (`parse<F>` takes its `F` from a turbofish). `usize` is an index slot (ADR-0028): an argument there is an
 // index use, a `usize` result is an index source. The table is read by `src/typing/core_surface.rs` (option C,
 // stage C1, docs/design/numeric-width-redesign.md section 7); every entry is checked against rustc by
-// `tests/core_surface_rustc_test.rs`.
+// `tests/core_surface_rustc_test.rs`. `slice(start, end)` is the parser's spelling of `x[start..end]` (checked as `&x[a..b]`).
 
 pub trait Vec<T> {
     fn new() -> Vec<T>;
@@ -29,6 +29,7 @@ pub trait Vec<T> {
     fn swap(&mut self, a: usize, b: usize);
     fn truncate(&mut self, len: usize);
     fn split_off(&mut self, at: usize) -> Vec<T>;
+    fn slice(self, start: usize, end: usize) -> Vec<T>;
     fn contains(self, value: &T) -> bool;
     fn clear(&mut self);
     fn iter(self) -> Iterator<&T>;
@@ -173,6 +174,9 @@ pub trait String {
     fn contains(self, pattern: &str) -> bool;
     fn starts_with(self, pattern: &str) -> bool;
     fn ends_with(self, pattern: &str) -> bool;
+    fn find(self, pattern: &str) -> Option<usize>;
+    fn rfind(self, pattern: &str) -> Option<usize>;
+    fn slice(self, start: usize, end: usize) -> &str;
     fn parse<F>(self) -> Result<F, String>;
     fn push_str(&mut self, text: &str);
     fn truncate(&mut self, len: usize);

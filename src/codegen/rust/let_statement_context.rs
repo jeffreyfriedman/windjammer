@@ -34,7 +34,9 @@ impl<'ast> CodeGenerator<'ast> {
         // `let rows: Vec<(string, int)> = [("a", 1)]`: the annotation gives each tuple its slot types
         let slots = type_.as_ref().filter(|_| matches!(value, Expression::Array { .. })).and_then(Self::list_element_tuple_slots);
         let outer_slots = std::mem::replace(&mut self.idiom.list_elem_tuple_slots, slots);
+        self.idiom.binding_value_depth += 1;
         let out = self.generate_let_statement(pattern, mutable, type_, value, location);
+        self.idiom.binding_value_depth -= 1;
         self.idiom.list_elem_tuple_slots = outer_slots;
         self.idiom.next_closure_borrows_captures = false;
         out
@@ -94,5 +96,20 @@ impl<'ast> CodeGenerator<'ast> {
             *value_str = format!("{value_str}.clone()");
         }
         true
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// An assignment statement; its value's block tails are the assigned value (see `binding_value_depth`).
+    pub(in crate::codegen::rust) fn generate_assignment_with_context(
+        &mut self,
+        target: &'ast Expression<'ast>,
+        value: &'ast Expression<'ast>,
+        compound_op: &Option<crate::parser::ast::CompoundOp>,
+    ) -> String {
+        self.idiom.binding_value_depth += 1;
+        let out = self.generate_assignment_statement(target, value, compound_op);
+        self.idiom.binding_value_depth -= 1;
+        out
     }
 }

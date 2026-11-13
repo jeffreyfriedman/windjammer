@@ -1,0 +1,18 @@
+// A counter declared with a literal and later assigned `line.parse::<int>()` inside a loop over `text.lines()`: the
+// loop variable is a `&str` (the core surface's `lines`), so `parse::<int>` gives an `int` and the counter is `i64`.
+// Before the fix the counter was emitted as `0_i32` and the assignment failed (expected `i32`, found `i64`).
+fn main() {
+    let text = "4\n17\nx"
+    let mut first_value = 0
+    let mut total = 0
+    let mut seen = false
+    for line in text.lines() {
+        if !seen {
+            seen = true
+            first_value = line.trim().parse::<int>().unwrap_or(0)
+            continue
+        }
+        total = total + line.parse::<int>().unwrap_or(0)
+    }
+    println("${first_value} ${total}")
+}

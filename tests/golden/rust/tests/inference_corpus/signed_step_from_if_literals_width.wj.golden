@@ -1,0 +1,69 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Cell {
+    pub x: i32,
+    pub y: i32,
+}
+impl Cell {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.x.to_ne_bytes());
+        __bytes.extend_from_slice(&self.y.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[inline]
+fn walkable(x: i32, y: i32) -> bool {
+    x >= 0_i32 && y >= 0_i32
+}
+
+#[inline]
+fn make_cells() -> Vec<Cell> {
+    let mut out: Vec<Cell> = Vec::new();
+    out.push(Cell { x: 2_i32, y: 5_i32 });
+    out
+}
+
+fn main() {
+    let cells: Vec<Cell> = make_cells();
+    let mut best: usize = 0_usize;
+    best += 0;
+    let cx = cells[best].x;
+    let cy = cells[best].y;
+    let mut d = 0_i64;
+    let mut open = 0_i64;
+    while d < 4_i64 {
+        let dx = {
+            if d == 1_i64 {
+                1_i32
+            } else {
+                if d == 3_i64 {
+                    -1_i32
+                } else {
+                    0_i32
+                }
+            }
+        };
+        let dy = {
+            if d == 0_i64 {
+                -1_i32
+            } else {
+                if d == 2_i64 {
+                    1_i32
+                } else {
+                    0_i32
+                }
+            }
+        };
+        let nx = cx + dx;
+        let ny = cy + dy;
+        if walkable(nx, ny) && walkable(cx + dx, cy) {
+            open += 1;
+        }
+        d += 1;
+    }
+    println!("{}", open);
+}
+

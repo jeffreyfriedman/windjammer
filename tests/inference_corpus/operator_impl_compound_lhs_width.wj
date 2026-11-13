@@ -1,0 +1,54 @@
+// A user type with `impl Add` and `impl Mul<f32>`: the right operand of `*` is the impl's `f32` even when the left
+// operand is itself an operator expression, a field of a local, or a method result. Before the fix the literal in
+// `(a + b) * 0.5` was emitted as `0.5_f64`.
+use std::ops::Add
+use std::ops::Mul
+
+pub struct P2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Add for P2 {
+    type Output = P2
+    fn add(self, o: P2) -> P2 {
+        P2 { x: self.x + o.x, y: self.y + o.y }
+    }
+}
+
+impl Mul<f32> for P2 {
+    type Output = P2
+    fn mul(self, s: f32) -> P2 {
+        P2 { x: self.x * s, y: self.y * s }
+    }
+}
+
+impl P2 {
+    pub fn flipped(self) -> P2 {
+        P2 { x: self.y, y: self.x }
+    }
+}
+
+pub struct Span {
+    pub lo: P2,
+    pub hi: P2,
+}
+
+fn mid(a: P2, b: P2) -> P2 {
+    (a + b) * 0.5
+}
+
+fn centre(spans: Vec<Span>, i: usize) -> P2 {
+    let s = spans[i]
+    (s.lo + s.hi) * 0.5
+}
+
+fn main() {
+    let a = P2 { x: 1.0, y: 2.0 }
+    let b = P2 { x: 3.0, y: 4.0 }
+    let m = mid(a, b)
+    let far = a.flipped() * 100.0
+    let spans = [Span { lo: a, hi: b }]
+    let c = centre(spans, 0)
+    println("${m.x} ${m.y} ${far.x} ${c.y}")
+}

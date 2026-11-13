@@ -28,6 +28,6 @@ pub fn test_local_var_indexing() {
     node.children = Some(Vec::new());
     node.children.unwrap().push(Node::new(5_i32));
     let child = node.direct_access(0_usize);
-    assert_eq!(child.value, 5);
+    assert_eq!(child.value, 5_i32);
 }
 

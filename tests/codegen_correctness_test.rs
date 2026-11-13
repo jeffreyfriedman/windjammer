@@ -147,9 +147,17 @@ corpus_tests!(
     borrowed_text_alias_reassigned_owned,
     owned_text_ordered_against_borrowed_text,
     nested_closure_typed_param,
+    if_value_in_let_not_cast_to_return_width,
+    int_element_compared_with_len_and_used_as_index,
+    struct_field_read_moves_literal_to_i32,
+    assert_in_match_let_value_takes_field_width,
+    sequence_adapters_take_usize_counts,
     collect_after_map_item_type,
     substring_tail_value,
     text_slice_in_every_position,
+    slice_bounds_from_find_index,
+    int_cast_operand_not_promoted_to_float,
+    list_literal_local_into_array_field,
 );
 
 // ------------------------------------------------------------------ generated programs

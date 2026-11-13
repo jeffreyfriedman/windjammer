@@ -1,0 +1,106 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod shapes;
+pub mod zblocks;
+
+// Re-export public items
+pub use zblocks::Corner;
+// ==== main.rs ====
+use self::shapes::Mesh;
+mod shapes;
+mod zblocks;
+#[inline]
+fn rebuild(src: &Vec<f32>) -> Mesh {
+    let mut out = Mesh::new();
+    let mut i: usize = 0_usize;
+    while i < src.len() {
+        if i + 2_usize < src.len() {
+            let _ = out.add(src[i], src[(i + 1) as usize], src[(i + 2) as usize]);
+        } else {
+            let _ = out.add(0.0_f32, 0.0_f32, 0.0_f32);
+        }
+        i += 3;
+    }
+    out
+}
+
+fn main() {
+    let m = rebuild(&vec![1.0_f32, 2.0_f32, 3.0_f32, 4.0_f32]);
+    let mut sum = 0.0_f32;
+    for p in &m.pts {
+        sum += p;
+    }
+    let mut s = zblocks::Mesh::new();
+    s.add();
+    println!("{} {}", m.count, sum as f32 + s.corners.len() as f32 - 1.0_f32);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod shapes;
+pub mod zblocks;
+
+// Re-export public items
+pub use zblocks::Corner;
+// ==== shapes.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Default)]
+#[repr(C)]
+pub struct Mesh {
+    pub pts: Vec<f32>,
+    pub count: i32,
+}
+
+impl Mesh {
+#[inline]
+pub fn new() -> Mesh {
+        Mesh { pts: Vec::new(), count: 0_i32 }
+}
+#[inline]
+pub fn add(&mut self, x: f32, y: f32, z: f32) {
+        self.pts.push(x);
+        self.pts.push(y);
+        self.pts.push(z);
+        self.count += 1;
+}
+}
+
+// ==== zblocks.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct Corner {
+    pub w: f64,
+}
+impl Corner {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.w.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq, Default)]
+#[repr(C)]
+pub struct Mesh {
+    pub corners: Vec<Corner>,
+}
+
+impl Mesh {
+#[inline]
+pub fn new() -> Mesh {
+        Mesh { corners: Vec::new() }
+}
+#[inline]
+pub fn add(&mut self) {
+        self.corners.push(Corner { w: 0.5_f64 });
+}
+}
+

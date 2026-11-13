@@ -1,6 +1,6 @@
 fn main() {
     println!("start");
-    assert_eq!(4, 5, "arithmetic is broken");
+    assert_eq!(4_i64, 5_i64, "arithmetic is broken");
     println!("never printed");
 }
 

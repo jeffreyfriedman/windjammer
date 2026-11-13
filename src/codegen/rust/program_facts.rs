@@ -14,6 +14,9 @@ pub(crate) struct IdiomScratch {
     pub(crate) non_escaping_closure_names: HashSet<String>,
     /// Set by `let` generation for the closure it is about to emit (by-reference captures).
     pub(crate) next_closure_borrows_captures: bool,
+    /// Inside the value of a `let` or an assignment: a block tail there is the binding's value, never the function's
+    /// return value, so the return-width tail casts do not apply.
+    pub(crate) binding_value_depth: u32,
     /// Locals bound to `lines()` / `split(..)` / `split_whitespace()` (their `next()` yields `&str`).
     pub(crate) text_iterator_locals: HashSet<String>,
     /// Locals bound to `text.split(..).next()` and the like: `Option<&str>` values.
@@ -29,6 +32,9 @@ pub(crate) struct IdiomScratch {
     pub(crate) file_scope_is_open: bool,
     /// Type names imported from another crate (`use dep::Type`); whether they implement `Serialize` is unknown.
     pub(crate) foreign_imported_types: HashSet<String>,
+    /// Free functions this file declares at top level: a bare call names one of them before a same-named
+    /// function of any other module (lexical scope beats imports and other files).
+    pub(crate) file_scope_fn_names: HashSet<String>,
     /// Functions of the standard library this file imports by name or through a glob
     /// (`use std::log::*` brings `debug`): they shadow a language intrinsic of the same name (ADR-0014).
     pub(crate) imported_std_fn_names: HashSet<String>,
@@ -65,6 +71,7 @@ impl<'ast> CodeGenerator<'ast> {
         let idiom = &mut self.idiom;
         idiom.file_scope_type_names.clear();
         idiom.foreign_imported_types.clear();
+        idiom.file_scope_fn_names.clear();
         idiom.file_scope_is_open = false;
         idiom.imported_std_fn_names.clear();
         for item in &program.items {
@@ -100,6 +107,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 Item::Mod { .. } => idiom.file_scope_is_open = true,
+                Item::Function { decl, .. } => {
+                    idiom.file_scope_fn_names.insert(decl.name.clone());
+                }
                 _ => {}
             }
         }
