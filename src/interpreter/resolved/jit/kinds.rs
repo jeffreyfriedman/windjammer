@@ -39,11 +39,71 @@ pub(crate) enum Elem {
 }
 
 /// A struct value's type name and, per field, the scalar type it held.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Shape {
     pub(crate) name: Rc<str>,
     pub(crate) fields: Vec<(Rc<str>, Option<Ty>)>,
     pub(crate) copy: bool,
+}
+
+/// Two names are the same text; the values of one program share their name strings, so the pointer test
+/// answers almost every comparison before the bytes are compared.
+#[inline(always)]
+pub(crate) fn same_name(a: &Rc<str>, b: &Rc<str>) -> bool {
+    Rc::ptr_eq(a, b) || **a == **b
+}
+
+impl PartialEq for Shape {
+    fn eq(&self, o: &Shape) -> bool {
+        same_name(&self.name, &o.name)
+            && self.copy == o.copy
+            && self.fields.len() == o.fields.len()
+            && self.fields.iter().zip(&o.fields).all(|((n, t), (m, u))| t == u && same_name(n, m))
+    }
+}
+
+/// `shape(v) == Some(sh)`, without building the shape.
+pub(crate) fn shape_is(v: &Value, sh: &Shape) -> bool {
+    match v {
+        Value::Struct(s) => {
+            s.copy == sh.copy
+                && s.fields.len() == sh.fields.len()
+                && same_name(&s.name, &sh.name)
+                && s.fields.iter().zip(&sh.fields).all(|((n, x), (m, t))| ty_of(x) == *t && same_name(n, m))
+        }
+        _ => false,
+    }
+}
+
+/// `value_class(v).map(|k| k == *c)`, without building the class.
+pub(crate) fn value_class_is(v: &Value, c: &Class) -> Option<bool> {
+    match v {
+        Value::Struct(s) if s.uid == 0 && s.fields.iter().all(|(_, x)| ty_of(x).is_some()) => Some(matches!(c, Class::Value(sh) if shape_is(v, sh))),
+        _ => None,
+    }
+}
+
+/// Is `c` what a local reaching `v` classifies as (`class_of`, with a scalar counted as `Opaque` as
+/// `osr::classify` does)? Nothing is allocated.
+pub(crate) fn class_of_is(v: &Value, c: &Class) -> bool {
+    match v {
+        Value::Vec(items) => {
+            let Class::Vec(e) = c else { return false };
+            match items.get_value(0) {
+                None => *e == Elem::Unknown,
+                Some(x) => match (ty_of(&x), e) {
+                    (Some(t), Elem::Scalar(u)) => t == *u,
+                    (Some(_), _) => false,
+                    (None, Elem::Struct(sh)) => shape_is(&x, sh),
+                    (None, Elem::Unknown) => !matches!(x, Value::Struct(_)),
+                    (None, Elem::Scalar(_)) => false,
+                },
+            }
+        }
+        v if ty_of(v).is_some() => *c == Class::Opaque,
+        Value::Struct(_) => matches!(c, Class::Struct(sh) if shape_is(v, sh)),
+        _ => *c == Class::Opaque,
+    }
 }
 
 impl Shape {

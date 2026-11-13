@@ -10,7 +10,7 @@
 
 use super::lower::{self, Level, Path, Plan, StructSpill, NO_SLOT, S};
 use super::rt::Ctx;
-use super::kinds::{bits, class_of, int_value, ty_of, value, value_class, Class, Ty};
+use super::kinds::{bits, class_of, class_of_is, int_value, same_name, ty_of, value, value_class, value_class_is, Class, Ty};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::engine::Interpreter;
 use crate::interpreter::error::{Ctl, R};
@@ -35,6 +35,25 @@ pub(crate) struct Unit {
     plan: Plan,
     unplanned: Cell<u32>,
     dead: Cell<bool>,
+    /// The spill buffer and row-view tables of the last run, kept for the next one (a loop entered once per
+    /// call of its function would otherwise allocate them on every call). Taken while a run uses them, so a
+    /// nested run of the same unit allocates its own.
+    spare: std::cell::RefCell<Spare>,
+}
+
+#[derive(Default)]
+struct Spare {
+    buf: Vec<i64>,
+    tbls: [Vec<i64>; super::rows::ROWS],
+}
+
+impl Unit {
+    /// Keep `buf` for the next run.
+    fn give_back(&self, buf: Vec<i64>) {
+        if let Ok(mut s) = self.spare.try_borrow_mut() {
+            s.buf = buf;
+        }
+    }
 }
 
 /// One classification of the loop's locals and its machine code (`None`: outside the subset).
@@ -64,8 +83,11 @@ pub(crate) fn enter(it: &mut Interpreter, b: usize, site: &OsrSite) -> R<bool> {
     let Some((exit, buf, raised)) = execute(it, b, site, &reg, &unit, &[]) else { return Ok(false) };
     let path = &unit.plan.exits[exit].path;
     if !path.is_empty() {
-        resume(it, b, &reg, path, &buf, raised)?;
+        let r = resume(it, b, &reg, path, &buf, raised);
+        unit.give_back(buf);
+        r?;
     } else {
+        unit.give_back(buf);
         close_body(it, b, &reg, site.stmt);
     }
     Ok(true)
@@ -96,12 +118,14 @@ pub(crate) fn enter_for(it: &mut Interpreter, b: usize, site: &OsrSite, i: i128,
     let at = int_value(buf[c], ty);
     let path = &unit.plan.exits[exit].path;
     if path.is_empty() {
+        unit.give_back(buf);
         close_body(it, b, &reg, site.stmt);
         return Ok(Some(at)); // stopped at the head: the counter reached the end
     }
     let Statement::For { label, .. } = site.stmt else { unreachable!("a for site") };
     let info = reg.for_info(site.stmt).ok_or_else(internal)?;
     let r = resume(it, b, &reg, path, &buf, raised);
+    unit.give_back(buf);
     let r = close_block(it, b, Some(&info.scope), r);
     Ok(Some(match loop_exit(r.map(|_| Value::Unit), label.as_deref())? {
         Some(_) => hi,
@@ -122,14 +146,15 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
     }
     let reg = site.reg.upgrade()?;
     let refs = site.units.borrow_mut().refs.get_or_insert_with(|| Rc::new(collect(site))).clone();
-    let mut sig: Vec<Class> = refs.iter().map(|(_, s)| classify(&it.rstack[b + s], reg.kind(*s))).collect();
-    if let Some(t) = counter {
-        sig.push(Class::Scalar(Ty::Int(t)));
-    }
-    let found = site.units.borrow().list.iter().find(|e| e.sig == sig).map(|e| e.unit.clone());
+    // the classification a unit was compiled for, checked in place (no class is built on the way in)
+    let found = site.units.borrow().list.iter().find(|e| sig_is(it, b, &reg, &refs, counter, &e.sig)).map(|e| e.unit.clone());
     let unit = match found {
-        Some(u) => u,
+        Some(u) => {
+            debug_assert!(site.units.borrow().list.iter().any(|e| e.sig == sig_of(it, b, &reg, &refs, counter)), "sig_is and classify disagree");
+            u
+        }
         None => {
+            let sig = sig_of(it, b, &reg, &refs, counter);
             if site.units.borrow().list.len() >= MAX_SIGS {
                 it.fallback.jitrefused += 1;
                 site.dead.set(true);
@@ -163,11 +188,39 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
     }
 }
 
+/// The classification of the loop's locals now (and a `for` unit's counter width).
+fn sig_of(it: &Interpreter, b: usize, reg: &Reg, refs: &[(&'static str, usize)], counter: Option<IntTy>) -> Vec<Class> {
+    let mut sig: Vec<Class> = refs.iter().map(|(_, s)| classify(&it.rstack[b + s], reg.kind(*s))).collect();
+    if let Some(t) = counter {
+        sig.push(Class::Scalar(Ty::Int(t)));
+    }
+    sig
+}
+
+/// `sig_of(..) == *sig`, without building the classification.
+fn sig_is(it: &Interpreter, b: usize, reg: &Reg, refs: &[(&'static str, usize)], counter: Option<IntTy>, sig: &[Class]) -> bool {
+    if sig.len() != refs.len() + counter.is_some() as usize {
+        return false;
+    }
+    if let Some(t) = counter {
+        if sig[refs.len()] != Class::Scalar(Ty::Int(t)) {
+            return false;
+        }
+    }
+    refs.iter().zip(sig).all(|((_, s), c)| classify_is(&it.rstack[b + s], reg.kind(*s), c))
+}
+
 /// Run the machine code: fill the spill buffer (the live-ins, then `init`), call, write the exit's
 /// variables back. `None`: a live-in no longer has the classified type (nothing ran). The third
 /// value is what a closure-run statement raised, when the exit follows one.
 fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Unit, init: &[(usize, i64)]) -> Option<(usize, Vec<i64>, Option<Ctl>)> {
-    let mut buf = vec![0i64; unit.plan.nbuf.max(1)];
+    let n = unit.plan.nbuf.max(1);
+    let (mut buf, tbls) = match unit.spare.try_borrow_mut() {
+        Ok(mut s) => (std::mem::take(&mut s.buf), std::mem::take(&mut s.tbls)),
+        Err(_) => Default::default(),
+    };
+    buf.clear();
+    buf.resize(n, 0);
     for (i, slot, t) in &unit.plan.live {
         buf[*i] = read(it, b + slot, reg.kind(*slot)).and_then(|v| bits(&v, *t))?;
     }
@@ -181,10 +234,14 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
         buf[*i] = *x;
     }
     let mut ctx = Ctx::new(it as *mut Interpreter, b, &unit.plan, reg);
+    ctx.row_tbls = tbls;
     // SAFETY: `f` is finalized code of the module `it.jit` keeps alive, with the `UnitFn` signature;
     // `ctx` and `buf` (`nbuf` slots) outlive the call.
     let exit = unsafe { (unit.f)(&mut ctx, buf.as_mut_ptr()) } as usize;
     let raised = ctx.raised.take();
+    if let Ok(mut s) = unit.spare.try_borrow_mut() {
+        s.tbls = std::mem::take(&mut ctx.row_tbls);
+    }
     it.fast.packedstore += ctx.view_stores as u64;
     it.fast.rowview += ctx.row_hits as u64;
     let e = &unit.plan.exits[exit];
@@ -214,11 +271,11 @@ const INLINE_STACK: usize = 1 << 20;
 pub(super) fn load_struct(it: &Interpreter, i: usize, kind: Option<SlotKind>, sp: &StructSpill, buf: &mut [i64]) -> Option<()> {
     let v = read(it, i, kind)?;
     let Value::Struct(s) = &v else { return None };
-    if *s.name != *sp.name || s.fields.len() != sp.fields.len() || s.uid != 0 {
+    if !same_name(&s.name, &sp.name) || s.fields.len() != sp.fields.len() || s.uid != 0 {
         return None;
     }
     for ((n, x), (m, k, t)) in s.fields.iter().zip(&sp.fields) {
-        if **n != **m {
+        if !same_name(n, m) {
             return None;
         }
         buf[*k] = bits(x, *t)?;
@@ -277,6 +334,27 @@ fn classify(v: &Value, kind: Option<SlotKind>) -> Class {
         Some(Class::Scalar(_)) | None => Class::Opaque,
         Some(c) => c,
     }
+}
+
+/// `classify(v, kind) == *c`, without building the class.
+fn classify_is(v: &Value, kind: Option<SlotKind>, c: &Class) -> bool {
+    let direct = match (kind, v) {
+        (Some(SlotKind::Boxed), Value::Ref(p)) if p.path.is_empty() => p.slot.try_borrow().ok().and_then(|g| ty_of(&g)),
+        (Some(SlotKind::Plain | SlotKind::Typed(_)), v) => ty_of(v),
+        _ => None,
+    };
+    if let Some(t) = direct {
+        return *c == Class::Scalar(t);
+    }
+    let held = match (kind, v) {
+        (Some(SlotKind::Boxed), Value::Ref(p)) if p.path.is_empty() => p.slot.try_borrow().ok().and_then(|g| value_class_is(&g, c)),
+        (Some(SlotKind::Plain), v) => value_class_is(v, c),
+        _ => None,
+    };
+    if let Some(yes) = held {
+        return yes;
+    }
+    super::rt::peek(v, |x| Some(class_of_is(x, c))).unwrap_or(*c == Class::Opaque)
 }
 
 /// The locals the loop names (its own `let`s shadow them inside; that is resolved when lowering).
@@ -348,7 +426,7 @@ fn compile(it: &mut Interpreter, site: &OsrSite, reg: &Reg, refs: &[(&'static st
         let p = module.get_finalized_function(id);
         // SAFETY: the function was built with `lower::signature`, which is `UnitFn`'s.
         let f = unsafe { std::mem::transmute::<*const u8, UnitFn>(p) };
-        Ok(Unit { f, plan, unplanned: Cell::new(0), dead: Cell::new(false) })
+        Ok(Unit { f, plan, unplanned: Cell::new(0), dead: Cell::new(false), spare: Default::default() })
     })();
     it.jit = Some(jit);
     r
