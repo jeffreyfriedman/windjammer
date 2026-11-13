@@ -29,8 +29,15 @@ fn run_toolchain(cmd: &Commands) {
     }
 }
 
-fn cmd_doctor(json: bool, expect_head: bool, strict: bool) -> Result<()> {
+fn cmd_doctor(json: bool, expect_head: bool, strict: bool, pin: bool) -> Result<()> {
     use windjammer::toolchain::doctor;
+    if pin {
+        match windjammer::toolchain::pin::pin_line(&windjammer::toolchain::identity::current()) {
+            Some(line) => println!("{line}"),
+            None => anyhow::bail!("this wj carries no source key"),
+        }
+        return Ok(());
+    }
     let path = windjammer::toolchain::env::get("PATH").unwrap_or_default();
     if expect_head {
         match doctor::expect_head(&path) {
@@ -99,7 +106,7 @@ fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
             let id = windjammer::toolchain::identity::current();
             Some(if *json { serde_json::to_string_pretty(&id.to_json()).map(|j| println!("{j}")).map_err(Into::into) } else { Ok(println!("{}", id.version_line())) })
         }
-        Commands::Doctor { json, expect_head, strict } => Some(cmd_doctor(*json, *expect_head, *strict)),
+        Commands::Doctor { json, expect_head, strict, pin } => Some(cmd_doctor(*json, *expect_head, *strict, *pin)),
         Commands::InstallDev { to, from, force, dry_run } => Some(cmd_install_dev(to.clone(), from.clone(), *force, *dry_run)),
         Commands::SelfInstall { dry_run } => Some(windjammer::cli::self_install::execute(*dry_run, &plugin_dirs_from_env())),
         _ => None,
