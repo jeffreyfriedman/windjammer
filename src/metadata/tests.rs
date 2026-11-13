@@ -310,12 +310,12 @@ fn wj_meta_sidecar_is_trusted_only_when_current() {
         "written by another compiler build: stale"
     );
     assert!(
-        wj_meta_is_current(&meta_path, &ModuleMetadata::new("m".into())),
-        "sidecars without a fingerprint (stdlib / hand-authored) are accepted"
+        !wj_meta_is_current(&meta_path, &ModuleMetadata::new("m".into())),
+        "a cached sidecar without a fingerprint is not trusted (the embedded stdlib_meta is read from memory)"
     );
-    // No sibling source (metadata shipped without sources): the compiler identity still gates it.
+    // No source left (deleted, or never there): nothing proves the entry current, so it is ignored.
     std::fs::remove_file(&src).unwrap();
-    assert!(wj_meta_is_current(&meta_path, &meta_with_fingerprint(now, h ^ 1)));
+    assert!(!wj_meta_is_current(&meta_path, &meta_with_fingerprint(now, h)));
 }
 
 #[test]

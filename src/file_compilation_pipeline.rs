@@ -231,8 +231,11 @@ fn compile_file_impl(
 
     // Cross-file ownership: load peer `*.wj.meta` (from prior `wj build` runs) into the registry
     // before analysis so call sites get `&` / `&mut` for callees defined in other files.
-    metadata::merge_wj_meta_signatures_from_dir(
+    // Only peers this file reaches (its `use` / `mod` declarations, closed over the peers' own) and whose sources
+    // still hold the text they were written for: an unrelated or stale cache entry never changes the output.
+    metadata::merge_wj_meta_signatures_from_dir_reaching(
         source_root,
+        Some(metadata::use_segments(&program)),
         &mut module_compiler.global_signatures,
     );
 

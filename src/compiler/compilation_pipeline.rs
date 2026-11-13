@@ -194,12 +194,15 @@ pub fn build_project_with_config(
         let ancestor_roots = metadata_roots_explicit_last(file_parent, &external_paths, external_metadata);
         let ancestor_root_refs: Vec<&Path> = ancestor_roots.iter().map(|p| p.as_path()).collect();
         meta_roots.extend_from_slice(&ancestor_root_refs);
+        // Only current peers this file reaches feed the build: an unrelated or stale cache entry never changes it.
         crate::metadata::with_own_meta_excluded(file, || {
-            crate::metadata::merge_wj_meta_signatures_and_copy_structs_multi(
-                &meta_roots,
-                &mut global_signatures,
-                &mut analyzer,
-            )
+            crate::metadata::with_peers_reached_by(file_parent, &program, || {
+                crate::metadata::merge_wj_meta_signatures_and_copy_structs_multi(
+                    &meta_roots,
+                    &mut global_signatures,
+                    &mut analyzer,
+                )
+            })
         });
         // External deps: also register `crate_key::fn` aliases for qualified calls.
         if !external_paths.is_empty() {

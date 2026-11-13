@@ -17,10 +17,17 @@ compilations read it to infer across file and crate boundaries.
 Never next to a source file.
 
 - Project with `wj.toml` or `Cargo.toml`: `<project>/.wj-cache/<path under src>.wj.meta` (git-ignored).
-- No manifest above the source: `<temp dir>/wj-meta/<hash of the module root>/<path>.wj.meta` (the OS temp
-  dir, honouring `TMPDIR`; it is a cache, so losing it costs a cold build, never correctness), where the module root is found by
+- No manifest above the source: `<cache root>/meta/<tree key>/<path>.wj.meta` (the shared cache root,
+  `WJ_CARGO_TARGET_ROOT` or the platform cache dir, pruned by `wj cache prune`; losing it costs a cold build, never
+  correctness). The tree key is content-derived (the sorted relative paths and source hashes of the tree's `.wj` files),
+  never the tree's location, so the same tree in two checkouts shares its entries. The module root is found by
   climbing out of module directories (a directory with `mod.wj`, or with a sibling `<name>.wj`), stopping
   at the nearest ancestor named `src`, else the file's directory.
+
+A cached entry is read only when it carries a fingerprint written by the same compiler (same binary bytes), its
+source still exists with the text it was written for, and the module is reached by the build (named by the current
+file's `use` / `mod` declarations, closed over those of the reached modules). Anything else is ignored: a cache
+can never change what a clean build emits.
 
 A `*.wj.meta` found anywhere else is a legacy sidecar written by an older compiler. It is never read
 (`merge_single_wj_meta_file` accepts only cache locations and the embedded `stdlib_meta/`). `wj doctor`
