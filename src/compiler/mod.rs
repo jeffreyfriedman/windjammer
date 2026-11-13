@@ -21,7 +21,6 @@ mod std_stubs;
 
 pub use cache_management::write_if_changed;
 pub(crate) use compilation_pipeline::load_path_dep_signatures_into_registry;
-pub(crate) use path_dep_metadata::fail_on_errors as fail_on_path_dep_errors;
 pub use compilation_pipeline::{
     build_project, build_project_ext, build_project_with_config, resolve_project_shadow,
 };
@@ -207,7 +206,11 @@ pub(crate) fn write_crate_metadata_json(
     metadata: &crate::metadata::CrateMetadata,
 ) -> anyhow::Result<()> {
     let metadata_path = output.join("metadata.json");
-    let metadata_json = serde_json::to_string_pretty(metadata)?;
+    // Which of its types the generated crate derives `Serialize` for: dependents' derive inference reads it.
+    let mut metadata = metadata.clone();
+    let derives = crate::metadata::type_derives::type_serde_derives_in_dir(output);
+    metadata.serde_types = Some(crate::metadata::type_derives::serde_type_names(&derives));
+    let metadata_json = serde_json::to_string_pretty(&metadata)?;
     cache_management::write_if_changed(&metadata_path, &metadata_json)?;
     Ok(())
 }

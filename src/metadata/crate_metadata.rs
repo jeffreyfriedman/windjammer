@@ -188,6 +188,10 @@ pub struct CrateMetadata {
     /// passed to another crate's `Value::Int64(..)` has the declared payload width).
     #[serde(default)]
     pub variant_payloads: std::collections::BTreeMap<String, Vec<String>>,
+    /// Struct and enum names the generated crate declares with `#[derive(Serialize)]` (`None` in metadata written
+    /// before this field existed: unknown). A dependent's derive inference reads it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serde_types: Option<Vec<String>>,
     /// Version for compatibility
     pub version: String,
 }
@@ -206,6 +210,7 @@ impl CrateMetadata {
             copy_structs: Vec::new(),
             string_consts: Vec::new(),
             variant_payloads: Default::default(),
+            serde_types: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
@@ -454,6 +459,14 @@ pub(in crate::metadata) fn merge_crate_metadata_file_with_alias(
         return;
     };
     copy_structs.extend(crate_meta.copy_structs.iter().cloned());
+    // A dependency's (aliased) metadata only: a project's own earlier metadata describes its own types.
+    if let (Some(_), Some(serde)) = (crate_alias, &crate_meta.serde_types) {
+        let enums = crate_meta.variant_payloads.keys().filter_map(|k| k.split_once("::").map(|(e, _)| e.to_string()));
+        for name in crate_meta.structs.keys().cloned().chain(enums).chain(serde.iter().cloned()) {
+            let derives = serde.contains(&name);
+            registry.record_dependency_type_serde(name, derives);
+        }
+    }
     for (struct_name, fields) in &crate_meta.structs {
         let field_types: Vec<String> = fields.iter().map(|(_, ty)| ty.clone()).collect();
         all_struct_fields

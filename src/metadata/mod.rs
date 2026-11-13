@@ -12,6 +12,7 @@ mod function_metadata;
 mod generated_rust_signatures;
 mod signature_filters;
 mod type_metadata;
+pub mod type_derives;
 
 pub use signature_filters::{
     drop_dependency_signatures_for_local_types, signature_targets_local_struct,

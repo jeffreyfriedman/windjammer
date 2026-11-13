@@ -3,6 +3,12 @@
 use super::{FunctionSignature, SignatureRegistry};
 
 impl SignatureRegistry {
+    /// The signature a file registers for its own definition `name` (its analysis, kept by `keep_own_definitions`):
+    /// this layer only, never a layer below it, where a same-named function of another module may sit.
+    pub fn own_definition(&self, name: &str) -> Option<&FunctionSignature> {
+        self.signatures.get(name)
+    }
+
     /// Lexical scope (C3): inside module `m`, a bare `f` is `m::f` when `m` defines it. Returns that
     /// module-qualified key when it is registered on this layer or a layer below it.
     pub fn scoped_key(&self, module_path: &[String], name: &str) -> Option<String> {
@@ -96,22 +102,6 @@ impl SignatureRegistry {
         let own = format!("{base}::{method}");
         key == own || key.ends_with(&format!("::{own}")) || self.key_may_name_method_of_known_receiver(key)
     }
-
-    /// True when `sig` is `method` of an inherent impl of a type other than `receiver_type`: a same-named method of
-    /// another type (`Tabs::active` for a `RailItem` receiver), never the method the call names.
-    pub fn is_inherent_method_of_another_type(&self, method: &str, sig: &FunctionSignature, receiver_type: &str) -> bool {
-        let leaf = |t: &str| {
-            let base = t.split('<').next().unwrap_or(t);
-            base.rsplit("::").next().unwrap_or(base).to_string()
-        };
-        let owner = match sig.param_types.first().filter(|_| sig.has_self_receiver) {
-            Some(crate::parser::Type::Reference(inner) | crate::parser::Type::MutableReference(inner)) => inner.as_ref(),
-            Some(other) => other,
-            None => return false,
-        };
-        let crate::parser::Type::Custom(owner) = owner else { return false };
-        leaf(owner) != leaf(receiver_type) && self.is_inherent_method_of(method, sig)
-    }
 }
 
 impl FunctionSignature {
@@ -120,5 +110,36 @@ impl FunctionSignature {
     /// never in what the source declares; a same-named function of another module may differ in both.
     pub fn declares_same_function(&self, other: &FunctionSignature) -> bool {
         self.formal_param_types == other.formal_param_types && self.return_type == other.return_type
+    }
+
+    /// True when `self` can implement the trait method declared by `trait_sig` (E0053): the same receiver kind and
+    /// the same number of formals. A same-named method of another trait with other formals is not its declaration.
+    pub fn may_implement(&self, trait_sig: &FunctionSignature) -> bool {
+        let arity = |s: &FunctionSignature| s.param_ownership.len().saturating_sub(usize::from(s.has_self_receiver));
+        self.has_self_receiver == trait_sig.has_self_receiver && arity(self) == arity(trait_sig)
+    }
+}
+
+/// Trait-key and dependency-type records (what the declarations of traits, impls and dependencies say).
+impl SignatureRegistry {
+    /// Record that `key` is a `Trait::method` definition (not an inherent impl).
+    pub fn record_trait_method_key(&mut self, key: String) {
+        self.trait_method_keys.insert(key);
+    }
+
+    /// Record that a dependency declares the type `name`, and whether its crate derives `Serialize` for it.
+    pub fn record_dependency_type_serde(&mut self, name: String, derives_serialize: bool) {
+        let entry = self.dependency_type_serde.entry(name).or_insert(derives_serialize);
+        *entry = *entry && derives_serialize;
+    }
+
+    /// `Some(derives Serialize)` when a dependency declares the type `name` (this layer, then the layers below).
+    pub fn dependency_type_serde(&self, name: &str) -> Option<bool> {
+        self.layers().find_map(|reg| reg.dependency_type_serde.get(name).copied())
+    }
+
+    /// Record that `key` is a `Type::method` from `impl Trait for Type`.
+    pub fn record_trait_impl_method_key(&mut self, key: String) {
+        self.trait_impl_method_keys.insert(key);
     }
 }

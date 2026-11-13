@@ -162,6 +162,15 @@ impl CodeGenerator<'_> {
 
     fn named_type_is_serde_derivable(&self, name: &str, depth: usize) -> bool {
         let leaf = crate::type_classification::type_name_leaf(name);
+        // A dependency's type implements `Serialize` exactly when its crate derives it: its fields say nothing.
+        if !self.user_declared_struct_names.contains(leaf) {
+            let declared = self.signature_registry.dependency_type_serde(leaf).or_else(|| {
+                self.global_signature_registry.as_ref().and_then(|g| g.dependency_type_serde(leaf))
+            });
+            if let Some(derives) = declared {
+                return derives;
+            }
+        }
         if let Some(fields) = self.lookup_struct_field_types(leaf) {
             return fields.values().all(|t| self.type_is_serde_derivable(t, depth + 1));
         }
