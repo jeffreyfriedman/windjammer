@@ -1,0 +1,73 @@
+// ==== domain/a.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+fn cell(s: String) -> String {
+    s
+}
+
+#[inline]
+pub fn a_pub(s: String) -> String {
+    cell(s)
+}
+
+// ==== domain/b.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+fn cell(s: String) -> String {
+    s
+}
+
+#[inline]
+pub fn b_pub(s: String) -> String {
+    cell(s)
+}
+
+#[inline]
+pub fn parse(cell: &str) -> i64 {
+    cell.len() as i64
+}
+
+// ==== domain/c.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn parse(cell: &str) -> i64 {
+    cell.len() as i64
+}
+
+// ==== domain/mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod a;
+pub mod b;
+pub mod c;
+
+// Re-export public items
+pub use self::a::*;
+pub use self::b::*;
+pub use self::c::*;
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod domain;
+
+// Re-export public items
+pub use domain::*;
+// ==== main.rs ====
+mod domain;
+fn main() {
+    println!("{}", domain::c::parse("xy"));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod domain;
+
+// Re-export public items
+pub use domain::*;
