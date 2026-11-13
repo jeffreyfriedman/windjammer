@@ -1,6 +1,9 @@
 //! Gates: age-based staleness warning (30 days behind an enclosing compiler checkout, 60 days otherwise),
 //! once per day, silenceable, and free on the hot path. The clock is injected with `WJ_TOOLCHAIN_NOW`.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -119,13 +122,27 @@ fn inside_a_checkout_the_binary_is_measured_against_the_newest_commit_there() {
     assert!(!warned(&o), "{}", String::from_utf8_lossy(&o.stderr));
 }
 
+/// The stamp directory lives under `WJ_CARGO_TARGET_ROOT`; the body runs in a child process that alone sees the private
+/// root (set in this process it would redirect every other test's builds there).
 #[test]
 fn a_binary_younger_than_thirty_days_pays_almost_nothing() {
+    let guard = scratch::Scratch::new("stale-hot");
+    let missing = guard.join("absent-target-root");
+    scratch::run_ignored_test_in_child(
+        module_path!(),
+        "hot_path_body",
+        &[("WJ_CARGO_TARGET_ROOT", missing.as_os_str())],
+    );
+}
+
+#[test]
+#[ignore = "child body of a_binary_younger_than_thirty_days_pays_almost_nothing"]
+fn hot_path_body() {
+    if !scratch::in_test_child() {
+        return;
+    }
     let Some(ts) = commit_ts() else { return };
-    // tempfile, not Scratch: WJ_CARGO_TARGET_ROOT is process-global, so a concurrent `wj` child may recreate the path after removal.
-    let guard = tempfile::tempdir().unwrap();
-    let missing = guard.path().join("absent-target-root");
-    std::env::set_var("WJ_CARGO_TARGET_ROOT", &missing);
+    let missing = std::path::PathBuf::from(std::env::var_os("WJ_CARGO_TARGET_ROOT").expect("root from the parent"));
     std::env::remove_var("WJ_NO_STALE_WARN");
     let id = identity::current();
     let now = ts + 10 * DAY;

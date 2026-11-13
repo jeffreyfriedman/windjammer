@@ -1,0 +1,288 @@
+// Instruction-count ratchet of the interpreter (ADR-0038): startup and the bench/interp kernels, counted in
+// instructions (not seconds), so a loaded machine cannot move the number.
+//
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN                print the table (JSON on stdout)
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --refs         also count the twins under qjs, lua, python3 and node
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --check        fail when a kernel counts more than its recorded
+//                                                              instructions + 3% (bench/interp/instr_baseline.json)
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --write        record the counts (lower only; --allow-raise to raise)
+//
+// The counter: callgrind (`valgrind --tool=callgrind`) when valgrind is installed, else the hardware counter of
+// `/usr/bin/time -l` ("instructions retired", macOS). Counts from different counters are never compared: the
+// baseline keeps one table per counter, and `--check` with no table for this counter says so and passes.
+// Every run must exit 0 and print the kernel's recorded output (bench/interp/expected/<kernel>.out), so a faster
+// interpreter that prints something else fails here before any count is compared. A count is the smallest of
+// --runs N runs (default 3; startup N + 2): the counter's noise only ever adds. Run from the repository root.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::members
+use wj_json_doc::as_i64
+use wj_json_doc::object
+use wj_json_doc::with
+use wj_json_doc::from_int
+use wj_json_doc::from_str
+use wj_json_doc::from_float
+use wj_json_doc::dumps
+
+const BENCH: string = "bench/interp"
+const BASELINE: string = "bench/interp/instr_baseline.json"
+const STARTUP: string = "bench/interp/startup/hello.wj"
+const SLACK_PCT: int = 3
+
+struct Count {
+    instr: int,
+    stdout: string,
+    status: int,
+}
+
+fn has(tool: string) -> bool {
+    match sh("command -v " + tool + " >/dev/null 2>&1") {
+        Ok(o) => o.status == 0,
+        Err(_) => false,
+    }
+}
+
+// "callgrind" or "retired" (macOS hardware counter), "" when neither works here.
+fn counter() -> string {
+    if has("valgrind") {
+        return "callgrind"
+    }
+    match sh("/usr/bin/time -l true 2>&1 >/dev/null") {
+        Ok(o) => {
+            if o.stdout.contains("instructions retired") {
+                return "retired"
+            }
+        },
+        Err(_) => {},
+    }
+    ""
+}
+
+fn platform_key(c: string) -> string {
+    let arch = match sh("uname -sm") {
+        Ok(o) => strings.replace(strings.trim(o.stdout), " ", "-"),
+        Err(_) => "unknown",
+    }
+    "${c}:${arch}"
+}
+
+// The instruction count of one run of `cmd` (a shell command line), with its stdout and exit status.
+fn count_once(c: string, cmd: string) -> Count {
+    let line = if c == "callgrind" {
+        "valgrind --tool=callgrind --callgrind-out-file=/dev/null " + cmd + " 2>" + quote(err_file())
+    } else {
+        "/usr/bin/time -l " + cmd + " 2>" + quote(err_file())
+    }
+    let out = match sh(line) {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln("cannot run ${cmd}: ${e}")
+            process.exit(1)
+        },
+    }
+    let err = fs::read_to_string(err_file()) ?? ""
+    let mut instr = 0
+    for l in strings.split_lines(err) {
+        let words = strings.split_whitespace(l)
+        if c == "callgrind" && l.contains("Collected :") && words.len() > 0 {
+            instr = words[words.len() - 1].parse::<int>() ?? 0
+        } else if c == "retired" && l.contains("instructions retired") && words.len() > 0 {
+            instr = words[0].parse::<int>() ?? 0
+        }
+    }
+    Count { instr: instr, stdout: out.stdout, status: out.status }
+}
+
+// Where the counter's report goes: one file per script run (the grant covers /tmp).
+fn err_file() -> string {
+    let pid = match sh("echo $PPID") {
+        Ok(o) => strings.trim(o.stdout),
+        Err(_) => "0",
+    }
+    "/tmp/wj-interp-instr-${pid}.err"
+}
+
+// The smallest count: what a run costs without the counter's additive noise (interrupts, page faults).
+fn min_int(xs: Vec<int>) -> int {
+    let mut best = 0
+    for x in xs {
+        if best == 0 || x < best {
+            best = x
+        }
+    }
+    best
+}
+
+// Smallest count of `runs` runs; exits when a run fails or prints other than `expected` ("" = not checked).
+fn measure(c: string, cmd: string, runs: int, expected: string, what: string) -> int {
+    let mut xs: Vec<int> = Vec::new()
+    let mut i = 0
+    while i < runs {
+        let r = count_once(c, cmd)
+        if r.status != 0 {
+            eprintln("${what}: exit ${r.status}")
+            process.exit(1)
+        }
+        if expected != "" && r.stdout != expected {
+            eprintln("${what}: output differs from ${BENCH}/expected\n  expected: ${expected}\n  got:      ${r.stdout}")
+            process.exit(1)
+        }
+        if r.instr <= 0 {
+            eprintln("${what}: no instruction count in the counter's report")
+            process.exit(1)
+        }
+        xs.push(r.instr)
+        i += 1
+    }
+    min_int(xs)
+}
+
+fn kernels() -> Vec<string> {
+    let mut names: Vec<string> = Vec::new()
+    match fs.read_dir(BENCH) {
+        Ok(entries) => {
+            for e in entries {
+                let name = fs.file_name(e.path()) ?? ""
+                if name.ends_with(".wj") {
+                    names.push(name.replace(".wj", ""))
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    names.sort()
+    names
+}
+
+fn arg_value(args: Vec<string>, flag: string, default: string) -> string {
+    let mut i = 0
+    while i + 1 < args.len() {
+        if args[i] == flag {
+            return args[i + 1]
+        }
+        i += 1
+    }
+    default
+}
+
+fn millions(n: int) -> f64 {
+    ((n as f64) / 100000.0).round() / 10.0
+}
+
+fn main() {
+    let args = env.args()
+    if args.len() < 2 {
+        eprintln("usage: interp_instr.wj WJ_BIN [--refs] [--check] [--write [--allow-raise]] [--runs N]")
+        process.exit(1)
+    }
+    let wj = args[1]
+    let runs = arg_value(args, "--runs", "3").parse::<int>() ?? 3
+    let c = counter()
+    if c == "" {
+        eprintln("no instruction counter: install valgrind (callgrind), or run on macOS (/usr/bin/time -l)")
+        process.exit(1)
+    }
+    let key = platform_key(c)
+    let cwd = env.current_dir() ?? "."
+    let mut counts = object()
+    // startup: the smallest program through the default `wj run` path
+    let hello = measure(c, quote(wj) + " run --no-lint " + quote(cwd + "/" + STARTUP), runs + 2, "hello\n", "startup")
+    counts = with(counts, "startup", from_int(hello as i64))
+    let mut refs = object()
+    // each reference tool's own startup (bench/interp/startup/hello.*), subtracted for the net ratios
+    let mut ref_start: Vec<(string, string, int)> = Vec::new()
+    if args.contains("--refs") {
+        for (tool, ext) in [("qjs", "mjs"), ("node", "mjs"), ("python3", "py"), ("lua", "lua")] {
+            if has(tool) {
+                ref_start.push((tool, ext, measure(c, tool + " " + quote(cwd + "/bench/interp/startup/hello." + ext), runs, "hello\n", "startup (${tool})")))
+            }
+        }
+        let mut row = with(object(), "wj", from_float(millions(hello)))
+        for (tool, _, n) in ref_start {
+            row = with(row, tool, from_float(millions(n)))
+        }
+        refs = with(refs, "startup", row)
+    }
+    for k in kernels() {
+        let expected = fs::read_to_string("${BENCH}/expected/${k}.out") ?? ""
+        if expected == "" {
+            eprintln("${k}: no recorded output ${BENCH}/expected/${k}.out")
+            process.exit(1)
+        }
+        let n = measure(c, quote(wj) + " run --no-lint " + quote("${cwd}/${BENCH}/${k}.wj"), runs, expected, k)
+        counts = with(counts, k, from_int(n as i64))
+        if args.contains("--refs") {
+            let mut row = with(object(), "wj", from_float(millions(n)))
+            for (tool, ext, start) in ref_start {
+                let twin = "${BENCH}/twins/${k}.${ext}"
+                if fs.exists(twin) {
+                    let t = measure(c, tool + " " + quote(cwd + "/" + twin), runs, expected, "${k} (${tool})")
+                    row = with(row, tool, from_float(millions(t)))
+                    // net of each side's startup: the kernel's own work
+                    let net = ((n - hello) as f64) / (((t - start) as f64).max(1.0))
+                    row = with(row, "net_wj_over_" + tool, from_float((net * 100.0).round() / 100.0))
+                }
+            }
+            refs = with(refs, k, row)
+        }
+    }
+    let mut res = with(with(object(), "counter", from_str(key)), "instructions", counts)
+    if args.contains("--refs") {
+        res = with(res, "references_millions", refs)
+    }
+    println(dumps(res, 1, true))
+
+    let base_doc = parse(fs::read_to_string(BASELINE) ?? "{}") ?? object()
+    let base = get(base_doc, key) ?? object()
+    if args.contains("--check") {
+        let mut bad: Vec<string> = Vec::new()
+        let mut tighter: Vec<string> = Vec::new()
+        let mut seen = 0
+        for m in members(base) {
+            let was = as_i64(m.value) ?? 0
+            match get(counts, m.key) {
+                Some(v) => {
+                    seen += 1
+                    let now = as_i64(v) ?? 0
+                    if now * 100 > was * (100 + SLACK_PCT) {
+                        bad.push("${m.key}: ${now} > ${was} + ${SLACK_PCT}%")
+                    } else if now * 100 < was * (100 - SLACK_PCT) {
+                        tighter.push("${m.key}: ${now} < ${was} - ${SLACK_PCT}% (record it with --write)")
+                    }
+                },
+                None => bad.push("${m.key}: in the baseline but not measured"),
+            }
+        }
+        if seen == 0 {
+            eprintln("no baseline for counter ${key} in ${BASELINE}: nothing to compare (record one with --write)")
+        }
+        for t in tighter {
+            eprintln("improved: " + t)
+        }
+        if bad.len() > 0 {
+            eprintln("instruction counts regressed:\n" + bad.join("\n"))
+            process.exit(1)
+        }
+    }
+    if args.contains("--write") {
+        let mut next = object()
+        for m in members(counts) {
+            let now = as_i64(m.value) ?? 0
+            let was = as_i64(get(base, m.key) ?? Json::Null) ?? 0
+            if was > 0 && now > was && !args.contains("--allow-raise") {
+                eprintln("${m.key}: ${now} > recorded ${was}; keeping the recorded count (--allow-raise to raise it)")
+                next = with(next, m.key, from_int(was as i64))
+            } else {
+                next = with(next, m.key, from_int(now as i64))
+            }
+        }
+        let _ = fs.write(BASELINE, dumps(with(base_doc, key, next), 1, true) + "\n")
+    }
+}
