@@ -40,8 +40,18 @@ pub fn read(dir: &Path, key: &str) -> Option<String> {
     fs::read_to_string(file_in(dir, key)?).ok()
 }
 
+/// The entry under `key` as bytes (an entry is opaque to the store: text or a binary table).
+pub fn read_bytes(dir: &Path, key: &str) -> Option<Vec<u8>> {
+    fs::read(file_in(dir, key)?).ok()
+}
+
 /// Write `text` under `key` and keep the newest `max` entries. Best effort: a cache that cannot be written is no error.
 pub fn write(dir: &Path, key: &str, text: &str, max: usize) {
+    write_bytes(dir, key, text.as_bytes(), max)
+}
+
+/// `write` for a binary entry.
+pub fn write_bytes(dir: &Path, key: &str, text: &[u8], max: usize) {
     let Some(path) = file_in(dir, key) else { return };
     // held until the end of the function: a prune that asks for the directory meanwhile is told it is in use
     let _guard = active::hold_path(dir);
@@ -133,6 +143,13 @@ impl RegistryStore {
     pub fn put(&self, key: &str, text: &str) {
         let _ = fs::create_dir_all(&self.dir);
         write(&self.dir, key, text, REGISTRY_MAX_ENTRIES);
+    }
+    pub fn get_bytes(&self, key: &str) -> Option<Vec<u8>> {
+        read_bytes(&self.dir, key)
+    }
+    pub fn put_bytes(&self, key: &str, bytes: &[u8]) {
+        let _ = fs::create_dir_all(&self.dir);
+        write_bytes(&self.dir, key, bytes, REGISTRY_MAX_ENTRIES);
     }
 }
 
