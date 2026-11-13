@@ -37,7 +37,7 @@
 "src/lib.rs" = 1
 
 [env_var_reads]
-"src/cargo_cache/mod.rs" = 9
+"src/cargo_cache/mod.rs" = 4
 "src/cli/code_mode.rs" = 3
 "src/cli/self_install.rs" = 3
 "src/compiler_config.rs" = 1
