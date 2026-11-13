@@ -9,11 +9,6 @@ pub use shapes::*;
 // ==== main.rs ====
 mod shapes;
 #[inline]
-fn total(x: f32, y: f32, z: f32) -> f32 {
-    x + y + z
-}
-
-#[inline]
 fn size(s: &crate::shapes::Shape) -> f32 {
     let (a, b, c) = match s {
         crate::shapes::Shape::Cube(e) => (e.x, e.y, e.z),
@@ -21,7 +16,7 @@ fn size(s: &crate::shapes::Shape) -> f32 {
         crate::shapes::Shape::Pill(r, h) => (*r * 1.0_f32, *h * 1.0_f32, 0.0_f32),
         crate::shapes::Shape::Hull(_) => (1.0_f32, 1.0_f32, 1.0_f32),
     };
-    total(a, b, c)
+    crate::shapes::total(a, b, c)
 }
 
 #[inline]
@@ -96,4 +91,9 @@ impl Item {
     }
 }
 
+
+#[inline]
+pub fn total(x: f32, y: f32, z: f32) -> f32 {
+    x + y + z
+}
 
