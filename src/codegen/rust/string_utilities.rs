@@ -3,6 +3,7 @@
 //! Helper functions for string type analysis and codegen decisions.
 //! These are pure functions with no state dependencies.
 
+use super::string_analysis::strip_enclosing_parens;
 use crate::analyzer::OwnershipMode;
 use crate::parser::{Expression, Literal, Statement, Type};
 
@@ -159,26 +160,6 @@ pub fn already_owned_string_expr(expr_str: &str) -> bool {
         || s.ends_with(".clone()")
         || s.starts_with("String::from(")
         || s == "String::new()"
-}
-
-/// The inside of `( .. )` when the opening parenthesis is closed by the last character: `(a).f(b)` is not wrapped
-/// (its first `(` closes before the end), so stripping its ends would garble it into `a).f(b`.
-pub fn strip_enclosing_parens(s: &str) -> Option<&str> {
-    let inner = s.strip_prefix('(')?.strip_suffix(')')?;
-    let mut depth = 0i32;
-    for c in inner.chars() {
-        match c {
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth < 0 {
-                    return None;
-                }
-            }
-            _ => {}
-        }
-    }
-    (depth == 0).then_some(inner)
 }
 
 /// Idempotent: coerce a generated expression to owned `String` without `.to_string()` leakage.
