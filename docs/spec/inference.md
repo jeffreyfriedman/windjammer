@@ -344,7 +344,9 @@ source or use is `usize` (a solved width, published as a fact); with an exact wi
 **Rule.** Each read of a local has the width of the binding it names. A name bound twice with different widths (a
 counter over a `len()`, later a counter passed to a `u32` parameter) is two classes; a fact keyed by the name cannot
 describe both, so the solver publishes the width of every read by its source position (`IrFunction::use_widths`).
-**Status.** Conforms for reads of `let` and pattern bindings; parameters keep their declared types.
+**Status.** Conforms for reads of `let` and pattern bindings; parameters keep their declared types (C4, wt/width-9).
+Gates: `ir::numeric_facts::tests::rebound_counter_reads_carry_their_bindings_width` and the golden
+`tests/inference_corpus/rebound_counter_widths.wj` (convergence gate 1).
 
 ### NUM-USIZE-TO-INT
 **Rule (ADR-0028).** A `usize` value that enters a slot of another integer width is converted at that site: an index
