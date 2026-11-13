@@ -234,6 +234,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.part(var, part, sub, "NUM-PAYLOAD");
                 continue;
             }
+            // A user-type payload (`Box(extents)` of a `Vec3`): the binding has that type, so `extents.x` is a field read.
+            if let Some(t) = declared.as_ref().and_then(|d| d.get(&key)).filter(|t| !super::numeric::contains_unfixed(t)) {
+                self.var_static_types.entry(sub).or_insert_with(|| t.clone());
+            }
             let base = declared
                 .as_ref()
                 .and_then(|d| d.get(&key))
