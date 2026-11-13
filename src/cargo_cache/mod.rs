@@ -359,7 +359,6 @@ pub fn prune(opts: PruneOptions) -> PruneReport {
     report.freed_bytes += entries::prune(&entries::analysis_dir(), entries::ANALYSIS_MAX_ENTRIES, opts.force, &mut report);
     report.freed_bytes += entries::prune(&entries::verdicts_dir(), 512, opts.force, &mut report);
     report.freed_bytes += entries::prune(&entries::registry_dir(), entries::REGISTRY_MAX_ENTRIES, opts.force, &mut report);
-    report.freed_bytes += entries::prune_meta_trees(&entries::meta_dir(), entries::META_MAX_TREES, opts.force, &mut report);
 
     // The verify tree is ephemeral scratch: always drop it when large or when reclaiming.
     if verify.exists() && deletable(&verify, &verify) && (do_aggressive || dir_size(&verify) > VERIFY_MAX_BYTES) {
