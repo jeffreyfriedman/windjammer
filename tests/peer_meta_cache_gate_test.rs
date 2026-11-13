@@ -254,3 +254,28 @@ fn a_copied_compiler_accepts_the_entries_the_original_wrote() {
     assert_eq!(by_original, emitted(&p), "the copied compiler answered differently");
     assert_eq!(entry, std::fs::read(meta_of(&p, "chain.wj")).unwrap(), "the copy rewrote the peer's entry");
 }
+
+/// Expected-failure ledger. A REACHED peer (the probe does `use chain`) that declares a free `fn len` still turns the
+/// probe's `cur.len() > 0` into `0_i64`: a method call resolving to a same-named free function. That is a resolution
+/// bug, not a cache bug (repro: transfer branch `repro-bare-name-method`; owner: the sig-keys work). The case is
+/// pinned here only so this gate notices the fix: when the reached case emits `0`, remove it from this ledger and
+/// make `known_open_reached_peer_case_is_still_open` assert the clean output instead. Never extend the ledger to hide
+/// a cache leak.
+const KNOWN_OPEN: &[&str] = &["reached peer declaring a same-named free function: cur.len() > 0_i64 (expected 0)"];
+
+#[test]
+fn known_open_reached_peer_case_is_still_open() {
+    assert_eq!(KNOWN_OPEN.len(), 1, "the ledger lists exactly the reached-peer case");
+    let d = tempfile::tempdir().unwrap();
+    let p = project(&d.path().join("p"));
+    let cache = d.path().join("cache");
+    std::fs::write(p.join("src/layout.wj"), format!("use chain\n{}", std::fs::read_to_string(p.join("src/layout.wj")).unwrap())).unwrap();
+    build(&p, "src/chain.wj", &cache);
+    build(&p, "src/layout.wj", &cache);
+    let rust: String = emitted(&p).into_values().collect();
+    assert!(
+        rust.contains("cur.len() > 0_i64"),
+        "the ledgered case now emits `cur.len() > 0`: the bare-name method bug is fixed; remove it from KNOWN_OPEN \
+         and assert the clean output here"
+    );
+}
