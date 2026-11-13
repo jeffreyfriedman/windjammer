@@ -125,6 +125,73 @@ pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
     }
 }
 
+/// `wj run --pair-list FILE` (internal, ADR-0038 C4): every program FILE lists, run under the tree walker and then the
+/// resolved engine in this process, each with deterministic time, no stdin, no arguments and the local profile's
+/// grant, and printed as one JSON line per run: `{"file", "engine", "exit", "stdout", "stderr"}`. The drift fuzz step
+/// compares the two engines on generated programs; one process for all of them saves a process start and a `wj check`
+/// per run. The check is not run: it is the same for both engines, so it cannot make them differ (a program it would
+/// refuse runs here, which only widens what the two engines are compared on).
+pub fn run_pair_list(list: &Path, opts: RunOptions) -> i32 {
+    let text = match std::fs::read_to_string(list) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: cannot read {}: {e}", list.display());
+            return 1;
+        }
+    };
+    let files: Vec<PathBuf> = text.lines().map(str::trim).filter(|l| !l.is_empty()).map(PathBuf::from).collect();
+    with_big_stack(move || {
+        for file in &files {
+            for (engine, resolved) in [("walker", false), ("resolved", true)] {
+                let (code, out, err) = pair_run(file, resolved, &opts);
+                let line = serde_json::json!({ "file": file.display().to_string(), "engine": engine, "exit": code, "stdout": out, "stderr": err });
+                println!("{line}");
+            }
+        }
+        0
+    })
+}
+
+/// One run of `run_pair_list`: exit status, captured stdout and stderr (the failure report included, as `wj run` prints it).
+fn pair_run(file: &Path, resolved: bool, opts: &RunOptions) -> (i32, String, String) {
+    let mut it = Interpreter::new_capturing();
+    it.set_capture_stderr(true);
+    it.guard_stack();
+    it.hash_seed = opts.hash_seed;
+    it.set_sched_seed(opts.sched_seed);
+    it.set_deterministic_time(true);
+    it.set_engine_resolved(resolved);
+    it.set_jit(!opts.no_jit);
+    if let Some(n) = opts.jit_loop_hot {
+        it.jit_loop_hot = n;
+    }
+    match super::caps::gate_for_run(file, false, &[], false, &opts.caps_mode) {
+        Ok(gate) => it.set_caps(gate),
+        Err(m) => return (1, String::new(), format!("error: {m}\n")),
+    }
+    it.set_args(Vec::new());
+    it.set_capture_locals(!opts.no_locals, Vec::new());
+    it.set_real_sleep(false);
+    let mut report = String::new();
+    let code = match it.load_program_at(file) {
+        Err(e) => {
+            report = format!("{}\n", e.render());
+            exit_code_for(&e)
+        }
+        Ok(()) => match it.call_main() {
+            Ok(v) => main_result_code_in(&mut it, &v, false),
+            Err(e) => {
+                if !matches!(e.kind, ErrorKind::Exit(_)) {
+                    report = format!("{}\n", e.render());
+                }
+                exit_code_for(&e)
+            }
+        },
+    };
+    it.flush();
+    (code, it.get_output(), it.get_err_output() + &report)
+}
+
 /// Result of an interpreted run.
 #[derive(Debug)]
 pub enum RunOutcome {
