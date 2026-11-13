@@ -419,16 +419,26 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
     }
     // a module function (shadows intrinsics, as in the walker)
     if let Some(f) = cx.it.modules[cx.module].funcs.get(name.as_str()).cloned() {
-        // a parameter the callee mutates would need a reference to our slot: walker only
+        // a parameter the callee mutates gets the place its argument resolves to (`place::arg`), as `eval_args` does
         let mutated = cx.it.param_mutation(&f);
-        if mutated.iter().any(|m| *m) || !f.type_params.is_empty() || f.params.first().is_some_and(|p| p.name == "self") {
+        let places = mutated.iter().any(|m| *m);
+        if (places && cx.it.fast_off("placeargs")) || !f.type_params.is_empty() || f.params.first().is_some_and(|p| p.name == "self") {
             return None;
         }
         // arguments are plain values in the walker (`eval_raw_for_arg`), except an explicit `&mut x`
         if arg_exprs().any(|e| matches!(e, Expression::Unary { op: UnaryOp::MutRef, .. })) {
             return None;
         }
-        let args: Vec<X> = arg_exprs().map(|e| expr_arg(cx, e)).collect::<Option<_>>()?;
+        let args: Vec<X> = arg_exprs()
+            .enumerate()
+            .map(|(i, e)| match mutated.get(i) {
+                Some(true) if Interpreter::is_place_expr(e) => Some(X::V(super::place::arg(cx, e)?)),
+                _ => expr_arg(cx, e),
+            })
+            .collect::<Option<_>>()?;
+        if places {
+            cx.it.fast.placeargs += 1;
+        }
         let ret = f.ret.and_then(IntTy::from_type).filter(|t| small(*t) && !f.is_async && !f.is_extern);
         let widths = args.iter().map(|a| if let X::I(_, u) = a { Some(*u) } else { None }).collect();
         let site = Site { f, args, widths, target: std::cell::OnceCell::new() };

@@ -23,6 +23,9 @@ pub struct IterState {
     pub src: IterSrc,
     /// One-item lookahead for `peek`: `Some(None)` = peeked and exhausted.
     pub peeked: RefCell<Option<Option<Value>>>,
+    /// The Rust iterator type this one stands for when that type has no exact size (`Chars`): the compiled
+    /// program has no `len()` on it (no `ExactSizeIterator`), so neither does the interpreter.
+    pub inexact: Option<&'static str>,
 }
 
 pub enum IterSrc {
@@ -58,7 +61,13 @@ pub enum IterSrc {
 
 impl IterState {
     pub fn new(src: IterSrc) -> Iter {
-        Rc::new(IterState { src, peeked: RefCell::new(None) })
+        Rc::new(IterState { src, peeked: RefCell::new(None), inexact: None })
+    }
+    /// An iterator over `items` standing for Rust's `rust_type`, which has no exact size (`len()` is refused).
+    pub fn from_items_inexact(items: Vec<Value>, rust_type: &'static str) -> Iter {
+        let n = items.len();
+        let src = IterSrc::Buf { items: Rc::new(items.into()), pos: Cell::new(0), end: Cell::new(n) };
+        Rc::new(IterState { src, peeked: RefCell::new(None), inexact: Some(rust_type) })
     }
     pub fn from_items(items: Vec<Value>) -> Iter {
         let n = items.len();
@@ -376,6 +385,19 @@ pub fn next_back(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
 }
 
 /// Remaining length for exact-size iterators (`len()`), `None` when Rust would not offer `len`.
+/// The Rust type without an exact size that `s` (through size-keeping adapters) stands for, if any: Rust has
+/// no `len()` on it, whatever the interpreter could count.
+pub fn inexact_type(s: &Iter) -> Option<&'static str> {
+    if s.inexact.is_some() {
+        return s.inexact;
+    }
+    match &s.src {
+        IterSrc::Map(i, _) | IterSrc::Inspect(i, _) | IterSrc::Rev(i) | IterSrc::Enumerate(i, _) | IterSrc::Take(i, _) | IterSrc::Skip(i, _) => inexact_type(i),
+        IterSrc::Zip(a, b) => inexact_type(a).or_else(|| inexact_type(b)),
+        _ => None,
+    }
+}
+
 pub fn exact_len(s: &Iter) -> Option<usize> {
     let peeked = match &*s.peeked.borrow() {
         Some(Some(_)) => 1,
@@ -432,7 +454,7 @@ pub fn clone_iter(s: &Iter) -> Iter {
         FromFn(f) => FromFn(f.clone()),
         Successors { next, f } => Successors { next: RefCell::new(next.borrow().clone()), f: f.clone() },
     };
-    Rc::new(IterState { src, peeked: RefCell::new(s.peeked.borrow().clone()) })
+    Rc::new(IterState { src, peeked: RefCell::new(s.peeked.borrow().clone()), inexact: s.inexact })
 }
 
 impl Interpreter {

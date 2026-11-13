@@ -1040,7 +1040,8 @@ pub(crate) fn generate_test_harness(
     for file in files {
         let output_file = compile_test_module(file, output_dir, library_dependency.as_ref())?;
         let rust_code = fs::read_to_string(&output_file)?;
-        fs::write(&output_file, mark_tests(rust_code, &file.tests))?;
+        let cwd = project_root.canonicalize().ok();
+        fs::write(&output_file, mark_tests(rust_code, &file.tests, cwd.as_deref()))?;
         module_names.push(file.module_name.clone());
     }
 

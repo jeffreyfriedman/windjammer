@@ -171,12 +171,13 @@ pub fn register(r: &mut Registry) {
     });
     r.pure(Kind::Str, "trim_start", |_, v, _| Ok(Value::str(sv(v).trim_start())));
     r.pure(Kind::Str, "trim_end", |_, v, _| Ok(Value::str(sv(v).trim_end())));
-    r.pure(Kind::Str, "chars", |_, v, _| Ok(new_iter(sv(v).chars().map(Value::Char).collect())));
+    r.pure(Kind::Str, "chars", |_, v, _| Ok(Value::Iter(crate::interpreter::iter::IterState::from_items_inexact(sv(v).chars().map(Value::Char).collect(), "Chars"))));
     r.pure(Kind::Str, "bytes", |_, v, _| Ok(new_iter(sv(v).bytes().map(|b| Value::Int(b as i128, IntTy::U8)).collect())));
     r.pure(Kind::Str, "as_bytes", |_, v, _| Ok(Value::vec(sv(v).bytes().map(|b| Value::Int(b as i128, IntTy::U8)).collect())));
     r.pure(Kind::Str, "into_bytes", |_, v, _| Ok(Value::vec(sv(v).bytes().map(|b| Value::Int(b as i128, IntTy::U8)).collect())));
     r.pure(Kind::Str, "char_indices", |_, v, _| {
-        Ok(new_iter(sv(v).char_indices().map(|(i, c)| Value::tuple(vec![Value::usize(i), Value::Char(c)])).collect()))
+        let items = sv(v).char_indices().map(|(i, c)| Value::tuple(vec![Value::usize(i), Value::Char(c)])).collect();
+        Ok(Value::Iter(crate::interpreter::iter::IterState::from_items_inexact(items, "CharIndices")))
     });
     r.pure(Kind::Str, "lines", |_, v, _| Ok(strs(sv(v).lines().map(|l| l.to_string()).collect())));
     r.pure(Kind::Str, "split_whitespace", |_, v, _| Ok(strs(sv(v).split_whitespace().map(|l| l.to_string()).collect())));
