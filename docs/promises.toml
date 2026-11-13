@@ -882,6 +882,10 @@ id = "wj doctor --strict"
 statement = "Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout"
 
 [[promise]]
+id = "wj doctor --pin"
+statement = "Print the toolchain pin line for this wj (its source key), ready to paste under `[toolchain]` in wj.toml"
+
+[[promise]]
 id = "wj doctor --json"
 statement = "Machine-readable output"
 
