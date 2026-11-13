@@ -1,0 +1,11 @@
+# Fallback counts of the resolved engine per program (tests/interpreter_fallbacks_test.rs, ADR-0038).
+# program	island	walkercall	deopt	jitrefused	jitdead	jitexit
+bench/interp/closures.wj	901	0	0	1	0	0
+bench/interp/fib30.wj	0	0	0	0	0	0
+bench/interp/hashmap.wj	1	0	0	2	0	0
+bench/interp/loop5m.wj	0	0	0	0	0	0
+bench/interp/nbody.wj	20001	0	0	1	0	0
+bench/interp/sieve.wj	1	0	0	0	0	0
+bench/interp/startup/hello.wj	0	0	0	0	0	0
+bench/interp/strings.wj	400	0	0	2	0	0
+bench/interp/structs.wj	0	0	0	0	0	0
