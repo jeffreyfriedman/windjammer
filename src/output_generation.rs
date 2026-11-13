@@ -133,8 +133,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         if let Some(parent) = output_file_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        generator.set_output_file(&output_file_path);
-        generator.set_module_roots(output_dir, source_root);
+        generator.set_output_position(&output_file_path, output_dir, source_root);
 
         let auto_arena = generator.config.auto_arena;
         let result = crate::optimizer::run_with_auto_arena(auto_arena, &generator.generate_program(program, analyzed));
@@ -246,8 +245,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
     if let Some(parent) = output_file_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    generator.set_output_file(&output_file_path);
-    generator.set_module_roots(output_dir, source_root);
+    generator.set_output_position(&output_file_path, output_dir, source_root);
 
     let auto_arena = generator.config.auto_arena;
     let result = crate::optimizer::run_with_auto_arena(auto_arena, &generator.generate_program(program, analyzed));

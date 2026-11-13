@@ -12,27 +12,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-thread_local! {
-    /// Dependencies being derived on this thread (a cycle of path dependencies stops here).
-    static IN_PROGRESS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
-    /// Path dependencies discovery could not give signatures to, not yet reported by a build.
-    static ERRORS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-/// Record a path dependency without signatures; the build that resolved it stops on it ([`fail_on_errors`]).
-pub(crate) fn record_error(message: String) {
-    ERRORS.with(|e| e.borrow_mut().push(message));
-}
-
-/// Stop the build when a path dependency had no signatures: its call sites would otherwise be guessed.
-pub(crate) fn fail_on_errors() -> anyhow::Result<()> {
-    let errors = ERRORS.with(|e| std::mem::take(&mut *e.borrow_mut()));
-    if errors.is_empty() {
-        return Ok(());
-    }
-    anyhow::bail!("{}", errors.join("\n"))
-}
-
 /// The Windjammer source directory of a dependency root: `<dep>/src` when it holds `.wj` files, else `<dep>`.
 pub(crate) fn wj_source_dir(dep_root: &Path) -> Option<PathBuf> {
     [dep_root.join("src"), dep_root.to_path_buf()]
@@ -60,10 +39,12 @@ pub(crate) fn derive(key: &str, dep_root: &Path) -> Option<Result<PathBuf, Strin
     let source_dir = wj_source_dir(dep_root)?;
     let files = super::dependency_resolution::find_wj_files(&source_dir).ok()?;
     let canonical = std::fs::canonicalize(&source_dir).unwrap_or_else(|_| source_dir.clone());
-    if IN_PROGRESS.with(|p| p.borrow().contains(&canonical)) {
+    let out = crate::cargo_cache::cache_root().join("path-deps").join(format!("{key}-{}", fingerprint(&source_dir, &canonical, &files)));
+    // A dependency whose derivation is under way further up the chain: a cycle of path dependencies.
+    let marker = out.join(".wj-deriving");
+    if marker.is_file() {
         return Some(Err(format!("path dependency `{key}` ({}) depends on itself", dep_root.display())));
     }
-    let out = crate::cargo_cache::cache_root().join("path-deps").join(format!("{key}-{}", fingerprint(&source_dir, &canonical, &files)));
     if out.join("metadata.json").is_file() {
         let index = crate::cargo_cache::path_dep_crate_index(&source_dir);
         if std::fs::read_to_string(&index).ok().as_deref() != Some(&out.display().to_string()) {
@@ -74,7 +55,7 @@ pub(crate) fn derive(key: &str, dep_root: &Path) -> Option<Result<PathBuf, Strin
         }
         return Some(Ok(out));
     }
-    IN_PROGRESS.with(|p| p.borrow_mut().push(canonical.clone()));
+    let _ = std::fs::create_dir_all(&out).and_then(|()| std::fs::write(&marker, ""));
     let built = super::compilation_pipeline::build_project_with_config(
         &source_dir,
         &out,
@@ -84,7 +65,7 @@ pub(crate) fn derive(key: &str, dep_root: &Path) -> Option<Result<PathBuf, Strin
         &[],
         &crate::compiler_config::CompilerConfig::default(),
     );
-    IN_PROGRESS.with(|p| p.borrow_mut().retain(|d| d != &canonical));
+    let _ = std::fs::remove_file(&marker);
     if built.is_ok() && out.join("Cargo.toml").is_file() {
         let index = crate::cargo_cache::path_dep_crate_index(&source_dir);
         if let Some(parent) = index.parent() {

@@ -26,8 +26,8 @@ use crate::compiler_config::CompilerConfig;
 fn merge_external_metadata_paths(
     build_path: &Path,
     external_metadata: &[(&str, &Path)],
-) -> HashMap<String, PathBuf> {
-    let mut external_paths = discover_wj_toml_path_dependency_metadata(build_path);
+) -> Result<HashMap<String, PathBuf>> {
+    let mut external_paths = discover_wj_toml_path_dependency_metadata(build_path).map_err(anyhow::Error::msg)?;
     for (k, v) in discover_wj_import_dependency_metadata(build_path) {
         external_paths.entry(k).or_insert(v);
     }
@@ -38,7 +38,7 @@ fn merge_external_metadata_paths(
     for (name, p) in external_metadata {
         external_paths.insert(name.replace('-', "_"), (*p).to_path_buf());
     }
-    external_paths
+    Ok(external_paths)
 }
 
 /// Load `wj.toml` path-dep + import `metadata.json` into a signature registry
@@ -52,8 +52,8 @@ pub(crate) fn load_path_dep_signatures_into_registry(
     build_path: &Path,
     registry: &mut SignatureRegistry,
     analyzer: Option<&mut Analyzer>,
-) -> HashMap<String, PathBuf> {
-    let external_paths = merge_external_metadata_paths(build_path, &[]);
+) -> Result<HashMap<String, PathBuf>> {
+    let external_paths = merge_external_metadata_paths(build_path, &[])?;
     if !external_paths.is_empty() {
         crate::metadata::merge_external_crate_metadata_with_aliases(
             &external_paths,
@@ -61,7 +61,7 @@ pub(crate) fn load_path_dep_signatures_into_registry(
             analyzer,
         );
     }
-    external_paths
+    Ok(external_paths)
 }
 
 /// Check if a Type is Copy in single-file context (overrides stale metadata Copy).
@@ -136,8 +136,7 @@ pub fn build_project_with_config(
     }
     std::fs::create_dir_all(output)?;
 
-    let external_paths = merge_external_metadata_paths(path, external_metadata);
-    super::path_dep_metadata::fail_on_errors()?;
+    let external_paths = merge_external_metadata_paths(path, external_metadata)?;
 
     let mut crate_metadata = CrateMetadata::new();
 
@@ -526,7 +525,7 @@ mod tests {
         .unwrap();
 
         let mut registry = SignatureRegistry::new();
-        let found = load_path_dep_signatures_into_registry(&app.join("src"), &mut registry, None);
+        let found = load_path_dep_signatures_into_registry(&app.join("src"), &mut registry, None).unwrap();
         assert!(
             found.contains_key("validate_pkg"),
             "expected path-dep discovery, got {found:?}"
@@ -575,7 +574,7 @@ pub fn parse_level(text: &str) -> Option<u8> { None }
         .unwrap();
 
         let mut registry = SignatureRegistry::new();
-        let found = load_path_dep_signatures_into_registry(&app.join("src"), &mut registry, None);
+        let found = load_path_dep_signatures_into_registry(&app.join("src"), &mut registry, None).unwrap();
         assert!(
             found.contains_key("wj_log"),
             "expected generated-rs path-dep discovery, got {found:?}"
@@ -599,7 +598,7 @@ pub fn parse_level(text: &str) -> Option<u8> { None }
             return;
         }
         let mut registry = SignatureRegistry::new();
-        let found = load_path_dep_signatures_into_registry(&app, &mut registry, None);
+        let found = load_path_dep_signatures_into_registry(&app, &mut registry, None).unwrap();
         assert!(
             found.contains_key("wj_querystring"),
             "expected wj_querystring path-dep, got {found:?}"
@@ -669,7 +668,7 @@ pub fn parse_level(text: &str) -> Option<u8> { None }
             return;
         }
         let mut registry = SignatureRegistry::new();
-        load_path_dep_signatures_into_registry(&app, &mut registry, None);
+        load_path_dep_signatures_into_registry(&app, &mut registry, None).unwrap();
         let stub = crate::analyzer::FunctionSignature {
             name: "qs_get".to_string(),
             param_types: vec![Type::String, Type::String],

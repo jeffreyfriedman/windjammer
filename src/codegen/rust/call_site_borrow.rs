@@ -1167,3 +1167,39 @@ fn bar(y: string) -> bool {
         assert_eq!(arg, "&value");
     }
 }
+
+impl<'ast> crate::codegen::rust::generator::CodeGenerator<'ast> {
+    /// Whether the formal at `arg_index` of the call-site signature wants `&arg` or an owned argument.
+    pub(crate) fn call_site_slot_wants_ref_and_owned_for(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+        callee_name: &str,
+    ) -> (bool, bool) {
+        let slot_sig = self.refreshed_call_site_sig_for_arg(
+            &self.signature_registry,
+            callee_name,
+            arg_index,
+            sig,
+        );
+        let pidx = slot_sig.arg_param_index(arg_index);
+        if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+            &self.signature_registry,
+            callee_name,
+            Some(&slot_sig),
+            arg_index,
+        ) {
+            return (true, false);
+        }
+        let wants_owned =
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&slot_sig, pidx)
+                || crate::codegen::rust::call_site_borrow::sig_formal_is_copy_aggregate_owned(
+                    &slot_sig,
+                    pidx,
+                    |t| self.is_type_copy(t),
+                );
+        let wants_ref = !wants_owned
+            && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&slot_sig, pidx);
+        (wants_ref, wants_owned)
+    }
+}
