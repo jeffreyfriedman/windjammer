@@ -300,7 +300,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
             } else if emitted_rust_closure_value(inner) {
                 *coerced = inner.to_string();
             } else {
-                *coerced = owned_coercion_for_str_subslice(inner);
+                *coerced = owned_coercion_for_str_subslice(inner, is_string_base(&expected.base));
             }
             return;
         }
