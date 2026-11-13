@@ -92,7 +92,7 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | C3 | fuzz divergences | 0 | 0 | `tests/drift_corpus/fuzz_divergences.txt` |
 | C4 | fuzz throughput (generated cases checked, walker vs resolved) | 154 cases in 14 s wall at load 50 (about 11 per second) | 10x, so the long seed range (`--fuzz-long`) runs on every merge | `drift_gate.wj` step `fuzz` |
 | C5 | readiness R2 (no silent divergence) and R5 (diagnostics agree) | 98.5% and 95.1% | 100% | `docs/generated/interp_readiness.json` |
-| C6b | integer widths: an unsuffixed literal gets the width the numeric solver gives it in the compiled program (ADR-0028 `literal_widths`), so a `usize` counter underflows interpreted exactly where it panics compiled | the interpreter keeps a literal's width open (`IntTy::Lit`); a countdown `while i >= 0 && ..` that indexes a `Vec` ends at -1 interpreted and panics compiled | the interpreter reads the solver's per-function `literal_widths` (needs `crate::ir` among its allowed imports and the solver in `wj run`'s check, paid in startup instructions, P2) | a drift corpus case per width class; `interp_instr.wj` for the startup cost |
+| C6b | integer widths: an unsuffixed literal gets the width the numeric solver gives it in the compiled program (ADR-0028 `literal_widths`), so a `usize` countdown underflows interpreted exactly where it panics compiled | done: `compiled_facts.rs` adopts the solver's non-`int` literal widths in the walker, the resolved engine and machine code; a program pays for the analysis only when its AST can give a literal another width (an index, a cast, a `usize` std method, a declared narrow type): 0 instructions for `hello`, +9M to +20M on the kernels that qualify; the drift ledger lost one line (`literal_out_of_range`), and `repros/index_countdown_usize_underflow.wj` holds it | every literal width from the solver at no measurable cost: reuse the widths `wj check` already computed in the same process | drift corpus case; `interp_instr.wj` for the cost |
 | C6 | engines agree with each other | walker == resolved == machine code on every corpus program | stays | `engine_parity`, `fast_paths`, `fallbacks`, jit differential tests |
 
 ## Ladder 3: developer experience
@@ -138,6 +138,9 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 ## Consequences
 
 - `interp_instr.wj --check` and the `fallbacks` test join the interpreter's merge checks; the PC (Linux, callgrind)
-  records its own table in `instr_baseline.json`.
+  records its own table in `instr_baseline.json`. Counts from different counters are never compared: the macOS
+  hardware counter reports 119M instructions for startup where the PC's callgrind reports 79M for the same program
+  (the counters disagree on what they count, not on the program), so each counter keeps its own baseline table and
+  every quoted number names its counter.
 - The reference tools (`qjs`, `lua`) are optional: `--refs` skips a tool that is not installed.
 - The ladders are re-measured, not edited: a table here is updated together with the commit that moved it.

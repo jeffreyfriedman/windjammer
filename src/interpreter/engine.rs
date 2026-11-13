@@ -263,6 +263,12 @@ pub struct Interpreter {
     pub(crate) programs: HashMap<usize, &'static crate::parser::Program<'static>>,
     /// The compiler's `&mut` parameters per module, computed on first use (`None`: analysis failed).
     pub(crate) compiled_facts: HashMap<usize, Option<Rc<super::compiled_facts::MutRefParams>>>,
+    /// The numeric solver's widths of each module's unsuffixed integer literals (`compiled_facts.rs`), by module.
+    pub(crate) lit_widths: Vec<super::compiled_facts::LitWidths>,
+    /// The same, by program (modules sharing a file share them).
+    pub(crate) lit_widths_by_program: HashMap<usize, super::compiled_facts::LitWidths>,
+    /// Give unsuffixed literals the solver's widths (a host may turn it off).
+    pub(crate) literal_widths_on: bool,
     /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
     pub(crate) type_hint: Option<Type>,
     /// Expected type of one specific call expression (address, type); see `generics.rs`.
@@ -374,6 +380,9 @@ impl Interpreter {
             mutating_analysis: HashSet::new(),
             programs: HashMap::new(),
             compiled_facts: HashMap::new(),
+            lit_widths: Vec::new(),
+            lit_widths_by_program: HashMap::new(),
+            literal_widths_on: true,
             type_hint: None,
             retained: Vec::new(),
             expected: None,

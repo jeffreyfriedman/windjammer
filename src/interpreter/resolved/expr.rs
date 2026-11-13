@@ -170,7 +170,13 @@ pub(super) fn expr_eval(cx: &mut Cx, e: E) -> Option<X> {
 
 pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
     Some(match e {
-        Expression::Literal { value, .. } => match cx.it.literal(value) {
+        Expression::Literal { value, location } => match match value {
+            Literal::Int(i) => match cx.it.literal_width(cx.module, location.as_ref()) {
+                Some(t) => crate::interpreter::compiled_facts::int_literal(*i, t),
+                None => Value::Int(*i as i128, IntTy::Lit),
+            },
+            _ => cx.it.literal(value),
+        } {
             Value::Int(v, t) if small(t) && v as i64 as i128 == v => X::I(I::Const(v as i64), t),
             v => X::Const(v),
         },

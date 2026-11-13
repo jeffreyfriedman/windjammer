@@ -1,0 +1,23 @@
+// A countdown that indexes a Vec: the compiled program types `i` usize (the numeric solver's index class,
+// ADR-0028), so the last `i - 1` at 0 panics with subtract overflow. The interpreter gives the literal the
+// solver's width and panics at the same place (ADR-0038 C6b; findings/eco index_countdown_underflows_compiled).
+pub fn increment(digits: Vec<int>) -> Vec<int> {
+    let mut out = digits
+    let mut i = 2
+    let mut carry = true
+    while i >= 0 && carry {
+        if out[i] == 9 {
+            out[i] = 0
+        } else {
+            out[i] = out[i] + 1
+            carry = false
+        }
+        i = i - 1
+    }
+    out
+}
+
+fn main() {
+    println("${increment([1, 2, 9]):?}")
+    println("${increment([9, 9, 9]):?}")
+}
