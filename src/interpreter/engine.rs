@@ -186,6 +186,9 @@ pub struct Interpreter {
     pub(crate) jit_mutant: Option<String>,
     /// How often each fast path ran (reported with `WJ_JIT_DEBUG`, so a gate can tell one that silently stopped).
     pub(crate) fast: FastHits,
+    /// How often the resolved engine left its compiled form for a slower one (reported with `WJ_JIT_DEBUG`, so a
+    /// gate can hold each count where it is: a fallback that grows is a regression no output shows).
+    pub(crate) fallback: Fallbacks,
     /// Statement registries of compiled code (`resolved/osr.rs`), alive as long as the code is.
     pub(crate) osr_regs: Vec<Rc<super::resolved::osr::Reg>>,
     /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
@@ -324,6 +327,7 @@ impl Interpreter {
             jit_debug: false,
             jit_mutant: None,
             fast: FastHits::default(),
+            fallback: Fallbacks::default(),
             #[cfg(feature = "jit")]
             jit: None,
             subprocesses: HashMap::new(),
@@ -646,6 +650,34 @@ pub(crate) struct FastHits {
     pub(crate) matchval: u64,
     /// Walker fallbacks of a method call given copies of the locals its other arguments only read.
     pub(crate) argcopy: u64,
+}
+
+/// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,
+/// so no output shows it; `tests/interpreter_fallbacks_test.rs` holds each kernel's counts to its ledger.
+#[derive(Default, Debug, Clone, Copy)]
+pub(crate) struct Fallbacks {
+    /// Statements and expressions run as walker islands inside compiled code.
+    pub(crate) island: u64,
+    /// Calls the resolved engine ran in the tree walker (the callee is not compiled, or the call deopted).
+    pub(crate) walkercall: u64,
+    /// Compiled calls whose arguments did not have the compiled frame's types (run in the walker).
+    pub(crate) deopt: u64,
+    /// Loop classifications machine code refused (outside the subset, or too many classifications).
+    pub(crate) jitrefused: u64,
+    /// Machine-code units given up after too many failed checks.
+    pub(crate) jitdead: u64,
+    /// Machine-code runs that stopped at a failed check (the closures finished the iteration).
+    pub(crate) jitexit: u64,
+}
+
+impl Fallbacks {
+    /// The `[fallback]` line of `WJ_JIT_DEBUG`.
+    pub(crate) fn line(&self) -> String {
+        format!(
+            "[fallback] island {} walkercall {} deopt {} jitrefused {} jitdead {} jitexit {}",
+            self.island, self.walkercall, self.deopt, self.jitrefused, self.jitdead, self.jitexit
+        )
+    }
 }
 
 impl Interpreter {

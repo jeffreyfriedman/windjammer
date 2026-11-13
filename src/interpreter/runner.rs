@@ -245,6 +245,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
                 "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} rowview {} matchval {} argcopy {} lenfast {}",
                 f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.rowview, f.matchval, f.argcopy, f.lenfast
             );
+            eprintln!("{}", it.fallback.line());
         }
         if let Some(p) = &opts.result_json {
             let (steps, effect_calls, output_bytes) = it.usage();

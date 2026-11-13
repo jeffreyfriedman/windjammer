@@ -206,6 +206,11 @@ path = "tests/interpreter_engine_parity_test.rs"
 name = "fast_paths"
 path = "tests/interpreter_fast_paths_test.rs"
 
+# Fallback counts of the resolved engine held to bench/interp/fallbacks.tsv: cargo test --release --test fallbacks
+[[test]]
+name = "fallbacks"
+path = "tests/interpreter_fallbacks_test.rs"
+
 # The calls a build-slot gate makes, interpreted: cargo test --release --test slot_gate
 [[test]]
 name = "slot_gate"

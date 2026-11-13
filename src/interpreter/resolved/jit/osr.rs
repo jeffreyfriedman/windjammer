@@ -131,6 +131,7 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
         Some(u) => u,
         None => {
             if site.units.borrow().list.len() >= MAX_SIGS {
+                it.fallback.jitrefused += 1;
                 site.dead.set(true);
                 return None;
             }
@@ -144,6 +145,7 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
                     Some(Rc::new(u))
                 }
                 Err(why) => {
+                    it.fallback.jitrefused += 1;
                     debug(it, site, &format!("outside the subset: {why}"));
                     None
                 }
@@ -193,9 +195,11 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
         write(it, b + sp.slot, reg.kind(sp.slot), make_struct(sp, &buf), sp.fresh);
     }
     if !e.planned {
+        it.fallback.jitexit += 1;
         let n = unit.unplanned.get() + 1;
         unit.unplanned.set(n);
         if n >= MAX_UNPLANNED {
+            it.fallback.jitdead += 1;
             unit.dead.set(true);
             debug(it, site, "too many failed checks: back to the closures");
         }
