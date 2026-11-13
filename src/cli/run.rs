@@ -183,6 +183,13 @@ fn build_quietly(path: &Path, output_dir: &Path, target: crate::CompilationTarge
         .filter(|l| !is_cache_note(l))
         .map(|l| format!("{l}\n"))
         .collect();
+    // The agent format (ADR-0037) is one line per diagnostic: the child prints lints in the human layout.
+    let cwd = std::env::current_dir().ok().map(|d| d.to_string_lossy().to_string());
+    let kept = if out.format == crate::diagnostics::render::Format::Agent {
+        crate::diagnostics::render::agent_lint_text(&kept, cwd.as_deref())
+    } else {
+        crate::diagnostics::render::collapse_repeated_lint_blocks(&kept, cwd.as_deref())
+    };
     std::io::stderr().write_all(kept.as_bytes())?;
     // Progress only: the "run cargo build manually" hints do not apply to `wj run`; shown when `out.progress` (ADR-0037).
     if out.progress {

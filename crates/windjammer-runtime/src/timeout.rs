@@ -26,8 +26,24 @@ where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
 {
+    // wasm32-unknown-unknown has no threads (`thread::spawn` panics): run the test inline, without a deadline.
+    #[cfg(target_arch = "wasm32")]
+    {
+        return Ok(test_fn());
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    with_timeout_threaded(timeout, test_fn)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn with_timeout_threaded<F, R>(timeout: Duration, test_fn: F) -> Result<R, TimeoutError>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
     let (tx, rx) = mpsc::channel();
 
+    #[cfg(not(target_arch = "wasm32"))]
     let _handle = thread::spawn(move || {
         let result = panic::catch_unwind(panic::AssertUnwindSafe(test_fn));
         let _ = tx.send(result);

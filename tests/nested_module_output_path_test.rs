@@ -28,6 +28,10 @@ fn test_single_nested_file_compiles_to_correct_path() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_root = temp_dir.path();
 
+    // The manifest is the explicit signal that `src/` is the project's source root (a directory called `src` alone
+    // proves nothing), so the single file below keeps its `ecs/` directory.
+    std::fs::write(project_root.join("wj.toml"), "[package]\nname = \"nested\"\nversion = \"0.1.0\"\n").unwrap();
+
     // Create nested source structure
     let src = project_root.join("src");
     let ecs_dir = src.join("ecs");

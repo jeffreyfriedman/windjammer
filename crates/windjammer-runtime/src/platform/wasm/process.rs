@@ -43,8 +43,8 @@ fn execute_tauri(command: String, args: Vec<String>) -> Result<CommandOutput, St
 
     // Convert args to JS array
     let js_args = Array::new();
-    for arg in args {
-        js_args.push(&JsValue::from_str(&arg));
+    for arg in &args {
+        js_args.push(&JsValue::from_str(arg));
     }
 
     exec_fn

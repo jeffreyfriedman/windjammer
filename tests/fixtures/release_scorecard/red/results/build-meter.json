@@ -1,1 +1,1 @@
-{"generated_epoch": "@NOW@", "commit": "x", "values": {"n50_rss_mb":100,"n100_rss_mb":400,"n200_rss_mb":7000,"n50_wall_s":1,"n100_wall_s":50,"n200_wall_s":700}}
+{"schema": 1, "generated_epoch": "@NOW@", "commit": "x", "values": {"n50_rss_mb":100,"n100_rss_mb":400,"n200_rss_mb":7000,"n50_wall_s":1,"n100_wall_s":50,"n200_wall_s":700}}

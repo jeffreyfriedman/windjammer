@@ -445,6 +445,10 @@ name = "interpreter_one_thread_tasks"
 path = "tests/interpreter_one_thread_tasks_test.rs"
 
 [[test]]
+name = "wasm_clock_gate"
+path = "tests/wasm_clock_gate_test.rs"
+
+[[test]]
 name = "interpreter_projects"
 path = "tests/interpreter_projects_test.rs"
 

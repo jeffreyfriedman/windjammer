@@ -2,13 +2,34 @@
 
 use std::path::Path;
 
-/// True when the output directory is a Rust module subtree under `src/...` (not the crate root).
-/// In that case we only emit `mod.rs` for Cargo, not `lib.rs` (which would be invalid as a nested crate root).
+/// Module marker files: a directory holding one is a module directory, and a directory below it is a submodule.
+/// (`lib.*` / `main.*` mark crate roots, which can sit beside an ordinary `build/` or `gen/` output, so they do not count.)
+const MODULE_MARKERS: &[&str] = &["mod.wj", "mod.rs"];
+
+/// How many directory levels above the output are searched for a module-tree marker.
+const MODULE_TREE_SEARCH_DEPTH: usize = 8;
+
+/// True when `output_dir` lies inside an existing module tree (e.g. `src/components/generated/`), so its `mod.rs` is a
+/// submodule of a crate that is rooted elsewhere; false when it is a crate root of its own (e.g. `out/`, `gen/`).
+///
+/// Decided from the project's layout, never from what directories are called: the output is inside a module tree when a
+/// strict ancestor holds a module marker file (`mod.wj`, `mod.rs`), or when it
+/// lies inside the `src/` directory of the nearest project manifest (`wj.toml` / `Cargo.toml`, the manifest's default
+/// source directory). The search stops at the project boundary.
 pub(crate) fn is_submodule_output_dir(output_dir: &Path) -> bool {
-    let comps: Vec<_> = output_dir.components().collect();
-    for i in 0..comps.len() {
-        if comps[i].as_os_str() == "src" && i + 1 < comps.len() {
+    let abs = std::path::absolute(output_dir).unwrap_or_else(|_| output_dir.to_path_buf());
+    let project = abs.parent().and_then(crate::metadata::find_project_root);
+    if let Some(project) = &project {
+        if abs.strip_prefix(project.join("src")).is_ok_and(|rel| !rel.as_os_str().is_empty()) {
             return true;
+        }
+    }
+    for dir in abs.ancestors().skip(1).take(MODULE_TREE_SEARCH_DEPTH) {
+        if MODULE_MARKERS.iter().any(|m| dir.join(m).is_file()) {
+            return true;
+        }
+        if project.as_deref() == Some(dir) {
+            break;
         }
     }
     false

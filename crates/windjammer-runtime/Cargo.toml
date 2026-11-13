@@ -129,6 +129,10 @@ console_error_panic_hook = { version = "0.1", optional = true }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# uuid has no randomness source on wasm32-unknown-unknown unless told to use the browser's.
+uuid = { version = "1", features = ["v4", "v7", "js"] }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
 

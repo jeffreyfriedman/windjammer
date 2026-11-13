@@ -58,6 +58,8 @@ pub(super) struct Cx<'a> {
     pub(super) reg: Rc<Reg>,
     /// Loops enclosing the statement being compiled.
     loop_depth: usize,
+    /// Locals a `let` declared with a builtin map or set type (`builtin_collection`).
+    collections: Vec<usize>,
 }
 
 impl Cx<'_> {
@@ -66,6 +68,22 @@ impl Cx<'_> {
     }
     pub(super) fn slot_ty(&self, slot: usize) -> Option<IntTy> {
         self.slot_ty[slot]
+    }
+    /// Does `slot` always hold a builtin map or set (directly or behind references)? Its `let`
+    /// declared one (the compiler checked the program) and no user type takes the name. Such a
+    /// receiver has no user methods (`find_user_method` looks only at structs and enums), so no call
+    /// on it takes a place argument by `&mut`.
+    pub(super) fn builtin_collection(&self, slot: usize) -> bool {
+        self.collections.contains(&slot) && !self.it.fast_off("collectionargs")
+    }
+    /// Remember a `let` of a builtin map or set type (`builtin_collection`).
+    fn note_collection(&mut self, slot: Option<usize>, ty: Option<&'static Type>) {
+        if let (Some(s), Some(Type::Parameterized(t, _))) = (slot, ty) {
+            let user = self.it.structs.contains_key(t.as_str()) || self.it.enums.contains_key(t.as_str());
+            if matches!(t.as_str(), "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet") && !user {
+                self.collections.push(s);
+            }
+        }
     }
     pub(super) fn declare(&mut self, name: &'static str, ty: Option<IntTy>) -> usize {
         let i = self.nslots;
@@ -205,6 +223,7 @@ pub(super) fn fixpoint<T>(it: &mut Interpreter, u: &Unit, mut boxed: HashSet<usi
             tail_hint: u.tail_hint,
             reg: Rc::new(Reg::default()),
             loop_depth: 0,
+            collections: Vec::new(),
         };
         let r = body(&mut cx);
         cx.reg.finish(&cx.slot_ty, cx.boxed);
@@ -616,6 +635,9 @@ fn stmt_island(cx: &mut Cx, s: S) -> Option<Code> {
         _ => {}
     }
     let declares: Vec<(&'static str, usize)> = names.into_iter().map(|n| (n, cx.declare_boxed(n))).collect();
+    if let (Statement::Let { pattern: Pattern::Identifier(_) | Pattern::MutBinding(_), type_, .. }, [(_, slot)]) = (s, declares.as_slice()) {
+        cx.note_collection(Some(*slot), type_.as_ref());
+    }
     if let (Statement::Let { pattern: Pattern::Identifier(_) | Pattern::MutBinding(_), .. }, [(_, slot)], true) = (s, declares.as_slice(), cx.loop_depth > 0) {
         cx.reg.record_let(s, *slot);
     }
@@ -776,6 +798,7 @@ fn raw_let(cx: &mut Cx, name: Option<&'static str>, ty: Option<&'static Type>, v
         None => v.clean().code(), // `let _ = e` evaluates with `eval`
     };
     let slot = name.map(|n| cx.declare_boxed(n));
+    cx.note_collection(slot, ty);
     Box::new(move |it, b| {
         let mut x = v(it, b)?;
         if let Some(t) = ty {
@@ -816,6 +839,7 @@ fn let_stmt(cx: &mut Cx, name: Option<&'static str>, ty: Option<&'static Type>, 
     }
     let v = v.code();
     let slot = name.map(|n| cx.declare(n, None));
+    cx.note_collection(slot, ty);
     let kind = slot_kind(cx, slot);
     Box::new(move |it, b| {
         let mut x = v(it, b)?;

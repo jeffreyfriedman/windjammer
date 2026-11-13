@@ -6,9 +6,9 @@ name: Book
 on:
   push:
     branches: [main]
-    paths: ['docs/book/**', 'crates/windjammer-playground/**', 'docs/promises.toml', 'docs/spec/grammar.ebnf', 'std/**', 'src/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
+    paths: ['docs/book/**', 'crates/windjammer-playground/**', 'docs/promises.toml', 'docs/spec/grammar.ebnf', 'std/**', 'src/**', 'Cargo.toml', 'Cargo.lock', 'build.rs', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
   pull_request:
-    paths: ['docs/book/**', 'crates/windjammer-playground/**', 'src/interpreter/**', 'std/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
+    paths: ['docs/book/**', 'crates/windjammer-playground/**', 'src/**', 'std/**', 'Cargo.toml', 'Cargo.lock', 'build.rs', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
   workflow_dispatch:
 
 permissions:

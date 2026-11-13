@@ -1059,7 +1059,6 @@ impl<'ast> CodeGenerator<'ast> {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
                     self.sync_i32_coord_binding_after_let(vn, &value_str);
                 }
-                self.note_text_slice_local(var_name, value, &value_str);
                 output.push_str(&value_str);
 
                 // Restore expression context
@@ -1240,7 +1239,6 @@ impl<'ast> CodeGenerator<'ast> {
                     &value_str,
                 );
                 self.note_owned_local_after_ref_clone(var_name, value, &value_str);
-                self.note_text_slice_local(var_name, value, &value_str);
 
                 output.push_str(&value_str);
 
@@ -1452,6 +1450,7 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression<'ast>,
         value_str: &str,
     ) {
+        self.note_text_slice_local(var_name, value, value_str);
         if !value_str.ends_with(".clone()") {
             return;
         }

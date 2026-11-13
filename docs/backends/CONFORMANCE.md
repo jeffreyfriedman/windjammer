@@ -10,7 +10,7 @@ semantics, and a program can print a constant.
 | oracle | where | used for |
 |--------|-------|----------|
 | known-answer vectors | `// expect:` lines in a program | published vectors (CRC-32, FNV-1a, SHA-256, PCG32, Park-Miller MINSTD, RFC 4648 base64, UTF-8 encodings, harmonic numbers, factorials, Collatz record, textbook determinants) and hand-derived semantic tables (integer casts, division signs, float formatting) |
-| reference model | `<name>.ref.py` + committed `<name>.vectors/<seed>.out` | seeded programs; the committed vector is *derived* by `regen_vectors.py` and the test `reference_vectors_are_derived_from_models` re-runs the model whenever `python3` exists and fails on drift |
+| reference model | `<name>.ref.py` + committed `<name>.vectors/<seed>.out` | seeded programs; the committed vector is *derived* by `scripts/wj/regen_conformance_vectors.wj` and the test `reference_vectors_are_derived_from_models` re-runs the model whenever `python3` exists and fails on drift |
 | generator evaluator | `tests/common/conformance/gen_ast.rs` | generated programs: a second, independent implementation of the intended semantics (wrapping i64, truncating division, Copy-struct value semantics) |
 | the interpreter | `src/interpreter` via `wj run --interpret` | a fourth, **explicitly weaker** voice. Reported by `interpreter_oracle_report`, never authoritative |
 

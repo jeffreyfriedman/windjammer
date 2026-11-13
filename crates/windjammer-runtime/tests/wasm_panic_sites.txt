@@ -1,0 +1,14 @@
+# Ungated wasm32-misbehaving std calls per file in src/ (tests/wasm_panic_sites_test.rs). Format: FILE PANIC UNSUPPORTED.
+# PANIC = Instant::now, SystemTime, temp_dir, thread::spawn/sleep, process::exit/id, Utc/Local::now (must stay 0 for the default-features=false build).
+# UNSUPPORTED = std::fs, Command::new, std::net sockets: return an Unsupported error on wasm32, never reached by engine code. Shrink-only.
+src/cap.rs 0 8
+src/caps.rs 0 13
+src/caps_core/fdio.rs 0 2
+src/caps_core/grant.rs 0 7
+src/caps_core/scope_match.rs 0 1
+src/durable_core/mod.rs 0 5
+src/fs.rs 0 3
+src/io.rs 0 1
+src/net_core/mod.rs 0 9
+src/process.rs 0 3
+src/subprocess.rs 0 1
