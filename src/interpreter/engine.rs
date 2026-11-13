@@ -650,6 +650,8 @@ pub(crate) struct FastHits {
     pub(crate) matchval: u64,
     /// Walker fallbacks of a method call given copies of the locals its other arguments only read.
     pub(crate) argcopy: u64,
+    /// Compiled calls of a function that mutates a parameter, given the argument's place (compile time).
+    pub(crate) placeargs: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,

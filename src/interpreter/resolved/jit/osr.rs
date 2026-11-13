@@ -150,7 +150,10 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
     let found = site.units.borrow().list.iter().find(|e| sig_is(it, b, &reg, &refs, counter, &e.sig)).map(|e| e.unit.clone());
     let unit = match found {
         Some(u) => {
-            debug_assert!(site.units.borrow().list.iter().any(|e| e.sig == sig_of(it, b, &reg, &refs, counter)), "sig_is and classify disagree");
+            // debug builds and `WJ_JIT_DEBUG` runs (the jit and fast-path gates) prove the in-place check is classify's
+            if cfg!(debug_assertions) || it.jit_debug {
+                assert!(site.units.borrow().list.iter().any(|e| e.sig == sig_of(it, b, &reg, &refs, counter)), "sig_is and classify disagree");
+            }
             u
         }
         None => {
@@ -215,8 +218,10 @@ fn sig_is(it: &Interpreter, b: usize, reg: &Reg, refs: &[(&'static str, usize)],
 /// value is what a closure-run statement raised, when the exit follows one.
 fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Unit, init: &[(usize, i64)]) -> Option<(usize, Vec<i64>, Option<Ctl>)> {
     let n = unit.plan.nbuf.max(1);
+    let rows = !unit.plan.row_shapes.is_empty();
     let (mut buf, tbls) = match unit.spare.try_borrow_mut() {
-        Ok(mut s) => (std::mem::take(&mut s.buf), std::mem::take(&mut s.tbls)),
+        Ok(mut s) if rows => (std::mem::take(&mut s.buf), std::mem::take(&mut s.tbls)),
+        Ok(mut s) => (std::mem::take(&mut s.buf), Default::default()),
         Err(_) => Default::default(),
     };
     buf.clear();
@@ -239,8 +244,10 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     // `ctx` and `buf` (`nbuf` slots) outlive the call.
     let exit = unsafe { (unit.f)(&mut ctx, buf.as_mut_ptr()) } as usize;
     let raised = ctx.raised.take();
-    if let Ok(mut s) = unit.spare.try_borrow_mut() {
-        s.tbls = std::mem::take(&mut ctx.row_tbls);
+    if rows {
+        if let Ok(mut s) = unit.spare.try_borrow_mut() {
+            s.tbls = std::mem::take(&mut ctx.row_tbls);
+        }
     }
     it.fast.packedstore += ctx.view_stores as u64;
     it.fast.rowview += ctx.row_hits as u64;
