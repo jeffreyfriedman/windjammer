@@ -49,9 +49,17 @@ pub fn is_valid(handle: SubprocessHandle) -> bool {
     handle.is_valid()
 }
 
+// A child process cannot be started on wasm32-unknown-unknown (`Command` returns Unsupported), so no drainer is.
+#[cfg(target_arch = "wasm32")]
+fn start_stdout_drainer(_stdout: ChildStdout) -> (LineQueue, JoinHandle<()>) {
+    unreachable!("no child process exists on wasm32")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn start_stdout_drainer(stdout: ChildStdout) -> (LineQueue, JoinHandle<()>) {
     let lines: LineQueue = Arc::new((Mutex::new(VecDeque::new()), Condvar::new()));
     let lines_clone = Arc::clone(&lines);
+    #[cfg(not(target_arch = "wasm32"))]
     let drainer = std::thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
         loop {

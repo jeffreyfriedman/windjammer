@@ -91,11 +91,11 @@ Tokens per error from a compiled build the compiler should have accepted (the op
 separately so that fixing bugs does not move the diagnostic number:
 
 <!-- wj:gen name=metric key=cost.diag.build_tokens_per_error_human -->
-111
+116
 <!-- wj:end -->
 
 <!-- wj:gen name=metric key=cost.diag.build_tokens_per_error_agent -->
-76
+57
 <!-- wj:end -->
 
 Share of error codes seen in the corpus that come with a fix a tool can apply without reading prose:

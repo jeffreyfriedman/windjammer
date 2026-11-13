@@ -161,7 +161,7 @@
 "src/codegen/portable/ordering.rs" = 12
 "src/codegen/portable/stdlib.rs" = 68
 "src/codegen/portable/ty.rs" = 15
-"src/codegen/rust/backend.rs" = 3
+"src/codegen/rust/backend.rs" = 1
 "src/codegen/rust/block_generation.rs" = 1
 "src/codegen/rust/codegen_helpers.rs" = 1
 "src/codegen/rust/data_structure_generation.rs" = 2
