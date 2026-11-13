@@ -74,12 +74,15 @@ fn platform_key(c: string) -> string {
 }
 
 // The instruction count of one run of `cmd` (a shell command line), with its stdout and exit status.
+// What follows a run's own stdout in `count_once`'s output: the counter's report.
+const MARK: string = "\n@@wj-interp-instr counter@@\n"
+
+// The instruction count of one run of `cmd` (a shell command line), with its stdout and exit status. The counter
+// writes to stderr; the shell keeps that in a file of the system temp dir (`mktemp`) that it deletes itself, so
+// nothing outlives the run, and appends it to stdout after `MARK`.
 fn count_once(c: string, cmd: string) -> Count {
-    let line = if c == "callgrind" {
-        "valgrind --tool=callgrind --callgrind-out-file=/dev/null " + cmd + " 2>" + quote(err_file())
-    } else {
-        "/usr/bin/time -l " + cmd + " 2>" + quote(err_file())
-    }
+    let counter = if c == "callgrind" { "valgrind --tool=callgrind --callgrind-out-file=/dev/null" } else { "/usr/bin/time -l" }
+    let line = "f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; ${counter} ${cmd} 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
     let out = match sh(line) {
         Ok(o) => o,
         Err(e) => {
@@ -87,7 +90,10 @@ fn count_once(c: string, cmd: string) -> Count {
             process.exit(1)
         },
     }
-    let err = fs::read_to_string(err_file()) ?? ""
+    let (stdout, err) = match out.stdout.find(MARK) {
+        Some(i) => (out.stdout[0..i].to_string(), out.stdout[i + MARK.len()..].to_string()),
+        None => (out.stdout, ""),
+    }
     let mut instr = 0
     for l in strings.split_lines(err) {
         let words = strings.split_whitespace(l)
@@ -97,19 +103,9 @@ fn count_once(c: string, cmd: string) -> Count {
             instr = words[0].parse::<int>() ?? 0
         }
     }
-    Count { instr: instr, stdout: out.stdout, status: out.status }
+    Count { instr: instr, stdout: stdout, status: out.status }
 }
 
-// Where the counter's report goes: one file per script run (the grant covers /tmp).
-fn err_file() -> string {
-    let pid = match sh("echo $PPID") {
-        Ok(o) => strings.trim(o.stdout),
-        Err(_) => "0",
-    }
-    "/tmp/wj-interp-instr-${pid}.err"
-}
-
-// The smallest count: what a run costs without the counter's additive noise (interrupts, page faults).
 fn min_int(xs: Vec<int>) -> int {
     let mut best = 0
     for x in xs {
