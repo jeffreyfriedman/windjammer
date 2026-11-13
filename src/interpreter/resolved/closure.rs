@@ -25,8 +25,10 @@ pub(crate) struct CompiledClosure {
     nslots: usize,
     /// Slot of each parameter (`None`: `_`).
     params: Vec<Option<usize>>,
-    /// Environment names the body uses: (position in the environment, boxed slot).
+    /// Environment names the body uses: (position in the environment, slot).
     free: Vec<(usize, usize)>,
+    /// Per `free` name: its slot is plain and takes a copy of the environment value at the call (`by_value`).
+    free_by_value: Vec<bool>,
     /// The parameters' boxed slots: lock guards they hold are poisoned on a panic. A parameter the
     /// body only reads is a plain slot (no walker slot per call); it takes plain values only.
     boxed: Vec<usize>,
@@ -87,8 +89,13 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
     // environment names are boxed (their slots are the environment's). A parameter is boxed only
     // when the body needs its walker slot (islands, borrows, captures); a plain one is given plain
     // values only: a call passing a reference to it (an `iter_mut` item) runs in the walker
-    let boxed_init: HashSet<usize> = (0..free.len()).collect();
-    let (nslots, pslots, body_code, boxed) = fixpoint(it, &unit, boxed_init, |cx| {
+    // A body that is one expression with no call, closure, assignment, block or macro cannot change an environment
+    // slot while it runs: its free names may be plain slots holding a copy of the value at the call (no reference
+    // boxed per name per call). Whatever still needs a walker slot (an island naming it) is boxed by the fixpoint.
+    let by_value = !it.fast_off("closurecopy")
+        && !["Call {", "MethodCall {", "Closure {", "Assignment", "MacroInvocation", "Block {", "Await", "Spawn", "Async", "ChannelSend", "ChannelRecv"].iter().any(|w| text.contains(w));
+    let boxed_init: HashSet<usize> = if by_value { HashSet::new() } else { (0..free.len()).collect() };
+    let (nslots, pslots, body_code, boxed, free_boxed) = fixpoint(it, &unit, boxed_init, |cx| {
         let free_slots: Vec<usize> = free.iter().map(|n| cx.declare_local(n)).collect();
         debug_assert!(free_slots.iter().enumerate().all(|(i, s)| i == *s));
         cx.enter();
@@ -96,7 +103,8 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
         let code = expr_eval(cx, body)?.code();
         let boxed: Vec<usize> = cx.boxed_here();
         cx.leave();
-        Some((cx.nslots(), pslots, code, boxed))
+        let free_boxed: Vec<bool> = free_slots.iter().map(|s| cx.is_boxed(*s)).collect();
+        Some((cx.nslots(), pslots, code, boxed, free_boxed))
     })?;
     Some(CompiledClosure {
         env_names: env.iter().map(|(n, _)| *n).collect(),
@@ -104,6 +112,7 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
         params: pslots,
         // the walker looks a name up from the end of the scope: its last binding
         free: free.iter().enumerate().map(|(i, n)| (env.iter().rposition(|(m, _)| m == n).expect("free name is in the environment"), i)).collect(),
+        free_by_value: free_boxed.iter().map(|b| !b).collect(),
         boxed,
         body: body_code,
         checked: std::cell::RefCell::new(std::rc::Weak::new()),
@@ -142,10 +151,21 @@ impl Interpreter {
         if cc.params.iter().zip(args.iter()).any(|(p, a)| matches!(p, Some(s) if !cc.boxed.contains(s)) && matches!(a, Value::Ref(_))) {
             return None;
         }
+        // a by-value name whose environment value is a reference (or in use) takes the walker, as a plain parameter does
+        for ((pos, _), v) in cc.free.iter().zip(&cc.free_by_value) {
+            if *v && env[*pos].1.try_borrow().map_or(true, |x| matches!(&*x, Value::Ref(_))) {
+                return None;
+            }
+        }
         let base = self.rstack.len();
         self.rstack.resize(base + cc.nslots, Value::Unit);
-        for (pos, s) in &cc.free {
-            self.rstack[base + s] = Value::Ref(Box::new(Place::of_slot(env[*pos].1.clone())));
+        for ((pos, s), v) in cc.free.iter().zip(&cc.free_by_value) {
+            self.rstack[base + s] = if *v {
+                self.fast.closurecopy += 1;
+                env[*pos].1.borrow().clone()
+            } else {
+                Value::Ref(Box::new(Place::of_slot(env[*pos].1.clone())))
+            };
         }
         for (i, p) in cc.params.iter().enumerate() {
             let a = if i < args.len() { std::mem::replace(&mut args[i], Value::Unit) } else { Value::Unit };

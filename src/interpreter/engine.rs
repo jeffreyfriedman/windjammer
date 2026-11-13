@@ -665,6 +665,8 @@ pub(crate) struct FastHits {
     pub(crate) mapjit: u64,
     /// Closures a compiled function created without a walker island (`resolved/closure.rs::create`).
     pub(crate) closurecreate: u64,
+    /// Free names of a compiled closure given a copy of their value instead of a reference (`resolved/closure.rs`).
+    pub(crate) closurecopy: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,
