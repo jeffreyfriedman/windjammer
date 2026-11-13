@@ -251,32 +251,9 @@ fn rebuilding_a_file_writes_identical_cache_bytes() {
 }
 
 #[test]
-fn a_copy_of_the_compiler_is_the_same_compiler() {
-    // Compiler identity is the binary's content: another path or mtime (a copy, `wj install-dev` re-copying an
-    // unchanged build, `touch`) keeps project caches valid; different bytes invalidate them.
-    use windjammer::compiler::incremental::identity_of_exe;
-    let d = tempfile::tempdir().unwrap();
-    let copy = d.path().join("bin/wj-copy");
-    std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
-    std::fs::copy(WJ, &copy).unwrap();
-    let id = identity_of_exe(Some(Path::new(WJ)));
-    assert_eq!(id, identity_of_exe(Some(&copy)), "a byte-identical copy at another path is another compiler");
-    let f = std::fs::File::options().write(true).open(&copy).unwrap();
-    f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(3600)).unwrap();
-    drop(f);
-    assert_eq!(id, identity_of_exe(Some(&copy)), "touching the binary changed its identity");
-    std::fs::copy(WJ, &copy).unwrap();
-    assert_eq!(id, identity_of_exe(Some(&copy)), "re-copying an unchanged binary changed its identity");
-    let mut bytes = std::fs::read(&copy).unwrap();
-    bytes.push(0);
-    std::fs::write(&copy, bytes).unwrap();
-    assert_ne!(id, identity_of_exe(Some(&copy)), "a binary with different bytes kept the identity");
-}
-
-#[test]
 fn a_copied_compiler_accepts_the_entries_the_original_wrote() {
-    // The reached peer's entry written by the original binary is current for its byte-identical copy: the output of
-    // the copy equals the original's (and a modified binary is covered by `a_copy_of_the_compiler_is_the_same_compiler`).
+    // The compiler's identity is its build key (tests/build_content_key_test.rs), not its executable: a copy at another
+    // path and mtime (`wj install-dev` re-copying an unchanged build) reads the entries the original wrote.
     let d = tempfile::tempdir().unwrap();
     let copy = d.path().join("bin/wj");
     std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
