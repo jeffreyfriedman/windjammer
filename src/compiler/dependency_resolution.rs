@@ -199,7 +199,7 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
         if found.is_none() {
             match super::path_dep_metadata::derive(&key, &dep_root) {
                 Some(Ok(root)) => found = Some(root),
-                Some(Err(e)) => eprintln!("error: {e}; its call sites have no signatures"),
+                Some(Err(e)) => super::path_dep_metadata::record_error(format!("{e}; its call sites would have no signatures")),
                 None => {}
             }
         }

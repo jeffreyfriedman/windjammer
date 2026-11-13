@@ -137,6 +137,7 @@ pub fn build_project_with_config(
     std::fs::create_dir_all(output)?;
 
     let external_paths = merge_external_metadata_paths(path, external_metadata);
+    super::path_dep_metadata::fail_on_errors()?;
 
     let mut crate_metadata = CrateMetadata::new();
 

@@ -21,6 +21,7 @@ mod std_stubs;
 
 pub use cache_management::write_if_changed;
 pub(crate) use compilation_pipeline::load_path_dep_signatures_into_registry;
+pub(crate) use path_dep_metadata::fail_on_errors as fail_on_path_dep_errors;
 pub use compilation_pipeline::{
     build_project, build_project_ext, build_project_with_config, resolve_project_shadow,
 };

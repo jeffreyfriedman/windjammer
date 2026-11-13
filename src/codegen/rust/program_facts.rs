@@ -32,6 +32,9 @@ pub(crate) struct IdiomScratch {
     /// `use crate::m` / `use crate::m as n` / `use self::..` / `use super::..` of this file, by the name it binds: a path
     /// call through it (`m::f(..)`) names a same-crate definition, as the imported-name form `use crate::m::f` does.
     pub(crate) same_crate_use_paths: std::collections::HashMap<String, String>,
+    /// Crates the project's `wj.toml` declares as dependencies: `use dep::m::T` names that crate, never a module
+    /// of this one, whatever directories sit next to the build output.
+    pub(crate) dependency_crates: HashSet<String>,
     /// Functions of the standard library this file imports by name or through a glob
     /// (`use std::log::*` brings `debug`): they shadow a language intrinsic of the same name (ADR-0014).
     pub(crate) imported_std_fn_names: HashSet<String>,
@@ -69,6 +72,13 @@ impl<'ast> CodeGenerator<'ast> {
         idiom.file_scope_type_names.clear();
         idiom.foreign_imported_types.clear();
         idiom.same_crate_use_paths.clear();
+        idiom.dependency_crates = if self.current_wj_file.as_os_str().is_empty() {
+            HashSet::new()
+        } else {
+            crate::module_system::project::find_manifest_dir(&self.current_wj_file)
+                .map(|root| crate::module_system::project::dependency_crate_names(&root))
+                .unwrap_or_default()
+        };
         idiom.file_scope_is_open = false;
         idiom.imported_std_fn_names.clear();
         for item in &program.items {

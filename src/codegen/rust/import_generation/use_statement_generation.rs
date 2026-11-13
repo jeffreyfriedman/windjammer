@@ -193,6 +193,17 @@ impl CodeGenerator<'_> {
             }
         }
 
+        // A crate the project's wj.toml declares (`use dep::m::T`) is that crate: the directory checks below look at the
+        // filesystem around the build output, where a dependency's own directory can sit under the same name.
+        if let Some(first_seg) = rust_path.split("::").next() {
+            if rust_path.contains("::") && self.idiom.dependency_crates.contains(first_seg) {
+                return match alias {
+                    Some(a) => format!("{}use {} as {};\n", pub_prefix, rust_path, a),
+                    None => format!("{}use {};\n", pub_prefix, rust_path),
+                };
+            }
+        }
+
         // TDD FIX: Handle imports from sibling modules (Part 2 - Nested Import Bug)
         // When in a subdirectory (e.g., rendering/sprite.wj) and importing a sibling (texture::Texture),
         // we need to detect this and rewrite to super::texture::Texture

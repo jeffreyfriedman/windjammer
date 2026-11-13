@@ -245,6 +245,7 @@ fn compile_file_impl(
             &mut module_compiler.global_signatures,
             Some(&mut module_compiler.analyzer),
         );
+        crate::compiler::fail_on_path_dep_errors()?;
         module_compiler.path_dep_signatures_loaded = true;
     }
 

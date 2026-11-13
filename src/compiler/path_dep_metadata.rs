@@ -15,6 +15,22 @@ use std::path::{Path, PathBuf};
 thread_local! {
     /// Dependencies being derived on this thread (a cycle of path dependencies stops here).
     static IN_PROGRESS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Path dependencies discovery could not give signatures to, not yet reported by a build.
+    static ERRORS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Record a path dependency without signatures; the build that resolved it stops on it ([`fail_on_errors`]).
+pub(crate) fn record_error(message: String) {
+    ERRORS.with(|e| e.borrow_mut().push(message));
+}
+
+/// Stop the build when a path dependency had no signatures: its call sites would otherwise be guessed.
+pub(crate) fn fail_on_errors() -> anyhow::Result<()> {
+    let errors = ERRORS.with(|e| std::mem::take(&mut *e.borrow_mut()));
+    if errors.is_empty() {
+        return Ok(());
+    }
+    anyhow::bail!("{}", errors.join("\n"))
 }
 
 /// The Windjammer source directory of a dependency root: `<dep>/src` when it holds `.wj` files, else `<dep>`.
