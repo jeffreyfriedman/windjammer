@@ -9,7 +9,7 @@ In: `build.rs` identity (`WJ_GIT_*`, `WJ_BUILD_*`), `wj.toml` and the compiler-p
 ## Invariants
 - The commit date is the only time that may reach generated output; the wall-clock build date is read in `identity.rs` only and printed by `--version` (gate: tests/toolchain_identity_test.rs).
 - A `wj` younger than 30 days returns from `stale::warn_if_stale` after one clock read and a subtraction (hot path); only older binaries touch the stamp under the cache dir.
-- A pin mismatch is an error for build/run/test/check unless `WJ_ALLOW_TOOLCHAIN_MISMATCH=1`; `WJ_NO_STALE_WARN=1` silences the age warning.
+- A pin mismatch is an error for build/run/test/check unless `WJ_ALLOW_TOOLCHAIN_MISMATCH=1`; `WJ_NO_STALE_WARN=1` silences the age warning and the behind-checkout line (the instruction gates set it: inside a checkout the behind check costs a `stat` per compiler source, about 40M instructions).
 - Installs stage next to the destination, verify `--version`, keep a timestamped `.bak` (last 5), and refuse downgrades without `--force`.
 
 ## Owns

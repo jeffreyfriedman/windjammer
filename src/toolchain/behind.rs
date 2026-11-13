@@ -163,13 +163,10 @@ pub fn checkout_inputs_key(checkout: &Path) -> String {
 /// git-free. To stay off the hot path, the digest is computed only when an input file is newer than the build.
 pub fn key_behind_text(id: &Identity, checkout: &Path) -> Option<String> {
     let mine = id.key.as_deref()?;
-    let newest = content_key::input_files(checkout)
-        .iter()
-        .filter_map(|f| std::fs::metadata(checkout.join(f)).and_then(|m| m.modified()).ok())
-        .filter_map(|t| t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64))
-        .max()?;
-    if id.build_ts.is_some_and(|built| newest <= built) {
-        return None;
+    if let Some(built) = id.build_ts {
+        if !content_key::any_input_newer_than(checkout, built) {
+            return None;
+        }
     }
     let theirs = content_key::inputs_key(checkout);
     if theirs.starts_with(mine) || mine.starts_with(theirs.as_str()) {
@@ -199,6 +196,11 @@ pub fn current_behind_text() -> Option<String> {
 
 /// Print the line to stderr when this `wj` runs inside a compiler checkout it was not built from.
 pub fn warn_if_behind() {
+    // the instruction gates measure the interpreter, not this check (a `stat` per compiler source, about 40M
+    // instructions per run inside a checkout)
+    if super::env::flag("WJ_NO_STALE_WARN") {
+        return;
+    }
     if let Some(line) = current_behind_text() {
         eprintln!("{line}");
     }
@@ -207,6 +209,19 @@ pub fn warn_if_behind() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_input_newer_than_the_build_is_found_and_an_older_tree_is_not() {
+        let root = std::env::temp_dir().join(format!("wj-behind-newer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src/deep")).unwrap();
+        std::fs::write(root.join("src/deep/a.rs"), "fn a() {}").unwrap();
+        std::fs::write(root.join("unrelated.txt"), "x").unwrap();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        assert!(content_key::any_input_newer_than(&root, now - 3600), "a file written now is newer than an hour ago");
+        assert!(!content_key::any_input_newer_than(&root, now + 3600), "nothing is newer than an hour from now");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     fn id(commit: &str, ts: i64) -> Identity {
         Identity {

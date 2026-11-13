@@ -83,7 +83,8 @@ const MARK: string = "\n@@wj-interp-instr counter@@\n"
 // nothing outlives the run, and appends it to stdout after `MARK`.
 fn count_once(c: string, cmd: string) -> Count {
     let counter = if c == "callgrind" { "valgrind --tool=callgrind --callgrind-out-file=/dev/null" } else { "/usr/bin/time -l" }
-    let line = "f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; ${counter} ${cmd} 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
+    // the staleness warnings are off: inside the checkout they cost a `stat` per compiler source, which is not the interpreter
+    let line = "export WJ_NO_STALE_WARN=1; f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; ${counter} ${cmd} 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
     let out = match sh(line) {
         Ok(o) => o,
         Err(e) => {

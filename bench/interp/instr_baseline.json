@@ -11,14 +11,15 @@
   "structs": 142495650
  },
  "retired:Darwin-arm64": {
+  "agent_loop": 582158748,
   "closures": 760827123,
-  "fib30": 182928245,
-  "hashmap": 284876132,
-  "loop5m": 336989491,
+  "fib30": 181113862,
+  "hashmap": 228077751,
+  "loop5m": 334014542,
   "nbody": 713800889,
-  "sieve": 601198557,
-  "startup": 57289866,
-  "strings": 419812291,
-  "structs": 153993725
+  "sieve": 595118881,
+  "startup": 57241363,
+  "strings": 416010411,
+  "structs": 153260985
  }
 }
