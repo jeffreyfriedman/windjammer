@@ -125,10 +125,19 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
             }
         }
     }
+    // rustc's secondary labels reach the `.wj` source by line only (no column), so an excerpt would repeat the line
+    // under a caret that points at nothing. One note line carries the label and the line (none when it is the primary's line); the agent format omits notes.
     for s in d.spans.iter().filter(|s| !s.is_primary) {
-        let mut sp = cache.span(&s.location, 1);
-        sp.label = s.label.clone();
-        out.secondary_spans.push(sp);
+        let Some(label) = s.label.as_deref().filter(|l| !l.is_empty()) else { continue };
+        let sp = cache.span(&s.location, 1);
+        // On the primary's own line it points nowhere new: the label only restates the error.
+        if out.primary_span.as_ref().is_some_and(|p| p.file == sp.file && p.line_start == sp.line_start) {
+            continue;
+        }
+        let note = format!("{label} ({}:{})", sp.file, sp.line_start);
+        if !out.notes.contains(&note) {
+            out.notes.push(note);
+        }
     }
     out.help = d.help.clone();
     out.notes.extend(d.notes.iter().cloned());
