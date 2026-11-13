@@ -8,7 +8,8 @@
 //! entry behind). Every case builds the probe into the same output directory and compares the emitted tree with a
 //! clean build of the same project.
 //!
-//! consumes: tests/peer_meta_cache/**
+//! The project is written by the test (not checked in as `.wj` files: the probe is an intentionally ill-typed program
+//! that repository-wide scans must not pick up).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -16,27 +17,64 @@ use std::process::Command;
 
 const WJ: &str = env!("CARGO_BIN_EXE_wj");
 
-fn corpus() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/peer_meta_cache")
-}
+const MANIFEST: &str = "[package]\nname = \"peer_meta_cache\"\nversion = \"0.1.0\"\n";
 
-/// A fresh copy of the corpus project (wj.toml, src/layout.wj, src/chain.wj) under `dir`.
-fn project(dir: &Path) -> PathBuf {
-    let p = dir.join("proj");
-    copy_dir(&corpus(), &p);
-    p
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for e in std::fs::read_dir(from).unwrap().flatten() {
-        let p = e.path();
-        if p.is_dir() {
-            copy_dir(&p, &to.join(e.file_name()));
+const LAYOUT: &str = r#"// Probe: `cur` is declared with the wrong type, so `.len()` has no known receiver and its result width comes from
+// whatever signature the build can see. A peer's unrelated free function `len` must not be one of them.
+fn wrap(text: string, width: int) -> Vec<string> {
+    let mut lines: Vec<string> = []
+    let mut cur: int = ""
+    for w in text.split_whitespace() {
+        if cur.len() > 0 && (cur.len() + 1 + w.len()) as int > width {
+            lines.push(cur)
+            cur = w.to_string()
+        } else if cur.len() == 0 {
+            cur = w.to_string()
         } else {
-            std::fs::copy(&p, to.join(e.file_name())).unwrap();
+            cur = cur + " " + w
         }
     }
+    if cur.len() > 0 { lines.push(cur) }
+    lines
+}
+
+fn main() {
+    for l in wrap("alpha beta gamma delta epsilon zeta eta theta", 12) {
+        println(l)
+    }
+}
+"#;
+
+const CHAIN: &str = r#"// Peer: declares a free function named like a method the probe calls.
+enum Chain {
+    Link(int, Box<Chain>),
+    End,
+}
+
+fn len(c: Chain) -> int {
+    match c {
+        Chain::Link(_, rest) => 1 + len(*rest),
+        Chain::End => 0,
+    }
+}
+
+fn main() {
+    println("${len(Chain::Link(1, Box::new(Chain::End)))}")
+}
+"#;
+
+/// The project sources (relative path, text).
+const SOURCES: &[(&str, &str)] = &[("src/layout.wj", LAYOUT), ("src/chain.wj", CHAIN)];
+
+/// A fresh project (wj.toml, src/layout.wj, src/chain.wj) under `dir`.
+fn project(dir: &Path) -> PathBuf {
+    let p = dir.join("proj");
+    std::fs::create_dir_all(p.join("src")).unwrap();
+    std::fs::write(p.join("wj.toml"), MANIFEST).unwrap();
+    for (rel, text) in SOURCES {
+        std::fs::write(p.join(rel), text).unwrap();
+    }
+    p
 }
 
 fn build_with(wj: &Path, project: &Path, file: &str, cache_root: &Path) {
@@ -183,8 +221,8 @@ fn a_manifest_less_tree_emits_the_same_in_two_locations() {
     for at in ["first/place", "second"] {
         let tree = d.path().join(at).join("tree");
         std::fs::create_dir_all(&tree).unwrap();
-        for f in ["layout.wj", "chain.wj"] {
-            std::fs::copy(corpus().join("src").join(f), tree.join(f)).unwrap();
+        for (rel, text) in SOURCES {
+            std::fs::write(tree.join(rel.trim_start_matches("src/")), text).unwrap();
         }
         build(&tree, "chain.wj", &cache);
         build(&tree, "layout.wj", &cache);
