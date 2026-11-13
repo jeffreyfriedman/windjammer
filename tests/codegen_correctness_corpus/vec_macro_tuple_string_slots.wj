@@ -5,10 +5,12 @@ fn count(pairs: Vec<(string, string)>) -> int {
 }
 fn mk() -> Vec<(string, string)> {
     vec![("a", "b")]
+//~@5+16 WARN W0007 `vec!` is deprecated
 }
 fn mk2() -> Vec<(string, string)> {
     [("a", "b")]
 }
 fn main() {
     println("${count([("a", "b"), ("c", "d")])} ${count(vec![("a", "b")])} ${mk().len()} ${mk2().len()}")
+//~@57+16 WARN W0007 `vec!` is deprecated
 }
