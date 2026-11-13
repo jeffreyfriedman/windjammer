@@ -24,6 +24,8 @@ fn main() -> anyhow::Result<()> {
         println!("{}", windjammer::toolchain::identity::current().version_line());
         return Ok(());
     }
+    windjammer::debug_env::phase("main");
     let cli = Cli::parse();
+    windjammer::debug_env::phase("clap");
     wj_cli_cmds::run(cli)
 }

@@ -83,6 +83,7 @@ pub fn parse(file: &str, text: &str, out: &mut Vec<Diagnostic>) -> Option<Parsed
             return None;
         }
     };
+    crate::debug_env::phase("check-lex");
     let mut parser = Parser::new_with_source(tokens, file.to_string(), text.to_string());
     parser.enable_span_log(); // true spans for W0016 (the `self` of a bodyless trait method)
     match quiet(|| parser.parse()) {
@@ -127,9 +128,11 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
             );
         }
     }
+    crate::debug_env::phase("check-parsed");
     for f in crate::intrinsics::surface_fix::lint_source(&p.text) {
         out.push(convert::finding(&f, &ix));
     }
+    crate::debug_env::phase("check-surface-fix");
     for off in crate::linter::dollar_escape::find(&p.text) {
         use crate::linter::dollar_escape as de;
         let span = ix.span(off, off + de::PATTERN.len());
@@ -148,6 +151,7 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     if let Err(msg) = crate::analyzer::Analyzer::new().check_forbidden_rust_patterns(&p.program) {
         out.push(forbidden(&msg, &ix));
     }
+    crate::debug_env::phase("check-forbidden");
     let mut leak = crate::linter::rust_leakage::RustLeakageLinter::new(&p.file).with_receiver_spans(p.parser.span_snapshot()).with_source(&p.text);
     leak.lint_program(&p.program);
     for d in leak.diagnostics() {

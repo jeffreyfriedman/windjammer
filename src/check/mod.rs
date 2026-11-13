@@ -53,7 +53,9 @@ pub struct Checked {
 /// Check a `.wj` file or a project directory. No cargo, no rustc, no generated code.
 pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
     let start = Instant::now();
+    crate::debug_env::phase("check-inputs-start");
     let (sources, keyed) = inputs(path)?;
+    crate::debug_env::phase("check-inputs");
     let fp = cache::fingerprint(&cache::relative_inputs(path, &keyed));
     let cached = if opts.use_cache { cache::load(path, &fp) } else { None };
     let was_cached = cached.is_some();
@@ -184,6 +186,7 @@ fn run_with(root: &Path, sources: &[(String, String)], use_cache: bool) -> RunOu
             parsed.push(p);
         }
     }
+    crate::debug_env::phase("check-parse");
     let use_depth = ambient::use_depth(parsed.iter().map(|p| &p.program));
     let ambient = if use_cache { ambient::fingerprint(use_depth) } else { None };
     let mut memo = ambient.as_deref().map(|a| file_cache::FileMemo::open(root, a));
