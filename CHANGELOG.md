@@ -92,6 +92,7 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ### Changed
 - **Explicit `let mut` is required** (ADR-0002, Q-007 resolved): a local changed without `mut` is now the error `WJ0051` in `wj check`, `wj build` and `wj run`, and the Rust backend no longer adds `mut` to locals on its own (parameters, `self` and match-arm bindings stay inferred). `wj fix <dir>` adds every missing `mut` (docs/language-guide/explicit-mut-migration.md).
 - `wj build --json` / `wj check --json` exit non-zero on errors and use diagnostics schema v2 (v1 was the legacy shape).
+- The analysis metadata of files outside any project (no `wj.toml` or `Cargo.toml` above them) moved from `<temp dir>/wj-meta` to `meta` under the shared cache root (`WJ_CARGO_TARGET_ROOT`, else the platform cache directory, as for `wj cache path`), and `wj cache prune` now bounds it (30 days, newest 2048 trees).
 
 ## [0.50.0] - 2026-07-07
 

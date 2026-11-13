@@ -17,8 +17,10 @@ compilations read it to infer across file and crate boundaries.
 Never next to a source file.
 
 - Project with `wj.toml` or `Cargo.toml`: `<project>/.wj-cache/<path under src>.wj.meta` (git-ignored).
-- No manifest above the source: `<temp dir>/wj-meta/<tree key>/<path>.wj.meta` (the OS temp dir, honouring
-  `TMPDIR`; it is a cache, so losing it costs a cold build, never correctness). The tree key is content-derived (the sorted relative paths and source hashes of the tree's `.wj` files),
+- No manifest above the source: `<cache root>/meta/<tree key>/<path>.wj.meta` under the shared cache root (`wj cache
+  path`'s root: `WJ_CARGO_TARGET_ROOT`, else the platform cache directory), resolved once by the driver and passed to
+  `metadata` explicitly (`CompilerConfig::cache_root`); `wj cache prune` drops trees older than 30 days and keeps the
+  newest 2048. It is a cache, so losing it costs a cold build, never correctness. The tree key is content-derived (the sorted relative paths and source hashes of the tree's `.wj` files),
   never the tree's location, so the same tree in two checkouts shares its entries. The module root is found by
   climbing out of module directories (a directory with `mod.wj`, or with a sibling `<name>.wj`), stopping
   at the nearest ancestor named `src`, else the file's directory.
