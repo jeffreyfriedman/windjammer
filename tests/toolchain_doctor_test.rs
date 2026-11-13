@@ -96,10 +96,12 @@ fn healthy_path_exits_zero() {
     let e = env(true);
     let bin = tempfile::tempdir().unwrap();
     let c = current();
-    let l = c["commit"]
-        .as_str()
-        .map(|h| line(&h[..12], ts()))
-        .unwrap_or_else(|| line("unknown", ts()));
+    let l = match (c["commit"].as_str(), c["inputs_key"].as_str()) {
+        (Some(h), _) => line(&h[..12], ts()),
+        // an unstamped build names its sources by key
+        (None, Some(k)) => line("unknown", ts()).replacen("wj 0.50.0 ", &format!("wj 0.50.0+{} ", &k[..10]), 1),
+        (None, None) => line("unknown", ts()),
+    };
     fake(bin.path(), &l);
     let o = doctor(&e, &[bin.path()], Some(ts() + DAY), &[]);
     let text = String::from_utf8_lossy(&o.stdout);

@@ -404,7 +404,7 @@ pub fn expect_head(path_env: &str) -> Result<String, String> {
         let key = id.short_key().ok_or_else(|| format!("{} predates build identity stamping", found.display()))?;
         let theirs = super::behind::checkout_inputs_key(&checkout);
         return if theirs.starts_with(key) {
-            Ok(format!("{} is built from this checkout's sources {key}", found.display()))
+            Ok(format!("{} is built from HEAD's sources {key}", found.display()))
         } else {
             Err(format!("{} is built from sources {key} but this checkout's are {}.\n  fix: {fix}", found.display(), &theirs[..10]))
         };
