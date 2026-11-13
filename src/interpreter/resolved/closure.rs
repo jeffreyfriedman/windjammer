@@ -36,6 +36,34 @@ pub(crate) struct CompiledClosure {
     checked: std::cell::RefCell<std::rc::Weak<Callable>>,
 }
 
+/// A closure expression in a compiled function, created without a walker island: its environment is the walker slots
+/// of the locals its body names (boxed, so the closure and the function share them), not every local of the scope as
+/// the walker's capture holds. Reads and writes through the environment are the same (a name the body does not use
+/// is never looked up); only the boxing changes: the function's other locals stay plain slots.
+pub(super) fn create(cx: &mut super::compile::Cx, parameters: &'static [String], body: E) -> Option<super::expr::X> {
+    if cx.closure_body || cx.it.fast_off("closurecreate") {
+        return None;
+    }
+    let text = format!("{:?}", body);
+    let used: HashSet<&str> = text.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|w| !w.is_empty()).collect();
+    let free = cx.visible_locals(&used);
+    for (_, s) in &free {
+        cx.need_box(*s);
+    }
+    let (module, self_ty) = (cx.module, cx.self_ty.clone());
+    Some(super::expr::X::V(Box::new(move |it, b| {
+        it.closure_counter += 1;
+        it.fast.closurecreate += 1;
+        let mut env: Vec<(&'static str, Slot)> = Vec::with_capacity(free.len());
+        for (n, s) in &free {
+            if let Value::Ref(p) = &it.rstack[b + s] {
+                env.push((n, p.slot.clone()));
+            }
+        }
+        Ok(Value::Func(Rc::new(Callable::Closure { params: parameters, body, env, module, self_ty: self_ty.clone(), tparams: Vec::new() })))
+    })))
+}
+
 /// `|x|`, `|x: T|`, `|&x|`, `|mut x|`: the bound name (`None`: a tuple pattern, the walker's).
 fn param_name(p: &'static str) -> Option<&'static str> {
     let p = p.split(':').next().unwrap_or(p).trim().trim_start_matches('&').trim();
@@ -55,7 +83,7 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
         }
     }
     free.reverse();
-    let unit = Unit { module, ret: None, self_ty, tail_hint: false };
+    let unit = Unit { module, ret: None, self_ty, tail_hint: false, closure_body: true };
     // environment names are boxed (their slots are the environment's). A parameter is boxed only
     // when the body needs its walker slot (islands, borrows, captures); a plain one is given plain
     // values only: a call passing a reference to it (an `iter_mut` item) runs in the walker

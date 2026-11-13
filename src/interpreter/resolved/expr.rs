@@ -170,6 +170,7 @@ pub(super) fn expr_eval(cx: &mut Cx, e: E) -> Option<X> {
 
 pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
     Some(match e {
+        Expression::Closure { parameters, body, .. } => super::closure::create(cx, parameters, body)?,
         Expression::Literal { value, location } => match match value {
             Literal::Int(i) => match cx.it.literal_width(cx.module, location.as_ref()) {
                 Some(t) => crate::interpreter::compiled_facts::int_literal(*i, t),
