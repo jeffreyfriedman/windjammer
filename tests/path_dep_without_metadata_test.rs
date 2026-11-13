@@ -164,3 +164,19 @@ fn unanalyzable_path_dependency_is_reported_by_name() {
     assert!(stderr.contains("path dependency `broken`"), "the dependency must be named:\n{stderr}");
     assert!(!out.status.success(), "a dependency without signatures stops the build (fail closed)");
 }
+
+/// Without `--module-file`, the consumer's generated `Cargo.toml` links the dependency's generated crate (the one
+/// derived from its sources), not its source directory (which has no `Cargo.toml`), and cargo builds the consumer.
+#[test]
+fn consumer_manifest_links_the_generated_crate_of_a_source_only_dependency() {
+    let tmp = tempfile::tempdir().unwrap();
+    let t = tmp.path();
+    workspace(t, "../sizing");
+    wj(&["build", "src", "--no-cargo", "-o", "../app_gen"], &t.join("app"));
+    let manifest = fs::read_to_string(t.join("app_gen/Cargo.toml")).unwrap();
+    let line = manifest.lines().find(|l| l.starts_with("sizing")).unwrap_or_else(|| panic!("no sizing dependency:\n{manifest}"));
+    let dep_dir = line.split("path = \"").nth(1).and_then(|r| r.split('"').next()).unwrap();
+    assert!(Path::new(dep_dir).join("Cargo.toml").is_file(), "the dependency path must hold a crate: {line}");
+    let check = Command::new("cargo").args(["check", "--quiet"]).current_dir(t.join("app_gen")).output().unwrap();
+    assert!(check.status.success(), "cargo check of the consumer failed:\n{}\n{manifest}", String::from_utf8_lossy(&check.stderr));
+}
