@@ -5,7 +5,8 @@
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --refs         also count the twins under qjs, lua, python3 and node
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --check        fail when a kernel counts more than its recorded
 //                                                              instructions + 3% (bench/interp/instr_baseline.json)
-//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --write        record the counts (lower only; --allow-raise to raise)
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --write        record the counts (lower only; --allow-raise to raise,
+//                                                              --raise K1,K2 to raise only those kernels)
 //
 // The counter: callgrind (`valgrind --tool=callgrind`) when valgrind is installed, else the hardware counter of
 // `/usr/bin/time -l` ("instructions retired", macOS). Counts from different counters are never compared: the
@@ -175,7 +176,7 @@ fn millions(n: int) -> f64 {
 fn main() {
     let args = env.args()
     if args.len() < 2 {
-        eprintln("usage: interp_instr.wj WJ_BIN [--refs] [--check] [--write [--allow-raise]] [--runs N]")
+        eprintln("usage: interp_instr.wj WJ_BIN [--refs] [--check] [--write [--allow-raise | --raise K1,K2]] [--runs N]")
         process.exit(1)
     }
     let wj = args[1]
@@ -269,10 +270,12 @@ fn main() {
     }
     if args.contains("--write") {
         let mut next = object()
+        let raise: Vec<string> = arg_value(args, "--raise", "").split(",").collect()
         for m in members(counts) {
             let now = as_i64(m.value) ?? 0
             let was = as_i64(get(base, m.key) ?? Json::Null) ?? 0
-            if was > 0 && now > was && !args.contains("--allow-raise") {
+            let may_raise = args.contains("--allow-raise") || raise.contains(m.key)
+            if was > 0 && now > was && !may_raise {
                 eprintln("${m.key}: ${now} > recorded ${was}; keeping the recorded count (--allow-raise to raise it)")
                 next = with(next, m.key, from_int(was as i64))
             } else {
