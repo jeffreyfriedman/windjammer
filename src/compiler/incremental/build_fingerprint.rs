@@ -26,11 +26,11 @@ pub fn hash_output(output: &str) -> u64 {
     hash_source(output)
 }
 
-/// Identity of this compiler build for stamps and `.wj.meta` fingerprints: [`crate::check::shared_cache::compiler_key`]
+/// Identity of this compiler build for stamps and `.wj.meta` fingerprints: [`crate::compiler_config::compiler_key`]
 /// (content of all build inputs, baked in at build time). A copy of the binary is the same compiler; a rebuild from
 /// different inputs is not.
 pub fn compiler_build_identity() -> String {
-    crate::check::shared_cache::compiler_key().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+    crate::compiler_config::compiler_key().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
 }
 
 /// Check whether `.wj-compiler-stamp` in `output` matches this compiler binary.

@@ -8,6 +8,8 @@
 
 #[path = "../build_support/content_key.rs"]
 mod content_key;
+#[path = "../build_support/build_key.rs"]
+mod build_key;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -42,7 +44,7 @@ fn tree(at: &Path) -> PathBuf {
 }
 
 fn key(t: &Path) -> String {
-    content_key::content_key(t, "rustc 1.0.0\nhost: x\n", "x86_64-unknown-linux-gnu", "release", &["CLI".into(), "JIT".into()])
+    build_key::content_key(t, "rustc 1.0.0\nhost: x\n", "x86_64-unknown-linux-gnu", "release", &["CLI".into(), "JIT".into()])
 }
 
 #[test]
@@ -86,7 +88,7 @@ fn a_content_change_to_any_input_changes_the_key() {
     assert_ne!(base, key(&t), "a new source file changes the key");
     std::fs::remove_file(t.join("src/new_module.rs")).unwrap();
     let k = |rustc: &str, target: &str, profile: &str, features: &[&str]| {
-        content_key::content_key(&t, rustc, target, profile, &features.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+        build_key::content_key(&t, rustc, target, profile, &features.iter().map(|s| s.to_string()).collect::<Vec<_>>())
     };
     let reference = k("rustc 1.0.0\nhost: x\n", "x86_64-unknown-linux-gnu", "release", &["CLI", "JIT"]);
     assert_eq!(base, reference);
@@ -112,7 +114,7 @@ fn the_run_time_identity_is_a_constant_of_the_build() {
     // from the executable.
     let key = windjammer::check::shared_cache::compiler_key().expect("this build carries a build key");
     assert_eq!(key, windjammer::compiler::incremental::compiler_build_identity(), "one identity for every cache");
-    let src = std::fs::read_to_string(root().join("src/check/shared_cache.rs")).unwrap();
+    let src = std::fs::read_to_string(root().join("src/compiler_config.rs")).unwrap();
     let body = &src[src.find("pub fn compiler_key()").unwrap()..];
     let body = &body[..body.find("\n}\n").unwrap()];
     for forbidden in ["current_exe", "metadata(", "modified", "SystemTime", "git"] {

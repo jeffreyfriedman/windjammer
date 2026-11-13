@@ -11,7 +11,6 @@
 
 use super::identity::Identity;
 
-#[allow(dead_code)]
 #[path = "../../build_support/content_key.rs"]
 mod content_key;
 use super::timefmt::iso_datetime;

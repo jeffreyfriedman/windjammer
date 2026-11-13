@@ -1,5 +1,7 @@
 #[path = "build_support/content_key.rs"]
 mod content_key;
+#[path = "build_support/build_key.rs"]
+mod build_key;
 #[path = "build_support/stable_build.rs"]
 mod stable_build;
 #[path = "build_support/test_modules.rs"]
@@ -190,7 +192,7 @@ fn emit_toolchain_identity() {
     println!("cargo:rustc-env=WJ_BUILD_TS={build_ts}");
 }
 
-/// [`content_key::content_key`] of this build (the manifest tree, the compiler (`rustc -vV`), target, profile and
+/// [`build_key::content_key`] of this build (the manifest tree, the compiler (`rustc -vV`), target, profile and
 /// enabled features) and the inputs key of the tree alone. Watches exactly the content inputs.
 fn build_content_key() -> (String, String) {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
@@ -206,7 +208,7 @@ fn build_content_key() -> (String, String) {
     let env = |k: &str| std::env::var(k).unwrap_or_default();
     let features: Vec<String> = std::env::vars().filter_map(|(k, _)| k.strip_prefix("CARGO_FEATURE_").map(str::to_string)).collect();
     let root = std::path::Path::new(&manifest);
-    (content_key::content_key(root, &version, &env("TARGET"), &env("PROFILE"), &features), content_key::inputs_key(root))
+    (build_key::content_key(root, &version, &env("TARGET"), &env("PROFILE"), &features), content_key::inputs_key(root))
 }
 
 fn main() {

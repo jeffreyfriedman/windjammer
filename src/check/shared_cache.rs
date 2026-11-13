@@ -31,13 +31,9 @@ struct Config {
 
 static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 
-/// The compiler's identity for every cache: its version plus the build key `build.rs` bakes in, a digest of all build
-/// inputs by content (build_support/content_key.rs: sources, std, embedded assets, manifests, build script, rustc,
-/// target, profile, features). A constant: no executable path, mtime, git state or clock, and no runtime cost. `None`
-/// only for a build without the key (never from this crate's build script).
+/// The compiler's identity for every cache ([`crate::compiler_config::compiler_key`]).
 pub fn compiler_key() -> Option<String> {
-    let key = option_env!("WJ_BUILD_KEY")?;
-    (!key.is_empty()).then(|| format!("{}+{key}", env!("CARGO_PKG_VERSION")))
+    crate::compiler_config::compiler_key()
 }
 
 /// Use `store` for the analysis cache, keyed under this build. Returns false (nothing shared) for an unknown build.
