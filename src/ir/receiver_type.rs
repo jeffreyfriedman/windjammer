@@ -35,7 +35,7 @@ pub fn infer_receiver_type_name<'ast>(
 }
 
 /// Declared type of a receiver path (`p`, `p.f`, `p.f[i]`, `self.f.g`); `None` when any step is unknown.
-fn infer_receiver_type<'ast>(
+pub(crate) fn infer_receiver_type<'ast>(
     object: &Expression<'ast>,
     func: &FunctionDecl<'ast>,
     struct_field_types: &HashMap<String, HashMap<String, Type>>,

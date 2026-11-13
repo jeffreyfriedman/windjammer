@@ -144,6 +144,7 @@ corpus_tests!(
     rebound_name_other_type_in_sibling_scope,
     self_field_arg_into_mut_self_method,
     self_field_arg_into_mut_self_method_returned,
+    assigned_value_read_after_return_arm_in_let,
     str_array_element_in_owned_branch,
     borrowed_text_alias_reassigned_owned,
     owned_text_ordered_against_borrowed_text,

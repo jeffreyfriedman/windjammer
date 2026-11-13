@@ -196,6 +196,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
         }
 
+        // An implicit receiver is a parameter too (`fn clear() { self.items.clear() }`): its uses constrain it.
+        if crate::ir::node::implicit_self_mode(analyzed).is_some() {
+            param_vars.insert("self".to_string(), cs.fresh_var());
+        }
+
         // Ownership seeds: explicit borrows and Copy types only.
         // Non-copy bare `T` params are resolved by body usage, call sites, and impl convergence.
         for param in &analyzed.decl.parameters {

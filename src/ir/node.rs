@@ -12,6 +12,12 @@ use crate::parser::ast::types::Type;
 use std::collections::{HashMap, HashSet};
 
 /// Qualified IR function name (`Type::method` for impl methods, bare name otherwise).
+/// The analyzer's mode for the receiver of a method that uses `self` without declaring it.
+pub fn implicit_self_mode(analyzed: &crate::analyzer::AnalyzedFunction) -> Option<crate::analyzer::OwnershipMode> {
+    let declared = analyzed.decl.parameters.iter().any(|p| p.name == "self");
+    analyzed.decl.parent_type.as_ref().filter(|_| !declared).and(analyzed.inferred_ownership.get("self").copied())
+}
+
 pub fn ir_function_name_from_decl(name: &str, parent_type: Option<&str>) -> String {
     if let Some(parent) = parent_type {
         format!("{parent}::{name}")
@@ -313,7 +319,7 @@ impl IrFunction {
             })
             .collect();
 
-        let param_types: HashMap<String, SafetyType> = analyzed
+        let mut param_types: HashMap<String, SafetyType> = analyzed
             .decl
             .parameters
             .iter()
@@ -381,6 +387,14 @@ impl IrFunction {
                 (param_name, safety)
             })
             .collect();
+
+        // An implicit receiver (a method that uses `self` without declaring it) is a parameter of the IR too, so the
+        // solver decides its mode from the body as for a declared one.
+        if let Some(mode) = implicit_self_mode(analyzed) {
+            let mut receiver = SafetyType::owned(parser_type_to_base_type(&Type::Custom(analyzed.decl.parent_type.clone().unwrap_or_default())));
+            receiver.ownership = ownership_mode_to_owned_type(mode, &mut region_counter);
+            param_types.insert("self".to_string(), receiver);
+        }
 
         let return_base = analyzed
             .decl

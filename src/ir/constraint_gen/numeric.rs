@@ -230,7 +230,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     reg,
                 )
             }));
-        if mut_self {
+        if mut_self || self.core_surface_changes_receiver(object, method) {
             self.emit_mutref_on_receiver_root(object);
         }
 
@@ -692,5 +692,17 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
         self.cs.add_because(Constraint::TypeEquals(result, obj_var), tagged("NUM-STD-SIG"));
         true
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// The core surface (`std/rust_core.wji`) declares the method `&mut self` for the receiver's declared type
+    /// (`self.map.insert(k, v)` on a `HashMap` field): the receiver root is written through (OWN-MUT-RECEIVER),
+    /// whatever the signature registry of this build holds.
+    fn core_surface_changes_receiver(&self, object: &Expression<'ast>, method: &str) -> bool {
+        let Some(surface) = self.core_surface else { return false };
+        let fields = self.struct_field_types.unwrap_or_else(|| super::empty_struct_field_types());
+        crate::ir::receiver_type::infer_receiver_type(object, &self.analyzed.decl, fields)
+            .is_some_and(|ty| surface.changes_receiver(&ty, method) == Some(true))
     }
 }

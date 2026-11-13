@@ -427,6 +427,11 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) -> Option<OwnershipMode> {
         if self.in_trait_impl {
+            // A receiver the impl method declares is its contract with the trait (W0016); a homonym trait in
+            // another module (two `InputPort`s) must not replace it.
+            if let Some(receiver) = analyzed.decl.parameters.first().filter(|p| declared_receiver(p).is_some()) {
+                return Some(if matches!(receiver.ownership, OwnershipHint::Mut) { OwnershipMode::MutBorrowed } else { OwnershipMode::Borrowed });
+            }
             if let Some(trait_name) = &self.current_trait_impl_name {
                 let methods = self.analyzed_trait_methods.get(trait_name).or_else(|| {
                     trait_name
