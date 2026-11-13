@@ -1,0 +1,9 @@
+// SPEC-MOD-006: a function without `pub` is private to its module. Two modules each have a private `fn cell`, and a
+// third has a parameter named `cell`: the private names are not exported by the parent's glob re-exports, so the
+// parameter is not ambiguous. Expected by hand: 2.
+// expect: 2
+mod domain
+
+fn main() {
+    println("${domain::c::parse("xy")}")
+}

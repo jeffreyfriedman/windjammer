@@ -55,6 +55,13 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::Array { elements, .. } if tail && !elements.is_empty() => {
                     out.insert(elements.as_ptr() as usize);
                 }
+                Expression::MacroInvocation { is_repeat: false, name, args, .. }
+                    if tail
+                        && !args.is_empty()
+                        && crate::intrinsics::Intrinsic::from_macro_name(name) == Some(crate::intrinsics::Intrinsic::Vec) =>
+                {
+                    out.insert(args.as_ptr() as usize);
+                }
                 Expression::Block { statements, .. } => stmts(statements, tail, out),
                 // `Ok([1])` / `Some([1])` returned from a `Result<Vec<_>, _>` / `Option<Vec<_>>` function
                 Expression::Call { function: Expression::Identifier { name, .. }, arguments, .. }
