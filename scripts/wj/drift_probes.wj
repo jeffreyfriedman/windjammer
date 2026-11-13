@@ -5,7 +5,10 @@
 // short-circuiting, closures, drop order, sort stability, hash-map iteration, process exit codes, stdin and
 // arguments, and threads and channels.
 //
-//   wj run scripts/wj/drift_probes.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled] [--no-rustc]
+//   wj run scripts/wj/drift_probes.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled] [--no-rustc] [--pair]
+//
+// `--pair`: run every program under both engines in one `wj run --pair-list` process (no check, no process start per
+// run: the fuzz step's batch mode, ADR-0038 C4) instead of two `wj run` processes per program; the rows are the same.
 //
 // Rows (id <TAB> walker <TAB> resolved <TAB> compiled) like drift_gen.wj: `probe/<family>-N` (stdout and exit
 // status of each engine), `...#rustc` (rustc's verdict on the generated Rust). `--run-compiled` also runs the
@@ -15,8 +18,14 @@ use std::env
 use std::fs
 use std::process
 use std::strings
+use std::collections::HashMap
 use wj_proc::sh
 use wj_proc::quote
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::as_str
+use wj_json_doc::as_i64
 
 fn next(s: int) -> int {
     (s * 1103515245 + 12345) % 2147483648
@@ -273,6 +282,32 @@ fn panic_loc(stderr: string, status: int) -> string {
     ""
 }
 
+// `file|engine` -> the token of `run` for every program of `files`, from one `wj run --pair-list` process
+fn pair_tokens(wj: string, dir: string, files: Vec<string>) -> HashMap<string, string> {
+    let list = "${dir}/pair-list.txt"
+    let _ = fs.write(list, files.join("\n") + "\n")
+    let mut out: HashMap<string, string> = HashMap::new()
+    match sh("${quote(wj)} run --interpret --pair-list ${quote(list)} < /dev/null") {
+        Ok(r) => {
+            for line in strings.split_lines(r.stdout) {
+                match parse(line) {
+                    Ok(doc) => {
+                        let file = as_str(get(doc, "file") ?? Json::Null) ?? ""
+                        let engine = as_str(get(doc, "engine") ?? Json::Null) ?? ""
+                        let code = as_i64(get(doc, "exit") ?? Json::Null) ?? -1
+                        let stdout = as_str(get(doc, "stdout") ?? Json::Null) ?? ""
+                        let stderr = as_str(get(doc, "stderr") ?? Json::Null) ?? ""
+                        out.insert("${file}|${engine}", "exit${code}:${checksum(stdout)}${panic_loc(stderr, code as int)}")
+                    },
+                    Err(_) => {},
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    out
+}
+
 // an empty exit-1 run may be a starved build rather than a verdict: try again, up to three times
 fn run_compiled(wj: string, file: string) -> string {
     let mut t = run_compiled_once(wj, file)
@@ -314,6 +349,7 @@ fn main() {
     let mut compiled = false
     let mut no_rustc = false
     let mut only = ""
+    let mut pair = false
     let mut baseline_path = ""
     let mut record_path = ""
     let mut i = 4
@@ -336,10 +372,30 @@ fn main() {
         } else if args[i] == "--only" {
             only = args[i + 1]
             i += 1
+        } else if args[i] == "--pair" {
+            pair = true
         }
         i += 1
     }
     let _ = sh("mkdir -p ${quote(dir)}")
+    let mut paired: HashMap<string, string> = HashMap::new()
+    if pair {
+        let mut files: Vec<string> = Vec::new()
+        for fam in strings.split(families(), " ") {
+            if !strings.contains(fam, only) {
+                continue
+            }
+            let mut s = lo
+            while s <= hi {
+                let _ = sh("mkdir -p ${quote(dir)}/${fam}_${s}")
+                let file = "${dir}/${fam}_${s}/main.wj"
+                let _ = fs.write(file, program(fam, s))
+                files.push(file)
+                s += 1
+            }
+        }
+        paired = pair_tokens(wj, dir, files)
+    }
     // compiled results recorded by an earlier `--run-compiled --record` run (id <TAB> token)
     let recorded_text = if baseline_path != "" { fs.read_to_string(baseline_path).unwrap_or("") } else { "" }
     let mut recorded_out = ""
@@ -352,11 +408,13 @@ fn main() {
         while seed <= hi {
             let id = "probe/${fam}-${seed}"
             // a directory per program: a build never sees the other programs' files
-            let _ = sh("mkdir -p ${quote(dir)}/${fam}_${seed}")
             let file = "${dir}/${fam}_${seed}/main.wj"
-            let _ = fs.write(file, program(fam, seed))
-            let w = run(wj, "walker", file)
-            let r = run(wj, "resolved", file)
+            if !pair {
+                let _ = sh("mkdir -p ${quote(dir)}/${fam}_${seed}")
+                let _ = fs.write(file, program(fam, seed))
+            }
+            let w = if pair { paired.get("${file}|walker") ?? "error" } else { run(wj, "walker", file) }
+            let r = if pair { paired.get("${file}|resolved") ?? "error" } else { run(wj, "resolved", file) }
             let c = if compiled { run_compiled(wj, file) } else if baseline_path != "" { recorded_token(recorded_text, id) } else { "skip" }
             if compiled {
                 recorded_out = recorded_out + "${id}\t${c}\n"
