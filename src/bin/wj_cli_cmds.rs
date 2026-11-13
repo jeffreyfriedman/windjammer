@@ -188,6 +188,7 @@ pub fn run(cli: Cli) -> Result<()> {
             jit_debug,
             jit_mutant,
             no_lint, no_locals,
+            pair_list,
             deterministic_time,
             allow_network,
             mock_http,
@@ -208,6 +209,10 @@ pub fn run(cli: Cli) -> Result<()> {
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
+            if let Some(list) = pair_list {
+                let opts = windjammer::interpreter::runner::RunOptions { hash_seed, sched_seed, no_jit: no_jit || jit == "off", jit_loop_hot, caps_mode: caps, ..Default::default() };
+                std::process::exit(windjammer::interpreter::runner::run_pair_list(&list, opts));
+            }
             let output = output_of(error_format.as_deref());
             use windjammer::cli::run_dev::{execute, Mode, RunOptions};
             let (path, args) = split_path_and_args(path_and_args);

@@ -228,6 +228,12 @@ pub enum Commands {
         #[arg(long)]
         no_locals: bool,
 
+        /// Interpreted runs (internal, hidden from help): run every program listed in FILE (one path per line) under the
+        /// tree walker and the resolved engine in this one process and print a JSON line per program and engine (exit
+        /// status, stdout, stderr); the drift fuzz step's batch mode (ADR-0038 C4)
+        #[arg(long, value_name = "FILE", hide = true)]
+        pair_list: Option<PathBuf>,
+
         /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
         #[arg(long)]
         deterministic_time: bool,

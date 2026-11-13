@@ -66,9 +66,11 @@ fn execute_path(opts: &RunOptions) -> i32 {
         }
     };
     let non_rust = !matches!(opts.target.to_lowercase().as_str(), "rust");
+    crate::debug_env::phase("target");
     if let (Some(lint), false, false) = (opts.lint, non_rust, matches!(opts.mode, Mode::Compiled { .. })) {
         lint(&target.entry, !opts.no_lint);
     }
+    crate::debug_env::phase("lint");
     match opts.mode {
         Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release, opts.output),
         _ if non_rust => run_compiled(&target, &opts.args, &opts.target, false, opts.output),
@@ -78,6 +80,7 @@ fn execute_path(opts: &RunOptions) -> i32 {
                 eprintln!("Error: {e}");
                 return 1;
             }
+            crate::debug_env::phase("check");
             let auto = opts.mode == Mode::Auto;
             let host = match host_bridge(&target) {
                 Ok(h) => h,
@@ -108,6 +111,7 @@ fn execute_path(opts: &RunOptions) -> i32 {
             }
             let mut interp = opts.interp.clone();
             interp.durable_sites = crate::check::durable_sites::discover(&target.entry).unwrap_or_default();
+            crate::debug_env::phase("durable-sites");
             let eo = runner::EntryOptions { fallback: auto, host, crates, hot: opts.hot, run: interp };
             match runner::run_entry(&target.entry, opts.args.clone(), eo) {
                 RunOutcome::Exited(c) => {

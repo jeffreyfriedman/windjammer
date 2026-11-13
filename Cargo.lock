@@ -4454,6 +4454,7 @@ dependencies = [
  "assert_cmd",
  "base64 0.22.1",
  "bcrypt",
+ "bincode",
  "chrono",
  "clap",
  "colored",

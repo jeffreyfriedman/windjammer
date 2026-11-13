@@ -4,7 +4,10 @@
 // miss. Oracles: the tree walker for the resolved engine (stdout and exit status), and rustc for the compiled
 // backend (the generated Rust must type-check); `--run-compiled` also runs the compiled program and compares.
 //
-//   wj run scripts/wj/drift_gen.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled] [--only-write] [--no-rustc]
+//   wj run scripts/wj/drift_gen.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled] [--only-write] [--no-rustc] [--pair]
+//
+// `--pair`: run every program under both engines in one `wj run --pair-list` process (no check, no process start per
+// run: the fuzz step's batch mode, ADR-0038 C4) instead of two `wj run` processes per program; the rows are the same.
 //
 // Rows (id <TAB> walker <TAB> resolved <TAB> compiled), like drift_corpus.wj:
 //   gen/seed-N          exit<N>:<bytes>:<checksum> of stdout under each engine (compiled: skip, or with --run-compiled)
@@ -14,8 +17,14 @@ use std::env
 use std::fs
 use std::process
 use std::strings
+use std::collections::HashMap
 use wj_proc::sh
 use wj_proc::quote
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::as_str
+use wj_json_doc::as_i64
 
 const PRELUDE: string = "tests/drift_corpus/gen/prelude.wj"
 const KINDS: usize = 9
@@ -193,6 +202,31 @@ fn run(wj: string, engine: string, file: string) -> string {
     }
 }
 
+// `file|engine` -> the token of `run` for every program of `files`, from one `wj run --pair-list` process
+fn pair_tokens(wj: string, dir: string, files: Vec<string>) -> HashMap<string, string> {
+    let list = "${dir}/pair-list.txt"
+    let _ = fs.write(list, files.join("\n") + "\n")
+    let mut out: HashMap<string, string> = HashMap::new()
+    match sh("${quote(wj)} run --interpret --pair-list ${quote(list)} < /dev/null") {
+        Ok(r) => {
+            for line in strings.split_lines(r.stdout) {
+                match parse(line) {
+                    Ok(doc) => {
+                        let file = as_str(get(doc, "file") ?? Json::Null) ?? ""
+                        let engine = as_str(get(doc, "engine") ?? Json::Null) ?? ""
+                        let code = as_i64(get(doc, "exit") ?? Json::Null) ?? -1
+                        let stdout = as_str(get(doc, "stdout") ?? Json::Null) ?? ""
+                        out.insert("${file}|${engine}", "exit${code}:${checksum(stdout)}")
+                    },
+                    Err(_) => {},
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    out
+}
+
 fn run_compiled(wj: string, file: string) -> string {
     let w = env::var("WJ_CARGO_WRAPPER").unwrap_or("")
     match sh("${w} ${quote(wj)} run --compiled --no-lint ${quote(file)}") {
@@ -222,6 +256,7 @@ fn main() {
     let mut lo = 1
     let mut hi = 60
     let mut compiled = false
+    let mut pair = false
     let mut no_rustc = false
     let mut i = 4
     while i < args.len() {
@@ -234,18 +269,34 @@ fn main() {
             i += 1
         } else if args[i] == "--run-compiled" {
             compiled = true
+        } else if args[i] == "--pair" {
+            pair = true
         }
         i += 1
     }
     let prelude = fs.read_to_string(PRELUDE).unwrap_or("")
     let _ = sh("mkdir -p ${quote(dir)}")
+    let mut paired: HashMap<string, string> = HashMap::new()
+    if pair {
+        let mut files: Vec<string> = Vec::new()
+        let mut s = lo
+        while s <= hi {
+            let file = "${dir}/gen_${s}.wj"
+            let _ = fs.write(file, program(s, prelude))
+            files.push(file)
+            s += 1
+        }
+        paired = pair_tokens(wj, dir, files)
+    }
     let mut rows = ""
     let mut seed = lo
     while seed <= hi {
         let file = "${dir}/gen_${seed}.wj"
-        let _ = fs.write(file, program(seed, prelude))
-        let w = run(wj, "walker", file)
-        let r = run(wj, "resolved", file)
+        if !pair {
+            let _ = fs.write(file, program(seed, prelude))
+        }
+        let w = if pair { paired.get("${file}|walker") ?? "error" } else { run(wj, "walker", file) }
+        let r = if pair { paired.get("${file}|resolved") ?? "error" } else { run(wj, "resolved", file) }
         let c = if compiled { run_compiled(wj, file) } else { "skip" }
         let id = "gen/seed-${seed}"
         rows = rows + "${id}\t${w}\t${r}\t${c}\n"

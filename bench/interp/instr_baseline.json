@@ -1,24 +1,40 @@
 {
  "callgrind:Linux-x86_64": {
-  "closures": 873053018,
-  "fib30": 185343692,
-  "hashmap": 518314676,
-  "loop5m": 303673955,
-  "nbody": 624427028,
-  "sieve": 584860169,
-  "startup": 83282193,
-  "strings": 398889277,
-  "structs": 142495650
+  "closures": 806952083,
+  "fib30": 178112559,
+  "hashmap": 267837897,
+  "loop5m": 296469544,
+  "nbody": 638215202,
+  "sieve": 587395260,
+  "startup": 42196493,
+  "strings": 402091122,
+  "structs": 135319393
+ },
+ "notes": {
+  "callgrind:Linux-x86_64": {
+   "nbody": {
+    "lower_when": "interp-cache is merged (src/check/run_cache.rs): re-run interp_instr --write and remove this note",
+    "raised_by": "ADR-0038 C6b: the solver's literal widths, solved once per width-sensitive program at run time (+~20M at startup)"
+   },
+   "sieve": {
+    "lower_when": "interp-cache is merged (src/check/run_cache.rs): re-run interp_instr --write and remove this note",
+    "raised_by": "ADR-0038 C6b: the solver's literal widths, solved once per width-sensitive program at run time (+~20M at startup)"
+   },
+   "strings": {
+    "lower_when": "interp-cache is merged (src/check/run_cache.rs): re-run interp_instr --write and remove this note",
+    "raised_by": "ADR-0038 C6b: the solver's literal widths, solved once per width-sensitive program at run time (+~20M at startup)"
+   }
+  }
  },
  "retired:Darwin-arm64": {
-  "closures": 890457413,
-  "fib30": 211223072,
-  "hashmap": 522255062,
-  "loop5m": 366251841,
-  "nbody": 727840865,
-  "sieve": 613873963,
-  "startup": 118789432,
-  "strings": 435154870,
-  "structs": 183579818
+  "closures": 783650996,
+  "fib30": 201090657,
+  "hashmap": 294886482,
+  "loop5m": 354828593,
+  "nbody": 735694461,
+  "sieve": 615612484,
+  "startup": 69135805,
+  "strings": 432990529,
+  "structs": 174023247
  }
 }

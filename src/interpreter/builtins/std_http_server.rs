@@ -192,7 +192,7 @@ enum Handler {
     /// `serve(addr, router)`: handlers take a `Request`.
     Router(Value),
     /// `serve_fn` / `Server::serve` / `server_serve`: one handler for every path. `serve_fn` is a
-    /// GET route on `/*path` in the runtime; the simple server is an axum fallback (any method).
+    /// GET route on `/` and `/*path` in the runtime; the simple server is an axum fallback (any method).
     Catch { f: Value, get_only: bool, simple: bool },
 }
 
@@ -200,10 +200,7 @@ fn dispatch(it: &mut Interpreter, h: &Handler, req: &RawRequest) -> R<(u16, Vec<
     let resp = match h {
         Handler::Catch { f, get_only, simple } => {
             if *get_only {
-                // `/*path` needs a non-empty tail; axum's GET routes also answer HEAD
-                if req.path.trim_matches('/').is_empty() {
-                    return Ok((404, vec![], vec![]));
-                }
+                // a GET route on `/` and on `/*path` in the runtime: every path; axum's GET routes also answer HEAD
                 if req.method != "GET" && req.method != "HEAD" {
                     return Ok((405, vec![], vec![]));
                 }

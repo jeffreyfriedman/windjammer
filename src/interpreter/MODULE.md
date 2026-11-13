@@ -16,6 +16,7 @@ the interpreter must never print something the compiled program would not print.
 - `register.rs`, `loader.rs`, `project.rs`  definitions; program file selection; whole-program module tree bound by `crate::resolve` (E0603 privacy)
 - `preflight.rs`, `deps.rs`, `host_bridge.rs`  `Unsupported`-feature detection (compiled-fallback trigger); dependencies as source (transitive, each crate once; `path = "../pkg/build"` is the package `../pkg`); `extern fn` bridge (ADR-0023); `crate_host/` Rust crate calls (ADR-0031): `sig.rs` surface fn -> wire types, `wire.rs` value encoding, `gen.rs` host binary source, `process.rs` the spawned host (pipes on fds 3/4), `stub.rs` `--simulate` stubs, `mod.rs` gate -> effect port -> call -> `&mut` copy-out
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
+- `compiled_facts.rs`    the compiler's decisions the interpreter adopts: emitted `&mut` parameters, solver literal widths (lazy, per program)
 - `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`; `moves.rs` ownership moves
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
@@ -43,7 +44,11 @@ Owns evaluation semantics, value model, native stdlib registry, CLI port. Browse
 
 ## Allowed imports
 `crate::parser`, `crate::lexer`, `crate::source_map::Location`, `crate::resolve` + `crate::module_system`, `crate::package`,
-`crate::type_display`, `crate::intrinsics` (names only; ratcheted), std, libloading. Nothing from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*`, `Interpreter`.
+`crate::type_display`, `crate::intrinsics` (names only; ratcheted), std, libloading. `compiled_facts.rs` alone reads the compiler's own
+decisions where the interpreter would otherwise guess differently (ADR-0038 C6b): `crate::codegen::generate_rust_source` (emitted `&mut`
+parameters), `crate::analyzer` + `crate::ir` + `crate::type_inference` (the numeric solver's `literal_widths`: an unsuffixed literal gets the
+width the compiled program gives it, so a `usize` countdown underflows where the compiled one panics; computed once per program, only for
+programs whose AST can give a literal another width than `int`). Nothing else from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*`, `Interpreter`.
 
 ## Entry points
 `runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `Interpreter::{new, new_capturing, run, run_checked}`.

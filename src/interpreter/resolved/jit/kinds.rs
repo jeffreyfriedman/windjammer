@@ -23,6 +23,8 @@ pub(crate) enum Class {
     Scalar(Ty),
     /// A `Vec` (possibly behind references), with what its first element looked like.
     Vec(Elem),
+    /// A `HashMap` (possibly behind references), with what one of its values looked like (`lower_map.rs`).
+    Map(Elem),
     /// A struct (possibly behind references): its type and the scalar fields it had.
     Struct(Shape),
     /// A struct held directly by the local (no reference) whose fields are all scalars: machine code
@@ -87,6 +89,7 @@ pub(crate) fn value_class_is(v: &Value, c: &Class) -> Option<bool> {
 /// `osr::classify` does)? Nothing is allocated.
 pub(crate) fn class_of_is(v: &Value, c: &Class) -> bool {
     match v {
+        Value::Map(m) if m.hashed => matches!(c, Class::Map(e) if *e == map_elem(m)),
         Value::Vec(items) => {
             let Class::Vec(e) = c else { return false };
             match items.get_value(0) {
@@ -211,6 +214,14 @@ pub(crate) fn int_value(x: i64, t: IntTy) -> i128 {
     }
 }
 
+/// The scalar type of one of a map's values (`Unknown`: empty, or not a scalar).
+fn map_elem(m: &crate::interpreter::kmap::KMap) -> Elem {
+    match m.any_value().and_then(ty_of) {
+        Some(t) => Elem::Scalar(t),
+        None => Elem::Unknown,
+    }
+}
+
 fn shape(v: &Value) -> Option<Shape> {
     match v {
         Value::Struct(s) => Some(Shape { name: s.name.clone(), fields: s.fields.iter().map(|(n, v)| (n.clone(), ty_of(v))).collect(), copy: s.copy }),
@@ -232,6 +243,7 @@ pub(crate) fn value_class(v: &Value) -> Option<Class> {
 /// The class of an aggregate reached from a local (references already followed).
 pub(crate) fn class_of(v: &Value) -> Class {
     match v {
+        Value::Map(m) if m.hashed => Class::Map(map_elem(m)),
         Value::Vec(items) => Class::Vec(match items.get_value(0) {
             None => Elem::Unknown,
             Some(x) => match (ty_of(&x), shape(&x)) {

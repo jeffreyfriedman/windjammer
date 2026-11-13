@@ -263,6 +263,12 @@ pub struct Interpreter {
     pub(crate) programs: HashMap<usize, &'static crate::parser::Program<'static>>,
     /// The compiler's `&mut` parameters per module, computed on first use (`None`: analysis failed).
     pub(crate) compiled_facts: HashMap<usize, Option<Rc<super::compiled_facts::MutRefParams>>>,
+    /// The numeric solver's widths of each module's unsuffixed integer literals (`compiled_facts.rs`), by module.
+    pub(crate) lit_widths: Vec<super::compiled_facts::LitWidths>,
+    /// The same, by program (modules sharing a file share them).
+    pub(crate) lit_widths_by_program: HashMap<usize, super::compiled_facts::LitWidths>,
+    /// Give unsuffixed literals the solver's widths (a host may turn it off).
+    pub(crate) literal_widths_on: bool,
     /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
     pub(crate) type_hint: Option<Type>,
     /// Expected type of one specific call expression (address, type); see `generics.rs`.
@@ -374,6 +380,9 @@ impl Interpreter {
             mutating_analysis: HashSet::new(),
             programs: HashMap::new(),
             compiled_facts: HashMap::new(),
+            lit_widths: Vec::new(),
+            lit_widths_by_program: HashMap::new(),
+            literal_widths_on: true,
             type_hint: None,
             retained: Vec::new(),
             expected: None,
@@ -652,6 +661,12 @@ pub(crate) struct FastHits {
     pub(crate) argcopy: u64,
     /// Compiled calls of a function that mutates a parameter, given the argument's place (compile time).
     pub(crate) placeargs: u64,
+    /// Map lookups and inserts lowered to machine code (`jit/lower_map.rs`, counted when a unit is compiled).
+    pub(crate) mapjit: u64,
+    /// Closures a compiled function created without a walker island (`resolved/closure.rs::create`).
+    pub(crate) closurecreate: u64,
+    /// Free names of a compiled closure given a copy of their value instead of a reference (`resolved/closure.rs`).
+    pub(crate) closurecopy: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,
