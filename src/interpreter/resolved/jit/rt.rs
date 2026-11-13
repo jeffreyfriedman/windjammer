@@ -366,10 +366,12 @@ pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) ->
     r
 }
 
-/// The key machine code passes a map helper: the integer at its static type, as the walker's value.
-fn int_key(k: i64, kt: i64) -> Option<crate::interpreter::value::Key> {
-    let super::kinds::Ty::Int(t) = from_code(kt)? else { return None };
-    Some(crate::interpreter::value::Key(Value::Int(int_value(k, t), t)))
+/// The integer type of the key machine code passes a map helper (its value is `int_value` at that type).
+fn int_ty(kt: i64) -> Option<crate::interpreter::int::IntTy> {
+    match from_code(kt)? {
+        super::kinds::Ty::Int(t) => Some(t),
+        _ => None,
+    }
 }
 
 /// `m.get(&k)` of a map local (`mapfast::MapGet`'s lookup): the value's bits at type `want` and `Ctx::found`.
@@ -379,7 +381,7 @@ pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64,
     let r = unsafe {
         with_slot(c, slot, |v| {
             peek(v, |v| match v {
-                Value::Map(km) => match km.get(&int_key(k, kt)?) {
+                Value::Map(km) => match int_ty(kt).map(|t| km.get_int(int_value(k, t), t))? {
                     None => Some(0),
                     Some(x) => {
                         let b = bits(x, from_code(want)?)?;
@@ -401,11 +403,11 @@ pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64,
 pub(crate) unsafe extern "C" fn map_insert(c: *mut Ctx, slot: i64, k: i64, kt: i64, x: i64, xt: i64) -> i64 {
     unsafe {
         with_slot(c, slot, |v| {
-            let key = int_key(k, kt)?;
+            let t = int_ty(kt)?;
             let x = value(x, from_code(xt)?);
             poke(v, |v| match v {
                 Value::Map(km) => {
-                    Rc::make_mut(km).insert(key, x);
+                    Rc::make_mut(km).set_int(int_value(k, t), t, x);
                     Some(0)
                 }
                 _ => None,
