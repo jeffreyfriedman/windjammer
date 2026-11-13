@@ -23,7 +23,7 @@ fn fault(d: Denial) -> ! {
         d.subject(),
         d.grant
     );
-    std::process::exit(126)
+    crate::process::exit(126)
 }
 
 fn base() -> Grant {

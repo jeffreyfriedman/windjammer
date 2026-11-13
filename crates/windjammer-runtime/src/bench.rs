@@ -3,7 +3,30 @@
 //! Provides simple benchmarking functions that can be used with `@bench` decorator.
 //! For more advanced benchmarking, use the criterion crate directly.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+/// A stopwatch. wasm32-unknown-unknown has no monotonic clock in std (`Instant::now` panics there), so on
+/// that target a benchmark runs its closure and reports a zero duration; time it in the host instead.
+#[cfg(not(target_arch = "wasm32"))]
+struct Stopwatch(std::time::Instant);
+#[cfg(not(target_arch = "wasm32"))]
+impl Stopwatch {
+    fn start() -> Self { Stopwatch(std::time::Instant::now()) }
+    fn elapsed(&self) -> Duration {
+        self.0.elapsed()
+    }
+}
+#[cfg(target_arch = "wasm32")]
+struct Stopwatch;
+#[cfg(target_arch = "wasm32")]
+impl Stopwatch {
+    fn start() -> Self {
+        Stopwatch
+    }
+    fn elapsed(&self) -> Duration {
+        Duration::ZERO
+    }
+}
 
 /// Run a closure multiple times and return the average duration
 ///
@@ -28,7 +51,7 @@ pub fn bench_iterations<F: Fn()>(iterations: usize, f: F) -> Duration {
 
     // Actual benchmark
     for _ in 0..iterations {
-        let start = Instant::now();
+        let start = Stopwatch::start();
         f();
         total += start.elapsed();
     }
@@ -50,7 +73,7 @@ pub fn bench_iterations<F: Fn()>(iterations: usize, f: F) -> Duration {
 /// println!("Duration: {:?}", duration);
 /// ```
 pub fn bench<F: FnOnce()>(f: F) -> Duration {
-    let start = Instant::now();
+    let start = Stopwatch::start();
     f();
     start.elapsed()
 }
