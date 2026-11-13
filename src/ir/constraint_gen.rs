@@ -510,7 +510,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.numeric_unmodelled.opaque.push(arg_var);
             }
 
-            if let Some(mode) = sig.param_ownership.get(param_idx) {
+            if let Some(mode) = sig.param_ownership.get(param_idx).filter(|_| !self.link_recursive_formal(param_idx, arg_index, arg_var)) {
                 let own = self.ownership_mode_to_owned(*mode);
                 self.cs.add_because(
                     Constraint::OwnershipIs(expected_var, own),

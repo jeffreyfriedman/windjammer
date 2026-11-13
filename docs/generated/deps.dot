@@ -148,6 +148,7 @@ digraph deps {
   "cargo_toml" -> "package" [label="1"];
   "check" -> "analyzer" [label="3"];
   "check" -> "codegen" [label="1"];
+  "check" -> "compiler_config" [label="1"];
   "check" -> "diagnostics" [label="30"];
   "check" -> "embedded_assets" [label="3"];
   "check" -> "fuzzy_matcher" [label="4"];
@@ -251,7 +252,7 @@ digraph deps {
   "compiler" -> "build_utils" [label="3"];
   "compiler" -> "cargo_toml" [label="4"];
   "compiler" -> "codegen" [label="39"];
-  "compiler" -> "compiler_config" [label="4"];
+  "compiler" -> "compiler_config" [label="5"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
   "compiler" -> "debug_env" [label="4"];
@@ -354,7 +355,7 @@ digraph deps {
   "interpreter" -> "type_display" [label="2"];
   "intrinsics" -> "lexer" [label="1"];
   "intrinsics" -> "parser" [label="3"];
-  "ir" -> "analyzer" [label="52"];
+  "ir" -> "analyzer" [label="54"];
   "ir" -> "auto_clone" [label="1"];
   "ir" -> "codegen" [label="51",color=red,fontcolor=red];
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];

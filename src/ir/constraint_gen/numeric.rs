@@ -706,3 +706,25 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             .is_some_and(|ty| surface.changes_receiver(&ty, method) == Some(true))
     }
 }
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A call of the function being solved (direct recursion: `walk(t, ..)` inside `walk`, `self.visit(..)` inside
+    /// `visit`): its formal is this function's own parameter, not the registry's prediction of it, so the argument
+    /// takes that parameter's requirement (OWN-CALL-FORMAL through the variable; the least fixed point, a read-only
+    /// recursive parameter stays borrowed). True when the link was made.
+    pub(super) fn link_recursive_formal(&mut self, param_idx: usize, arg_index: usize, arg_var: ConstraintVar) -> bool {
+        let decl = &self.analyzed.decl;
+        let own = crate::ir::node::ir_function_name_from_decl(&decl.name, decl.parent_type.as_deref());
+        if self.call_targets.last() != Some(&own) {
+            return false;
+        }
+        // The declaration lists `self` only when it is written; the signature's slot index counts it either way.
+        let idx = if decl.parameters.first().is_some_and(|p| p.name == "self") { param_idx } else { arg_index };
+        let Some(&formal) = decl.parameters.get(idx).and_then(|p| self.param_vars.get(&p.name)) else { return false };
+        self.cs.add_because(
+            Constraint::UsedAs(arg_var, formal),
+            origin("OWN-CALL-FORMAL", format!("argument {param_idx} of a recursive call takes the parameter's own requirement"), &None),
+        );
+        true
+    }
+}
