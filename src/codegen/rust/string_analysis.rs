@@ -461,3 +461,23 @@ mod tests {
         assert!(!contains_string_literal(&expr));
     }
 }
+
+/// The inside of `( .. )` when the opening parenthesis is closed by the last character: `(a).f(b)` is not wrapped
+/// (its first `(` closes before the end), so stripping its ends would garble it into `a).f(b`.
+pub fn strip_enclosing_parens(s: &str) -> Option<&str> {
+    let inner = s.strip_prefix('(')?.strip_suffix(')')?;
+    let mut depth = 0i32;
+    for c in inner.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+    (depth == 0).then_some(inner)
+}

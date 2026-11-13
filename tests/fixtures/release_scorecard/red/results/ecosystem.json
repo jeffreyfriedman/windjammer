@@ -1,1 +1,1 @@
-{"generated_epoch": "@NOW@", "commit": "x", "values": {"packages":10,"packages_without_tests":9,"sweep_total":100,"sweep_pass":90}}
+{"schema": 1, "generated_epoch": "@NOW@", "commit": "x", "values": {"packages":10,"packages_without_tests":9,"sweep_total":100,"sweep_pass":90}}

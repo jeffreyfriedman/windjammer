@@ -81,6 +81,16 @@ prompt wording is the wrong lever: the one command should be cheap (L5), not avo
   (below) tests whether the levers move the real number.
 - The quiet run hides nothing the user can act on: Windjammer's own lints and every compile error are still printed;
   only build progress (on a pipe) and rustc's warnings about generated Rust are dropped.
+- The measurement may not be older than the code that feeds it: `ratchet.json` lists the `feeds` paths (diagnostic
+  rendering, the run driver, the source map, the linter, the replay and its corpus), and the ratchet test fails when a
+  ratcheted key was measured at a commit before the last change to any of them. Re-measure with `replay.wj --write` on a
+  build of the head, commit `measured.json` and tighten the limits.
+- Compiled-build errors, after the secondary-label and lint-block changes (9 events, bytes / 4 per error): human 148 -> 116,
+  agent 81 -> 57. The agent limit was tightened to 57. The human limit is re-based 111 -> 116 rather than cut further:
+  the 5 tokens over the old limit are the note lines for rustc's secondary labels that sit on a different line than the
+  error (`expected due to this value (main.wj:34)`); the replay cannot say what they are worth (no fix applies to these
+  errors, `cost.fixsim.reached_green` is 0), they are absent from the agent format, and a label on the error's own line
+  is already dropped. If a pilot shows they do not shorten the loop, drop them and tighten the limit.
 - W0017 is a warning with a `maybe_incorrect` fix: `$${` is occasionally meant literally, so `wj check --fix` never
   applies it.
 

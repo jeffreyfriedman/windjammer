@@ -256,18 +256,58 @@ struct RFile {
     epoch: int,
     commit: string,
     values: Json,
+    doc: Json,
+}
+
+// Problems with the shape of a parsed results file (contract: results/README.md): `schema` 1, numeric `generated_epoch`,
+// string `commit`, `values` a flat object of numbers, and the optional `web_plan` a string. Empty when well formed.
+fn schema_problems(doc: Json) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    match get(doc, "schema") {
+        Some(j) => if as_i64(j).unwrap_or(0) != 1 { out.push("schema is not 1") },
+        None => out.push("no schema"),
+    }
+    match get(doc, "generated_epoch") {
+        Some(j) => if as_i64(j).is_none() { out.push("generated_epoch is not a number") },
+        None => out.push("no generated_epoch"),
+    }
+    match get(doc, "commit") {
+        Some(j) => if as_str(j).is_none() { out.push("commit is not a string") },
+        None => out.push("no commit"),
+    }
+    match get(doc, "values") {
+        Some(v) => {
+            for mem in members(v) {
+                if num(mem.value).is_none() {
+                    out.push("values.${mem.key} is not a number")
+                }
+            }
+        },
+        None => out.push("no values object"),
+    }
+    match get(doc, "web_plan") {
+        Some(j) => if as_str(j).is_none() { out.push("web_plan is not a string") },
+        None => {},
+    }
+    out
 }
 
 fn load_rfile(c: Ctx, name: string, enforce_age: bool) -> RFile {
     let path = c.results + "/" + name
-    let empty = RFile { state: "missing", note: "missing: results/${name} (written by the PC verification flow)", epoch: 0, commit: "", values: object() }
+    let empty = RFile { state: "missing", note: "missing: results/${name} (written by the PC verification flow)", epoch: 0, commit: "", values: object(), doc: object() }
     let text = match read(path) {
         Some(t) => t,
         None => return empty,
     }
     let doc = match parse(text) {
         Ok(d) => d,
-        Err(e) => return RFile { state: "missing", note: "unreadable: results/${name}", epoch: 0, commit: "", values: object() },
+        Err(e) => return RFile { state: "missing", note: "unreadable: results/${name}", epoch: 0, commit: "", values: object(), doc: object() },
+    }
+    match get(doc, "schema") {
+        Some(j) => if as_i64(j).unwrap_or(0) != 1 {
+            return RFile { state: "missing", note: "results/${name} has an unknown schema version (this scorecard reads schema 1)", epoch: 0, commit: "", values: object(), doc: object() }
+        },
+        None => {},
     }
     let epoch = match get(doc, "generated_epoch") {
         Some(j) => as_i64(j).unwrap_or(0) as int,
@@ -280,12 +320,12 @@ fn load_rfile(c: Ctx, name: string, enforce_age: bool) -> RFile {
     let values = get(doc, "values").unwrap_or(object())
     let age = ((c.now - epoch) as f64) / 86400.0
     if epoch == 0 {
-        return RFile { state: "missing", note: "results/${name} has no generated_epoch", epoch: 0, commit: commit, values: values }
+        return RFile { state: "missing", note: "results/${name} has no generated_epoch", epoch: 0, commit: commit, values: values, doc: doc }
     }
     if enforce_age && age > c.max_age {
-        return RFile { state: "stale", note: "results/${name} is ${fmt(age)} days old (limit ${fmt(c.max_age)})", epoch: epoch, commit: commit, values: values }
+        return RFile { state: "stale", note: "results/${name} is ${fmt(age)} days old (limit ${fmt(c.max_age)})", epoch: epoch, commit: commit, values: values, doc: doc }
     }
-    RFile { state: "ok", note: "results/${name}, ${fmt(age)} days old", epoch: epoch, commit: commit, values: values }
+    RFile { state: "ok", note: "results/${name}, ${fmt(age)} days old", epoch: epoch, commit: commit, values: values, doc: doc }
 }
 
 fn rv(f: RFile, key: string) -> Option<f64> {
@@ -304,6 +344,22 @@ fn from_key(ms: Vec<Metric>, id: string, f: RFile, key: string) -> Vec<Metric> {
         Some(v) => set(ms, id, v, f.note),
         None => unavailable(ms, id, "missing", "results key ${key} absent"),
     }
+}
+
+// Name the plan document the stage was counted from: the flow writes its path (relative to the project that owns it) as
+// the top-level string `web_plan` of the results file (results/README.md), so the page points at it without the public
+// repository naming that project.
+fn with_plan(ms: Vec<Metric>, id: string, f: RFile) -> Vec<Metric> {
+    let plan = get(f.doc, "web_plan").and_then(|j| as_str(j)).unwrap_or("")
+    let i = find(ms, id)
+    if f.state != "ok" || plan.len() == 0 || i < 0 {
+        return ms
+    }
+    let mut r = ms
+    let mut m = r[i as usize]
+    m.note = "${m.note}; plan: ${plan}"
+    r[i as usize] = m
+    r
 }
 
 fn ratio(ms: Vec<Metric>, id: string, f: RFile, num_key: string, den_key: string) -> Vec<Metric> {
@@ -666,6 +722,7 @@ fn collect_results(ms: Vec<Metric>, c: Ctx) -> Vec<Metric> {
     let tg = load_rfile(c, "targets.json", true)
     r = from_key(r, "engine_native_errors", tg, "engine_native_build_errors")
     r = from_key(r, "web_stage", tg, "web_stage")
+    r = with_plan(r, "web_stage", tg)
     r = from_key(r, "playground_parity_failures", tg, "playground_parity_failures")
     let dc = load_rfile(c, "docs.json", true)
     r = from_key(r, "docs_stale_numbers", dc, "stale_or_hand_typed_numbers")
@@ -900,6 +957,29 @@ fn selftest(base_now: int) -> bool {
         }
     }
     fails = expect(results_backed >= 20, "fewer than 20 results-backed criteria", fails)
+    // results-file schema: every fixture file follows the contract; a malformed one is reported
+    for dir in [green_dir, red_dir] {
+        for f in fs.read_dir(dir + "/results").unwrap_or(Vec::new()) {
+            let p = f.path()
+            match parse(fs.read_to_string(p).unwrap_or("")) {
+                Ok(d) => {
+                    for why in schema_problems(d) {
+                        fails = expect(false, "${p}: ${why}", fails)
+                    }
+                },
+                Err(_) => fails = expect(false, "${p}: not JSON", fails),
+            }
+        }
+    }
+    let bad_doc = parse("{\"schema\": 2, \"generated_epoch\": \"x\", \"values\": {\"a\": \"1\"}, \"web_plan\": 3}")
+    let bad_count = match bad_doc {
+        Ok(d) => schema_problems(d).len(),
+        Err(_) => 0,
+    }
+    fails = expect(bad_count == 5, "schema_problems finds ${bad_count} problems in a malformed results file (want 5)", fails)
+    let plan_ms = collect(fixture_ctx(green_dir, t, ""))
+    let ws = plan_ms[find(plan_ms, "web_stage") as usize]
+    fails = expect(strings.contains(ws.note, "plan: docs/web-plan.md"), "web_stage note lacks the plan path: ${ws.note}", fails)
     // rendering round trip: the run region re-renders identically from the JSON form
     let c = fixture_ctx(green_dir, t, "")
     let head = "selftest"

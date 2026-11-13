@@ -1,1 +1,1 @@
-{"generated_epoch": "@NOW@", "commit": "x", "values": {"stale_or_hand_typed_numbers":6,"orphan_tests":4}}
+{"schema": 1, "generated_epoch": "@NOW@", "commit": "x", "values": {"stale_or_hand_typed_numbers":6,"orphan_tests":4}}

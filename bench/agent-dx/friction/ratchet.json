@@ -1,13 +1,24 @@
 {
-  "_doc": "Agent-cost ratchet (ADR-0037), checked by tests/agent_cost_ratchet_test.rs against docs/generated/measured.json. shrink: may only go down; grow: may only go up; zero: must stay 0. A better measured value must be written here in the same change.",
+  "_doc": "Agent-cost ratchet (ADR-0037), checked by tests/agent_cost_ratchet_test.rs against docs/generated/measured.json. shrink: may only go down; grow: may only go up; zero: must stay 0. A better measured value must be written here in the same change. feeds: the paths whose changes alter what the replay measures; measured.json must have been recorded at a commit after the last change to any of them (the staleness test).",
+  "feeds": [
+    "src/diagnostics",
+    "src/cli/run.rs",
+    "src/cli/check.rs",
+    "src/cli/build_json.rs",
+    "src/source_map.rs",
+    "src/linter",
+    "bench/agent-dx/friction/replay.wj",
+    "bench/agent-dx/friction/events",
+    ":(exclude,glob)bench/agent-dx/friction/events/**/status.txt"
+  ],
   "shrink": {
     "cost.friction.events_open": 9,
     "cost.friction.open_compiler_bugs": 9,
     "cost.noise.lines_per_build": 0,
     "cost.diag.check_tokens_per_error_human": 278,
     "cost.diag.check_tokens_per_error_agent": 126,
-    "cost.diag.build_tokens_per_error_human": 111,
-    "cost.diag.build_tokens_per_error_agent": 76
+    "cost.diag.build_tokens_per_error_human": 116,
+    "cost.diag.build_tokens_per_error_agent": 57
   },
   "grow": {
     "cost.diag.fix_coverage": 0,

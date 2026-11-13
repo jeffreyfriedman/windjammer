@@ -536,22 +536,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let saved_body = self.current_function_body.clone();
-        let saved_idx = self.current_statement_idx;
-        let saved_local_idx = self.current_block_local_idx;
-        self.current_function_body = body.to_vec();
-        // A loop body is never the function's tail: a `return` in it stays explicit.
-        let old_in_function_body = std::mem::replace(&mut self.in_function_body, false);
-        for (i, stmt) in body.iter().enumerate() {
-            self.current_statement_idx = self.auto_clone_counter;
-            self.current_block_local_idx = i;
-            self.auto_clone_counter += 1;
-            output.push_str(&self.generate_statement(stmt));
-        }
-        self.in_function_body = old_in_function_body;
-        self.current_function_body = saved_body;
-        self.current_statement_idx = saved_idx;
-        self.current_block_local_idx = saved_local_idx;
+        output.push_str(&self.generate_loop_body_statements(body));
 
         self.restore_str_slice_loop(str_slice_shadowed, &str_slice_vars);
         if is_borrowed_iterator {
@@ -751,5 +736,29 @@ impl<'ast> CodeGenerator<'ast> {
             })
         };
         is_usize_ty(start) || is_usize_ty(end)
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The statements of a loop body, each numbered for auto-clone analysis. A loop body is never the function's
+    /// tail: a `return` in it stays explicit.
+    fn generate_loop_body_statements(&mut self, body: &[&'ast Statement<'ast>]) -> String {
+        let saved_body = self.current_function_body.clone();
+        let saved_idx = self.current_statement_idx;
+        let saved_local_idx = self.current_block_local_idx;
+        self.current_function_body = body.to_vec();
+        let old_in_function_body = std::mem::replace(&mut self.in_function_body, false);
+        let mut output = String::new();
+        for (i, stmt) in body.iter().enumerate() {
+            self.current_statement_idx = self.auto_clone_counter;
+            self.current_block_local_idx = i;
+            self.auto_clone_counter += 1;
+            output.push_str(&self.generate_statement(stmt));
+        }
+        self.in_function_body = old_in_function_body;
+        self.current_function_body = saved_body;
+        self.current_statement_idx = saved_idx;
+        self.current_block_local_idx = saved_local_idx;
+        output
     }
 }

@@ -12,4 +12,3 @@ tests/fixtures/formatter/* | golden input/expected pairs read by directory in te
 tests/fixtures/resolve/* | resolver fixtures read by directory in tests/resolve_fixtures_test.rs
 tests/py_ports/** | fixture trees and recorded expectations for the Windjammer script ports (scripts/wj/port_gates.wj)
 tests/drift_corpus/** | pinned ecosystem snapshot and its recorded results, read by directory in scripts/wj/drift_corpus.wj (the drift gate)
-tests/interpreter_corpus/regen_vectors.sh | manual maintenance script: regenerates committed vectors from the *.ref.py reference models
