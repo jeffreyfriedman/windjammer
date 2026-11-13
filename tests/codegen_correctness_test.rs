@@ -140,6 +140,7 @@ corpus_tests!(
     string_as_bytes_to_vec_formal,
     vec_macro_tuple_string_slots,
     bitwise_vs_comparison_precedence,
+    slice_to_vec_extend_argument,
 );
 
 // ------------------------------------------------------------------ generated programs

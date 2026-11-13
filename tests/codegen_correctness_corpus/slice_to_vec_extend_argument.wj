@@ -1,0 +1,19 @@
+// `data[0..n].to_vec()` is a list copy: passed to `extend` it stays a Vec, for bytes and for other element types.
+// expect: 5 4
+pub fn append_prefix(dst: Vec<u8>, data: Vec<u8>, n: usize) -> Vec<u8> {
+    let mut out = dst
+    out.extend(data[0..n].to_vec())
+    out
+}
+
+pub fn append_ints(dst: Vec<int>, data: Vec<int>, n: usize) -> Vec<int> {
+    let mut out = dst
+    out.extend(data[1..n].to_vec())
+    out
+}
+
+fn main() {
+    let bytes = append_prefix([1, 2], [7, 8, 9], 3)
+    let ints = append_ints([1], [5, 6, 7, 8], 4)
+    println("${bytes.len()} ${ints.len()}")
+}

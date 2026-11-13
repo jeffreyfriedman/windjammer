@@ -730,6 +730,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // `vec[i]` → element type (peeling `&Vec<T>`: `vals: &Vec<f32>` yields `f32`; `mask[i]` of
             // `Vec<u8>` is `u8`); `map[&k]` → value type.
+            // `vec[a..b]` is a slice of the collection (a `Vec<T>` view), not an element
+            Expression::Index { object, index, .. } if matches!(index, Expression::Range { .. }) => {
+                let ty = self.infer_expression_type(object)?;
+                Some(crate::codegen::rust::collection_detection::peel_type_reference(&ty).clone())
+            }
             Expression::Index { object, .. } => {
                 Self::indexed_type(&self.infer_expression_type(object)?)
             }
