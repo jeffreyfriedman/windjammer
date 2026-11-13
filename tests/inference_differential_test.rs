@@ -720,6 +720,13 @@ fn corpus_signed_step_from_if_literals_width() {
     corpus_check("signed_step_from_if_literals_width");
 }
 
+/// A `Vec::new()` local filled by `push` of a user type: `(pts[a] + pts[b]) * 0.5` takes the operator impl's `f32`.
+/// Expected output: `2 4`.
+#[test]
+fn corpus_vec_new_push_element_operator_width() {
+    corpus_check("vec_new_push_element_operator_width");
+}
+
 /// A literal in the `None` arm beside a field of the `Some(r)` binding, and a running minimum over field reads.
 #[test]
 fn corpus_match_payload_field_width() {

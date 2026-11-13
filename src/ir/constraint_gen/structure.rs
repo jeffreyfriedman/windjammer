@@ -222,7 +222,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     fn bind_variant(&mut self, name: &str, binding: &EnumPatternBinding<'ast>) -> ConstraintVar {
         let var = self.cs.fresh_var();
         let prelude = prelude_payload(name);
-        let declared = self.struct_field_types.and_then(|f| f.get(name)).cloned();
+        let declared = self.variant_payload_fields(name);
         let subs: Vec<(String, ConstraintVar)> = match binding {
             EnumPatternBinding::Single(n) => vec![("0".to_string(), self.bind_name(n))],
             EnumPatternBinding::Tuple(pats) => pats.iter().enumerate().map(|(i, p)| (i.to_string(), self.bind_pattern(p))).collect(),
@@ -457,6 +457,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         for ((param, &v), (_, a)) in params.iter().zip(arg_vars).zip(arguments) {
             self.bind_surface_argument(param, v, a, &mut g);
         }
+        self.refine_element_from_argument(object, &type_generics, &params, arguments);
         match ret.as_ref() {
             Some(r) if super::numeric::numeric_base_of(r) == Some(BaseType::Usize) => {
                 if let Some(l) = expr.location() {
@@ -487,7 +488,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// A call with no signature is still modelled when it constructs a prelude payload or a declared variant.
     pub(super) fn call_is_modelled(&self, callee: &str) -> bool {
-        prelude_payload(callee).is_some() || self.struct_field_types.is_some_and(|f| f.contains_key(callee))
+        prelude_payload(callee).is_some() || self.variant_payload_fields(callee).is_some()
     }
 
     /// `S { f: v }`: `v` has field `f`'s declared type; a field of a struct the walk cannot see is opaque.

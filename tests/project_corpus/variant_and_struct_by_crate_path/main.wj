@@ -1,0 +1,35 @@
+// A variant pattern and a parameter type written with their crate paths (`crate::shapes::Shape::Ball(r)`,
+// `Vec<crate::shapes::Item>`) name the declarations of module `shapes`: the payload `r` is an `f32`, so the literals
+// beside it are too, and `m.weight > 0.5` compares two `f32`s (both were emitted `_f64`).
+// Expected by hand: Pill(1.5, 2.0) gives 1.5 + 2 + 0 = 3.5; Ball(0.5) gives 0.5; items weigh 0.75 and 0.25: one heavy.
+// expect: 3.5 0.5
+// expect: 1
+mod shapes
+
+fn total(x: f32, y: f32, z: f32) -> f32 {
+    x + y + z
+}
+
+fn size(s: crate::shapes::Shape) -> f32 {
+    let (a, b, c) = match s {
+        crate::shapes::Shape::Ball(r) => (r * 1.0, 0.0, 0.0),
+        crate::shapes::Shape::Pill(r, h) => (r * 1.0, h * 1.0, 0.0),
+        crate::shapes::Shape::Hull(_) => (1.0, 1.0, 1.0),
+    }
+    total(a, b, c)
+}
+
+fn heavy(items: Vec<crate::shapes::Item>) -> int {
+    let mut n = 0
+    for m in items {
+        if m.weight > 0.5 {
+            n = n + 1
+        }
+    }
+    n
+}
+
+fn main() {
+    println("${size(crate::shapes::Shape::Pill(1.5, 2.0))} ${size(crate::shapes::Shape::Ball(0.5))}")
+    println("${heavy([crate::shapes::Item { weight: 0.75, kind: 1 }, crate::shapes::Item { weight: 0.25, kind: 2 }])}")
+}

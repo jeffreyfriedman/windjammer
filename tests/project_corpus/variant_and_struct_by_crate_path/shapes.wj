@@ -1,0 +1,10 @@
+pub enum Shape {
+    Ball(f32),
+    Pill(f32, f32),
+    Hull(i32),
+}
+
+pub struct Item {
+    pub weight: f32,
+    pub kind: i32,
+}
