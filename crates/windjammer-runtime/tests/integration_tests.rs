@@ -309,9 +309,9 @@ fn test_crypto_password_hashing() {
 
 #[test]
 fn test_crypto_base64() {
-    let data = b"Hello, World!";
+    let data = "Hello, World!";
     let encoded = crypto::base64_encode(data);
-    assert!(!encoded.is_empty());
+    assert_eq!(encoded, "SGVsbG8sIFdvcmxkIQ==");
 
     let decoded_result = crypto::base64_decode(&encoded);
     assert!(decoded_result.is_ok());

@@ -2004,6 +2004,14 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|arg_str| needs_format_temp(arg_str));
 
+        // A slice-typed argument (`s.as_bytes()`) at a `Vec` formal is copied into one.
+        if let Some(sig) = resolved_signature.as_ref().or(method_signature.as_ref()) {
+            for (i, arg_str) in processed_args.iter_mut().enumerate() {
+                if let Some((_, arg_expr)) = arguments.get(i) {
+                    self.convert_slice_arg_to_vec_formal(arg_expr, sig, i, arg_str);
+                }
+            }
+        }
         self.lower_option_default_and_cmp(object, method, inferred_receiver_ty.as_ref(), &mut obj_str, &mut processed_args); processed_args = self.unborrow_ref_closure_args(arguments, processed_args);
         let base_expr = if has_format_arg {
             // Extract format!() macros to temp variables
