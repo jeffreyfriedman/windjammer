@@ -124,27 +124,42 @@ impl<'ast> Analyzer<'ast> {
     pub(crate) fn expr_is_if_else_with_param(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Block { statements, .. } => {
-                // Check if block contains an if statement with the parameter
-                for stmt in statements {
-                    if let Statement::If {
-                        then_block,
-                        else_block,
-                        ..
-                    } = stmt
-                    {
-                        let in_then = self.stmts_mention_identifier(name, then_block);
-                        let in_else = else_block
-                            .as_ref()
-                            .is_some_and(|block| self.stmts_mention_identifier(name, block));
-                        if in_then || in_else {
-                            return true;
-                        }
+                // The parameter (or a field of it) is a branch's value: the other branch produces an owned
+                // value, so this one must own it too. A branch that only reads it (`a.len()`, `a[i] < b[i]`)
+                // produces some other value and needs nothing from the parameter's mode.
+                statements.iter().any(|stmt| match stmt {
+                    Statement::If { then_block, else_block, .. } => {
+                        Self::branch_value_is_param(name, then_block)
+                            || else_block.as_ref().is_some_and(|block| Self::branch_value_is_param(name, block))
                     }
-                }
-                false
+                    _ => false,
+                })
             }
             _ => false,
         }
+    }
+
+    /// The block's value is `name` itself or a field path of it; an `else if` chain is followed.
+    fn branch_value_is_param(name: &str, stmts: &[&Statement]) -> bool {
+        fn rooted_at(name: &str, e: &Expression) -> bool {
+            match e {
+                Expression::Identifier { name: id, .. } => id == name,
+                Expression::FieldAccess { object, .. } => rooted_at(name, object),
+                Expression::Block { statements, .. } => statements.last().is_some_and(|s| tail_is(name, s)),
+                _ => false,
+            }
+        }
+        fn tail_is(name: &str, s: &Statement) -> bool {
+            match s {
+                Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => rooted_at(name, expr),
+                Statement::If { then_block, else_block, .. } => {
+                    then_block.last().is_some_and(|t| tail_is(name, t))
+                        || else_block.as_ref().and_then(|b| b.last()).is_some_and(|t| tail_is(name, t))
+                }
+                _ => false,
+            }
+        }
+        stmts.last().is_some_and(|s| tail_is(name, s))
     }
 
     pub(crate) fn stmts_mention_identifier(

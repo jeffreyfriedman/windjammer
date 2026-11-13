@@ -9991,7 +9991,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return "&str".to_string();
         }
-        format!("&{}", self.type_to_rust(&param.type_))
+        if matches!(param.type_, Type::Reference(_)) { self.type_to_rust(&param.type_) } else { format!("&{}", self.type_to_rust(&param.type_)) } // declared `&T` is the borrow
     }
 
     /// True when `param_name` is forwarded to a callee whose resolved signature emits `&String`.

@@ -586,10 +586,10 @@ impl<'ast> CodeGenerator<'ast> {
                 _ => None,
             },
             // Binary operations: infer from operands (result usually matches operand type).
-            // P3.280: when one side is default WJ `int` (i64) and the other is a specific
-            // width from a non-literal (i32 const/param), prefer the specific width so
+            // P3.280: when one side is default WJ `int` (i64) and the other is a specific width from a non-literal (i32 const/param), prefer the specific width so
             // `let cx = VIEWER_GRID / 2` records i32. Never let an untyped literal's
             // default int steal width from a typed peer (`year % 400` stays i64).
+            Expression::Binary { op, .. } if crate::codegen::rust::operators::yields_bool(op) => Some(Type::Bool),
             Expression::Binary { left, right, .. } => {
                 let l = self.infer_expression_type(left);
                 let r = self.infer_expression_type(right);

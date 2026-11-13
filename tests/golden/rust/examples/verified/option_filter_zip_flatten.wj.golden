@@ -1,6 +1,6 @@
 fn main() {
-    println!("{:?}", Some(3_i64).filter(|x| *x > 5_i64));
-    println!("{:?}", Some(8_i64).filter(|x| *x > 5_i64));
+    println!("{:?}", Some(3_i64).filter(|x| *x > 5));
+    println!("{:?}", Some(8_i64).filter(|x| *x > 5));
     let z = Some(1_i64).zip(Some(String::from("a")));
     println!("{:?}", z);
     let o: Option<i64> = None;

@@ -1303,22 +1303,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // `borrowed_iterator_vars` but often lack a typed local — infer may
                 // miss `&i64`. If the *peer* is Copy, still deref the borrowed side
                 // (`id != entity_id` → `*id != entity_id`, P3.600 / retain E0277).
-                let side_is_copy = |expr: &Expression<'_>| {
-                    self.infer_expression_type(expr).is_some_and(|ty| {
-                        let bare = match &ty {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                inner.as_ref()
-                            }
-                            other => other,
-                        };
-                        self.is_type_copy(bare)
-                    }) || self.expression_is_copy(expr)
-                };
+                let by_value = self.compares_by_value(left) || self.compares_by_value(right);
                 if left_is_borrowed {
-                    if side_is_copy(left) || side_is_copy(right) {
+                    if by_value {
                         left_str = format!("*{}", left_str);
                     }
-                } else if side_is_copy(right) || side_is_copy(left) {
+                } else if by_value {
                     right_str = format!("*{}", right_str);
                 }
             }
