@@ -80,7 +80,7 @@ pub struct Line {
 }
 
 #[inline]
-pub fn lookup(tenant_slug: &str, wanted: &str) -> Result<bool, String> {
+fn lookup(tenant_slug: &str, wanted: &str) -> Result<bool, String> {
     let slug = tenant_slug;
     let code = wanted;
     let r = ListReader { n: 0_i64 };
@@ -97,7 +97,7 @@ pub fn lookup(tenant_slug: &str, wanted: &str) -> Result<bool, String> {
 }
 
 #[inline]
-pub fn validate(tenant_slug: &str, lines: Vec<Line>) -> Result<(), String> {
+fn validate(tenant_slug: &str, lines: Vec<Line>) -> Result<(), String> {
     let slug = tenant_slug;
     for line in lines {
         let code = line.code.clone();

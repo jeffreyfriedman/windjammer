@@ -44,7 +44,7 @@ use super::*;
 
 use crate::ledger::Ledger;
 #[inline]
-pub fn entry_body(entry: Ledger, extra: &str) -> String {
+fn entry_body(entry: Ledger, extra: &str) -> String {
     let mut body = format!("{}{}{}{}", "{\"code\":\"", entry.code, "\",\"name\":\"", entry.name);
     body = body + "\",\"cents\":" + &entry.cents.to_string();
     body = body + &extra;
@@ -57,7 +57,7 @@ pub fn entry_json(entry: Ledger) -> String {
 }
 
 #[inline]
-pub fn entry_text(entry: Ledger, extra: &str) -> String {
+fn entry_text(entry: Ledger, extra: &str) -> String {
     entry_body(entry, extra)
 }
 

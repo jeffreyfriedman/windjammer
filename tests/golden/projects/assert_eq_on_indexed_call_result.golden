@@ -10,7 +10,7 @@ pub use lists::*;
 #[allow(unused_imports)]
 use super::*;
 #[inline]
-pub fn make() -> Vec<Vec<u8>> {
+fn make() -> Vec<Vec<u8>> {
     let a: Vec<u8> = vec![97_u8];
     let b: Vec<u8> = vec![98_u8];
     vec![a, b]

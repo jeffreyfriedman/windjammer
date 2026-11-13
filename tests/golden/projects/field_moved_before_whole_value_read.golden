@@ -54,7 +54,7 @@ pub struct Request {
 }
 
 #[inline]
-pub fn distance(node: &Node, q: f64) -> f64 {
+fn distance(node: &Node, q: f64) -> f64 {
     node.x - q
 }
 
@@ -64,7 +64,7 @@ pub fn score(node: Node, q: f64) -> Hit {
 }
 
 #[inline]
-pub fn known(kind: String, rel: String) -> bool {
+fn known(kind: String, rel: String) -> bool {
     let mut seen: Vec<String> = Vec::new();
     seen.push(kind);
     seen.push(rel);
@@ -80,7 +80,7 @@ pub fn expand(request: Request) -> String {
 }
 
 #[inline]
-pub fn describe(obj: Obj, rel: &str) -> String {
+fn describe(obj: Obj, rel: &str) -> String {
     let mut out = obj.kind;
     out.push_str(":");
     out.push_str(&obj.key);

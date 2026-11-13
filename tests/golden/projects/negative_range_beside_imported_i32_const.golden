@@ -4,7 +4,7 @@ use super::*;
 
 use crate::grid::SIZE;
 #[inline]
-pub fn put(x: i32) -> i32 {
+fn put(x: i32) -> i32 {
     x
 }
 
