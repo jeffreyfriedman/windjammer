@@ -1,0 +1,11 @@
+pub fn verify(token: string) -> Result<int, string> {
+    if token.len() > 3 {
+        return Err("Token EXPIRED")
+    }
+    Ok(1)
+}
+
+pub fn rejected_as_expired(token: string) -> bool {
+    let result = verify(token)
+    result.is_err() && result.unwrap_err().to_lowercase().contains("expired")
+}

@@ -1,0 +1,8 @@
+pub struct Bag { pub items: Vec<string> }
+impl Bag {
+    pub fn contains(self, item: string) -> bool {
+        let mut items = self.items
+        items.push(item)
+        items.len() > 1
+    }
+}

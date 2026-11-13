@@ -155,6 +155,8 @@ pub trait Result<T, E> {
     fn unwrap_or_default(self) -> T;
     fn ok(self) -> Option<T>;
     fn err(self) -> Option<E>;
+    fn unwrap_err(self) -> E;
+    fn expect_err(self, message: &str) -> E;
     fn is_ok(self) -> bool;
     fn is_err(self) -> bool;
 }
