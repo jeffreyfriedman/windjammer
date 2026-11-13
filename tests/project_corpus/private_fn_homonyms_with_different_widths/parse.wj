@@ -5,7 +5,7 @@ pub struct Mapping {
 
 fn cell(cells: Vec<string>, idx: int) -> string {
     if idx < cells.len() as int {
-        cells[idx as usize].clone()
+        cells[idx as usize]
     } else {
         ""
     }

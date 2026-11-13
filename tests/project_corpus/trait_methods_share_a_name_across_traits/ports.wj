@@ -3,9 +3,9 @@ pub struct AuditDraft { pub note: string }
 pub struct Posted { pub id: int }
 
 pub trait EventSink {
-    fn append(self, event: EventDraft) -> Result<(), string>
+    fn append(&self, event: EventDraft) -> Result<(), string>
 }
 
 pub trait AuditSink {
-    fn append(self, scope: string, event: AuditDraft) -> Result<Posted, string>
+    fn append(&self, scope: string, event: AuditDraft) -> Result<Posted, string>
 }

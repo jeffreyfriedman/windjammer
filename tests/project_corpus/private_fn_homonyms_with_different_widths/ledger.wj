@@ -1,6 +1,6 @@
 fn cell(row: Vec<string>, index: usize) -> string {
     if index < row.len() {
-        row[index].clone()
+        row[index]
     } else {
         "-"
     }
