@@ -289,10 +289,7 @@ impl<'ast> CodeGenerator<'ast> {
         for item in &program.items {
             match item {
                 Item::Struct { decl: s, .. } => {
-                    self.user_declared_struct_names.insert(s.name.clone());
-                    if !s.type_params.is_empty() {
-                        self.generic_user_struct_names.insert(s.name.clone());
-                    }
+                    self.note_declared_struct(&s.name, !s.type_params.is_empty());
                 }
                 Item::Enum { decl: e, .. } => {
                     self.user_declared_struct_names.insert(e.name.clone());
