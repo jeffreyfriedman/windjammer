@@ -150,7 +150,10 @@ impl FloatInference {
                 let mut found_metadata = false;
                 for candidate in &candidates {
                     // only a current entry (fingerprinted by this compiler, its source unchanged) feeds inference
-                    if let Some(meta) = crate::metadata::read_current_cached_meta(self.source_root.as_deref(), candidate) {
+                    if let Some(meta) = crate::metadata::read_current_cached_meta(
+                        self.source_root.as_ref().map(|(root, cache)| (root.as_path(), cache.as_path())),
+                        candidate,
+                    ) {
                         {
                             // Load all function signatures from metadata
                             for (func_name, sig) in meta.functions {

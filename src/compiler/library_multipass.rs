@@ -182,6 +182,9 @@ pub(crate) fn build_library_multipass(
 ) -> Result<()> {
     let phase_start = Instant::now();
 
+    // The shared cache root: where `.wj.meta` entries of a manifest-less tree live.
+    let cache_root = config.cache_root();
+
     // Step 0: Detect stdlib usage and prepend stdlib files FIRST
     let mut sources: Vec<(PathBuf, String)> = Vec::new();
     let (needed_stdlib_modules, mut std_stubs) = super::std_stubs::StdStubs::prepend_sources(
@@ -269,7 +272,7 @@ pub(crate) fn build_library_multipass(
         super::dependency_resolution::find_dependency_metadata_roots(&src_base, external_paths);
     let dep_epoch_snapshot = super::incremental::dep_metadata_epoch(&dep_roots);
 
-    super::cache_management::invalidate_meta_cache_on_compiler_change(&src_base, output);
+    super::cache_management::invalidate_meta_cache_on_compiler_change(&src_base, &cache_root, output);
 
     let dependency_graph =
         super::incremental::DependencyGraph::build(&sources, &parsed_programs, &src_base);
@@ -280,11 +283,12 @@ pub(crate) fn build_library_multipass(
 
     // INCREMENTAL: Whole-crate fast path — if no .wj file has changed and dep
     // metadata is also unchanged, skip the entire transpilation pipeline.
-    if super::cache_management::all_sources_fresh(&sources, &src_base, output, &dep_roots) {
+    if super::cache_management::all_sources_fresh(&sources, &src_base, output, &cache_root, &dep_roots) {
         let stale = super::cache_management::find_stale_codegen_outputs_with_dep_epoch(
             &sources,
             &src_base,
             output,
+            &cache_root,
             &dep_roots,
             Some(dep_epoch_snapshot),
         );
@@ -313,6 +317,7 @@ pub(crate) fn build_library_multipass(
         &sources,
         &src_base,
         output,
+        &cache_root,
         dep_epoch_snapshot,
         &dependency_graph,
     );
@@ -359,6 +364,7 @@ pub(crate) fn build_library_multipass(
         for root in &dep_roots {
             crate::metadata::merge_wj_meta_signatures_from_dir_inner_pub(
                 root,
+                &cache_root,
                 &mut dep_registry,
                 &mut dep_copy_structs,
                 &mut dep_struct_fields,
@@ -401,7 +407,7 @@ pub(crate) fn build_library_multipass(
     // Merge same-crate `.wj.meta` AFTER dependency filtering. Do not drop again —
     // a second `drop_dependency_signatures_for_local_types` would delete bare
     // `Type::method` keys from defining-module metas (cross-file &str).
-    crate::metadata::merge_wj_meta_signatures_from_dir(&src_base, &mut global_registry);
+    crate::metadata::merge_wj_meta_signatures_from_dir(&src_base, &cache_root, &mut global_registry);
     let mut global_float_signatures: HashMap<
         String,
         (
@@ -731,6 +737,7 @@ pub(crate) fn build_library_multipass(
         &sources,
         &src_base,
         output,
+        &cache_root,
         dep_epoch_snapshot,
         &reanalysis_set,
     );
@@ -836,13 +843,14 @@ pub(crate) fn build_library_multipass(
             // directly into final_global_registry. These signatures are the converged
             // output from the previous build, so they're authoritative and don't need
             // the prefer_converged_over_stub promotion check.
-            let meta_path = crate::metadata::meta_cache_path(file);
+            let meta_path = crate::metadata::meta_cache_path(file, &cache_root);
             if meta_path.exists() {
                 let mut meta_registry = SignatureRegistry::empty();
                 let mut meta_copy = Vec::new();
                 let mut meta_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
                 crate::metadata::merge_wj_meta_signatures_from_file_pub(
                     &meta_path,
+                    &cache_root,
                     &mut meta_registry,
                     &mut meta_copy,
                     &mut meta_fields,
@@ -1169,6 +1177,7 @@ pub(crate) fn build_library_multipass(
                     &analysis.output_file,
                     &src_base,
                     output,
+                    &cache_root,
                     dep_epoch_snapshot,
                 ) {
                     return false;
@@ -1539,6 +1548,7 @@ pub(crate) fn build_library_multipass(
             &sources,
             &src_base,
             output,
+            &cache_root,
             &dep_roots,
             Some(dep_epoch_snapshot),
         );

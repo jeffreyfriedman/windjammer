@@ -69,6 +69,6 @@ Still on the allowlist (`docs/testing/tmp-allowlist.txt`):
 * Interpreted `.wj` scripts under `scripts/wj/` that use `/tmp/wj-*` and remove at the end of a normal run.
 
 Product code that creates temp directories at run time (`src/cli_execution.rs`, `src/test_runner`,
-`src/doctest/run.rs`, `src/embedded_assets.rs`, `src/ejector.rs`, `src/interpreter/caps.rs`, `src/metadata/crate_metadata.rs`)
-is outside the harness gate: `wj-embedded` and `wj-meta` are deliberate shared caches, the rest are per-run
-directories owned by the command.
+`src/doctest/run.rs`, `src/embedded_assets.rs`, `src/ejector.rs`, `src/interpreter/caps.rs`)
+is outside the harness gate: `wj-embedded` is a deliberate shared cache, the rest are per-run directories owned by the
+command. (`wj-meta` was the manifest-less metadata cache of older compilers; it now lives in `<cache root>/meta`.)

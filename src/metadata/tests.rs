@@ -66,7 +66,7 @@ fn test_meta_cache_path_src() {
     let source = proj.join("src/math/vec3.wj");
     std::fs::write(&source, "").unwrap();
 
-    let result = meta_cache_path(&source);
+    let result = meta_cache_path(&source, tmp.path());
     assert_eq!(result, proj.join(".wj-cache/math/vec3.wj.meta"));
 }
 
@@ -78,7 +78,7 @@ fn test_meta_cache_path_nested() {
     let source = proj.join("src/rendering/shaders/mesh.wj");
     std::fs::write(&source, "").unwrap();
 
-    let result = meta_cache_path(&source);
+    let result = meta_cache_path(&source, tmp.path());
     assert_eq!(
         result,
         proj.join(".wj-cache/rendering/shaders/mesh.wj.meta")
@@ -93,7 +93,7 @@ fn test_meta_cache_path_top_level() {
     let source = proj.join("src/main.wj");
     std::fs::write(&source, "").unwrap();
 
-    let result = meta_cache_path(&source);
+    let result = meta_cache_path(&source, tmp.path());
     assert_eq!(result, proj.join(".wj-cache/main.wj.meta"));
 }
 
@@ -105,7 +105,7 @@ fn test_meta_cache_path_no_project_fallback() {
     let source = dir.join("file.wj");
     std::fs::write(&source, "").unwrap();
 
-    let result = meta_cache_path(&source);
+    let result = meta_cache_path(&source, tmp.path());
     assert_eq!(result, dir.join("file.wj.meta"));
 }
 
@@ -117,7 +117,7 @@ fn test_meta_cache_path_components_subdir() {
     let source = proj.join("src/components/textarea.wj");
     std::fs::write(&source, "").unwrap();
 
-    let result = meta_cache_path(&source);
+    let result = meta_cache_path(&source, tmp.path());
     assert_eq!(result, proj.join(".wj-cache/components/textarea.wj.meta"));
 }
 
@@ -129,7 +129,7 @@ fn test_meta_cache_path_components_nested() {
     let source = proj.join("src/components/forms/input.wj");
     std::fs::write(&source, "").unwrap();
 
-    let result = meta_cache_path(&source);
+    let result = meta_cache_path(&source, tmp.path());
     assert_eq!(
         result,
         proj.join(".wj-cache/components/forms/input.wj.meta")
@@ -143,7 +143,7 @@ fn test_meta_cache_root_with_cargo_toml() {
     create_project(&proj, &["src"]);
     let src = proj.join("src");
 
-    let result = meta_cache_root(&src);
+    let result = meta_cache_root(&src, tmp.path());
     assert_eq!(result, proj.join(".wj-cache"));
 }
 
@@ -153,7 +153,7 @@ fn test_meta_cache_root_no_project() {
     let dir = tmp.path().join("noproject/src");
     std::fs::create_dir_all(&dir).unwrap();
 
-    let result = meta_cache_root(&dir);
+    let result = meta_cache_root(&dir, tmp.path());
     assert_eq!(result, dir.join(".wj-cache"));
 }
 
@@ -166,7 +166,7 @@ fn test_meta_cache_root_wj_toml() {
     std::fs::create_dir_all(proj.join("src")).unwrap();
     let src = proj.join("src");
 
-    let result = meta_cache_root(&src);
+    let result = meta_cache_root(&src, tmp.path());
     assert_eq!(result, proj.join(".wj-cache"));
 }
 
@@ -253,7 +253,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
 
     let mut registry = crate::analyzer::SignatureRegistry::new();
     let mut analyzer = crate::analyzer::Analyzer::new();
-    merge_wj_meta_signatures_and_copy_structs(&proj.join("src"), &mut registry, &mut analyzer);
+    merge_wj_meta_signatures_and_copy_structs(&proj.join("src"), tmp.path(), &mut registry, &mut analyzer);
 
     let sig = registry
         .get_signature("VoxelRenderer::set_camera")

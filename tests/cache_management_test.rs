@@ -47,7 +47,7 @@ fn test_compute_dirty_files_marks_all_when_no_output() {
 
     let sources = vec![(wj, "fn a() {}\n".to_string())];
     let (dirty, skipped) =
-        cache_management::compute_dirty_files(&sources, &src, dir.path(), &[]);
+        cache_management::compute_dirty_files(&sources, &src, dir.path(), &dir.path().join("cache"), &[]);
     assert_eq!(skipped, 0);
     assert_eq!(dirty.len(), 1);
 }
@@ -66,6 +66,7 @@ fn test_all_sources_fresh_false_without_outputs() {
         &sources,
         &src,
         dir.path(),
+        &dir.path().join("cache"),
         &[] as &[PathBuf],
     ));
 }
@@ -95,7 +96,7 @@ fn test_compute_dirty_when_rs_mtime_newer_but_source_content_changed() {
         analysis_fingerprint: Some(fp.into()),
         ..ModuleMetadata::new("foo".to_string())
     };
-    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&wj, &dir.path().join("cache"));
     if let Some(parent) = meta_path.parent() {
         fs::create_dir_all(parent).unwrap();
     }
@@ -118,12 +119,13 @@ fn test_compute_dirty_when_rs_mtime_newer_but_source_content_changed() {
         updated,
         &wj,
         &rs,
+        &dir.path().join("cache"),
         &[] as &[PathBuf],
     ));
 
     let sources = vec![(wj, updated.to_string())];
     let (dirty, skipped) =
-        cache_management::compute_dirty_files(&sources, &src, dir.path(), &[]);
+        cache_management::compute_dirty_files(&sources, &src, dir.path(), &dir.path().join("cache"), &[]);
     assert_eq!(skipped, 0, "must not silently skip when content changed");
     assert_eq!(dirty.len(), 1);
 }
@@ -150,7 +152,7 @@ fn test_find_stale_codegen_outputs_detects_fingerprint_mismatch() {
         analysis_fingerprint: Some(fp.into()),
         ..ModuleMetadata::new("foo".to_string())
     };
-    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&wj, &dir.path().join("cache"));
     if let Some(parent) = meta_path.parent() {
         fs::create_dir_all(parent).unwrap();
     }
@@ -161,7 +163,7 @@ fn test_find_stale_codegen_outputs_detects_fingerprint_mismatch() {
     fs::write(&rs, "// stale\n").unwrap();
 
     let sources = vec![(wj.clone(), updated.to_string())];
-    let stale = cache_management::find_stale_codegen_outputs(&sources, &src, dir.path(), &[]);
+    let stale = cache_management::find_stale_codegen_outputs(&sources, &src, dir.path(), &dir.path().join("cache"), &[]);
     assert_eq!(stale, vec![wj]);
 }
 
@@ -189,7 +191,7 @@ fn test_mod_wj_merged_into_mod_rs_is_not_stale() {
         analysis_fingerprint: Some(fp.into()),
         ..ModuleMetadata::new("mod".to_string())
     };
-    let meta_path = windjammer::metadata::meta_cache_path(&mod_wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&mod_wj, &dir.path().join("cache"));
     if let Some(parent) = meta_path.parent() {
         fs::create_dir_all(parent).unwrap();
     }
@@ -203,7 +205,7 @@ fn test_mod_wj_merged_into_mod_rs_is_not_stale() {
 
     let sources = vec![(mod_wj.clone(), source.to_string())];
     assert!(
-        cache_management::find_stale_codegen_outputs(&sources, &src, dir.path(), &[]).is_empty(),
+        cache_management::find_stale_codegen_outputs(&sources, &src, dir.path(), &dir.path().join("cache"), &[]).is_empty(),
         "declaration-only mod.wj merged into mod.rs must not be reported stale"
     );
 }
@@ -233,7 +235,7 @@ fn test_codegen_cache_invalid_when_output_hash_mismatch() {
         analysis_fingerprint: Some(fp.into()),
         ..ModuleMetadata::new("foo".to_string())
     };
-    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&wj, &dir.path().join("cache"));
     if let Some(parent) = meta_path.parent() {
         fs::create_dir_all(parent).unwrap();
     }
@@ -247,12 +249,13 @@ fn test_codegen_cache_invalid_when_output_hash_mismatch() {
         source,
         &wj,
         &rs,
+        &dir.path().join("cache"),
         &[] as &[PathBuf],
     ));
 
     let sources = vec![(wj.clone(), source.to_string())];
     let (dirty, skipped) =
-        cache_management::compute_dirty_files(&sources, &src, dir.path(), &[]);
+        cache_management::compute_dirty_files(&sources, &src, dir.path(), &dir.path().join("cache"), &[]);
     assert_eq!(skipped, 0);
     assert_eq!(dirty.len(), 1);
 }
@@ -280,7 +283,7 @@ fn test_find_stale_codegen_outputs_skips_out_of_tree_stdlib_injects() {
         (stdlib_wj.clone(), "pub struct HashMap {}\n".to_string()),
         (user_wj.clone(), "use std::collections::HashMap\n".to_string()),
     ];
-    let stale = cache_management::find_stale_codegen_outputs(&sources, &src, dir.path(), &[]);
+    let stale = cache_management::find_stale_codegen_outputs(&sources, &src, dir.path(), &dir.path().join("cache"), &[]);
     assert!(
         !stale.contains(&stdlib_wj),
         "out-of-tree stdlib inject must not be stale-checked, got {:?}",
@@ -303,7 +306,7 @@ fn test_meta_cache_path_uses_nearest_crate_not_workspace_root() {
     let wj = member.join("src/foo.wj");
     fs::write(&wj, "fn foo() {}\n").unwrap();
 
-    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&wj, &workspace.path().join("cache"));
     assert_eq!(
         meta_path,
         member.join(".wj-cache/foo.wj.meta"),
@@ -322,7 +325,7 @@ fn test_meta_cache_path_skips_src_module_nested_cargo_toml() {
     let wj = module.join("camera.wj");
     fs::write(&wj, "fn camera() {}\n").unwrap();
 
-    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&wj, &dir.path().join("cache"));
     assert_eq!(
         meta_path,
         dir.path().join(".wj-cache/rendering/camera.wj.meta"),
@@ -341,7 +344,7 @@ fn test_meta_cache_path_skips_generated_gen_cargo_toml() {
     let wj = gen.join("scenario.wj");
     fs::write(&wj, "fn scenario() {}\n").unwrap();
 
-    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&wj, &dir.path().join("cache"));
     assert_eq!(
         meta_path,
         dir.path().join(".wj-cache/testing/scenario.wj.meta"),
@@ -360,7 +363,7 @@ fn test_meta_cache_path_skips_nested_src_cargo_toml() {
     let wj = src.join("foo.wj");
     fs::write(&wj, "fn foo() {}\n").unwrap();
 
-    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    let meta_path = windjammer::metadata::meta_cache_path(&wj, &dir.path().join("cache"));
     assert_eq!(
         meta_path,
         dir.path().join(".wj-cache/foo.wj.meta"),

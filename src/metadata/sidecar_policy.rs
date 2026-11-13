@@ -36,9 +36,10 @@ pub(super) fn drop_declared(declared: Option<&Declared>, meta: &mut ModuleMetada
 }
 
 /// Merge the sidecars of `root` (its cache directory and the tree itself), restricted to what `root`'s crate metadata
-/// does not declare.
+/// does not declare. `cache_root` is the shared cache root (the manifest-less metadata cache lives under it).
 pub(super) fn merge_root(
     root: &Path,
+    cache_root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
@@ -46,13 +47,13 @@ pub(super) fn merge_root(
     let prev = DECLARED.with(|c| c.replace(declared_by_crate_metadata(root)));
     let scoped = super::PEER_SCOPE.with(|c| c.borrow().is_none());
     if scoped {
-        super::PEER_SCOPE.with(|c| *c.borrow_mut() = Some(PeerScope::new(root, None)));
+        super::PEER_SCOPE.with(|c| *c.borrow_mut() = Some(PeerScope::new(root, None, cache_root)));
     }
-    let cache_root = crate_metadata::meta_cache_root(root);
-    if cache_root.exists() {
-        merge_wj_meta_signatures_from_dir_inner(&cache_root, registry, copy_structs, all_struct_fields);
+    let meta_root = crate_metadata::meta_cache_root(root, cache_root);
+    if meta_root.exists() {
+        merge_wj_meta_signatures_from_dir_inner(&meta_root, Some(cache_root), registry, copy_structs, all_struct_fields);
     }
-    merge_wj_meta_signatures_from_dir_inner(root, registry, copy_structs, all_struct_fields);
+    merge_wj_meta_signatures_from_dir_inner(root, Some(cache_root), registry, copy_structs, all_struct_fields);
     if scoped {
         super::PEER_SCOPE.with(|c| *c.borrow_mut() = None);
     }
@@ -62,14 +63,15 @@ pub(super) fn merge_root(
 /// The `.wj` source a `.wj.meta` was written for: `<project>/.wj-cache/foo/bar.wj.meta` is `<project>/src/foo/bar.wj`
 /// (or `<project>/foo/bar.wj`); an entry of a manifest-less tree (`<cache root>/meta/<tree key>/foo/bar.wj.meta`) is
 /// `foo/bar.wj` under the tree root of the build being fed (the key names content, never a location); a legacy
-/// `bar.wj.meta` beside its source is `bar.wj`.
-pub(super) fn sidecar_source(meta: &Path) -> Option<PathBuf> {
+/// `bar.wj.meta` beside its source is `bar.wj`. `cache_root` is the shared cache root (`None`: no manifest-less entry
+/// is recognised).
+pub(super) fn sidecar_source(meta: &Path, cache_root: Option<&Path>) -> Option<PathBuf> {
     let base = super::PEER_SCOPE.with(|c| c.borrow().as_ref().map(|s| s.base.clone()));
-    sidecar_source_in(meta, base.as_deref())
+    sidecar_source_in(meta, base.as_deref(), cache_root)
 }
 
 /// [`sidecar_source`] with the tree root of manifest-less entries given.
-fn sidecar_source_in(meta: &Path, base: Option<&Path>) -> Option<PathBuf> {
+fn sidecar_source_in(meta: &Path, base: Option<&Path>, cache_root: Option<&Path>) -> Option<PathBuf> {
     let beside = meta.with_extension("");
     if beside.is_file() {
         return Some(beside);
@@ -81,7 +83,7 @@ fn sidecar_source_in(meta: &Path, base: Option<&Path>) -> Option<PathBuf> {
         let rel = rel.with_extension("");
         return [project.join("src").join(&rel), project.join(&rel)].into_iter().find(|p| p.is_file());
     }
-    let tree_rel = meta.strip_prefix(crate_metadata::global_meta_cache_dir()).ok()?;
+    let tree_rel = meta.strip_prefix(crate_metadata::global_meta_cache_dir(cache_root?)).ok()?;
     let rel: PathBuf = tree_rel.components().skip(1).collect();
     Some(base?.join(rel.with_extension(""))).filter(|p| p.is_file())
 }
@@ -113,11 +115,11 @@ pub(super) struct PeerScope {
 }
 
 impl PeerScope {
-    pub(super) fn new(source_root: &Path, uses: Option<std::collections::BTreeSet<String>>) -> PeerScope {
+    pub(super) fn new(source_root: &Path, uses: Option<std::collections::BTreeSet<String>>, cache_root: &Path) -> PeerScope {
         let base = crate_metadata::peer_source_base(source_root);
         let mut scope = PeerScope { base, reached: None };
         if let Some(seed) = uses {
-            scope.reached = Some(scope.close_over_peers(seed, &crate_metadata::meta_cache_root(source_root)));
+            scope.reached = Some(scope.close_over_peers(seed, &crate_metadata::meta_cache_root(source_root, cache_root), cache_root));
         }
         scope
     }
@@ -126,10 +128,11 @@ impl PeerScope {
     fn close_over_peers(
         &self,
         mut reached: std::collections::BTreeSet<String>,
+        meta_root: &Path,
         cache_root: &Path,
     ) -> std::collections::BTreeSet<String> {
         let mut metas = Vec::new();
-        collect_metas(cache_root, 0, &mut metas);
+        collect_metas(meta_root, 0, &mut metas);
         metas.sort();
         let mut done = vec![false; metas.len()];
         loop {
@@ -139,7 +142,7 @@ impl PeerScope {
                     continue;
                 }
                 done[i] = true;
-                let Some(text) = sidecar_source_in(meta, Some(&self.base)).and_then(|src| std::fs::read_to_string(src).ok()) else {
+                let Some(text) = sidecar_source_in(meta, Some(&self.base), Some(cache_root)).and_then(|src| std::fs::read_to_string(src).ok()) else {
                     continue;
                 };
                 for line in text.lines() {

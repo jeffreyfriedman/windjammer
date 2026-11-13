@@ -120,7 +120,9 @@ pub(super) fn path_for(root: &Path, kind: &str) -> PathBuf {
     let canon = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let base = base_of(root);
     canon.strip_prefix(&base).unwrap_or(&canon).hash(&mut h);
-    crate::metadata::meta_cache_root(dir).join(format!("check-{kind}-v{FORMAT}-{:08x}.json", h.finish() as u32))
+    // `wj check` holds no `CompilerConfig`: the process's shared cache root holds manifest-less entries
+    let cache_root = crate::compiler_config::shared_cache_root();
+    crate::metadata::meta_cache_root(dir, &cache_root).join(format!("check-{kind}-v{FORMAT}-{:08x}.json", h.finish() as u32))
 }
 
 /// Write through a temporary file and a rename, so a concurrent reader never sees half a file.

@@ -19,7 +19,8 @@ pub use signature_filters::{
 };
 
 pub use crate_metadata::{
-    collect_string_const_names, collect_variant_payloads, find_project_root, load_function_signatures_from_metadata,
+    collect_string_const_names, collect_variant_payloads, find_project_root, global_meta_cache_dir,
+    load_function_signatures_from_metadata,
     load_merged_external_function_signatures, load_merged_external_struct_fields,
     load_string_const_names, load_struct_field_types_from_file, meta_cache_path, meta_cache_root,
     resolve_metadata_json_path, CrateMetadata,
@@ -102,9 +103,10 @@ impl ModuleMetadata {
 /// Searches both `root` (legacy colocated meta) and the `.wj-cache/` sibling directory.
 pub fn merge_wj_meta_signatures_from_dir(
     root: &Path,
+    cache_root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
 ) {
-    merge_wj_meta_signatures_from_dir_reaching(root, None, registry);
+    merge_wj_meta_signatures_from_dir_reaching(root, cache_root, None, registry);
 }
 
 /// [`merge_wj_meta_signatures_from_dir`] for a build that reaches only the modules its sources name (only peers it
@@ -112,19 +114,22 @@ pub fn merge_wj_meta_signatures_from_dir(
 /// written for): `uses` are the
 /// path segments of the current file's `use` / `mod` declarations. Peer sidecars of modules the build does not reach
 /// (directly or through the reached modules' own `use` declarations) are ignored. `None`: every current peer.
+/// `cache_root` is the shared cache root (`CompilerConfig::cache_root`); manifest-less trees cache under it.
 pub fn merge_wj_meta_signatures_from_dir_reaching(
     root: &Path,
+    cache_root: &Path,
     uses: Option<std::collections::BTreeSet<String>>,
     registry: &mut crate::analyzer::SignatureRegistry,
 ) {
-    let scope = sidecar_policy::PeerScope::new(root, uses);
+    let scope = sidecar_policy::PeerScope::new(root, uses, cache_root);
     let prev = PEER_SCOPE.with(|c| c.replace(Some(scope)));
     let mut copy_structs = Vec::new();
     let mut all_struct_fields = HashMap::new();
-    let cache_root = crate_metadata::meta_cache_root(root);
-    if cache_root.exists() {
+    let meta_root = crate_metadata::meta_cache_root(root, cache_root);
+    if meta_root.exists() {
         merge_wj_meta_signatures_from_dir_inner(
-            &cache_root,
+            &meta_root,
+            Some(cache_root),
             registry,
             &mut copy_structs,
             &mut all_struct_fields,
@@ -132,6 +137,7 @@ pub fn merge_wj_meta_signatures_from_dir_reaching(
     }
     merge_wj_meta_signatures_from_dir_inner(
         root,
+        Some(cache_root),
         registry,
         &mut copy_structs,
         &mut all_struct_fields,
@@ -143,19 +149,20 @@ pub fn merge_wj_meta_signatures_from_dir_reaching(
 
 /// The cached sidecar `candidate` (a path relative to the cache of `source_root`'s project, or `./.wj-cache` without
 /// one) when it is current (fingerprinted by this compiler, its source unchanged since): the read used by callers
-/// that look a module's entry up directly.
-pub fn read_current_cached_meta(source_root: Option<&Path>, candidate: &Path) -> Option<ModuleMetadata> {
+/// that look a module's entry up directly. `cache_root` is the shared cache root (given with `source_root`).
+pub fn read_current_cached_meta(source_root: Option<(&Path, &Path)>, candidate: &Path) -> Option<ModuleMetadata> {
     let path = match source_root {
-        Some(root) => crate_metadata::meta_cache_root(root).join(candidate),
+        Some((root, cache_root)) => crate_metadata::meta_cache_root(root, cache_root).join(candidate),
         None => PathBuf::from(".wj-cache").join(candidate),
     };
     let meta: ModuleMetadata = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
     let scoped = PEER_SCOPE.with(|c| c.borrow().is_none()) && source_root.is_some();
     if scoped {
-        let scope = sidecar_policy::PeerScope::new(source_root?, None);
+        let (root, cache_root) = source_root?;
+        let scope = sidecar_policy::PeerScope::new(root, None, cache_root);
         PEER_SCOPE.with(|c| *c.borrow_mut() = Some(scope));
     }
-    let current = wj_meta_is_current(&path, &meta);
+    let current = wj_meta_is_current(&path, source_root.map(|(_, cache_root)| cache_root), &meta);
     if scoped {
         PEER_SCOPE.with(|c| *c.borrow_mut() = None);
     }
@@ -164,8 +171,13 @@ pub fn read_current_cached_meta(source_root: Option<&Path>, candidate: &Path) ->
 
 /// Run `f` (metadata merges for the build of `program`, whose sources live under `source_root`) reading only the peer
 /// sidecars that build reaches: modules named by `program`'s `use` / `mod` declarations, closed over the reached peers'.
-pub fn with_peers_reached_by<R>(source_root: &Path, program: &crate::parser::Program, f: impl FnOnce() -> R) -> R {
-    let scope = sidecar_policy::PeerScope::new(source_root, Some(use_segments(program)));
+pub fn with_peers_reached_by<R>(
+    source_root: &Path,
+    cache_root: &Path,
+    program: &crate::parser::Program,
+    f: impl FnOnce() -> R,
+) -> R {
+    let scope = sidecar_policy::PeerScope::new(source_root, Some(use_segments(program)), cache_root);
     let prev = PEER_SCOPE.with(|c| c.replace(Some(scope)));
     let out = f();
     PEER_SCOPE.with(|c| *c.borrow_mut() = prev);
@@ -177,14 +189,17 @@ pub fn with_peers_reached_by<R>(source_root: &Path, program: &crate::parser::Pro
 /// changes the output.
 pub fn merge_reached_peers_of_file(
     file: &Path,
+    cache_root: &Path,
     roots: &[&Path],
     program: &crate::parser::Program,
     registry: &mut crate::analyzer::SignatureRegistry,
     analyzer: &mut crate::analyzer::Analyzer,
 ) {
     let dir = file.parent().unwrap_or(Path::new("."));
-    with_own_meta_excluded(file, || {
-        with_peers_reached_by(dir, program, || merge_wj_meta_signatures_and_copy_structs_multi(roots, registry, analyzer))
+    with_own_meta_excluded(file, cache_root, || {
+        with_peers_reached_by(dir, cache_root, program, || {
+            merge_wj_meta_signatures_and_copy_structs_multi(roots, cache_root, registry, analyzer)
+        })
     });
 }
 
@@ -211,15 +226,17 @@ pub fn use_segments(program: &crate::parser::Program) -> std::collections::BTree
 /// Same as `merge_wj_meta_signatures_from_dir` but also populates the analyzer with Copy struct info.
 pub fn merge_wj_meta_signatures_and_copy_structs(
     root: &Path,
+    cache_root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     analyzer: &mut crate::analyzer::Analyzer,
 ) {
     let mut copy_structs = Vec::new();
     let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
-    let cache_root = crate_metadata::meta_cache_root(root);
-    if cache_root.exists() {
+    let meta_root = crate_metadata::meta_cache_root(root, cache_root);
+    if meta_root.exists() {
         merge_wj_meta_signatures_from_dir_inner(
-            &cache_root,
+            &meta_root,
+            Some(cache_root),
             registry,
             &mut copy_structs,
             &mut all_struct_fields,
@@ -227,6 +244,7 @@ pub fn merge_wj_meta_signatures_and_copy_structs(
     }
     merge_wj_meta_signatures_from_dir_inner(
         root,
+        Some(cache_root),
         registry,
         &mut copy_structs,
         &mut all_struct_fields,
@@ -279,13 +297,14 @@ pub fn merge_external_crate_metadata_with_aliases(
 /// Used when cross-crate dependencies need to be resolved.
 pub fn merge_wj_meta_signatures_and_copy_structs_multi(
     roots: &[&Path],
+    cache_root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     analyzer: &mut crate::analyzer::Analyzer,
 ) {
     let mut copy_structs = Vec::new();
     let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
     for root in roots {
-        sidecar_policy::merge_root(root, registry, &mut copy_structs, &mut all_struct_fields);
+        sidecar_policy::merge_root(root, cache_root, registry, &mut copy_structs, &mut all_struct_fields);
     }
     // Project-root metadata.json is the authoritative source (full multi-pass
     // analysis). Load it last so it overrides stale per-file .wj.meta entries.
@@ -312,6 +331,7 @@ pub fn merge_wj_meta_signatures_from_dir_only(
     let prev = TRUSTED_SIDECAR_DIR.with(|c| c.replace(true));
     merge_wj_meta_signatures_from_dir_inner(
         root,
+        None,
         registry,
         &mut copy_structs,
         &mut all_struct_fields,
@@ -324,11 +344,12 @@ pub fn merge_wj_meta_signatures_from_dir_only(
 /// Loads the project-root `metadata.json` last as authoritative source.
 pub fn merge_wj_meta_signatures_from_dir_inner_pub(
     root: &Path,
+    cache_root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
-    sidecar_policy::merge_root(root, registry, copy_structs, all_struct_fields);
+    sidecar_policy::merge_root(root, cache_root, registry, copy_structs, all_struct_fields);
     load_project_root_metadata(root, registry, copy_structs, all_struct_fields);
 }
 
@@ -336,15 +357,18 @@ pub fn merge_wj_meta_signatures_from_dir_inner_pub(
 /// argument as a source root and merges the whole project cache, which makes a per-file call quadratic.
 pub fn merge_wj_meta_signatures_from_file_pub(
     meta_file: &Path,
+    cache_root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
-    merge_single_wj_meta_file(meta_file, registry, copy_structs, all_struct_fields);
+    merge_single_wj_meta_file(meta_file, Some(cache_root), registry, copy_structs, all_struct_fields);
 }
 
+/// `cache_root`: the shared cache root (`None` only for the trusted `stdlib_meta/` directory, which is not a cache).
 fn merge_wj_meta_signatures_from_dir_inner(
     root: &Path,
+    cache_root: Option<&Path>,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
@@ -360,7 +384,7 @@ fn merge_wj_meta_signatures_from_dir_inner(
                     all_struct_fields,
                 );
             } else if name.ends_with(".wj.meta") {
-                merge_single_wj_meta_file(root, registry, copy_structs, all_struct_fields);
+                merge_single_wj_meta_file(root, cache_root, registry, copy_structs, all_struct_fields);
             }
         }
         return;
@@ -374,12 +398,13 @@ fn merge_wj_meta_signatures_from_dir_inner(
         if path.is_dir() {
             merge_wj_meta_signatures_from_dir_inner(
                 &path,
+                cache_root,
                 registry,
                 copy_structs,
                 all_struct_fields,
             );
         } else if path.to_string_lossy().ends_with(".wj.meta") {
-            merge_single_wj_meta_file(&path, registry, copy_structs, all_struct_fields);
+            merge_single_wj_meta_file(&path, cache_root, registry, copy_structs, all_struct_fields);
         } else if path
             .file_name()
             .map(|n| n == "metadata.json")
@@ -422,7 +447,7 @@ fn load_project_root_metadata(
 /// text it was written for; anything else (no fingerprint, another compiler, an edited or deleted source) is stale
 /// and ignored, so a cache can never change what a clean build emits. The compiler's own embedded `stdlib_meta/` is
 /// read from memory and does not pass through here.
-fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
+fn wj_meta_is_current(path: &Path, cache_root: Option<&Path>, meta: &ModuleMetadata) -> bool {
     if TRUSTED_SIDECAR_DIR.with(|c| c.get()) {
         return true;
     }
@@ -432,7 +457,7 @@ fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
     if fp.compiler_version != crate::compiler::incremental::compiler_build_identity() {
         return false;
     }
-    match sidecar_policy::sidecar_source(path) {
+    match sidecar_policy::sidecar_source(path, cache_root) {
         Some(source_path) => match std::fs::read_to_string(&source_path) {
             Ok(source) => fp.content_hash == crate::compiler::incremental::hash_source(&source),
             Err(_) => false,
@@ -462,8 +487,8 @@ fn same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// Run `f` with the sidecars of `source` excluded from every metadata merge on this thread.
-pub fn with_own_meta_excluded<R>(source: &Path, f: impl FnOnce() -> R) -> R {
-    let paths = vec![crate_metadata::meta_cache_path(source)];
+pub fn with_own_meta_excluded<R>(source: &Path, cache_root: &Path, f: impl FnOnce() -> R) -> R {
+    let paths = vec![crate_metadata::meta_cache_path(source, cache_root)];
     let prev = OWN_META_PATHS.with(|c| std::mem::replace(&mut *c.borrow_mut(), paths));
     let out = f();
     OWN_META_PATHS.with(|c| *c.borrow_mut() = prev);
@@ -472,13 +497,14 @@ pub fn with_own_meta_excluded<R>(source: &Path, f: impl FnOnce() -> R) -> R {
 
 fn merge_single_wj_meta_file(
     path: &Path,
+    cache_root: Option<&Path>,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
     // Analysis metadata is read from the cache only; a `*.wj.meta` beside a source is a legacy sidecar
     // (`wj clean --sidecars` removes it) and must not influence the build.
-    if !TRUSTED_SIDECAR_DIR.with(|c| c.get()) && !crate_metadata::is_cache_location(path) {
+    if !TRUSTED_SIDECAR_DIR.with(|c| c.get()) && !crate_metadata::is_cache_location(path, cache_root) {
         return;
     }
     if OWN_META_PATHS.with(|c| c.borrow().iter().any(|own| same_file(own, path))) {
@@ -490,7 +516,7 @@ fn merge_single_wj_meta_file(
     let Ok(mod_meta) = serde_json::from_str::<ModuleMetadata>(&text) else {
         return;
     };
-    if !wj_meta_is_current(path, &mod_meta) {
+    if !wj_meta_is_current(path, cache_root, &mod_meta) {
         return;
     }
     if !PEER_SCOPE.with(|c| c.borrow().as_ref().is_none_or(|scope| scope.reaches(path))) {
@@ -751,9 +777,9 @@ pub fn collect_analyzed_module_metadata(
     meta
 }
 
-/// Write a ModuleMetadata to the .wj.meta cache file for the given source path.
-pub fn write_module_meta_cache(source_file: &Path, meta: &ModuleMetadata) -> std::io::Result<()> {
-    let meta_path = meta_cache_path(source_file);
+/// Write a ModuleMetadata to the .wj.meta cache file for the given source path (`cache_root`: the shared cache root).
+pub fn write_module_meta_cache(source_file: &Path, cache_root: &Path, meta: &ModuleMetadata) -> std::io::Result<()> {
+    let meta_path = meta_cache_path(source_file, cache_root);
     if let Some(parent) = meta_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -772,6 +798,7 @@ pub fn write_module_meta_cache(source_file: &Path, meta: &ModuleMetadata) -> std
 
 pub fn emit_module_meta_for_file_with_fingerprint(
     source_file: &Path,
+    cache_root: &Path,
     program: &crate::parser::Program,
     registry: &crate::analyzer::SignatureRegistry,
     copy_structs: Vec<String>,
@@ -783,7 +810,7 @@ pub fn emit_module_meta_for_file_with_fingerprint(
         .unwrap_or("unknown");
     let mut meta = collect_analyzed_module_metadata(module_name, program, registry, copy_structs);
     meta.analysis_fingerprint = analysis_fingerprint;
-    let _ = write_module_meta_cache(source_file, &meta);
+    let _ = write_module_meta_cache(source_file, cache_root, &meta);
 }
 
 #[cfg(test)]

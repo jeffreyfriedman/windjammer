@@ -1,7 +1,7 @@
 # src/metadata/
 
 ## Purpose
-Cross-file/cross-crate metadata (`.wj.meta`, cached under `.wj-cache/` or the global meta cache, never beside a source; see docs/metadata-data-model.md): serialized function signatures, struct fields and trait impls so later compilations can infer across module boundaries.
+Cross-file/cross-crate metadata (`.wj.meta`, cached under `.wj-cache/` or, without a manifest, under `<cache root>/meta` where the shared cache root is an explicit parameter (this module reads no environment and no temp dir: tests/metadata_ambient_ratchet_test.rs), never beside a source; see docs/metadata-data-model.md): serialized function signatures, struct fields and trait impls so later compilations can infer across module boundaries.
 
 ## Inputs/Outputs
 In: analyzed items. Out/In: JSON metadata files and loaders (`load_struct_field_types_from_file`, `meta_cache_path`).
