@@ -210,13 +210,13 @@ thread_local! {
 
 fn die(msg: &str) -> ! {
     eprintln!("error: {msg}");
-    std::process::exit(1)
+    crate::process::exit(1)
 }
 
 fn crash() -> ! {
     use std::io::Write;
     let _ = std::io::stdout().flush();
-    std::process::exit(137)
+    crate::process::exit(137)
 }
 
 /// Run `body` as the durable function `name` with `args` (the JSON of its arguments): resume its journal when it has one.
