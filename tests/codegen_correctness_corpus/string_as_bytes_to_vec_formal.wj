@@ -1,0 +1,27 @@
+// A string's `as_bytes()` (declared `&Vec<u8>`) passed to a `Vec<u8>` formal is copied into a `Vec`, for a free
+// function, a method and a consumed formal.
+// expect: 3
+// expect: 5
+// expect: 2
+struct Sink { n: int }
+
+impl Sink {
+    fn take(self, data: Vec<u8>) -> int {
+        data.len() as int + self.n
+    }
+}
+
+fn byte_count(data: Vec<u8>) -> int {
+    data.len() as int
+}
+
+fn keep(data: Vec<u8>) -> Vec<u8> {
+    data
+}
+
+fn main() {
+    println("${byte_count("abc".as_bytes())}")
+    let s = Sink { n: 2 }
+    println("${s.take("abc".as_bytes())}")
+    println("${keep("hi".as_bytes()).len()}")
+}

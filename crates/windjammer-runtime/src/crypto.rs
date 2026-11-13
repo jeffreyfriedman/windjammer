@@ -132,28 +132,30 @@ pub fn argon2id_raw(
     Ok(out)
 }
 
-/// Base64 encode
-pub fn base64_encode(data: &[u8]) -> String {
-    use base64::{engine::general_purpose, Engine as _};
-    general_purpose::STANDARD.encode(data)
+/// Base64 encode a string (Windjammer `std::crypto::base64_encode(data: string) -> string`: the declaration in
+/// `std/crypto.wj` is the contract; bytes go through `base64_encode_bytes`).
+pub fn base64_encode(data: impl AsRef<str>) -> String {
+    base64_encode_bytes(data.as_ref().as_bytes())
 }
 
-/// Base64 decode
-pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
-    use base64::{engine::general_purpose, Engine as _};
-    general_purpose::STANDARD
-        .decode(s)
-        .map_err(|e| e.to_string())
+/// Base64 decode to a UTF-8 string (Windjammer `std::crypto::base64_decode(data: string) -> Result<string, string>`).
+pub fn base64_decode(s: impl AsRef<str>) -> Result<String, String> {
+    let bytes = base64_decode_bytes(s.as_ref())?;
+    String::from_utf8(bytes).map_err(|e| e.to_string())
 }
 
 /// Base64 encode bytes (Windjammer `std::crypto::base64_encode_bytes`).
 pub fn base64_encode_bytes(data: &[u8]) -> String {
-    base64_encode(data)
+    use base64::{engine::general_purpose, Engine as _};
+    general_purpose::STANDARD.encode(data)
 }
 
 /// Base64 decode to bytes (Windjammer `std::crypto::base64_decode_bytes`).
 pub fn base64_decode_bytes(s: &str) -> Result<Vec<u8>, String> {
-    base64_decode(s)
+    use base64::{engine::general_purpose, Engine as _};
+    general_purpose::STANDARD
+        .decode(s)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -228,10 +230,12 @@ mod tests {
 
     #[test]
     fn test_base64() {
-        let data = b"hello world";
-        let encoded = base64_encode(data);
-        let decoded = base64_decode(&encoded).unwrap();
-        assert_eq!(decoded, data);
+        let encoded = base64_encode("hello world");
+        assert_eq!(encoded, "aGVsbG8gd29ybGQ=");
+        assert_eq!(base64_decode(&encoded).unwrap(), "hello world");
+        let bytes = base64_encode_bytes(b"hello world");
+        assert_eq!(bytes, encoded);
+        assert_eq!(base64_decode_bytes(&bytes).unwrap(), b"hello world");
     }
 
     /// RFC 4231 section 4 test cases (HMAC-SHA-256), the independent oracle for `hmac_sha256_bytes`.
