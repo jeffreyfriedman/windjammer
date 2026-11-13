@@ -25,7 +25,7 @@ use std::process
 use std::strings
 
 // The streams that own known divergences (docs/testing/DRIFT.md, section The drift budget).
-const OWNERS: string = "numeric-width codegen-refs codegen-types codegen-ownership runtime-surface parser-lexer language-decision gate-harness interp-literal-typing"
+const OWNERS: string = "numeric-width codegen-refs codegen-types codegen-ownership runtime-surface parser-lexer language-decision gate-harness interp-literal-typing interp-check"
 
 struct Row {
     id: string,

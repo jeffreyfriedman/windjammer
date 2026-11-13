@@ -280,3 +280,26 @@ on the way (the interpreter now follows the language, the compiled backend does 
   engines agree. Case `repros/call_closure_field_parenthesized.wj`, test `a_parenthesised_field_call_calls_the_stored_closure_in_every_engine`.
   The compiled backend has the mirror defect (it emits `l.before(4)`, rustc E0599): ledgered, owner `codegen-types`. The ledger
   ceiling rises 80 to 82 for these two compiled-side lines (the interpreter side is fixed).
+
+## O. The check before `wj run` accepts what the compiled build rejects (wt/interp-wc, round 6)
+
+Found by writing the ADR-0038 agent-loop program (`bench/interp/startup/agent_loop.wj`): two errors that `wj run`
+interpreted and `wj run --compiled` refused. In both, the compiled side follows the language (rustc rejects the
+program), so the fix is on the interpreted side: the check `wj run` applies first should report what rustc would,
+as an error when certain, as a warning when it is a prediction (ADR-0033). Owner `interp-check` (new stream). The
+ledger ceiling rises 89 to 91 for these two lines.
+
+### O.1 A match whose arms disagree
+
+`match i % 2 { 0 => m.insert(i, i * 10), _ => println(..) }` as a statement: one arm is `Option<int>`, the other unit.
+Compiled: WJ0003 `mismatched types: expected Option<i64>, found void` (rustc E0308; Rust needs both arms unit in
+statement position, so the insert arm wants `let _ = ..` or a `;`-terminated block). Interpreted: runs and prints
+`odd 1` and `2`. Case `repros/match_arm_option_next_to_unit.wj`.
+
+### O.2 A field moved out of a borrowed map value
+
+`catalog.values().filter(..).map(|i| i.name).collect()` where `catalog` came from `let (mut catalog, n) = load()` and
+was written through `get_mut`. Compiled: WJ0016 `cannot move i.name out of a borrow` (rustc E0507; write
+`i.name.clone()`). Without the `mut` binding and the `get_mut` the generated Rust clones and both sides agree, so the
+compiled side's ownership inference also depends on the binding's mutability here. Interpreted: runs. Case
+`repros/map_field_move_out_of_borrow.wj`.

@@ -42,6 +42,7 @@ const OWNERS: [&str; 9] = [
     "language-decision",
     "gate-harness",
     "interp-literal-typing",
+    "interp-check",
 ];
 
 fn check_ledger(text: &str, ceiling: usize) -> Result<(), String> {

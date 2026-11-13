@@ -149,6 +149,7 @@ Every ledger line names an owner stream: `case | walker=A resolved=B compiled=C 
 | `language-decision` | needs a ruling in the spec before either side is called wrong |
 | `gate-harness` | the gate's own recording, not behaviour |
 | `interp-literal-typing` | the interpreter types a computed literal later than the compiler does |
+| `interp-check` | the check `wj run` applies before interpreting accepts a program the compiled build rejects (a type or ownership error found only by codegen); closed by a check-side diagnostic, or a prediction that warns |
 
 `tests/drift_corpus/known_divergences.txt` lists the divergences we know about: `case | walker=A resolved=B
 compiled=C | reason`. The ledger is shrink-only:
