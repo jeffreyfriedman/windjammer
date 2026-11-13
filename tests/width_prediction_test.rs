@@ -244,6 +244,9 @@ fn predictions_across_the_corpora() {
         "tests/engine_parity/closure_params.wj 1",
         // `y + outer + x` (i64 against i32, family A), rejected by rustc with E0308
         "tests/engine_parity/closures_compiled.wj 1",
+        // `w.get(&(q % 3))` and `big.get(&0)`: the explicit `&` of a map lookup key is dropped, so rustc gets `i64` where
+        // `get` takes `&i64` (E0308, family B; same shape as map_get_match.wj). Measured prediction, owner: ownership.
+        "tests/engine_parity/jit_map_ops.wj 2",
         "tests/engine_parity/map_get_match.wj 2",
         "tests/engine_parity/match_arms.wj 1",
         "tests/engine_parity/match_value.wj 3",
