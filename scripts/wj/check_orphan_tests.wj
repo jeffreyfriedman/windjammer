@@ -12,6 +12,12 @@
 //   3. its repo-relative path, or its basename, is mentioned in a reference file
 //      (tests/*.rs, tests/common/*.rs, src/**/*.rs, scripts/*, Makefile, .github/**)
 //   4. it matches an entry in tests/ORPHAN_ALLOWLIST.txt ("<glob> | <reason>")
+//   5. it is a .wj or .rs data file under a directory that a runner walks: a quoted "tests/<dir>" literal in a
+//      top-level tests/*.rs (or in a helper .rs that a runner reaches) names the directory, directly or as the
+//      directory part of a format string ("tests/<dir>/{name}.wj"). Shell scripts are never reached this way.
+//   6. it is a Rust sub-module: `<dir>/mod.rs` is reached and declares `mod <stem>;`
+//
+// An allow-list entry also covers disabled files (*.skip, *.disabled, *.bak) inside a recorded fixture tree.
 //
 //   wj run scripts/wj/check_orphan_tests.wj        (run from the repository root)
 use std::collections::HashSet
@@ -186,10 +192,70 @@ fn main() {
         }
     }
 
+    // Rust sub-modules: `dir/mod.rs` is reached and declares `mod <stem>;` (a few rounds cover nested trees)
+    let mut round = 0
+    while round < 4 {
+        round = round + 1
+        for f in candidates {
+            if !f.ends_with(".rs") || f.ends_with("/mod.rs") || mentioned.contains(f) {
+                continue
+            }
+            let slash = f.rfind("/")
+            if slash.is_none() {
+                continue
+            }
+            let dir = f[0..(slash ?? 0)].to_string()
+            let modrs = dir + "/mod.rs"
+            if !mentioned.contains(modrs) {
+                continue
+            }
+            let stem = f[(slash ?? 0) + 1..f.len() - 3].to_string()
+            let decl = regex.compile("(?m)^[ \\t]*(?:pub(?:\\([a-z]+\\))?[ \\t]+)?mod[ \\t]+" + stem + "[ \\t]*;") ?? regex.compile("x") ?? panic("bad pattern")
+            if decl.is_match(fs.read_to_string(modrs) ?? "") {
+                mentioned.insert(f)
+            }
+        }
+    }
+
+    // directories a runner walks: quoted "tests/<dir>" literals in top-level runners and in the helpers they reach
+    let mut runner_files: Vec<string> = top_level_in("tests", ".rs")
+    for f in candidates {
+        if f.ends_with(".rs") && mentioned.contains(f) && f.starts_with("tests/") {
+            runner_files.push(f)
+        }
+    }
+    let runner_text = cat_files(runner_files)
+    let dir_re = regex.compile("\"(tests/[A-Za-z0-9_./-]+)(\\{[^\"]*)?\"") ?? regex.compile("x") ?? panic("bad pattern")
+    let mut walked: HashSet<string> = HashSet::new()
+    for c in dir_re.captures_all(runner_text) {
+        let mut d = c.get(1) ?? ""
+        if c.get(2).is_some() {
+            match d.rfind("/") {
+                Some(i) => { d = d[0..i].to_string() },
+                None => {},
+            }
+        }
+        while d.ends_with("/") {
+            d = d[0..d.len() - 1].to_string()
+        }
+        if d.contains("/") {
+            walked.insert(d)
+        }
+    }
+
     let mut orphans: Vec<string> = Vec::new()
     for f in candidates {
         if f.ends_with(".skip") || f.ends_with(".disabled") || f.ends_with(".bak") {
-            orphans.push(f + "  (disabled test file)")
+            let mut allowed = false
+            for g in allow_globs {
+                if matches_glob(f, g) {
+                    allowed = true
+                    break
+                }
+            }
+            if !allowed {
+                orphans.push(f + "  (disabled test file)")
+            }
             continue
         }
         if is_top_level_rs(f) {
@@ -216,6 +282,21 @@ fn main() {
         }
         if mentioned.contains(f) {
             continue
+        }
+        if f.ends_with(".wj") || f.ends_with(".rs") {
+            let mut up = f
+            let mut walked_dir = false
+            while up.contains("/") {
+                let cut = (up.rfind("/") ?? 0)
+                up = up[0..cut].to_string()
+                if walked.contains(up) {
+                    walked_dir = true
+                    break
+                }
+            }
+            if walked_dir {
+                continue
+            }
         }
         orphans.push(f)
     }

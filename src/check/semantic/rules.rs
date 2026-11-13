@@ -100,8 +100,8 @@ pub enum Kind {
     Float,
     Str,
     Bool,
+    Char,
 }
-
 
 /// Scalar kind of a declared type, if it is one of the four scalars.
 pub fn type_kind(t: &crate::parser::Type) -> Option<Kind> {
@@ -115,6 +115,7 @@ pub fn type_kind(t: &crate::parser::Type) -> Option<Kind> {
             "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => Some(Kind::Int),
             "f32" | "f64" => Some(Kind::Float),
             "bool" => Some(Kind::Bool),
+            "char" => Some(Kind::Char),
             "String" | "str" | "string" => Some(Kind::Str),
             _ => None,
         },
@@ -132,7 +133,7 @@ pub fn literal_kind(l: &Literal) -> Option<Kind> {
         Literal::Float(_) => Some(Kind::Float),
         Literal::String(_) => Some(Kind::Str),
         Literal::Bool(_) => Some(Kind::Bool),
-        _ => None,
+        Literal::Char(_) => Some(Kind::Char),
     }
 }
 
@@ -142,7 +143,32 @@ fn kind_name(k: Kind) -> &'static str {
         Kind::Float => "float",
         Kind::Str => "string",
         Kind::Bool => "bool",
+        Kind::Char => "char",
     }
+}
+
+/// A `char` compared (`==`, `!=`, `<`, ..) with a string: rustc rejects it (`expected char, found &str`).
+pub fn char_vs_string(op: BinaryOp, l: Option<Kind>, r: Option<Kind>) -> bool {
+    let comparison = matches!(op, BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge);
+    comparison && matches!((l, r), (Some(Kind::Char), Some(Kind::Str)) | (Some(Kind::Str), Some(Kind::Char)))
+}
+
+/// The char literal source text (`'?'`) for a string of exactly one character, or `None`.
+pub fn single_char_literal(s: &str) -> Option<String> {
+    let mut it = s.chars();
+    let c = it.next()?;
+    if it.next().is_some() {
+        return None;
+    }
+    Some(match c {
+        '\\' => "'\\\\'".to_string(),
+        '\'' => "'\\''".to_string(),
+        '\n' => "'\\n'".to_string(),
+        '\t' => "'\\t'".to_string(),
+        '\r' => "'\\r'".to_string(),
+        c if c.is_control() => return None,
+        c => format!("'{c}'"),
+    })
 }
 
 fn op_text(op: BinaryOp) -> Option<&'static str> {
@@ -215,6 +241,25 @@ mod tests {
     #[test]
     fn placeholder_specs() {
         assert_eq!(placeholders("a {} b {:?} {{x}} {:.2}"), vec![true, false, false]);
+    }
+
+    #[test]
+    fn char_against_string_rule() {
+        assert!(char_vs_string(BinaryOp::Eq, Some(Kind::Char), Some(Kind::Str)));
+        assert!(char_vs_string(BinaryOp::Lt, Some(Kind::Str), Some(Kind::Char)));
+        assert!(!char_vs_string(BinaryOp::Eq, Some(Kind::Char), Some(Kind::Char)));
+        assert!(!char_vs_string(BinaryOp::Eq, Some(Kind::Char), None), "unknown kinds are never judged");
+        assert!(!char_vs_string(BinaryOp::Add, Some(Kind::Char), Some(Kind::Str)));
+    }
+
+    #[test]
+    fn single_char_literals_are_escaped() {
+        assert_eq!(single_char_literal("?").as_deref(), Some("'?'"));
+        assert_eq!(single_char_literal("'").as_deref(), Some("'\\''"));
+        assert_eq!(single_char_literal("\n").as_deref(), Some("'\\n'"));
+        assert_eq!(single_char_literal("\\").as_deref(), Some("'\\\\'"));
+        assert_eq!(single_char_literal("ab"), None);
+        assert_eq!(single_char_literal(""), None);
     }
 
     #[test]

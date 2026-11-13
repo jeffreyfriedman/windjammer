@@ -71,6 +71,8 @@ fn method_call_generic(
     // the walker's whole-expression path, for a user method taking a place argument by `&mut`
     let fallback = match (&recv, place_args) {
         (_, false) => None,
+        // a builtin map or set: no user method, so its arguments are only read (no box for a place argument)
+        (Recv::Local(s), true) if cx.builtin_collection(*s) => None,
         (Recv::Local(_), true) => {
             // the receiver and place arguments may be taken by `&mut`: boxed. Other arguments the walker
             // only reads when none holds a closure or a call: they keep their slots

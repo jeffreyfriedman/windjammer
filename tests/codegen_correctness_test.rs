@@ -147,6 +147,9 @@ corpus_tests!(
     borrowed_text_alias_reassigned_owned,
     owned_text_ordered_against_borrowed_text,
     nested_closure_typed_param,
+    collect_after_map_item_type,
+    substring_tail_value,
+    text_slice_in_every_position,
 );
 
 // ------------------------------------------------------------------ generated programs

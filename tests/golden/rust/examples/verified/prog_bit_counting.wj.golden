@@ -15,7 +15,7 @@ fn main() {
     }
     let m: u32 = 1023_u32;
     if popcount(m) != 1_i64 {
-        let _ = println!("{} is not a power of two", m);
+        println!("{} is not a power of two", m);
     }
 }
 

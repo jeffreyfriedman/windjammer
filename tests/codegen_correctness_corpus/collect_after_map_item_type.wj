@@ -1,0 +1,18 @@
+// `collect` into a `Vec` takes the item type of the iterator it ends: after `filter`, `take` or `skip` the items are the
+// list's (borrowed, so they are copied), after `map` they are the closure's results (already values: nothing added).
+// The declared adapter results in std/rust_core.wji say which (`-> Iterator<T>` keeps the items, `-> Iterator<U>` not).
+// expect: [16, 8]
+// expect: [8, 4]
+// expect: [10, 6]
+// expect: [8]
+fn main() {
+    let v = [5, 3, 8, 4]
+    let doubled: Vec<int> = v.filter(|n| n % 2 == 0).map(|n| n * 2).collect()
+    println("${doubled:?}")
+    let evens: Vec<int> = v.filter(|n| n % 2 == 0).collect()
+    println("${evens:?}")
+    let first_two: Vec<int> = v.filter(|n| n > 0).take(2).map(|n| n * 2).collect()
+    println("${first_two:?}")
+    let big: Vec<int> = v.filter(|n| n > 3).skip(1).take(1).collect()
+    println("${big:?}")
+}

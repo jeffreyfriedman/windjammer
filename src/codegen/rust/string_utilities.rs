@@ -3,6 +3,7 @@
 //! Helper functions for string type analysis and codegen decisions.
 //! These are pure functions with no state dependencies.
 
+use super::string_analysis::strip_enclosing_parens;
 use crate::analyzer::OwnershipMode;
 use crate::parser::{Expression, Literal, Statement, Type};
 
@@ -143,7 +144,7 @@ pub fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
 /// Generated Rust already produces an owned `String` (no second conversion pass).
 pub fn already_owned_string_expr(expr_str: &str) -> bool {
     let mut s = expr_str.trim();
-    while let Some(inner) = s.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+    while let Some(inner) = strip_enclosing_parens(s) {
         s = inner.trim();
     }
     // Redundant `String::from("…").to_string()` is still owned — treat as owned so
@@ -164,11 +165,7 @@ pub fn already_owned_string_expr(expr_str: &str) -> bool {
 /// Idempotent: coerce a generated expression to owned `String` without `.to_string()` leakage.
 pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
     let mut s = expr_str.trim().to_string();
-    while let Some(inner) = s
-        .strip_prefix('(')
-        .and_then(|x| x.strip_suffix(')'))
-        .map(|x| x.trim().to_string())
-    {
+    while let Some(inner) = strip_enclosing_parens(&s).map(|x| x.trim().to_string()) {
         s = inner;
     }
     // P3.329: strip shared refs before owning — `&parts[i].to_string()` is still `&String`.

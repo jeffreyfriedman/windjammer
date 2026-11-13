@@ -1,0 +1,1 @@
+{"schema": 1, "generated_epoch": "@NOW@", "commit": "x", "values": {"wj_cost_per_task_usd":0.5,"rust_cost_per_task_usd":0.6,"wj_pass_rate":0.95,"reference_total":9,"reference_verified":9}}

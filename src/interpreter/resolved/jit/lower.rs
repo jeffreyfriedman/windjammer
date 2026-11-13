@@ -15,7 +15,7 @@
 //! to the closure engine, which runs the remaining iterations.
 
 use super::rt;
-use super::kinds::{int_ok, unsigned_repr, Class, Ty};
+use super::kinds::{int_ok, unsigned_repr, Class, Shape, Ty};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::engine::Interpreter;
 use crate::interpreter::resolved::osr::{loc, Reg};
@@ -106,6 +106,8 @@ pub(crate) struct Plan {
     pub(crate) exits: Vec<Exit>,
     pub(crate) stmts: Vec<StmtRun>,
     pub(crate) nbuf: usize,
+    /// The shapes row views are built for (`rows.rs`; machine code passes their addresses).
+    pub(crate) row_shapes: Vec<Box<Shape>>,
 }
 
 #[derive(Clone)]
@@ -167,6 +169,10 @@ pub(super) struct Lo<'a, 'i> {
     stmts: Vec<StmtRun>,
     /// `&&`/`||` blocks opened and not yet joined (a statement that fails inside one cannot fall back).
     pub(super) open_joins: usize,
+    /// Statements lowered to machine code (`stmts` holds those run by their closure code).
+    natives: usize,
+    /// Row view shapes (`Plan::row_shapes`) with the slot each is for.
+    pub(super) row_shapes: Vec<(usize, Box<Shape>)>,
 }
 
 /// A loop being lowered: where `continue` goes (the head, or a `for` loop's increment), where `break`
@@ -225,6 +231,8 @@ pub(crate) fn lower(
         frames: Vec::new(),
         inlines: false,
         open_joins: 0,
+        natives: 0,
+        row_shapes: Vec::new(),
         unit_label: match stmt {
             Statement::While { label, .. } | Statement::For { label, .. } => label.as_deref(),
             _ => None,
@@ -269,13 +277,18 @@ pub(crate) fn lower(
     if !ok {
         return Err(lo.why.unwrap_or_default());
     }
+    // every closure-run statement costs a spill and reload of the variables in scope around it: a loop
+    // that is mostly such statements runs faster in the closure engine
+    if !lo.stmts.is_empty() && lo.stmts.len() >= lo.natives {
+        return Err(format!("{} of its {} statements run in the closures", lo.stmts.len(), lo.stmts.len() + lo.natives));
+    }
     for (blk, id) in std::mem::take(&mut lo.pending) {
         lo.b.switch_to_block(blk);
         lo.exit_body(id);
     }
     lo.b.seal_all_blocks();
     lo.b.finalize();
-    Ok(Plan { live, live_structs, inlines: lo.inlines, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts })
+    Ok(Plan { live, live_structs, inlines: lo.inlines, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts, row_shapes: lo.row_shapes.into_iter().map(|(_, s)| s).collect() })
 }
 
 impl Lo<'_, '_> {
@@ -617,6 +630,7 @@ impl Lo<'_, '_> {
     fn stmt_in(&mut self, s: S) -> Option<bool> {
         let joins = self.open_joins;
         let r = self.native(s);
+        self.natives += r.is_some() as usize;
         // a simple statement outside the subset runs in the closures, if nothing was left half-built
         if r.is_none() && self.open_joins == joins {
             // a `let` binds its name to the slot the closure code fills (opaque to machine code)

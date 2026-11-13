@@ -3,6 +3,7 @@
 //! definitions (WJ0021). Conservative by construction: every check must be sound on programs
 //! that build, which `tests/check_corpus_test.rs` verifies over the repository corpus.
 
+use super::elements::{self, Scope};
 use super::index::{is_std_name, FileNames, Index};
 use super::mismatch::check_literal;
 use super::rules::{self, Kind};
@@ -27,6 +28,7 @@ pub fn check_file(idx: &Index, input: &FileInput<'_>, out: &mut Vec<Diagnostic>)
         names: &names,
         loc: Locator::new(&six),
         out,
+        aliases: crate::check::std_calls::std_imports(input.items),
     };
     cx.items(input.items, true);
 }
@@ -36,6 +38,8 @@ struct Cx<'a, 'o> {
     names: &'a FileNames,
     loc: Locator<'a>,
     out: &'o mut Vec<Diagnostic>,
+    /// `use std::strings` -> `strings`: the std modules this file imports, by the name it uses.
+    aliases: HashMap<String, String>,
 }
 
 fn type_name(ty: &Type) -> Option<&str> {
@@ -138,7 +142,7 @@ impl Cx<'_, '_> {
         self_ty: Option<&str>,
         ret: Option<&Type>,
     ) {
-        let mut col = Collect::new(self.idx);
+        let mut col = Collect::new(self.idx, &self.aliases, self.idx.declared.as_ref());
         let mut typed: HashMap<String, String> = HashMap::new();
         for p in params {
             col.bind(&p.name);
@@ -187,6 +191,10 @@ impl Cx<'_, '_> {
 /// of `let x = Point { .. }` / `let x: Point` bindings.
 struct Collect<'i> {
     idx: &'i Index,
+    aliases: &'i HashMap<String, String>,
+    declared: Option<&'i super::declared::Declared>,
+    /// Bindings that hold a sequence of one scalar kind (`let cs = strings.chars(s)`), from declarations.
+    elems: HashMap<String, Kind>,
     names: HashSet<String>,
     counts: HashMap<String, usize>,
     let_types: HashMap<String, String>,
@@ -195,9 +203,12 @@ struct Collect<'i> {
 }
 
 impl<'i> Collect<'i> {
-    fn new(idx: &'i Index) -> Self {
+    fn new(idx: &'i Index, aliases: &'i HashMap<String, String>, declared: Option<&'i super::declared::Declared>) -> Self {
         Self {
             idx,
+            declared,
+            aliases,
+            elems: HashMap::new(),
             names: HashSet::new(),
             counts: HashMap::new(),
             let_types: HashMap::new(),
@@ -241,6 +252,16 @@ impl Visitor for Collect<'_> {
         }
     }
     fn stmt(&mut self, s: &Statement<'_>) {
+        // `for ch in strings.chars(text)`: the binding has the declared element kind.
+        if let Statement::For { pattern: Pattern::Identifier(n), iterable, .. } = s {
+            let found = self.declared.and_then(|declared| {
+                let scope = Scope { scalars: &self.scalars, elems: &self.elems, aliases: self.aliases, names: &self.names, declared };
+                elements::iterable_element(&scope, iterable)
+            });
+            if let Some(k) = found {
+                self.scalars.insert(n.clone(), (k, true));
+            }
+        }
         // `match get(..) { Ok(u) => .., }`: `u` is the struct inside the Result / Option
         if let Statement::Match { value, arms, .. } = s {
             if let Some(st) = wrapped_struct(self.idx, value) {
@@ -280,6 +301,18 @@ impl Visitor for Collect<'_> {
             if let Some(k) = declared {
                 self.scalars.insert(n.clone(), k);
             }
+            let elem = match (type_, self.declared) {
+                (Some(t), _) => elements::element_of_type(t),
+                (None, Some(declared)) => {
+                    let scope = Scope { scalars: &self.scalars, elems: &self.elems, aliases: self.aliases, names: &self.names, declared };
+                    elements::iterable_element(&scope, value)
+                }
+                (None, None) => None,
+            };
+            match elem {
+                Some(k) => self.elems.insert(n.clone(), k),
+                None => self.elems.remove(n),
+            };
         }
     }
 }
@@ -774,7 +807,13 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
 
     fn operand_span(&self, e: &Expression<'_>) -> Option<Span> {
         match e {
-            Expression::Literal { value, location } => self.cx.loc.literal(&self.effective(location), value),
+            Expression::Literal { value, location } => {
+                let loc = self.effective(location);
+                self.cx.loc.literal(&loc, value).or_else(|| match value {
+                    Literal::String(s) => self.cx.loc.interpolated_string(s),
+                    _ => None,
+                })
+            }
             Expression::Identifier { name, location } => self.cx.loc.word(&self.effective(location), name),
             _ => None,
         }
@@ -789,6 +828,34 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             }
             self.cx.out.push(d);
         }
+        self.char_against_string(left, op, right, l.map(|k| k.0), r.map(|k| k.0));
+    }
+
+    /// `ch == "?"` with `ch` a `char`: rustc rejects comparing `char` with `&str`, and the interpreter answers `false`.
+    fn char_against_string(&mut self, left: &Expression<'_>, op: crate::parser::BinaryOp, right: &Expression<'_>, l: Option<Kind>, r: Option<Kind>) {
+        if !rules::char_vs_string(op, l, r) {
+            return;
+        }
+        let text = if l == Some(Kind::Str) { left } else { right };
+        let mut d = Diagnostic::error("WJ0003", "mismatched types: expected `char`, found `string` in comparison");
+        if let Some(sp) = self.operand_span(text) {
+            d = d.at(sp.clone().with_label("expected `char`, found `string`"));
+            if let Expression::Literal { value: Literal::String(s), .. } = text {
+                if let Some(c) = rules::single_char_literal(s) {
+                    let mut fix = replace_fix(&sp, &c, format!("compare with the char literal {c}"));
+                    fix.applicability = Applicability::MachineApplicable;
+                    d = d.with_fix(fix);
+                }
+            }
+        }
+        let help = match text {
+            Expression::Literal { value: Literal::String(s), .. } if rules::single_char_literal(s).is_some() => {
+                "a `char` is compared with a char literal in single quotes, for example `ch == '?'`".to_string()
+            }
+            Expression::Literal { .. } => "a `char` is one character: compare with a char literal such as `'?'`, or turn the char into text first with `ch.to_string()`".to_string(),
+            _ => "compare like with like: turn the char into text with `ch.to_string()`, or compare with a char".to_string(),
+        };
+        self.cx.out.push(d.with_help(help));
     }
 
     /// `${x}` where `x` is a user struct/enum without a `Display` impl (WJ0017).

@@ -1390,45 +1390,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Auto-deref borrowed bool operands in logical ops (&&, ||).
         // Rust requires `bool`, not `&bool`, for these operators.
         if matches!(op, BinaryOp::And | BinaryOp::Or) {
-            let deref_if_borrowed_bool = |expr: &Expression, s: &str, gen: &Self| -> String {
-                if let Expression::Identifier { name, .. } = expr {
-                    if (gen.inferred_borrowed_params.contains(name.as_str())
-                        || gen.borrowed_iterator_vars.contains(name))
-                        && !s.starts_with('*')
-                    {
-                        return format!("*{}", s);
-                    }
-                }
-                s.to_string()
-            };
-            left_str = deref_if_borrowed_bool(left, &left_str, self);
-            right_str = deref_if_borrowed_bool(right, &right_str, self);
+            left_str = self.deref_borrowed_logical_operand(left, &left_str);
+            right_str = self.deref_borrowed_logical_operand(right, &right_str);
         }
 
-        // An adapter closure's parameter declared two references deep (`filter(|n| ..)` on `v.iter()`: `&&i64`)
-        // has no operator impls in Rust. A comparison takes the Copy value under it (`**n > 4`); arithmetic on a
-        // primitive also takes one reference (`impl Rem<i64> for &i64`), so one level is enough there (`*n % 2`).
-        if is_arithmetic || is_comparison {
-            left_str = self.deref_adapter_closure_param(left, left_str, is_comparison);
-            right_str = self.deref_adapter_closure_param(right, right_str, is_comparison);
-        }
-        // `text[a..b] + rest`: Rust's `+` on text takes an owned `String` on the left, so the slice is copied.
-        if matches!(op, BinaryOp::Add)
-            && (self.is_text_slice_expr(left) || self.is_str_slice_local(left))
-            && !crate::codegen::rust::string_utilities::already_owned_string_expr(&left_str)
-        {
-            left_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&left_str);
-        }
-        // A borrowed `&str` local (a `text[a..b]` slice) compared with an owned `string` local: Rust compares
-        // `&str` with `&str`, so the owned side is viewed as one (`act < best.as_str()`).
-        if is_comparison {
-            let (l_slice, r_slice) = (self.borrowed_text_operand(left, op), self.borrowed_text_operand(right, op));
-            if l_slice && !r_slice && self.owned_text_operand(right, op) {
-                right_str = format!("{right_str}.as_str()");
-            } else if r_slice && !l_slice && self.owned_text_operand(left, op) {
-                left_str = format!("{left_str}.as_str()");
-            }
-        }
+        (left_str, right_str) = self.adapt_closure_param_and_text_slice_operands(op, left, right, (left_str, right_str), (is_arithmetic, is_comparison));
 
         if is_arithmetic && self.in_call_argument_generation {
             if let Some(ref aft) = self.assignment_float_target_type {
@@ -1629,5 +1595,57 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn is_str_slice_local(&self, e: &Expression<'ast>) -> bool {
         matches!(e, Expression::Identifier { .. })
             && self.infer_expression_type(e).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Operand fix-ups for adapter closure parameters and borrowed text.
+    /// An adapter closure's parameter declared two references deep (`filter(|n| ..)` on `v.iter()`: `&&i64`) has no
+    /// operator impls in Rust. A comparison takes the Copy value under it (`**n > 4`); arithmetic on a primitive also
+    /// takes one reference (`impl Rem<i64> for &i64`), so one level is enough there (`*n % 2`).
+    /// `text[a..b] + rest`: Rust's `+` on text takes an owned `String` on the left, so the slice is copied.
+    /// A borrowed `&str` local (a `text[a..b]` slice) compared with an owned `string` local: Rust compares `&str`
+    /// with `&str`, so the owned side is viewed as one (`act < best.as_str()`).
+    fn adapt_closure_param_and_text_slice_operands(
+        &self,
+        op: &BinaryOp,
+        left: &Expression<'ast>,
+        right: &Expression<'ast>,
+        (mut left_str, mut right_str): (String, String),
+        (is_arithmetic, is_comparison): (bool, bool),
+    ) -> (String, String) {
+        if is_arithmetic || is_comparison {
+            left_str = self.deref_adapter_closure_param(left, left_str, is_comparison);
+            right_str = self.deref_adapter_closure_param(right, right_str, is_comparison);
+        }
+        if matches!(op, BinaryOp::Add)
+            && (self.is_text_slice_expr(left) || self.is_str_slice_local(left))
+            && !crate::codegen::rust::string_utilities::already_owned_string_expr(&left_str)
+        {
+            left_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&left_str);
+        }
+        // A borrowed `&str` operand compared with an owned `string` one: Rust compares `&str` with `&str`,
+        // so the owned side is viewed as one (`act < best.as_str()`).
+        if is_comparison {
+            let (l_slice, r_slice) = (self.borrowed_text_operand(left, op), self.borrowed_text_operand(right, op));
+            if l_slice && !r_slice && self.owned_text_operand(right, op) {
+                right_str = format!("{right_str}.as_str()");
+            } else if r_slice && !l_slice && self.owned_text_operand(left, op) {
+                left_str = format!("{left_str}.as_str()");
+            }
+        }
+        (left_str, right_str)
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `&&` and `||` take `bool`, not `&bool`: a borrowed parameter or iterator binding is dereferenced.
+    fn deref_borrowed_logical_operand(&self, expr: &Expression<'ast>, generated: &str) -> String {
+        if let Expression::Identifier { name, .. } = expr {
+            if (self.inferred_borrowed_params.contains(name.as_str()) || self.borrowed_iterator_vars.contains(name)) && !generated.starts_with('*') {
+                return format!("*{generated}");
+            }
+        }
+        generated.to_string()
     }
 }

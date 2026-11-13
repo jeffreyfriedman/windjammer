@@ -88,10 +88,7 @@ impl<'ast> CodeGenerator<'ast> {
             field_types.insert(field.name.clone(), ty);
         }
         self.struct_field_types.insert(s.name.clone(), field_types);
-        self.user_declared_struct_names.insert(s.name.clone());
-        if !s.type_params.is_empty() {
-            self.generic_user_struct_names.insert(s.name.clone());
-        }
+        self.note_declared_struct(&s.name, !s.type_params.is_empty());
         crate::codegen::rust::recursive_struct_layout::apply_recursive_struct_boxing(
             &mut self.struct_field_types,
         );
@@ -1547,5 +1544,16 @@ impl<'ast> CodeGenerator<'ast> {
         let out = self.generate_expression(expr);
         self.coerce_string_literals_to_owned = previous;
         out
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// A struct this file declares (so a homonym import never shadows it); `generic` marks one with type parameters,
+    /// whose literals are not typed as the bare name.
+    pub(in crate::codegen::rust) fn note_declared_struct(&mut self, name: &str, generic: bool) {
+        self.user_declared_struct_names.insert(name.to_string());
+        if generic {
+            self.generic_user_struct_names.insert(name.to_string());
+        }
     }
 }

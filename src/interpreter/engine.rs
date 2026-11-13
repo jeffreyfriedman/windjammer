@@ -133,6 +133,9 @@ pub(crate) type Epoch = std::time::Instant;
 pub(crate) struct Epoch;
 #[cfg(target_arch = "wasm32")]
 impl Epoch {
+    pub(crate) fn now() -> Epoch {
+        Epoch
+    }
     pub(crate) fn elapsed(&self) -> std::time::Duration {
         std::time::Duration::ZERO
     }
@@ -183,6 +186,9 @@ pub struct Interpreter {
     pub(crate) jit_mutant: Option<String>,
     /// How often each fast path ran (reported with `WJ_JIT_DEBUG`, so a gate can tell one that silently stopped).
     pub(crate) fast: FastHits,
+    /// How often the resolved engine left its compiled form for a slower one (reported with `WJ_JIT_DEBUG`, so a
+    /// gate can hold each count where it is: a fallback that grows is a regression no output shows).
+    pub(crate) fallback: Fallbacks,
     /// Statement registries of compiled code (`resolved/osr.rs`), alive as long as the code is.
     pub(crate) osr_regs: Vec<Rc<super::resolved::osr::Reg>>,
     /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
@@ -241,7 +247,7 @@ pub struct Interpreter {
     pub(crate) err_output: Option<Vec<String>>,
     pub(crate) out: std::io::BufWriter<std::io::Stdout>,
     /// When buffered output was last pushed to the process stdout (see `write_out`).
-    pub(crate) last_out_flush: std::time::Instant,
+    pub(crate) last_out_flush: Epoch,
     pub(crate) builtins: Registry,
     pub(crate) depth: usize,
     pub(crate) max_depth: usize,
@@ -321,13 +327,14 @@ impl Interpreter {
             jit_debug: false,
             jit_mutant: None,
             fast: FastHits::default(),
+            fallback: Fallbacks::default(),
             #[cfg(feature = "jit")]
             jit: None,
             subprocesses: HashMap::new(),
             next_subprocess: 0,
             sched: super::sched::Sched::new(),
             #[cfg(not(target_arch = "wasm32"))]
-            epoch: std::time::Instant::now(),
+            epoch: Epoch::now(),
             #[cfg(target_arch = "wasm32")]
             epoch: Epoch,
             rng: None,
@@ -356,7 +363,7 @@ impl Interpreter {
             capture_output: false,
             err_output: None,
             out: std::io::BufWriter::new(std::io::stdout()),
-            last_out_flush: std::time::Instant::now(),
+            last_out_flush: Epoch::now(),
             builtins: Registry::standard(),
             depth: 0,
             max_depth: 10_000,
@@ -464,7 +471,7 @@ impl Interpreter {
 
     pub fn flush(&mut self) {
         let _ = self.out.flush();
-        self.last_out_flush = std::time::Instant::now();
+        self.last_out_flush = Epoch::now();
     }
 
     pub(crate) fn write_out(&mut self, s: &str) {
@@ -637,10 +644,42 @@ pub(crate) struct FastHits {
     pub(crate) pushfmt: u64,
     /// Machine-code stores written straight into a packed vector's storage (a `View`).
     pub(crate) packedstore: u64,
+    /// Machine-code field reads and writes straight on a vector of structs (a row view, `jit/rows.rs`).
+    pub(crate) rowview: u64,
     /// Lowered `match` values known never to be references (a `let` of one gets a plain slot).
     pub(crate) matchval: u64,
     /// Walker fallbacks of a method call given copies of the locals its other arguments only read.
     pub(crate) argcopy: u64,
+    /// Compiled calls of a function that mutates a parameter, given the argument's place (compile time).
+    pub(crate) placeargs: u64,
+}
+
+/// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,
+/// so no output shows it; `tests/interpreter_fallbacks_test.rs` holds each kernel's counts to its ledger.
+#[derive(Default, Debug, Clone, Copy)]
+pub(crate) struct Fallbacks {
+    /// Statements and expressions run as walker islands inside compiled code.
+    pub(crate) island: u64,
+    /// Calls the resolved engine ran in the tree walker (the callee is not compiled, or the call deopted).
+    pub(crate) walkercall: u64,
+    /// Compiled calls whose arguments did not have the compiled frame's types (run in the walker).
+    pub(crate) deopt: u64,
+    /// Loop classifications machine code refused (outside the subset, or too many classifications).
+    pub(crate) jitrefused: u64,
+    /// Machine-code units given up after too many failed checks.
+    pub(crate) jitdead: u64,
+    /// Machine-code runs that stopped at a failed check (the closures finished the iteration).
+    pub(crate) jitexit: u64,
+}
+
+impl Fallbacks {
+    /// The `[fallback]` line of `WJ_JIT_DEBUG`.
+    pub(crate) fn line(&self) -> String {
+        format!(
+            "[fallback] island {} walkercall {} deopt {} jitrefused {} jitdead {} jitexit {}",
+            self.island, self.walkercall, self.deopt, self.jitrefused, self.jitdead, self.jitexit
+        )
+    }
 }
 
 impl Interpreter {

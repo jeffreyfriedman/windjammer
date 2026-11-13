@@ -77,6 +77,30 @@ file_has = { "m.wj" = "println(\"${v.len()}\")" }
 output_has = ["2 rewrite(s)"]
 
 [[case]]
+name = "fix migrates vec! where a declared Vec type fixes the list type (argument, return, assignment)"
+polarity = "positive"
+files = { "m.wj" = "pub struct Box {\n    pub xs: Vec<int>,\n}\n\nfn total(xs: Vec<int>) -> int {\n    xs.len()\n}\n\nfn make() -> Vec<int> {\n    vec![4, 5]\n}\n\nfn main() {\n    let mut b = Box { xs: [] }\n    b.xs = vec![1]\n    let n = total(vec![1, 2])\n    println(\"${n} ${make().len()} ${b.xs.len()}\")\n}\n" }
+args = ["fix", "{w}/m.wj"]
+file_has = { "m.wj" = "total([1, 2])" }
+output_has = ["3 rewrite(s)"]
+
+[[case]]
+name = "fix keeps vec! where no declared Vec type reaches the position and says how to resolve it"
+polarity = "positive"
+files = { "m.wj" = "fn id<T>(x: T) -> T {\n    x\n}\n\nfn main() {\n    let n = id(vec![1, 2]).len()\n    println(\"${n}\")\n}\n" }
+args = ["fix", "{w}/m.wj"]
+file_has = { "m.wj" = "id(vec![1, 2])" }
+output_has = ["no declared `Vec<T>` type reaches this position", "1 occurrence(s) need manual migration"]
+
+[[case]]
+name = "fix --check fails on a vec! argument of a declared Vec formal and does not write"
+polarity = "negative"
+files = { "m.wj" = "fn total(xs: Vec<int>) -> int {\n    xs.len()\n}\n\nfn main() {\n    let n = total(vec![1, 2])\n    println(\"${n}\")\n}\n" }
+args = ["fix", "--check", "{w}/m.wj"]
+exit = 1
+file_has = { "m.wj" = "total(vec![1, 2])" }
+
+[[case]]
 name = "fix of a missing path fails"
 polarity = "negative"
 args = ["fix", "{w}/nope.wj"]

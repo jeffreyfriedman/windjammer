@@ -47,6 +47,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0035](0035-time-travel-debugging.md) | Time-travel debugging from the effect journal | Proposed |
 | [0036](0036-runtime-errors.md) | Runtime errors that explain themselves | Proposed |
 | [0037](0037-agent-cost-levers.md) | Agent-cost levers, measured offline | Proposed |
+| [0038](0038-interpreter-world-class.md) | A world-class interpreter, as a ladder of measured rungs | Proposed |
 <!-- wj:end -->
 
 ## Template

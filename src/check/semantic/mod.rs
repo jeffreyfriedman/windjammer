@@ -1,6 +1,8 @@
 //! Conservative AST-level semantic checks that need no type checker. See `check/MODULE.md`.
 
 mod checker;
+mod declared;
+mod elements;
 mod index;
 mod mismatch;
 mod rules;

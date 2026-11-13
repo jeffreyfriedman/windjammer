@@ -85,6 +85,18 @@ fn prepare(cx: &mut Cx, e: E, pc: &mut PlaceCode) -> Option<()> {
     Some(())
 }
 
+/// An argument the callee mutates (an inferred `&mut` parameter): the place the expression resolves to,
+/// or its value when it resolves to none -- the walker's `eval_args`, with the walker's own resolution.
+pub(super) fn arg(cx: &mut Cx, e: E) -> Option<Code> {
+    let mut pc = PlaceCode::default();
+    prepare(cx, e, &mut pc)?;
+    let value = expr_arg(cx, e)?.code();
+    Some(Box::new(move |it, b| match it.resolve_place_in(e, &mut pc.env(b))? {
+        Some(p) => Ok(Value::Ref(Box::new(p))),
+        None => value(it, b),
+    }))
+}
+
 /// `target op= value` through a place (`None`: leave it to an island).
 pub(super) fn assign(cx: &mut Cx, target: E, value: E, op: Option<CompoundOp>) -> Option<Code> {
     let ident = match target {

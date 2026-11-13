@@ -65,6 +65,7 @@ impl Island {
             }
         }
         it.fast.argcopy += !self.copies.is_empty() as u64;
+        it.fallback.island += 1;
         for (n, s) in &self.copies {
             let slot = match &it.rstack[b + s] {
                 Value::Ref(p) => p.slot.clone(),

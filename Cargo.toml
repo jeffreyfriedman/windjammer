@@ -206,6 +206,16 @@ path = "tests/interpreter_engine_parity_test.rs"
 name = "fast_paths"
 path = "tests/interpreter_fast_paths_test.rs"
 
+# Fallback counts of the resolved engine held to bench/interp/fallbacks.tsv: cargo test --release --test fallbacks
+[[test]]
+name = "fallbacks"
+path = "tests/interpreter_fallbacks_test.rs"
+
+# Programs the compiled build rejects or fails do not pass interpreted: cargo test --release --test compiled_agreement
+[[test]]
+name = "compiled_agreement"
+path = "tests/interpreter_compiled_agreement_test.rs"
+
 # The calls a build-slot gate makes, interpreted: cargo test --release --test slot_gate
 [[test]]
 name = "slot_gate"
@@ -433,6 +443,10 @@ path = "tests/interpreter_features_test.rs"
 [[test]]
 name = "interpreter_one_thread_tasks"
 path = "tests/interpreter_one_thread_tasks_test.rs"
+
+[[test]]
+name = "wasm_clock_gate"
+path = "tests/wasm_clock_gate_test.rs"
 
 [[test]]
 name = "interpreter_projects"

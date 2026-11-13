@@ -1,0 +1,44 @@
+// expect: one
+// expect: noted 2
+// expect: 1
+// expect: two
+// expect: 2
+// expect: 1
+// A non-final if/else statement whose branches end in a print, a unit call, a `Vec::push` and a
+// value-returning call (`Vec::pop`), in a function returning a value and in one returning nothing.
+fn note(n: int) {
+    println("noted ${n}")
+}
+fn step(v: Vec<int>, k: int) -> int {
+    let mut w = v
+    if k == 0 {
+        println("one")
+    } else if k == 1 {
+        note(2)
+    } else if k == 2 {
+        w.push(9)
+    } else {
+        w.pop()
+    }
+    w.len() as int
+}
+fn show(v: Vec<int>, k: int) {
+    let mut w = v
+    if k == 0 {
+        println("two")
+    } else if k == 1 {
+        note(3)
+    } else if k == 2 {
+        w.push(9)
+    } else {
+        w.pop()
+    }
+    println("${w.len()}")
+}
+fn main() {
+    let a = step([1, 2], 0)
+    let b = step([1, 2], 1)
+    println("${step([1, 2], 2) + step([1, 2], 3) - a - b + 1}")
+    show([1, 2], 0)
+    show([1, 2], 3)
+}

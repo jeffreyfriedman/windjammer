@@ -315,6 +315,14 @@ impl Interpreter {
                     return self.call_named(path, arguments, &[], expected);
                 }
             }
+            // `(self.layers[i].before)(x)`: a parenthesised field is a call of the closure the field holds (Rust's
+            // reading); a field that is not a callable falls through to the method-call reading
+            if Self::is_place_expr(object) {
+                if let Ok(f @ Value::Func(_)) = self.eval(function) {
+                    let args = self.eval_args(arguments, None, false)?;
+                    return self.call_value(&f, args);
+                }
+            }
             return self.eval_method_call(function, object, field.as_str(), None, arguments, location.as_ref());
         }
         let f = self.eval(function)?;
@@ -773,6 +781,7 @@ impl Interpreter {
 
     /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
     pub(crate) fn call_func_walk(&mut self, f: &Rc<FuncDef>, args: Vec<Value>, self_val: Option<Value>, targs: &[Type], expected: Option<Type>) -> R {
+        self.fallback.walkercall += self.engine_resolved as u64;
         if f.decorators.iter().any(|d| d.name == "durable") {
             return self.call_durable(f, args, self_val, targs, expected); // journaled steps (ADR-0021 E4), tree-walked
         }
