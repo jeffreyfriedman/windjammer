@@ -3,7 +3,7 @@
 //   wj run scripts/wj/release_scorecard.wj                 print the scorecard (text), no files written
 //   wj run scripts/wj/release_scorecard.wj -- --write      also rewrite docs/RELEASE_SCORECARD.md and docs/generated/release_scorecard.json
 //   wj run scripts/wj/release_scorecard.wj -- --check      the page and JSON on disk match the definition and each other (what CI runs)
-//   wj run scripts/wj/release_scorecard.wj -- --selftest   fixtures prove every criterion can turn RED, GREEN, STALE and MISSING
+//   wj run scripts/wj/release_scorecard.wj -- --selftest [--scratch DIR]   fixtures prove every criterion can turn RED, GREEN, STALE and MISSING
 //   With WJ_ECOSYSTEM set, add --allow "fs.read=$WJ_ECOSYSTEM/**" to any of these (the sibling checkout is read).
 //
 // Options: --root DIR (repository, default .), --results DIR (default <root>/results), --now EPOCH, --max-age DAYS (8).
@@ -901,8 +901,8 @@ fn fixture_ctx(dir: string, now: int, eco: string) -> Ctx {
 }
 
 // Copies a fixture to scratch space, makes it a git repository (the RED one gets a trailer commit and a 2 MB file).
-fn stage(name: string, bad: bool, now: int) -> string {
-    let dir = "/tmp/wj-scorecard-selftest-" + name
+fn stage(scratch: string, name: string, bad: bool, now: int) -> string {
+    let dir = scratch + "/selftest-" + name
     let _ = sh("rm -rf " + quote(dir) + " && mkdir -p " + quote(dir) + " && cp -R " + quote(FIXTURES + "/" + name) + "/. " + quote(dir))
     let commit = " && git add -A && git -c user.name=t -c user.email=t@t commit -q -m x"
     let _ = sh_in(dir, "git init -q" + commit)
@@ -925,10 +925,10 @@ fn stage(name: string, bad: bool, now: int) -> string {
     dir
 }
 
-fn selftest(base_now: int) -> bool {
+fn selftest(base_now: int, scratch: string) -> bool {
     let mut fails: Vec<string> = Vec::new()
-    let red_dir = stage("red", true, base_now)
-    let green_dir = stage("green", false, base_now)
+    let red_dir = stage(scratch, "red", true, base_now)
+    let green_dir = stage(scratch, "green", false, base_now)
     let t = base_now
     let red = collect(fixture_ctx(red_dir, t, red_dir + "/eco"))
     let green = collect(fixture_ctx(green_dir, t, ""))
@@ -1042,7 +1042,9 @@ fn main() {
     }
     let now = flag(args, "--now", "${now_default}").parse::<int>().unwrap_or(now_default)
     if has(args, "--selftest") {
-        if !selftest(now) {
+        // fixtures live in an explicit directory the caller owns (the test harness passes a reaped Scratch); the
+        // default is under the checkout's target/, never the OS temp dir
+        if !selftest(now, flag(args, "--scratch", root + "/target/wj-scorecard-selftest")) {
             process.exit(1)
         }
         return
