@@ -68,45 +68,51 @@ pub fn unary_op_to_rust(op: &UnaryOp) -> &'static str {
 
 /// Returns the precedence level for a binary operator **as Rust parses it**.
 ///
-/// Used by Rust codegen to decide when to emit parentheses. Windjammer's
-// *parser* may differ (shifts bind tighter than additive); emission
-/// must still follow Rust so `Add(a, Shl(b,c))` becomes `a + (b << c)`.
+/// Used by Rust codegen to decide when to emit parentheses. Windjammer's parser differs from Rust (shifts bind
+/// tighter than additive; `& ^ |` bind looser than comparisons, SPEC-EXPR-001); emission must follow Rust's table so
+/// that the tree the Windjammer parser built is the tree rustc reads back: `Add(a, Shl(b, c))` is `a + (b << c)` and
+/// `BitAnd(a, Eq(b, c))` is `a & (b == c)`.
 ///
-/// Higher numbers indicate higher precedence (tighter binding):
-/// - 10: Multiplicative (*, /, %)
-/// - 9: Additive (+, -)
-/// - 8: Bitshift (<<, >>)
-/// - 7: Comparison (<, <=, >, >=)
-/// - 6: Equality (==, !=)
-/// - 5: Bitwise AND (&)
-/// - 4: Bitwise XOR (^)
-/// - 3: Bitwise OR (|)
-/// - 2: Logical AND (&&)
-/// - 1: Logical OR (||)
+/// Higher numbers bind tighter (Rust reference, operator precedence):
+/// - 9: `* / %`
+/// - 8: `+ -`
+/// - 7: `<< >>`
+/// - 6: `&`
+/// - 5: `^`
+/// - 4: `|`
+/// - 3: `== != < <= > >=` (non-associative)
+/// - 2: `&&`
+/// - 1: `||`
 ///
 /// # Examples
 /// ```
 /// use windjammer::parser::BinaryOp;
 /// use windjammer::codegen::rust::operators::op_precedence;
 ///
-/// assert_eq!(op_precedence(&BinaryOp::Mul), 10); // Highest
-/// assert_eq!(op_precedence(&BinaryOp::Add), 9);
-/// assert_eq!(op_precedence(&BinaryOp::Or), 1);   // Lowest
+/// assert!(op_precedence(&BinaryOp::Mul) > op_precedence(&BinaryOp::Add));
 /// assert!(op_precedence(&BinaryOp::Add) > op_precedence(&BinaryOp::Shl));
+/// assert!(op_precedence(&BinaryOp::BitAnd) > op_precedence(&BinaryOp::Eq));
+/// assert!(op_precedence(&BinaryOp::And) > op_precedence(&BinaryOp::Or));
 /// ```
 pub fn op_precedence(op: &BinaryOp) -> i32 {
     match op {
         BinaryOp::Or => 1,
         BinaryOp::And => 2,
-        BinaryOp::BitOr => 3,
-        BinaryOp::BitXor => 4,
-        BinaryOp::BitAnd => 5,
-        BinaryOp::Eq | BinaryOp::Ne => 6,
-        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 7,
-        BinaryOp::Shl | BinaryOp::Shr => 8,
-        BinaryOp::Add | BinaryOp::Sub => 9,
-        BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 10,
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 3,
+        BinaryOp::BitOr => 4,
+        BinaryOp::BitXor => 5,
+        BinaryOp::BitAnd => 6,
+        BinaryOp::Shl | BinaryOp::Shr => 7,
+        BinaryOp::Add | BinaryOp::Sub => 8,
+        BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 9,
     }
+}
+
+/// A bitwise operator under a comparison: Rust reads it the same way (`a & b == c` is `(a & b) == c`) but it is
+/// easy to misread, so the parentheses stay.
+pub fn bitwise_under_comparison(parent: &BinaryOp, child: &BinaryOp) -> bool {
+    matches!(parent, BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge)
+        && matches!(child, BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor)
 }
 
 /// When the parent and right-hand child are binary operators with the **same** Rust precedence,
