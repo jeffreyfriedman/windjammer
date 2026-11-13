@@ -9,7 +9,7 @@ In: calls from generated Rust. Out: stdlib behavior. Signatures are scanned by t
 ## Invariants
 - Heavy modules are cargo-feature gated (`net`, `async`, `cli`, `crypto`, `datetime`, `jwt`, `regex`, `parallel`, `yaml`, `compress`, `csv`, `log`, `db`). The single `#[cfg(feature = "f")]` line directly above `pub mod m;` in `lib.rs` (and `platform/native/mod.rs`) is what the compiler reads to enable only the groups a program uses; keep that one-line shape. `default` enables everything.
 - The public signature of each function is the ownership contract the analyzer reads; changing `&T`/`T` parameters changes generated code.
-- Platform differences live in `platform/{native,wasm}`.
+- Platform differences live in `platform/{native,wasm}`. The crate builds for `wasm32-unknown-unknown` with `--no-default-features` (the engine's build; `platform::wasm` needs the `wasm` feature). A std call that panics there (`Instant::now`, `SystemTime`, `temp_dir`, `thread::spawn`, `process::exit`/`id`) sits behind `cfg(target_arch = "wasm32")` with an alternative; `tests/wasm_panic_sites_test.rs` counts ungated sites per file against `tests/wasm_panic_sites.txt` (shrink-only).
 - No dependency on the compiler crate. `caps_core/` is the one exception in spirit: the compiler compiles that directory too (`#[path]`), so the capability model has a single source; it uses only `std`.
 - Capabilities (ADR-0021): every public function that touches the OS calls `caps::*` first (audit: tests/effects_runtime_audit_test.rs); `caps::install` runs once at the start of a program's `main`, only when the compiler could not prove its calls; a denial exits 126. `cap.rs` is `std::cap`.
 
