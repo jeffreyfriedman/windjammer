@@ -313,8 +313,8 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
             (true, coerced["&mut ".len()..].trim())
         } else if coerced.starts_with('&') {
             (true, coerced[1..].trim())
-        } else if coerced.starts_with('(') && coerced.ends_with(')') {
-            let inner_expr = coerced[1..coerced.len() - 1].trim();
+        } else if coerced.starts_with('(') && coerced.ends_with(')') && strip_wrapping_parens(coerced).len() < coerced.trim().len() {
+            let inner_expr = strip_wrapping_parens(coerced);
             if inner_expr.starts_with("&mut ") {
                 (true, inner_expr["&mut ".len()..].trim())
             } else if inner_expr.starts_with('&') {
