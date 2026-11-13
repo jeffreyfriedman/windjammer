@@ -1082,15 +1082,7 @@ impl<'ast> CodeGenerator<'ast> {
             return !self.expression_type_is_unit(&ty);
         }
         // Built-ins declare their result in the intrinsic registry (`println`, `assert_eq`: `()`).
-        let intrinsic = match expr {
-            Expression::Call { function, .. } => match &**function {
-                Expression::Identifier { name, .. } => crate::intrinsics::Intrinsic::from_call_name(name),
-                _ => None,
-            },
-            Expression::MacroInvocation { name, .. } => crate::intrinsics::Intrinsic::from_macro_name(name),
-            _ => None,
-        };
-        if intrinsic.is_some_and(|i| i.returns_unit() || i.diverges()) {
+        if super::intrinsic_lowering::expression_is_unit_or_diverging_intrinsic(expr) {
             return false;
         }
         if self.declared_unit_call(expr) {

@@ -27,6 +27,20 @@ pub(super) fn std_fn_names_imported_by(path: &[String], out: &mut std::collectio
     }
 }
 
+/// Whether `expr` is a call (or macro invocation) of a registry intrinsic that declares `()` or never returns
+/// (`println`, `assert_eq`, `panic`): the registry, not the call's name, says so.
+pub(super) fn expression_is_unit_or_diverging_intrinsic(expr: &Expression) -> bool {
+    let intrinsic = match expr {
+        Expression::Call { function, .. } => match &**function {
+            Expression::Identifier { name, .. } => Intrinsic::from_call_name(name),
+            _ => None,
+        },
+        Expression::MacroInvocation { name, .. } => Intrinsic::from_macro_name(name),
+        _ => None,
+    };
+    intrinsic.is_some_and(|i| i.returns_unit() || i.diverges())
+}
+
 fn escape_format_braces(rust_literal: &str) -> String {
     rust_literal.replace('{', "{{").replace('}', "}}")
 }

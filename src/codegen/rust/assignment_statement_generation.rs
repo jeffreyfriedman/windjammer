@@ -560,48 +560,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            // `None` / bool keywords are not bindings — auto_clone can
-            // false-hit `"None"` at the wrong statement_idx → `None.clone()`.
-            // Unit `None` never needs clone (Option::None is freely constructible).
-            let is_unit_keyword = name == "None" || name == "true" || name == "false";
-            if !is_unit_keyword {
-                if let Some(ref analysis) = self.auto_clone_analysis {
-                    if analysis
-                        .needs_clone(name, self.current_statement_idx)
-                        .is_some()
-                        && !value_str.ends_with(".clone()")
-                        && !value_str.starts_with('*')
-                    {
-                        let target_type = self.infer_expression_type(target);
-                        let owned_string_field = target_type.as_ref().is_some_and(|t| {
-                            matches!(t, Type::String)
-                                || matches!(t, Type::Custom(n) if n == "string" || n == "String")
-                        });
-                        let target_is_copy =
-                            target_type.as_ref().is_some_and(|t| self.is_type_copy(t));
-                        // Dual-oracle: identifier emit already skips Copy; do not re-clone
-                        // on field assign (helper u32, i32 formals, usize).
-                        let skip_copy =
-                            target_is_copy || self.ident_skips_auto_clone_as_copy(name, value);
-                        // demoted `&str` → owned String already got
-                        // `.to_string()` above (P3.418). Do not stack a second
-                        // `.to_string()` / `.clone()` from auto_clone reuse.
-                        if owned_string_field && self.inferred_borrowed_params.contains(name) {
-                            if !value_str.ends_with(".to_string()")
-                                && !value_str.ends_with(".clone()")
-                                && !value_str.ends_with(".into()")
-                                && !crate::codegen::rust::literals::is_already_owned_string(
-                                    &value_str,
-                                )
-                            {
-                                value_str = format!("{}.to_string()", value_str);
-                            }
-                        } else if !skip_copy {
-                            value_str = format!("{}.clone()", value_str);
-                        }
-                    }
-                }
-            }
+            value_str = self.auto_clone_identifier_assignment_value(name, target, value, value_str);
             if self.inferred_borrowed_params.contains(name) {
                 let target_type = self.infer_expression_type(target);
                 let assignment_target_is_text = target_type
@@ -629,24 +588,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // A borrowed `&str` value (a `text[a..b]` slice, or a local bound to one) into an owned `string`
-        // target: the target's declared type decides, the slice is copied.
-        // A loop binding over a map's keys or a list (`for k in m.keys()`) is a reference to the text, too.
-        let borrowed_text = self.is_text_slice_expr(value)
-            || matches!(value, Expression::Identifier { name, .. }
-                if self.infer_expression_type(value).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
-                    || (self.borrowed_iterator_vars.contains(name)
-                        && !self.match_arm_bindings.contains(name.as_str())
-                        // a later `let` of the same name that holds an owned value is not the loop binding
-                        && !self.local_var_types.get(name.as_str()).is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))));
-        if borrowed_text
-            && self.infer_expression_type(target).is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && crate::codegen::rust::types::is_windjammer_text_type(&t))
-            && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
-            && !value_str.ends_with(".to_string()")
-        {
-            // `&k[a..b]` -> `k[a..b].to_string()` (`.` binds tighter than `&`)
-            value_str = format!("{}.to_string()", value_str.strip_prefix('&').unwrap_or(&value_str));
-        }
+        value_str = self.copy_borrowed_text_into_owned_target(target, value, value_str);
 
         // Auto-clone when assigning one self field from another self field.
         // In Rust, `self.a = self.b` is E0507 when self is &mut self and b is non-Copy,
@@ -832,5 +774,80 @@ impl<'ast> CodeGenerator<'ast> {
         self.mut_borrowed_iterator_vars.contains(name)
             || self.inferred_mut_borrowed_params.contains(name)
             || self.identifier_already_mut_ref(name)
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// A borrowed `&str` value (a `text[a..b]` slice, or a local bound to one) into an owned `string` target: the
+    /// target's declared type decides, the slice is copied. A loop binding over a map's keys or a list
+    /// (`for k in m.keys()`) is a reference to the text, too.
+    fn copy_borrowed_text_into_owned_target(&self, target: &Expression<'ast>, value: &Expression<'ast>, value_str: String) -> String {
+        let is_owned_type = |t: &Type| !matches!(t, Type::Reference(_) | Type::MutableReference(_));
+        let borrowed_text = self.is_text_slice_expr(value)
+            || matches!(value, Expression::Identifier { name, .. }
+                if self.infer_expression_type(value).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
+                    || (self.borrowed_iterator_vars.contains(name)
+                        && !self.match_arm_bindings.contains(name.as_str())
+                        // a later `let` of the same name that holds an owned value is not the loop binding
+                        && !self.local_var_types.get(name.as_str()).is_some_and(|t| is_owned_type(t))));
+        if borrowed_text
+            && self.infer_expression_type(target).is_some_and(|t| is_owned_type(&t) && crate::codegen::rust::types::is_windjammer_text_type(&t))
+            && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
+            && !value_str.ends_with(".to_string()")
+        {
+            // `&k[a..b]` -> `k[a..b].to_string()` (`.` binds tighter than `&`)
+            return format!("{}.to_string()", value_str.strip_prefix('&').unwrap_or(&value_str));
+        }
+        value_str
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `target = name` where the auto-clone analysis says `name` is used again: the value is copied (`.clone()`),
+    /// or `.to_string()`-ed for a demoted `&str` formal going into an owned text field.
+    fn auto_clone_identifier_assignment_value(&self, name: &str, target: &Expression<'ast>, value: &Expression<'ast>, mut value_str: String) -> String {
+        // `None` / bool keywords are not bindings — auto_clone can
+        // false-hit `"None"` at the wrong statement_idx → `None.clone()`.
+        // Unit `None` never needs clone (Option::None is freely constructible).
+        let is_unit_keyword = name == "None" || name == "true" || name == "false";
+        if !is_unit_keyword {
+            if let Some(ref analysis) = self.auto_clone_analysis {
+                if analysis
+                    .needs_clone(name, self.current_statement_idx)
+                    .is_some()
+                    && !value_str.ends_with(".clone()")
+                    && !value_str.starts_with('*')
+                {
+                    let target_type = self.infer_expression_type(target);
+                    let owned_string_field = target_type.as_ref().is_some_and(|t| {
+                        matches!(t, Type::String)
+                            || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                    });
+                    let target_is_copy =
+                        target_type.as_ref().is_some_and(|t| self.is_type_copy(t));
+                    // Dual-oracle: identifier emit already skips Copy; do not re-clone
+                    // on field assign (helper u32, i32 formals, usize).
+                    let skip_copy =
+                        target_is_copy || self.ident_skips_auto_clone_as_copy(name, value);
+                    // demoted `&str` → owned String already got
+                    // `.to_string()` above (P3.418). Do not stack a second
+                    // `.to_string()` / `.clone()` from auto_clone reuse.
+                    if owned_string_field && self.inferred_borrowed_params.contains(name) {
+                        if !value_str.ends_with(".to_string()")
+                            && !value_str.ends_with(".clone()")
+                            && !value_str.ends_with(".into()")
+                            && !crate::codegen::rust::literals::is_already_owned_string(
+                                &value_str,
+                            )
+                        {
+                            value_str = format!("{}.to_string()", value_str);
+                        }
+                    } else if !skip_copy {
+                        value_str = format!("{}.clone()", value_str);
+                    }
+                }
+            }
+        }
+        value_str
     }
 }
