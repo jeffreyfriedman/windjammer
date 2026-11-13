@@ -230,12 +230,15 @@ fn strip_rust_ref_expr(expr: &str) -> &str {
 }
 
 /// `text[s..e]` / `&text[s..e]` are `str` subslices — owned `String` formals need `.to_string()`.
-fn owned_coercion_for_str_subslice(inner: &str) -> String {
+///
+/// Only when the formal is text and the whole expression is the subslice: a list slice's copy
+/// (`data[0..n].to_vec()`, or a slice passed to a list formal) is not text, so it keeps `.clone()`.
+fn owned_coercion_for_str_subslice(inner: &str, text_formal: bool) -> String {
     // unit keywords are constructors — never `.clone()`.
     if inner == "None" || inner == "true" || inner == "false" {
         return inner.to_string();
     }
-    if inner.contains('[') && inner.contains("..") {
+    if text_formal && inner.ends_with(']') && inner.contains("..") {
         format!("({inner}).to_string()")
     } else {
         format!("{inner}.clone()")
@@ -369,7 +372,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                     }
                 } else if !coerced.ends_with(".clone()") {
                     let base = strip_rust_ref_expr(coerced);
-                    *coerced = owned_coercion_for_str_subslice(base);
+                    *coerced = owned_coercion_for_str_subslice(base, is_string_base(&expected.base));
                 }
             }
             CoercionKind::Clone => {
@@ -378,7 +381,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                     && !coerced.ends_with(".to_owned()")
                 {
                     let base = strip_rust_ref_expr(coerced);
-                    *coerced = owned_coercion_for_str_subslice(base);
+                    *coerced = owned_coercion_for_str_subslice(base, is_string_base(&expected.base));
                 }
             }
             _ => {}
