@@ -1,9 +1,0 @@
-pub struct Doc { pub a: string, pub b: string }
-
-fn draft(a: string, b: string) -> Doc {
-    Doc { a: a, b: b }
-}
-
-pub fn make(a: string) -> Doc {
-    draft(a, "x")
-}

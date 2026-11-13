@@ -835,19 +835,14 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
         if key == sig.name {
             continue;
         }
-        if trait_sig.has_self_receiver != sig.has_self_receiver
-            || effective_user_arg_count(&trait_sig) != effective_user_arg_count(sig)
-        {
+        if trait_sig.has_self_receiver != sig.has_self_receiver {
             continue;
         }
         for idx in 0..sig.param_ownership.len() {
             if sig.has_self_receiver && idx == 0 {
                 continue;
             }
-            // E0053: the trait a method implements declares the same formals. A text formal of a same-named method
-            // of another trait (`append(self, scope: string, e)` beside `append(self, e: Event)`) is not this
-            // method's: the impl must declare text in that slot too.
-            if !trait_declares_owned_text_param(&trait_sig, idx) || !trait_declares_owned_text_param(sig, idx) {
+            if !trait_declares_owned_text_param(&trait_sig, idx) {
                 continue;
             }
             // For trait definitions, the formal `string` type determines the contract

@@ -139,9 +139,6 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             return None;
         }
         let suffix = format!("::{call_method}");
-        // A receiver of known type has no inherent method under another type's key (`Tabs::active` is not
-        // `RailItem::active`): only a trait's method can be the one it calls (a bound, a trait object).
-        let receiver_known = type_name.clone().or_else(|| gen.receiver_static_call_type(call_obj));
         let mut candidates: Vec<Option<crate::analyzer::FunctionSignature>> = Vec::new();
         let push_matching =
             |reg: &crate::analyzer::SignatureRegistry,
@@ -149,7 +146,6 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                 for (key, sig) in &reg.signatures {
                     if key.ends_with(&suffix)
                         && call_signature_resolution::validate_arg_count(sig, arguments.len())
-                        && reg.key_may_name_method_of(key, receiver_known.as_deref(), call_method)
                     {
                         out.push(Some(sig.clone()));
                     }

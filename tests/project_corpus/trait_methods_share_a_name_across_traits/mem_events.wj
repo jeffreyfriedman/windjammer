@@ -1,8 +1,0 @@
-use crate::ports::EventSink
-use crate::ports::EventDraft
-pub struct MemEvents {}
-impl EventSink for MemEvents {
-    fn append(self, event: EventDraft) -> Result<(), string> {
-        if event.size > 0 { Ok(()) } else { Err("empty") }
-    }
-}
