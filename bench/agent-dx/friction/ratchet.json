@@ -17,8 +17,8 @@
     "cost.noise.lines_per_build": 0,
     "cost.diag.check_tokens_per_error_human": 278,
     "cost.diag.check_tokens_per_error_agent": 126,
-    "cost.diag.build_tokens_per_error_human": 111,
-    "cost.diag.build_tokens_per_error_agent": 76
+    "cost.diag.build_tokens_per_error_human": 116,
+    "cost.diag.build_tokens_per_error_agent": 57
   },
   "grow": {
     "cost.diag.fix_coverage": 0,
