@@ -49,7 +49,7 @@ pub struct FloatInference {
     /// Errors detected during inference
     pub errors: Vec<String>,
     /// Function signature registry: name → (param_types, return_type)
-    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
+    function_signatures: crate::type_inference::sig_table::SigTable,
     /// Variable assignment tracking: variable name → initial value ExprId
     var_assignments: HashMap<String, ExprId>,
     /// Variable type tracking: variable name → explicit Type (for let x: Type = ...)
@@ -102,7 +102,7 @@ impl FloatInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: std::collections::BTreeMap::new(),
+            function_signatures: crate::type_inference::sig_table::SigTable::default(),
             var_assignments: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
@@ -128,17 +128,23 @@ impl FloatInference {
     }
 
     fn register_stdlib_signatures(&mut self) {
-        use crate::analyzer::SignatureRegistry;
-
-        for (name, sig) in SignatureRegistry::stdlib().all_signatures() {
-            let param_types = if !sig.formal_param_types.is_empty() {
-                sig.formal_param_types.clone()
-            } else {
-                sig.param_types.clone()
-            };
-            self.function_signatures
-                .insert(name.clone(), (param_types, sig.return_type.clone()));
+        // the stdlib's part is shared by every inference of the process and built on first use (`sig_table`)
+        fn stdlib() -> &'static std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig> {
+            static TABLE: std::sync::OnceLock<std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig>> = std::sync::OnceLock::new();
+            TABLE.get_or_init(|| {
+                let mut table = std::collections::BTreeMap::new();
+                for (name, sig) in crate::analyzer::SignatureRegistry::stdlib().all_signatures() {
+                    let param_types = if !sig.formal_param_types.is_empty() {
+                        sig.formal_param_types.clone()
+                    } else {
+                        sig.param_types.clone()
+                    };
+                    table.insert(name.clone(), (param_types, sig.return_type.clone()));
+                }
+                table
+            })
         }
+        self.function_signatures = crate::type_inference::sig_table::SigTable::over(stdlib);
     }
 
     /// Set current file being analyzed (for file-aware ExprId generation)

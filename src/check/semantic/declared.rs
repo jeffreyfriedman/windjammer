@@ -6,8 +6,14 @@ use crate::parser::{Item, Type};
 use crate::typing::core_surface::CoreSurface;
 use std::collections::HashMap;
 
+/// `std/rust_core.wji` parsed, on the first `String` method a check asks about (once per process; a check that asks
+/// about none, such as `hello`'s, never parses it: 4.5M instructions, ADR-0038 P2).
+fn core() -> &'static CoreSurface {
+    static CORE: std::sync::OnceLock<CoreSurface> = std::sync::OnceLock::new();
+    CORE.get_or_init(CoreSurface::parse)
+}
+
 pub struct Declared {
-    core: CoreSurface,
     /// (std module, function) -> declared return type.
     returns: HashMap<(String, String), Type>,
 }
@@ -31,7 +37,7 @@ impl Declared {
                 }
             }
         }
-        Self { core: CoreSurface::parse(), returns }
+        Self { returns }
     }
 
     /// The declared return type of `std::<module>::<function>`.
@@ -41,7 +47,7 @@ impl Declared {
 
     /// The declared result of `text.method()` on a `String` receiver.
     pub fn string_method_return(&self, method: &str) -> Option<Type> {
-        self.core.method_signature(&Type::String, method, &[])?.ret
+        core().method_signature(&Type::String, method, &[])?.ret
     }
 }
 
