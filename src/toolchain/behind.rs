@@ -114,13 +114,49 @@ pub fn behind_text(id: &Identity, head: &Head) -> Option<String> {
     ))
 }
 
+/// What goes into a `wj` binary: the compiler's sources, the embedded std and runtime crates, the build script and the
+/// manifests. A commit that changes nothing here (documentation, tests, benchmark data, scripts) leaves a binary
+/// built before it current.
+pub const COMPILER_INPUTS: &[&str] = &["src", "std", "crates", "build.rs", "build_support", "Cargo.toml", "Cargo.lock"];
+
+/// Did any of `COMPILER_INPUTS` change between commits `from` and `to` of `checkout`? `None`: git cannot say (no git,
+/// a commit it does not have), and the caller keeps the commit comparison.
+pub fn inputs_changed(checkout: &Path, from: &str, to: &str) -> Option<bool> {
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(checkout)
+        .args(["diff", "--quiet", from, to, "--"])
+        .args(COMPILER_INPUTS)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .ok()?;
+    match status.code() {
+        Some(0) => Some(false),
+        Some(1) => Some(true),
+        _ => None,
+    }
+}
+
+/// `behind_text`, unless the commits differ only outside the compiler's inputs (asked of git only when the commits
+/// differ, so a current binary pays nothing).
+pub fn behind_text_in(checkout: &Path, id: &Identity, head: &Head) -> Option<String> {
+    let line = behind_text(id, head)?;
+    let commit = id.commit.as_deref()?;
+    if super::env::get("WJ_CHECKOUT_HEAD").is_none() && inputs_changed(checkout, commit, &head.sha) == Some(false) {
+        return None;
+    }
+    Some(line)
+}
+
 /// The checkout enclosing the current directory (or this executable), and the line for it, if behind.
 pub fn current_behind_text() -> Option<String> {
     let checkout = std::env::current_dir()
         .ok()
         .and_then(|d| super::stale::enclosing_checkout(&d))
         .or_else(|| std::env::current_exe().ok().and_then(|e| super::stale::enclosing_checkout(&e)))?;
-    behind_text(&super::identity::current(), &checkout_head(&checkout)?)
+    behind_text_in(&checkout, &super::identity::current(), &checkout_head(&checkout)?)
 }
 
 /// Print the line to stderr when this `wj` runs inside a compiler checkout whose HEAD is newer.
@@ -159,6 +195,42 @@ mod tests {
         // HEAD's date unreadable (packed): another commit is reported without claiming "older"
         let packed = Head { sha: "bbbb".into(), commit_ts: None };
         assert!(behind_text(&id("aaaa", 1_000), &packed).unwrap().contains("is not built from this checkout"));
+    }
+
+    /// A binary is behind only when the compiler's inputs changed since its commit: a commit that touches only data
+    /// or documentation leaves it current. Mutation-checked both ways: the docs-only case fails if every difference
+    /// counted, the source case fails if none did.
+    #[test]
+    fn only_a_change_to_the_compiler_inputs_makes_a_binary_behind() {
+        let dir = std::env::temp_dir().join(format!("wj-behind-git-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        let git = |args: &[&str]| -> String {
+            let o = std::process::Command::new("git").arg("-C").arg(&dir).args(args).output().expect("git");
+            assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+        git(&["init", "-q"]);
+        let commit = |msg: &str| {
+            git(&["add", "-A"]);
+            git(&["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", msg]);
+            git(&["rev-parse", "HEAD"])
+        };
+        std::fs::write(dir.join("src/lib.rs"), "fn a() {}\n").unwrap();
+        std::fs::write(dir.join("docs/a.md"), "a\n").unwrap();
+        let built = commit("one");
+        std::fs::write(dir.join("docs/a.md"), "b\n").unwrap();
+        let docs_only = commit("docs");
+        std::fs::write(dir.join("src/lib.rs"), "fn b() {}\n").unwrap();
+        let source = commit("source");
+        assert_eq!(inputs_changed(&dir, &built, &docs_only), Some(false));
+        assert_eq!(inputs_changed(&dir, &built, &source), Some(true));
+        assert_eq!(inputs_changed(&dir, &built, "0000000000000000000000000000000000000000"), None, "an unknown commit is no answer");
+        let me = id(&built, 1_000);
+        assert_eq!(behind_text_in(&dir, &me, &Head { sha: docs_only, commit_ts: Some(2_000) }), None);
+        assert!(behind_text_in(&dir, &me, &Head { sha: source, commit_ts: Some(3_000) }).is_some());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
