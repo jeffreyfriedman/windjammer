@@ -167,6 +167,13 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
     // Cached only inside a project (`wj.toml`): results go to its `.wj-cache/`, the build's cache directory; a
     // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
     // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
+    // a program that passed this check before, with every input unchanged, is not checked again (`check/run_cache.rs`)
+    let run_key = check::run_cache::key(path, lints_block, &format!("{format:?}"));
+    let runs = crate::cargo_cache::entries::runs_dir();
+    if let Some(stderr) = run_key.as_deref().and_then(|k| crate::cargo_cache::entries::read(&runs, k)).as_deref().and_then(check::run_cache::decode) {
+        eprint!("{stderr}");
+        return Ok(());
+    }
     let use_cache = check::effects::manifest_path(path).is_some();
     share_registry_layer();
     if use_cache {
@@ -199,13 +206,25 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
         // ADR-0033: integer widths the compiled build would mix are a backend defect, not a language error. `wj check`
         // reports them as errors; an interpreted run warns before the program's output and runs it (scripts that
         // are only ever interpreted keep working)
-        for mut d in super::widths_gate::predicted_widths(path) {
+        let (found, built) = super::widths_gate::predicted_widths_via(path, false);
+        let mut stderr = String::new();
+        for mut d in found {
             d.severity = crate::diagnostics::Severity::Warning;
             d.message = d.message.replacen("the compiled build would reject this", "this runs interpreted, but the compiled build would reject it", 1);
             for sp in d.primary_span.iter_mut() {
                 sp.file = short(&sp.file);
             }
-            eprintln!("{}", render::render_as(&d, &source_of, format));
+            stderr.push_str(&render::render_as(&d, &source_of, format));
+            stderr.push('\n');
+        }
+        eprint!("{stderr}");
+        // stored only when the prediction read nothing but the sources (no build of the program ran)
+        if let (Some(key), None) = (run_key, built) {
+            let sources: Vec<(String, String)> = checked.sources.iter().map(|(f, t)| (f.clone(), t.clone())).collect();
+            if let Some(text) = check::run_cache::encode(&sources, &stderr) {
+                let _ = std::fs::create_dir_all(&runs);
+                crate::cargo_cache::entries::write(&runs, &key, &text, crate::cargo_cache::entries::RUNS_MAX_ENTRIES);
+            }
         }
         return Ok(());
     }

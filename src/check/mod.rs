@@ -20,6 +20,7 @@ mod project;
 mod rust_calls;
 mod rust_surface_health;
 mod match_variants;
+pub mod run_cache;
 pub mod shared_cache;
 mod std_calls;
 pub mod taint;

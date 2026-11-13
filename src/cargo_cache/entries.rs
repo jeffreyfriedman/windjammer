@@ -42,6 +42,14 @@ pub fn meta_dir() -> PathBuf {
 /// Trees kept in [`meta_dir`] (the most recently written win).
 pub const META_MAX_TREES: usize = 2048;
 
+/// Checks before interpreted runs that passed (`<cache root>/runs`, `check/run_cache.rs`).
+pub fn runs_dir() -> PathBuf {
+    super::cache_root().join("runs")
+}
+
+/// Entries kept in the runs directory (newest win).
+pub const RUNS_MAX_ENTRIES: usize = 4096;
+
 pub fn verdicts_dir() -> PathBuf {
     super::cache_root().join("verdicts")
 }
