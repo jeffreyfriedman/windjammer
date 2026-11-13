@@ -11,6 +11,9 @@
 #     the owner process is gone AND nothing in the tree was touched for 10 minutes (a recycled pid is then not mistaken
 #     for the owner, and a live one is never touched);
 #  2. pid-less   .tmp* (tempfile crate), wj-drift-live.*: nothing in the tree touched for 6 hours.
+# Never reaped, whatever their name or age (KEEP_NAMES): wj-meta* is the shared crate-metadata cache
+# (src/metadata/crate_metadata.rs, global_meta_cache_dir; hundreds of MB that every run reuses). It moves under the
+# shared cache root later so `wj cache prune` manages it; until then this script leaves it alone.
 # Killed test runs (timeouts, kill -9, restarts) never run their cleanup; tests/common/scratch.rs reaps rule 1 itself
 # on the first Scratch::new of a process, this script covers everything else and runs before heavy jobs.
 #
@@ -28,6 +31,14 @@ ME="$0"
 TMP_BASE=${TMPDIR:-/tmp}
 TMP_BASE=${TMP_BASE%/}
 [ -n "$TMP_BASE" ] || TMP_BASE=/
+
+# Legitimate shared caches that live in the temp dir: never reaped by any rule.
+is_kept_name() {
+  case "$1" in
+    wj-meta*) return 0 ;;   # shared crate-metadata cache (global_meta_cache_dir), not test scratch
+  esac
+  return 1
+}
 
 # Anything in the tree (including the directory itself) modified within the last $2 minutes?
 touched_within() {
@@ -52,6 +63,7 @@ reap_main() {
   for d in "$TMP_BASE"/wj-* "$TMP_BASE"/windjammer-test-*; do
     [ -d "$d" ] && [ ! -L "$d" ] && [ -O "$d" ] || continue
     b=${d##*/}
+    is_kept_name "$b" && continue
     [[ $b =~ -([0-9]+)-[0-9]+$ ]] || continue
     pid=${BASH_REMATCH[1]}
     [ "$pid" = "$$" ] && continue
@@ -61,6 +73,7 @@ reap_main() {
   done
   for d in "$TMP_BASE"/.tmp* "$TMP_BASE"/wj-drift-live.*; do
     [ -d "$d" ] && [ ! -L "$d" ] && [ -O "$d" ] || continue
+    is_kept_name "${d##*/}" && continue
     touched_within "$d" 360 && continue
     reap_one "$d"
   done
@@ -96,6 +109,8 @@ selftest_main() {
   mk ".tmpNEW456"                                                  # pid-less, recent: kept
   mk "other-tool-$dead-0";      age "other-tool-$dead-0"           # foreign name: kept
   mk "wj-nopid";                age "wj-nopid"                     # wj- without a pid: kept
+  mk "wj-meta";                 age "wj-meta"                      # shared metadata cache: kept
+  mk "wj-meta-$dead-0";         age "wj-meta-$dead-0"              # wj-meta* even when pid-named: kept
   check() { checks=$((checks + 1)); if ! eval "$2"; then echo "selftest FAIL: $1" >&2; fails=$((fails + 1)); fi; }
 
   out=$(TMPDIR="$base" bash "$ME" --dry-run); code=$?
@@ -114,6 +129,8 @@ selftest_main() {
   check "new .tmp dir kept" '[ -f "$base/.tmpNEW456/sub/f" ]'
   check "foreign name kept" '[ -f "$base/other-tool-$dead-0/sub/f" ]'
   check "wj- without pid kept" '[ -f "$base/wj-nopid/sub/f" ]'
+  check "wj-meta cache kept" '[ -f "$base/wj-meta/sub/f" ]'
+  check "pid-named wj-meta* kept" '[ -f "$base/wj-meta-$dead-0/sub/f" ]'
 
   TMPDIR="$base" WJ_DISK_ALARM_GB=0 WJ_DISK_STOP_GB=0 bash "$ME" --disk >/dev/null; code=$?
   check "disk ok exits 0" '[ $code = 0 ]'
