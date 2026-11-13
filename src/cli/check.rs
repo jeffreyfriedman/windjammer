@@ -62,6 +62,12 @@ impl crate::analyzer::LayerStore for RegistryDir {
     fn put(&self, key: &str, text: &str) {
         self.0.put(key, text)
     }
+    fn get_bytes(&self, key: &str) -> Option<Vec<u8>> {
+        self.0.get_bytes(key)
+    }
+    fn put_bytes(&self, key: &str, bytes: &[u8]) {
+        self.0.put_bytes(key, bytes)
+    }
 }
 
 struct AnalysisDir(crate::cargo_cache::entries::AnalysisStore);
