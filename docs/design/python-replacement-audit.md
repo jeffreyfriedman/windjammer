@@ -140,6 +140,8 @@ Python fallback: per-child timeout, no `process` function can stop a program aft
 
 Python fallback: owned by the readiness stream, `scripts/interp_readiness.py` and `scripts/readiness/*`; ported last and only if clearly safe.
 
+Shell kept: temp-dir reaper, `scripts/reap-tmp.sh` (stale test scratch and `--disk` free-space report) needs a file's modification time, whether another pid is running and a filesystem's free space; `std::fs::Metadata` has no `modified`, `std::process` has no liveness check and there is no free-space query, so a port would fork `find`, `kill` and `df` per entry; it also has to run before any `wj` is built. Self-test: `scripts/reap-tmp.sh --selftest` (`tests/reap_tmp_script_test.rs`).
+
 Python fallback: package-sized, `bench/agent-dx/agentdx/*` is one Python package with a unittest suite and a Python arm in the comparison it measures; it moves as a whole.
 
 ## Measurements
