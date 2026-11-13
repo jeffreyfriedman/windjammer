@@ -1,0 +1,62 @@
+// ==== bag.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Bag {
+    pub items: Vec<String>,
+}
+
+impl Bag {
+#[inline]
+pub fn contains(&self, item: String) -> bool {
+        let mut items: Vec<String> = self.items.clone();
+        items.push(item);
+        items.len() > 1_usize
+}
+}
+
+// ==== check.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn verify(token: &str) -> Result<i64, String> {
+    if token.len() > 3_usize {
+        return Err(String::from("Token EXPIRED"));
+    }
+    Ok(1_i64)
+}
+
+#[inline]
+pub fn rejected_as_expired(token: &str) -> bool {
+    let result = verify(token);
+    result.is_err() && result.unwrap_err().to_lowercase().contains("expired")
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod bag;
+pub mod check;
+
+// Re-export public items
+pub use bag::*;
+pub use check::*;
+// ==== main.rs ====
+mod bag;
+mod check;
+fn main() {
+    println!("{} {}", check::rejected_as_expired("abcd"), check::rejected_as_expired("ab"));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod bag;
+pub mod check;
+
+// Re-export public items
+pub use bag::*;
+pub use check::*;
