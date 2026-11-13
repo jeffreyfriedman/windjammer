@@ -242,8 +242,8 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         if it.jit_debug {
             let f = it.fast;
             eprintln!(
-                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} rowview {} matchval {} argcopy {} lenfast {}",
-                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.rowview, f.matchval, f.argcopy, f.lenfast
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} rowview {} matchval {} argcopy {} lenfast {} placeargs {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.rowview, f.matchval, f.argcopy, f.lenfast, f.placeargs
             );
             eprintln!("{}", it.fallback.line());
         }
