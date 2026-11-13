@@ -1,0 +1,36 @@
+// expect: 0
+// expect: 1
+// The t307 shape: the callee is declared after the caller, the call is a `return` value inside an `if` whose
+// condition reads the same field, and the field is a text formal of a `&mut self` method.
+struct Form {
+    s: string,
+    kind: int,
+}
+struct Interp {
+    forms: Vec<Form>,
+    errors: int,
+}
+fn reserved(s: string) -> bool {
+    s == "add"
+}
+impl Interp {
+    fn eval(self, h: int) -> int {
+        if self.forms[h].kind == 2 && reserved(self.forms[h].s) {
+            return self.special(self.forms[h].s, 1)
+        }
+        self.errors
+    }
+    fn fail(self, msg: string) -> int {
+        self.errors += 1
+        msg.len() as int
+    }
+    fn special(self, op: string, n: int) -> int {
+        if op == "add" { return self.fail("x") }
+        n
+    }
+}
+fn main() {
+    let mut it = Interp { forms: [Form { s: "add", kind: 2 }], errors: 0 }
+    println("${it.errors}")
+    println("${it.eval(0)}")
+}

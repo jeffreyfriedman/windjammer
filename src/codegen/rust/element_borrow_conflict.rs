@@ -121,7 +121,7 @@ fn path_root(e: &Expression<'_>) -> Option<String> {
 impl<'ast> CodeGenerator<'ast> {
     /// `self.special(self.forms[h].s, ..)` where `special` takes `&mut self` and the argument is passed by shared
     /// reference: the argument borrows the receiver while the call borrows it mutably (rustc E0502), so the argument is
-    /// copied first (`&(self.forms[h].s).clone()`; the copy is a temporary, the receiver is free when the call runs).
+    /// copied first (`&(self.forms[h].s.clone())`; the copy is a temporary, the receiver is free when the call runs).
     pub(in crate::codegen::rust) fn copy_receiver_borrows_into_mut_call(
         &self,
         object: &Expression<'ast>,
@@ -130,20 +130,17 @@ impl<'ast> CodeGenerator<'ast> {
         sig: &Option<crate::analyzer::FunctionSignature>,
         mut args: Vec<String>,
     ) -> Vec<String> {
-        let mut_receiver = sig.as_ref().is_some_and(|s| {
-            s.has_self_receiver && matches!(s.param_ownership.first(), Some(crate::analyzer::OwnershipMode::MutBorrowed))
-        }) || self.ir_receiver_is_mut(object, method);
-        let Some(root) = path_root(object).filter(|_| mut_receiver) else { return args };
         for ((_, arg), text) in arguments.iter().zip(args.iter_mut()) {
-            let projects = matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. });
-            if !projects || path_root(arg).as_deref() != Some(root.as_str()) || text.starts_with("&mut") {
+            if !self.arg_borrows_mut_receiver(object, method, sig.as_ref(), Some(arg)) || text.starts_with("&mut") {
                 continue;
             }
+            // The copy is parenthesized (`&(self.forms[h].s.clone())`): later argument passes drop a trailing `.clone()`
+            // into a shared-reference formal, and this one is required.
             if let Some(inner) = text.strip_prefix('&') {
-                *text = format!("&({}).clone()", inner.trim());
+                *text = format!("&({}.clone())", inner.trim());
             } else if !text.ends_with(".clone()") && self.infer_expression_type(arg).is_some_and(|t| !self.is_type_copy(&t)) {
-                // The borrow is added later (`&self.forms[h].s.clone()`): copy the value first.
-                text.push_str(".clone()");
+                // The borrow is added later: copy the value first.
+                *text = format!("({text}.clone())");
             }
         }
         args
@@ -162,6 +159,23 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `arg` is a field or element path of the receiver of a `&mut self` call (`self.special(self.forms[h].s, ..)`):
+    /// passing a borrow of it while the call borrows the receiver mutably is rustc E0502, so the argument is a copy.
+    /// Later argument passes must keep that copy even where the formal is a shared reference.
+    pub(in crate::codegen::rust) fn arg_borrows_mut_receiver(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        sig: Option<&crate::analyzer::FunctionSignature>,
+        arg: Option<&Expression<'ast>>,
+    ) -> bool {
+        let Some(arg) = arg.filter(|a| matches!(a, Expression::FieldAccess { .. } | Expression::Index { .. })) else { return false };
+        let mut_receiver = sig.is_some_and(|s| {
+            s.has_self_receiver && matches!(s.param_ownership.first(), Some(crate::analyzer::OwnershipMode::MutBorrowed))
+        }) || self.ir_receiver_is_mut(object, method);
+        mut_receiver && path_root(object).is_some_and(|root| path_root(arg).as_deref() == Some(root.as_str()))
+    }
+
     /// The IR solved the callee `Type::method` (of the receiver's type) to take `&mut self`.
     fn ir_receiver_is_mut(&self, object: &Expression<'ast>, method: &str) -> bool {
         let Some(ty) = self.infer_type_name(object) else { return false };
