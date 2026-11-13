@@ -161,8 +161,10 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
     }
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
+    crate::debug_env::phase("check-start");
     let checked = check::check_path(path, &CheckOptions { use_cache });
     std::panic::set_hook(previous);
+    crate::debug_env::phase("check-path");
     let checked = checked?;
     // `--no-lint`: Rust-leakage lints (W####) do not stop the run; every other error does.
     // a lint code is `W` and four digits; `WJ0003` is a compile error and must stop the run whatever `--no-lint` says

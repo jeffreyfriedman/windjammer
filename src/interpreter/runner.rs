@@ -155,7 +155,9 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
     let entry = entry.to_path_buf();
     with_big_stack(move || {
         let EntryOptions { fallback, host, crates, hot, run: opts } = opts;
+        crate::debug_env::phase("interp-start");
         let mut it = Interpreter::new();
+        crate::debug_env::phase("interp-new");
         it.set_env_snapshot(host_env()); // host input, like `args`
         it.guard_stack();
         it.hash_seed = opts.hash_seed;
@@ -219,6 +221,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         if let Some(c) = crates {
             it.attach_crate_host(c);
         }
+        crate::debug_env::phase("interp-setup");
         if let Err(e) = it.load_program_at(&entry) {
             if fallback && super::preflight::is_preflight(&e) {
                 return RunOutcome::NeedsCompiled(e);
@@ -226,6 +229,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             report_failure(&e, exit_code_for(&e), opts.json_errors);
             return RunOutcome::Exited(exit_code_for(&e));
         }
+        crate::debug_env::phase("load");
         if hot {
             it.enable_hot_reload();
         }
@@ -239,6 +243,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             }
         };
         it.flush();
+        crate::debug_env::phase("main");
         if it.jit_debug {
             let f = it.fast;
             eprintln!(

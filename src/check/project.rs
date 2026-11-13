@@ -39,13 +39,32 @@ fn manifest_deps(root: &Path) -> std::collections::HashSet<String> {
     out
 }
 
+/// Can the file bind a name at all (a parameter, a `let`, a `for` or `match` pattern, a closure parameter)? A local
+/// changed without `mut` (WJ0051) needs a binding, so a program without one skips that analysis (an IR pipeline
+/// over the whole program: 17M of a 121M `hello` run). The text test can only say yes too often (a `let` in a
+/// string or a comment), never too rarely.
+pub(super) fn has_bindings(p: &Parsed) -> bool {
+    fn items(list: &[crate::parser::Item<'_>]) -> bool {
+        use crate::parser::Item;
+        list.iter().any(|i| match i {
+            Item::Function { decl, .. } => !decl.parameters.is_empty(),
+            Item::Mod { items: inner, .. } => items(inner),
+            Item::Struct { .. } | Item::Enum { .. } | Item::Use { .. } | Item::Const { .. } | Item::Static { .. } | Item::TypeAlias { .. } | Item::BoundAlias { .. } => false,
+            _ => true,
+        })
+    }
+    ["let", "for", "match", "|"].iter().any(|w| p.text.contains(w)) || items(&p.program.items)
+}
+
 /// `memo`: per-file reuse of the analysis phase (`file_cache.rs`); `None` computes everything.
 pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Option<&mut FileMemo>) {
     let parsed: Vec<&Parsed> = all.iter().filter(|p| !is_shader(p)).collect();
     let parsed = parsed.as_slice();
     let by_file: HashMap<String, &Parsed> = parsed.iter().map(|p| (p.file.clone(), *p)).collect();
     resolve_phase(root, parsed, &by_file, out);
+    crate::debug_env::phase("check-resolve");
     super::effects::run(root, parsed, &by_file, out);
+    crate::debug_env::phase("check-effects");
     let programs: Vec<_> = parsed.iter().map(|p| &p.program).collect();
     let idx = Index::build(&programs);
     // ADR-0026: calls into Rust crates checked against `rust/<crate>.wji`
@@ -59,6 +78,7 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     if let Some(dir) = &manifest_dir {
         super::rust_surface_health::run(dir, &crates, out);
     }
+    crate::debug_env::phase("check-calls");
     for p in parsed {
         semantic::check_file(
             &idx,
@@ -66,10 +86,16 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
             out,
         );
     }
+    crate::debug_env::phase("check-semantic");
     // Session-shared stdlib tables, computed on the first analysis that is not reused from the memo.
     let tables = std::cell::OnceCell::new();
     // ADR-0002: local bindings changed without `mut` (WJ0051), over the whole program at once
-    out.extend(super::local_mut::run(parsed, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::load_or_compute())).clone()));
+    if parsed.iter().any(|p| has_bindings(p)) {
+        let t = tables.get_or_init(|| std::sync::Arc::new(StdlibTables::load_or_compute())).clone();
+        crate::debug_env::phase("check-tables");
+        out.extend(super::local_mut::run(parsed, t));
+    }
+    crate::debug_env::phase("check-local-mut");
     for p in parsed {
         // A file that already has errors would only add cascading analyzer noise.
         let has_errors = out
@@ -246,7 +272,9 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     use crate::analyzer::{Analyzer, SignatureRegistry};
     let mut analyzer = Analyzer::new();
     let sigs = SignatureRegistry::new();
-    match analyzer.analyze_program_with_global_signatures(&p.program, &sigs) {
+    let analysis = analyzer.analyze_program_with_global_signatures(&p.program, &sigs);
+    crate::debug_env::phase("check-analyzer");
+    match analysis {
         Ok((analyzed, registry, _)) => {
             let mut num = crate::ir::numeric_bridge::UnifiedNumericInference::new();
             num.infer_program(&p.program);
@@ -256,8 +284,10 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
                         .with_note(format!("in {}", p.file)),
                 );
             }
+            crate::debug_env::phase("check-numeric");
             let mut pipeline = crate::ir::IrPipeline::new().with_stdlib_tables(tables);
             let module = pipeline.lower_to_ir(&analyzed, &registry, None);
+            crate::debug_env::phase("check-ir");
             use crate::ir::pipeline::DiagnosticSeverity as S;
             for d in &module.diagnostics {
                 // Only the solvers' real violations; shadow-mode constraint chatter is not a finding.
@@ -281,5 +311,6 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     if !out.iter().any(|d| d.is_error()) {
         out.extend(super::moves::predict(&p.program, &p.text, &p.file));
     }
+    crate::debug_env::phase("check-moves");
     out
 }
