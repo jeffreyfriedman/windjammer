@@ -1,6 +1,6 @@
 // The drift gate: one command that fails when the interpreter and the compiled output disagree.
 //
-//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--fuzz-short] [--check-env] [--prune] [--compiled recorded|live|skip]
+//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--fuzz-short] [--allow-stale] [--check-env] [--prune] [--compiled recorded|live|skip]
 //
 // Steps (docs/testing/DRIFT.md):
 //   selftest   the ledger comparer and the corpus tokens, against planted divergences
@@ -17,7 +17,8 @@
 //              prefix; every divergence is in tests/drift_corpus/fuzz_divergences.txt or the gate fails
 //   corpus     (plus 40 generated value-kind x position programs, drift_gen.wj) ecosystem tests + value-position programs: walker, resolved and compiled agree, or the
 //              divergence is in tests/drift_corpus/known_divergences.txt (a shrink-only ledger)
-// `--fast` skips the cargo steps (selftest, fuzz, corpus and spec only). WJ_CARGO_WRAPPER prefixes every cargo and
+// `--fast` skips the cargo steps (selftest, fuzz, corpus and spec only) and prints how many it skipped. A `wj` older than
+// this checkout's compiler sources fails the gate (STALE) unless `--allow-stale`. WJ_CARGO_WRAPPER prefixes every cargo and
 // compiled run (a build-slot gate); DRIFT_BASE_REF (default: the current branch's upstream, else the merge-base with origin/HEAD) names the ref the ledger may only
 // shrink against. Exit status 1 when any step fails.
 use std::env
@@ -134,6 +135,21 @@ fn mutant_step() -> Step {
             Step { name: "builtin-mutants", cases: if n >= 0 { "${n}${ran_text(r.stdout)}" } else { "?" }, verdict: if ok { "pass" } else if r.status == 0 { "FAIL (0 tests ran)" } else { "FAIL" }, secs: now() - t0, detail: if ok { "" } else { tail_lines(r.stdout, 25) } }
         },
         Err(e) => Step { name: "builtin-mutants", cases: "?", verdict: "FAIL", secs: now() - t0, detail: e },
+    }
+}
+
+// The staleness line `wj` prints (behind its checkout's compiler sources), or "".
+fn stale_line(wj: string) -> string {
+    match sh("${wj} check --no-lint scripts/wj/drift_gate.wj 2>&1 >/dev/null") {
+        Ok(r) => {
+            for line in strings.split_lines(r.stdout) {
+                if line.contains("older than this checkout") || line.contains("is not built from this checkout") {
+                    return line
+                }
+            }
+            ""
+        },
+        Err(_) => "",
     }
 }
 
@@ -439,6 +455,7 @@ fn main() {
     let mut adopt = ""
     let mut fast = false
     let mut fuzz_long = true
+    let mut allow_stale = false
     let mut compiled = "recorded"
     let mut i = 1
     while i < args.len() {
@@ -458,6 +475,8 @@ fn main() {
             fuzz_long = true
         } else if args[i] == "--fuzz-short" {
             fuzz_long = false
+        } else if args[i] == "--allow-stale" {
+            allow_stale = true
         } else if args[i] == "--compiled" {
             compiled = args[i + 1]
             i += 1
@@ -486,6 +505,16 @@ fn main() {
         println("wj: ${wj}")
         return
     }
+    // a `wj` built before the compiler sources it is judged against would measure the wrong compiler: refuse it
+    // loudly (`--allow-stale` runs it anyway and says so in the result)
+    let stale = stale_line(wj)
+    if stale != "" {
+        println("drift gate: STALE ${stale}")
+        if !allow_stale {
+            println("drift gate: FAIL (the wj under test is older than this checkout's compiler sources; rebuild it, or pass --allow-stale)")
+            process.exit(1)
+        }
+    }
     let mut steps: Vec<Step> = Vec::new()
     steps.push(wj_step("selftest", wj, "scripts/wj/drift_selftest.wj ${wj}"))
     if !fast {
@@ -508,6 +537,14 @@ fn main() {
         }
     }
     println(plain(t, "  "))
+    // steps this run did not take are counted, never left out silently
+    let skipped = if fast { 6 } else { 0 }
+    if skipped > 0 {
+        println("drift gate: SKIPPED ${skipped} step(s) (--fast: the cargo steps parity, fast-paths, jit-loops, packed-vec, crate-host, builtin-mutants)")
+    }
+    if stale != "" {
+        println("drift gate: STALE binary allowed by --allow-stale: the result is about that build, not this checkout")
+    }
     for s in steps {
         if s.detail != "" {
             println("--- ${s.name}")

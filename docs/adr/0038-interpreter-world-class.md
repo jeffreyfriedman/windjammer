@@ -65,8 +65,12 @@ CPython 136, Node 214.
 
 The first rungs of this ADR's own work moved nbody: loop entry checks the cached classification in place, and a
 call with an inferred `&mut` parameter is compiled instead of running as a walker island. nbody 905M -> 728M
-instructions, net 0.63 vs QuickJS and 1.03 vs Lua; kernel islands 21,304 -> 1,304 (geometric means 0.33 vs
-QuickJS, 0.66 vs Lua).
+retired instructions (-19.6%, macOS counter); the PC's callgrind counts 763.7M -> 624.4M (-18.2%) for the same
+commits. Kernel islands 21,304 -> 1,304. The second round put map lookups and inserts into machine code (hashmap
+537M -> 315M, -41%; net 0.76 vs QuickJS, was 1.49) and took the local-mut analysis off programs without bindings
+(startup 120M -> 105M). Geometric means at the second round's head: 0.33 vs QuickJS, 0.66 vs Lua, 0.17 vs CPython.
+Net ratios subtract each side's own startup; a startup gain that the kernels do not share (they all bind names)
+raises their net ratios slightly, which is why some moved up by a few hundredths.
 
 The integer kernels (fib30, loop5m, structs) already run as machine code and beat every interpreter; the gaps are
 the kernels whose hot loops still leave machine code: closures (a walker island per iterator chain), hashmap (both
@@ -75,11 +79,11 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | Rung | Metric | Now | Target | Gate |
 |---|---|---|---|---|
 | P0 | every kernel and startup counted, outputs checked, fallbacks ledgered | done | stays done | `interp_instr.wj --check` (+3%), `cargo test --release --test fallbacks` |
-| P1 | worst kernel, net vs QuickJS | 1.47 (hashmap) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
-| P2 | startup instructions | 119M | <= 60M, then <= 25M | `instr_baseline.json` `startup` |
-| P3 | worst kernel, net vs Lua 5.5 | 6.89 (hashmap) | <= 1.0 | `--refs` |
+| P1 | worst kernel, net vs QuickJS | 1.24 (closures; hashmap 1.49 -> 0.76) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
+| P2 | startup instructions (`hello`, macOS counter) | 104.6M (was 119M); by phase (`WJ_PHASES=1`): before main 28.8M, first analyzer (stdlib trait bootstrap) 22.6M, moves prediction 26.6M, numeric 5.7M, calls 4.5M, the interpreter 2.5M | <= 60M, then <= 25M | `instr_baseline.json` `startup` |
+| P3 | worst kernel, net vs Lua 5.5 | 3.53 (hashmap, was 6.89) | <= 1.0 | `--refs` |
 | P4 | islands and refused loops in kernels | 1,304 islands (was 21,304), 6 refused loops | 0 in any hot loop | `bench/interp/fallbacks.tsv` (exact) |
-| P5 | geometric mean, net vs Node (V8) | 2.49 | <= 1.0 (JIT class) | `--refs` |
+| P5 | geometric mean, net vs Node (V8) | 2.5 to 2.8 (V8's own count varies by run) | <= 1.0 (JIT class) | `--refs` |
 | P6 | a kernel suite of real programs (JSON, regex, a game tick, a parser) | not yet | added, counted, P1-P5 apply | new kernels in `bench/interp/` |
 
 ## Ladder 2: correctness (the compiled program is the oracle)
@@ -87,10 +91,10 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | Rung | Metric | Now | Target | Gate |
 |---|---|---|---|---|
 | C0 | drift fast gate: fuzz, corpus (walker, resolved, recorded compiled), spec oracle | fuzz 154 cases 0 divergent; corpus 3047 cases, all divergences ledgered; spec 229 cases, all ledgered | clean on every merge | `scripts/wj/drift_gate.wj --fast` |
-| C1 | known divergences in the drift ledger | 90 (ceiling 90) | 0 | `tests/drift_corpus/known_divergences.txt` shrink-only, `ledger_ceiling.txt` |
+| C1 | known divergences in the drift ledger | 89 (ceiling 89; was 90) | 0 | `tests/drift_corpus/known_divergences.txt` shrink-only, `ledger_ceiling.txt` |
 | C2 | spec-oracle known divergences | 14 | 0 | `tests/spec_oracle/known_divergences.txt` shrink-only |
 | C3 | fuzz divergences | 0 | 0 | `tests/drift_corpus/fuzz_divergences.txt` |
-| C4 | fuzz throughput (generated cases checked, walker vs resolved) | 154 cases in 14 s wall at load 50 (about 11 per second) | 10x, so the long seed range (`--fuzz-long`) runs on every merge | `drift_gate.wj` step `fuzz` |
+| C4 | fuzz throughput (generated cases checked, walker vs resolved) | both engines on every program in one `wj run --pair-list` process: the long seed range (2234 rows) in 12.9 s wall / 11.3 s CPU, was 99.6 s / 71.5 s (7.8x wall, 6.3x CPU), byte-identical rows; the gate runs the long range by default | 10x CPU (the rest is generating programs in interpreted Windjammer), then a fuzz budget of 10k programs per merge | `drift_gate.wj` step `fuzz` |
 | C5 | readiness R2 (no silent divergence) and R5 (diagnostics agree) | 98.5% and 95.1% | 100% | `docs/generated/interp_readiness.json` |
 | C6b | integer widths: an unsuffixed literal gets the width the numeric solver gives it in the compiled program (ADR-0028 `literal_widths`), so a `usize` countdown underflows interpreted exactly where it panics compiled | done: `compiled_facts.rs` adopts the solver's non-`int` literal widths in the walker, the resolved engine and machine code; a program pays for the analysis only when its AST can give a literal another width (an index, a cast, a `usize` std method, a declared narrow type): 0 instructions for `hello`, +9M to +20M on the kernels that qualify; the drift ledger lost one line (`literal_out_of_range`), and `repros/index_countdown_usize_underflow.wj` holds it | every literal width from the solver at no measurable cost: reuse the widths `wj check` already computed in the same process | drift corpus case; `interp_instr.wj` for the cost |
 | C6 | engines agree with each other | walker == resolved == machine code on every corpus program | stays | `engine_parity`, `fast_paths`, `fallbacks`, jit differential tests |
