@@ -1,17 +1,19 @@
 //! Programs the compiled build rejects or fails must not pass interpreted (the compiled program is the oracle,
 //! ADR-0038 ladder 2). Each case is a reduced repro from ecosystem work; the expected behaviour is the compiled one.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::process::Command;
 
 const WJ: &str = env!("CARGO_BIN_EXE_wj");
 
 fn run(name: &str, src: &str) -> (i32, String, String) {
-    let dir = std::env::temp_dir().join(format!("wj-agree-{}-{name}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let scratch = Scratch::new(&format!("agree-{name}"));
+    let dir = scratch.path().to_path_buf();
     let p = dir.join("main.wj");
     std::fs::write(&p, src).unwrap();
     let o = Command::new(WJ).args(["run", "--interpret", "--no-lint"]).arg(&p).stdin(std::process::Stdio::null()).output().unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into(), String::from_utf8_lossy(&o.stderr).into())
 }
 
