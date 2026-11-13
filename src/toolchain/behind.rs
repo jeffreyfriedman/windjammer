@@ -1,4 +1,5 @@
-//! Commit-based staleness: is this `wj` built from an older commit than the compiler checkout it runs in?
+//! Staleness: is this `wj` built from other sources than the compiler checkout it runs in? By the content key of
+//! the sources the binary carries (`key_behind_text`; every build since build-key), else by commit (older binaries).
 //!
 //! The age-based check (`stale.rs`) waits 30 days; a `wj` a few days behind its checkout already lacks
 //! subcommands and accepted inputs (`wj eval`, `wj run -`), and the failure it gives ("plugin not found", "no
@@ -117,6 +118,35 @@ pub fn behind_text(id: &Identity, head: &Head) -> Option<String> {
     ))
 }
 
+/// The content key of the sources in `checkout` (the digest build.rs bakes into a binary built from them).
+pub fn checkout_inputs_key(checkout: &Path) -> String {
+    content_key::inputs_key(checkout)
+}
+
+/// One line when this binary was built from other sources than `checkout` holds now: the content key it was built
+/// from differs from the checkout's (build_support/content_key.rs, the same digest build.rs bakes in). Exact and
+/// git-free. To stay off the hot path, the digest is computed only when an input file is newer than the build.
+pub fn key_behind_text(id: &Identity, checkout: &Path) -> Option<String> {
+    let mine = id.key.as_deref()?;
+    // one pass, one `stat` per input, stopping at the first newer one (no path list built first)
+    if let Some(built) = id.build_ts {
+        if !content_key::any_input_newer_than(checkout, built) {
+            return None;
+        }
+    }
+    let theirs = content_key::inputs_key(checkout);
+    if theirs.starts_with(mine) || mine.starts_with(theirs.as_str()) {
+        return None;
+    }
+    let built = id.build_ts.map(iso_datetime).unwrap_or_else(|| "unknown".into());
+    let commit = id.commit.as_deref().map(|c| format!("commit {}, ", &c[..c.len().min(12)])).unwrap_or_default();
+    Some(format!(
+        "wj: this wj ({commit}sources {}, built {built}) is not built from this checkout's sources ({}); run `wj install-dev --from <fresh build>` (for example `cargo build --release --bin wj && target/release/wj install-dev`)",
+        &mine[..mine.len().min(10)],
+        &theirs[..10]
+    ))
+}
+
 /// What goes into a `wj` binary: the compiler's sources, the embedded std and runtime crates, the build script and the
 /// manifests. A commit that changes nothing here (documentation, tests, benchmark data, scripts) leaves a binary
 /// built before it current.
@@ -153,51 +183,29 @@ pub fn behind_text_in(checkout: &Path, id: &Identity, head: &Head) -> Option<Str
     Some(line)
 }
 
-/// The content key of the sources in `checkout` (the digest build.rs bakes into a binary built from them).
-pub fn checkout_inputs_key(checkout: &Path) -> String {
-    content_key::inputs_key(checkout)
+/// The line for `id` run in `checkout`, if behind. A binary that carries the content key of its sources (every build
+/// since build-key) is compared by that key: exact, and blind to commits and files that are not compiler inputs, so a
+/// stamped and an unstamped build of the same sources agree, and an uncommitted change to an input is seen either way.
+/// The commit comparison is the fallback for older binaries without a key.
+pub fn behind_for(id: &Identity, checkout: &Path) -> Option<String> {
+    if id.key.is_some() {
+        return key_behind_text(id, checkout);
+    }
+    behind_text_in(checkout, id, &checkout_head(checkout)?)
 }
 
-/// One line when this binary was built from other sources than `checkout` holds now: the content key it was built
-/// from differs from the checkout's (build_support/content_key.rs, the same digest build.rs bakes in). Exact and
-/// git-free. To stay off the hot path, the digest is computed only when an input file is newer than the build.
-pub fn key_behind_text(id: &Identity, checkout: &Path) -> Option<String> {
-    let mine = id.key.as_deref()?;
-    if let Some(built) = id.build_ts {
-        if !content_key::any_input_newer_than(checkout, built) {
-            return None;
-        }
-    }
-    let theirs = content_key::inputs_key(checkout);
-    if theirs.starts_with(mine) || mine.starts_with(theirs.as_str()) {
-        return None;
-    }
-    let built = id.build_ts.map(iso_datetime).unwrap_or_else(|| "unknown".into());
-    Some(format!(
-        "wj: this wj (sources {}, built {built}) is not built from this checkout's sources ({}); run `wj install-dev --from <fresh build>` (for example `cargo build --release --bin wj && target/release/wj install-dev`)",
-        &mine[..mine.len().min(10)],
-        &theirs[..10]
-    ))
-}
-
-/// The checkout enclosing the current directory (or this executable), and the line for it, if behind: by commit
-/// for a build stamped with one, else by the content key of the sources.
+/// The checkout enclosing the current directory (or this executable), and the line for it, if behind ([`behind_for`]).
 pub fn current_behind_text() -> Option<String> {
     let checkout = std::env::current_dir()
         .ok()
         .and_then(|d| super::stale::enclosing_checkout(&d))
         .or_else(|| std::env::current_exe().ok().and_then(|e| super::stale::enclosing_checkout(&e)))?;
-    let id = super::identity::current();
-    if id.commit.is_some() {
-        return behind_text_in(&checkout, &id, &checkout_head(&checkout)?);
-    }
-    key_behind_text(&id, &checkout)
+    behind_for(&super::identity::current(), &checkout)
 }
 
 /// Print the line to stderr when this `wj` runs inside a compiler checkout it was not built from.
 pub fn warn_if_behind() {
-    // the instruction gates measure the interpreter, not this check (a `stat` per compiler source, about 40M
-    // instructions per run inside a checkout)
+    // the instruction gates measure the interpreter, not this check (a `stat` per compiler source inside a checkout)
     if super::env::flag("WJ_NO_STALE_WARN") {
         return;
     }
@@ -284,6 +292,35 @@ mod tests {
         let me = id(&built, 1_000);
         assert_eq!(behind_text_in(&dir, &me, &Head { sha: docs_only, commit_ts: Some(2_000) }), None);
         assert!(behind_text_in(&dir, &me, &Head { sha: source, commit_ts: Some(3_000) }).is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A stamped binary that carries its sources' key is judged by the key, as an unstamped one is: an uncommitted
+    /// change to a compiler input is flagged although the commit matches, and a change to a non-input is not.
+    /// Mutation-checked: with the commit logic for stamped builds the source case passes as current and fails here.
+    #[test]
+    fn a_stamped_binary_with_a_key_is_judged_by_its_sources_not_its_commit() {
+        let dir = std::env::temp_dir().join(format!("wj-behind-key-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        std::fs::write(dir.join("src/lib.rs"), "fn a() {}\n").unwrap();
+        std::fs::write(dir.join("docs/a.md"), "a\n").unwrap();
+        let built_from = content_key::inputs_key(&dir);
+        let head = "1234567890abcdef1234567890abcdef12345678";
+        std::fs::create_dir_all(dir.join(".git/refs/heads")).unwrap();
+        std::fs::write(dir.join(".git/HEAD"), format!("{head}\n")).unwrap();
+        // built before the edits below (the mtime shortcut must not skip them)
+        let me = Identity { key: Some(built_from), build_ts: Some(1), ..id(head, 1) };
+        assert_eq!(behind_for(&me, &dir), None, "the sources it was built from");
+        std::fs::write(dir.join("docs/a.md"), "b\n").unwrap();
+        assert_eq!(behind_for(&me, &dir), None, "a documentation change is no compiler input");
+        std::fs::write(dir.join("src/lib.rs"), "fn b() {}\n").unwrap();
+        let line = behind_for(&me, &dir).expect("an uncommitted source change on the binary's own commit is flagged");
+        assert!(line.contains("commit 1234567890ab") && line.contains("is not built from this checkout"), "{line}");
+        // the same binary without a key (an older build) falls back to the commit: same commit, nothing claimed
+        let old = Identity { key: None, ..me };
+        assert_eq!(behind_for(&old, &dir), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

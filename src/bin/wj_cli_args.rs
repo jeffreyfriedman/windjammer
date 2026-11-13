@@ -814,6 +814,10 @@ pub enum Commands {
         /// Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout
         #[arg(long)]
         strict: bool,
+
+        /// Print the toolchain pin line for this wj (its source key), ready to paste under `[toolchain]` in wj.toml
+        #[arg(long)]
+        pin: bool,
     },
 
     /// Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup

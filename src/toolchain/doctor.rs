@@ -358,14 +358,11 @@ pub fn collect(path_env: &str) -> Report {
     }
 }
 
-/// The first `wj` on PATH (the one a command runs) built from an older commit than the checkout's HEAD.
+/// The first `wj` on PATH (the one a command runs) when it is not built from the checkout's sources (`behind::behind_for`).
 fn behind_warnings(checkout: Option<&Path>, binaries: &[Binary]) -> Vec<Problem> {
     let Some(checkout) = checkout else { return Vec::new() };
     let Some((b, id)) = binaries.first().and_then(|b| b.identity.as_ref().map(|id| (b, id))) else { return Vec::new() };
-    let line = match id.commit {
-        Some(_) => super::behind::checkout_head(checkout).and_then(|head| super::behind::behind_text(id, &head)),
-        None => super::behind::key_behind_text(id, checkout),
-    };
+    let line = super::behind::behind_for(id, checkout);
     match line {
         Some(line) => vec![Problem {
             kind: "behind",

@@ -192,17 +192,6 @@ fn emit_toolchain_identity() {
     println!("cargo:rustc-env=WJ_BUILD_TS={build_ts}");
 }
 
-/// macOS on Apple silicon: link `wj` with chained fixups, so dyld applies the binary's pointer fixups page by page as
-/// it maps them instead of rebasing every pointer before `main` (4.3M of the 27.5M instructions `wj -V` retired; the
-/// interpreter's startup ladder, ADR-0038 P2). Only the `wj` binary is linked differently: no dependency is rebuilt.
-fn link_wj_with_chained_fixups() {
-    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-    if os == "macos" && arch == "aarch64" {
-        println!("cargo:rustc-link-arg-bin=wj=-Wl,-fixup_chains");
-    }
-}
-
 /// [`build_key::content_key`] of this build (the manifest tree, the compiler (`rustc -vV`), target, profile and
 /// enabled features) and the inputs key of the tree alone. Watches exactly the content inputs.
 fn build_content_key() -> (String, String) {
@@ -220,6 +209,17 @@ fn build_content_key() -> (String, String) {
     let features: Vec<String> = std::env::vars().filter_map(|(k, _)| k.strip_prefix("CARGO_FEATURE_").map(str::to_string)).collect();
     let root = std::path::Path::new(&manifest);
     (build_key::content_key(root, &version, &env("TARGET"), &env("PROFILE"), &features), content_key::inputs_key(root))
+}
+
+/// macOS on Apple silicon: link `wj` with chained fixups, so dyld applies the binary's pointer fixups page by page as
+/// it maps them instead of rebasing every pointer before `main` (4.3M of the 27.5M instructions `wj -V` retired; the
+/// interpreter's startup ladder, ADR-0038 P2). Only the `wj` binary is linked differently: no dependency is rebuilt.
+fn link_wj_with_chained_fixups() {
+    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    if os == "macos" && arch == "aarch64" {
+        println!("cargo:rustc-link-arg-bin=wj=-Wl,-fixup_chains");
+    }
 }
 
 fn main() {
