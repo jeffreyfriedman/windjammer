@@ -186,9 +186,8 @@ pub fn fix_in_place(path: &Path) -> Result<usize> {
 /// Runs the same front-end checks as `wj check`; on any error-level diagnostic prints them and
 /// returns `Err` so the caller refuses to execute the program. Warnings do not block.
 pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> Result<()> {
-    // Cached only inside a project (`wj.toml`): results go to its `.wj-cache/`, the build's cache directory; a
-    // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
-    // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
+    // installed even on a hit: the interpreter's own analyses read the stored stdlib tables through it
+    share_registry_layer();
     // a program that passed this check before, with every input unchanged, is not checked again (`check/run_cache.rs`)
     let run_key = check::run_cache::key(path, lints_block, &format!("{format:?}"));
     let runs = crate::cargo_cache::entries::runs_dir();
@@ -196,8 +195,10 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
         eprint!("{stderr}");
         return Ok(());
     }
+    // Cached only inside a project (`wj.toml`): results go to its `.wj-cache/`, the build's cache directory; a
+    // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
+    // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
     let use_cache = check::effects::manifest_path(path).is_some();
-    share_registry_layer();
     if use_cache {
         share_analysis();
     }
