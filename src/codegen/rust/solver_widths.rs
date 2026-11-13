@@ -181,6 +181,10 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Unary { op: UnaryOp::Neg, operand, .. } => self.solver_operand_width(operand),
             Expression::Binary { left, op, right, .. } => {
                 use crate::parser::BinaryOp::*;
+                // a shift has the width of the shifted operand; the shift amount is its own class
+                if matches!(op, Shl | Shr) {
+                    return self.solver_operand_width(left);
+                }
                 if !matches!(op, Add | Sub | Mul | Div | Mod | BitAnd | BitOr | BitXor) {
                     return None;
                 }
