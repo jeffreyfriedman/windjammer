@@ -1,8 +1,7 @@
 //! A cached `<file>.wj.meta` is stale analysis output, not a source of truth. With a deliberately stale
 //! entry in the cache (written for an older version of the same source), `wj build` and
 //! `wj explain-ownership` must answer exactly as they do with no cache at all. The cache lives in
-//! `<cache root>/meta` (these projects have no manifest; `WJ_CARGO_TARGET_ROOT` points it into the test dir), never next
-//! to the source.
+//! `$TMPDIR/wj-meta` (these projects have no manifest), never next to the source.
 
 use std::path::Path;
 use std::process::Command;
@@ -33,7 +32,7 @@ fn find_meta(dir: &Path) -> std::path::PathBuf {
 fn build(dir: &Path, file: &str) -> String {
     let out = dir.join("out");
     let o = Command::new(WJ)
-        .env("WJ_CARGO_TARGET_ROOT", cache_of(dir))
+        .env("TMPDIR", cache_of(dir))
         .args(["build", file, "--no-cargo", "--no-lint", "--quiet", "-o"])
         .arg(&out)
         .current_dir(dir)
@@ -44,7 +43,7 @@ fn build(dir: &Path, file: &str) -> String {
 }
 
 fn explain(dir: &Path, file: &str) -> String {
-    let o = Command::new(WJ).env("WJ_CARGO_TARGET_ROOT", cache_of(dir)).args(["explain-ownership", file, "--json"]).current_dir(dir).output().unwrap();
+    let o = Command::new(WJ).env("TMPDIR", cache_of(dir)).args(["explain-ownership", file, "--json"]).current_dir(dir).output().unwrap();
     assert!(o.status.success(), "explain failed: {}", String::from_utf8_lossy(&o.stderr));
     String::from_utf8_lossy(&o.stdout).replace(&dir.display().to_string(), "<dir>")
 }

@@ -107,7 +107,9 @@ pub fn merge_wj_meta_signatures_from_dir(
     merge_wj_meta_signatures_from_dir_reaching(root, None, registry);
 }
 
-/// [`merge_wj_meta_signatures_from_dir`] for a build that reaches only the modules its sources name: `uses` are the
+/// [`merge_wj_meta_signatures_from_dir`] for a build that reaches only the modules its sources name (only peers it
+/// reaches, closed over their own `use` / `mod` declarations, and whose sources still hold the text they were
+/// written for): `uses` are the
 /// path segments of the current file's `use` / `mod` declarations. Peer sidecars of modules the build does not reach
 /// (directly or through the reached modules' own `use` declarations) are ignored. `None`: every current peer.
 pub fn merge_wj_meta_signatures_from_dir_reaching(
@@ -139,16 +141,21 @@ pub fn merge_wj_meta_signatures_from_dir_reaching(
     PEER_SCOPE.with(|c| *c.borrow_mut() = prev);
 }
 
-/// The cached sidecar at `path` when it is current (fingerprinted by this compiler, its source under `source_root`'s
-/// tree unchanged since): the read used by callers that look a module's entry up directly.
-pub fn read_current_module_meta(path: &Path, source_root: Option<&Path>) -> Option<ModuleMetadata> {
-    let meta: ModuleMetadata = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+/// The cached sidecar `candidate` (a path relative to the cache of `source_root`'s project, or `./.wj-cache` without
+/// one) when it is current (fingerprinted by this compiler, its source unchanged since): the read used by callers
+/// that look a module's entry up directly.
+pub fn read_current_cached_meta(source_root: Option<&Path>, candidate: &Path) -> Option<ModuleMetadata> {
+    let path = match source_root {
+        Some(root) => crate_metadata::meta_cache_root(root).join(candidate),
+        None => PathBuf::from(".wj-cache").join(candidate),
+    };
+    let meta: ModuleMetadata = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
     let scoped = PEER_SCOPE.with(|c| c.borrow().is_none()) && source_root.is_some();
     if scoped {
         let scope = sidecar_policy::PeerScope::new(source_root?, None);
         PEER_SCOPE.with(|c| *c.borrow_mut() = Some(scope));
     }
-    let current = wj_meta_is_current(path, &meta);
+    let current = wj_meta_is_current(&path, &meta);
     if scoped {
         PEER_SCOPE.with(|c| *c.borrow_mut() = None);
     }
@@ -163,6 +170,22 @@ pub fn with_peers_reached_by<R>(source_root: &Path, program: &crate::parser::Pro
     let out = f();
     PEER_SCOPE.with(|c| *c.borrow_mut() = prev);
     out
+}
+
+/// The peer metadata a single-file build of `file` reads (`roots`: its directory, then the metadata roots above):
+/// its own previous entry excluded, and only current peers it reaches, so an unrelated or stale cache entry never
+/// changes the output.
+pub fn merge_reached_peers_of_file(
+    file: &Path,
+    roots: &[&Path],
+    program: &crate::parser::Program,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    analyzer: &mut crate::analyzer::Analyzer,
+) {
+    let dir = file.parent().unwrap_or(Path::new("."));
+    with_own_meta_excluded(file, || {
+        with_peers_reached_by(dir, program, || merge_wj_meta_signatures_and_copy_structs_multi(roots, registry, analyzer))
+    });
 }
 
 /// The identifiers a file's `use` and `mod` declarations name (`use crate::geo::shapes::{Circle}` names `crate`, `geo`,

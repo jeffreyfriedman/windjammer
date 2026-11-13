@@ -96,14 +96,15 @@ pub fn meta_cache_path(source_file: &Path) -> PathBuf {
     projectless_meta_path(source_file)
 }
 
-/// Directory holding analysis metadata for manifest-less trees: `<cache root>/meta` (`cargo_cache::cache_root`, shared by
-/// every checkout of this user, pruned by `wj cache prune`). It is a cache: losing it costs a cold build, never correctness.
+/// Directory holding analysis metadata for manifest-less trees: `wj-meta` under the OS temp dir (honours
+/// `TMPDIR`). It is a cache: losing it costs a cold build, never correctness. Entries are keyed by the tree's content
+/// (`projectless_tree_key`), never its location.
 pub fn global_meta_cache_dir() -> PathBuf {
-    // the browser playground (ADR-0034) has no cache root; its cache reads and writes just fail
+    // the browser playground (ADR-0034) has no temp dir (std panics there); its cache reads and writes just fail
     if cfg!(target_arch = "wasm32") {
         return PathBuf::from("/wj-meta");
     }
-    crate::cargo_cache::entries::meta_dir()
+    std::env::temp_dir().join("wj-meta")
 }
 
 /// The module root of a manifest-less tree. Climb out of module directories (a directory holding

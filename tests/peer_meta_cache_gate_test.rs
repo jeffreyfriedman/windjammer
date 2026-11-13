@@ -80,8 +80,11 @@ fn project(dir: &Path) -> PathBuf {
 fn build_with(wj: &Path, project: &Path, file: &str, cache_root: &Path) {
     let out = project.join("out");
     let _ = std::fs::remove_dir_all(&out);
+    std::fs::create_dir_all(cache_root.join("tmp")).unwrap();
     let o = Command::new(wj)
         .env("WJ_CARGO_TARGET_ROOT", cache_root)
+        // manifest-less trees keep their entries in <temp dir>/wj-meta: give each case its own
+        .env("TMPDIR", cache_root.join("tmp"))
         .args(["build", file, "--no-cargo", "--no-lint", "--quiet", "-o"])
         .arg(&out)
         .current_dir(project)
@@ -214,7 +217,7 @@ fn a_peer_entry_made_stale_by_a_source_edit_is_ignored() {
 
 #[test]
 fn a_manifest_less_tree_emits_the_same_in_two_locations() {
-    // No manifest: entries live under <cache root>/meta keyed by the tree's content, never its path.
+    // No manifest: entries live under <temp dir>/wj-meta keyed by the tree's content, never its path.
     let d = tempfile::tempdir().unwrap();
     let cache = d.path().join("cache");
     let mut outs = Vec::new();
@@ -229,8 +232,8 @@ fn a_manifest_less_tree_emits_the_same_in_two_locations() {
         outs.push(emitted(&tree));
     }
     assert_eq!(outs[0], outs[1], "the same tree emitted different Rust in two locations");
-    let meta = cache.join("meta");
-    let keys: Vec<_> = std::fs::read_dir(&meta).expect("entries under <cache root>/meta").flatten().collect();
+    let meta = cache.join("tmp/wj-meta");
+    let keys: Vec<_> = std::fs::read_dir(&meta).expect("entries under <temp dir>/wj-meta").flatten().collect();
     assert_eq!(keys.len(), 1, "two locations of one tree must share one cache key");
     let clean = clean_probe(d.path());
     assert_eq!(outs[0], clean, "an unreached peer changed a manifest-less build");
