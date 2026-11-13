@@ -100,79 +100,42 @@ mod unary_operator_tests {
 mod operator_precedence_tests {
     use super::*;
 
-    #[test]
-    fn test_precedence_level_1_logical_or() {
-        // Lowest precedence: ||
-        assert_eq!(op_precedence(&BinaryOp::Or), 1);
+    /// The Rust reference's table, tightest first (operators in one row share a level). The output must follow it,
+    /// whatever the Windjammer parser's own table is (SPEC-EXPR-001), so the tree the parser built is the tree rustc reads.
+    fn rust_levels() -> Vec<Vec<BinaryOp>> {
+        vec![
+            vec![BinaryOp::Mul, BinaryOp::Div, BinaryOp::Mod],
+            vec![BinaryOp::Add, BinaryOp::Sub],
+            vec![BinaryOp::Shl, BinaryOp::Shr],
+            vec![BinaryOp::BitAnd],
+            vec![BinaryOp::BitXor],
+            vec![BinaryOp::BitOr],
+            vec![BinaryOp::Eq, BinaryOp::Ne, BinaryOp::Lt, BinaryOp::Le, BinaryOp::Gt, BinaryOp::Ge],
+            vec![BinaryOp::And],
+            vec![BinaryOp::Or],
+        ]
     }
 
     #[test]
-    fn test_precedence_level_2_logical_and() {
-        // Level 2: &&
-        assert_eq!(op_precedence(&BinaryOp::And), 2);
-    }
-
-    #[test]
-    fn test_precedence_level_3_bitwise_or() {
-        // Level 3: |
-        assert_eq!(op_precedence(&BinaryOp::BitOr), 3);
-    }
-
-    #[test]
-    fn test_precedence_level_4_bitwise_xor() {
-        // Level 4: ^
-        assert_eq!(op_precedence(&BinaryOp::BitXor), 4);
-    }
-
-    #[test]
-    fn test_precedence_level_5_bitwise_and() {
-        // Level 5: &
-        assert_eq!(op_precedence(&BinaryOp::BitAnd), 5);
-    }
-
-    #[test]
-    fn test_precedence_level_6_equality() {
-        // Level 6: ==, !=
-        assert_eq!(op_precedence(&BinaryOp::Eq), 6);
-        assert_eq!(op_precedence(&BinaryOp::Ne), 6);
-    }
-
-    #[test]
-    fn test_precedence_level_7_comparison() {
-        // Level 7: <, <=, >, >=
-        assert_eq!(op_precedence(&BinaryOp::Lt), 7);
-        assert_eq!(op_precedence(&BinaryOp::Le), 7);
-        assert_eq!(op_precedence(&BinaryOp::Gt), 7);
-        assert_eq!(op_precedence(&BinaryOp::Ge), 7);
-    }
-
-    #[test]
-    fn test_precedence_level_8_bitshift() {
-        // Level 8: <<, >>
-        assert_eq!(op_precedence(&BinaryOp::Shl), 8);
-        assert_eq!(op_precedence(&BinaryOp::Shr), 8);
-    }
-
-    #[test]
-    fn test_precedence_level_9_additive() {
-        // Level 9: +, -
-        assert_eq!(op_precedence(&BinaryOp::Add), 9);
-        assert_eq!(op_precedence(&BinaryOp::Sub), 9);
-    }
-
-    #[test]
-    fn test_precedence_level_10_multiplicative() {
-        // Highest precedence: *, /, %
-        assert_eq!(op_precedence(&BinaryOp::Mul), 10);
-        assert_eq!(op_precedence(&BinaryOp::Div), 10);
-        assert_eq!(op_precedence(&BinaryOp::Mod), 10);
+    fn test_precedence_matches_the_rust_reference_table() {
+        let levels = rust_levels();
+        for (i, row) in levels.iter().enumerate() {
+            for op in row {
+                assert_eq!(op_precedence(op), op_precedence(&row[0]), "{op:?} shares its level");
+            }
+            if let Some(next) = levels.get(i + 1) {
+                assert!(op_precedence(&row[0]) > op_precedence(&next[0]), "{:?} binds tighter than {:?}", row[0], next[0]);
+            }
+        }
     }
 
     #[test]
     fn test_precedence_ordering() {
-        // Verify relative ordering: multiplication > addition > comparison > logical
+        // multiplication > addition > shifts > bitwise > comparison > logical
         assert!(op_precedence(&BinaryOp::Mul) > op_precedence(&BinaryOp::Add));
-        assert!(op_precedence(&BinaryOp::Add) > op_precedence(&BinaryOp::Lt));
+        assert!(op_precedence(&BinaryOp::Add) > op_precedence(&BinaryOp::Shl));
+        assert!(op_precedence(&BinaryOp::Shl) > op_precedence(&BinaryOp::BitAnd));
+        assert!(op_precedence(&BinaryOp::BitAnd) > op_precedence(&BinaryOp::Eq));
         assert!(op_precedence(&BinaryOp::Lt) > op_precedence(&BinaryOp::And));
         assert!(op_precedence(&BinaryOp::And) > op_precedence(&BinaryOp::Or));
     }
