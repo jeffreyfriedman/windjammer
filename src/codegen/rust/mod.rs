@@ -98,6 +98,7 @@ pub mod simd_transform;
 pub mod list_literal_context;
 pub mod optional_chain_lowering;
 pub mod match_scrutinee_borrow;
+pub mod owned_string_tail_coercion;
 pub mod method_receiver_resolution;
 pub mod statement_generation;
 pub mod struct_field_coercion;

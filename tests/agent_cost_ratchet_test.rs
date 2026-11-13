@@ -48,6 +48,86 @@ fn cost_proxies_do_not_regress() {
     assert!(v.is_empty(), "agent-cost ratchet:\n  {}", v.join("\n  "));
 }
 
+/// Paths of the repository whose changes since `commit` alter what the measurement would read: the feeding code.
+/// `Err` when `commit` is unknown to this checkout (a rewritten history: measure again).
+fn feed_changes_since(repo: &std::path::Path, commit: &str, feeds: &[String]) -> Result<Vec<String>, String> {
+    let git = |args: &[&str]| std::process::Command::new("git").arg("-C").arg(repo).args(args).output();
+    let known = git(&["cat-file", "-e", &format!("{commit}^{{commit}}")]).map(|o| o.status.success()).unwrap_or(false);
+    if !known {
+        return Err(format!("commit {commit} is not in this checkout"));
+    }
+    let mut args = vec!["log", "--format=%h %s", "--no-merges"];
+    let range = format!("{commit}..HEAD");
+    args.push(&range);
+    args.push("--");
+    args.extend(feeds.iter().map(String::as_str));
+    let out = git(&args).map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&out.stdout).lines().map(str::to_string).collect())
+}
+
+/// The measurement may not be older than the code that feeds it: every ratcheted key was measured at a commit after
+/// the last change to `feeds` in ratchet.json (diagnostic rendering, the run driver, the source map, the corpus and
+/// the replay). Otherwise the ratchet test passes on numbers the current compiler no longer produces.
+#[test]
+fn measured_json_is_not_older_than_the_code_that_feeds_it() {
+    if !root().join(".git").exists() {
+        return; // a source tarball has no history to compare with
+    }
+    let ratchet = read_json("bench/agent-dx/friction/ratchet.json");
+    let measured = read_json("docs/generated/measured.json");
+    let feeds: Vec<String> = ratchet["feeds"].as_array().expect("ratchet.json lists `feeds`").iter().filter_map(|f| f.as_str().map(str::to_string)).collect();
+    assert!(!feeds.is_empty());
+    let mut problems = Vec::new();
+    for dir in ["shrink", "grow", "zero"] {
+        for key in ratchet[dir].as_object().into_iter().flatten().map(|(k, _)| k) {
+            let Some(commit) = measured[key]["commit"].as_str() else {
+                problems.push(format!("{key}: no commit recorded in measured.json"));
+                continue;
+            };
+            match feed_changes_since(&root(), commit, &feeds) {
+                Ok(changes) if changes.is_empty() => {}
+                Ok(changes) => problems.push(format!("{key}: measured at {commit}, feeding code changed since: {}", changes.join("; "))),
+                Err(e) => problems.push(format!("{key}: {e}")),
+            }
+        }
+    }
+    problems.sort();
+    problems.dedup_by(|a, b| a.split_once(": ").map(|x| x.1) == b.split_once(": ").map(|x| x.1));
+    assert!(
+        problems.is_empty(),
+        "docs/generated/measured.json is older than the code that feeds it. Build wj at the head and run\n  \
+         wj run --interpret --allow 'fs.read=**' --allow 'fs.write=**' --allow 'process=*' --allow 'env.read=*' bench/agent-dx/friction/replay.wj -- --wj /abs/path/wj --write\n\
+         then commit measured.json and tighten ratchet.json:\n  {}",
+        problems.join("\n  ")
+    );
+}
+
+#[test]
+fn staleness_check_notices_a_feeding_change_and_ignores_others() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    let git = |args: &[&str]| {
+        let o = std::process::Command::new("git").arg("-C").arg(r).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).output().unwrap();
+        assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    };
+    git(&["init", "-q"]);
+    std::fs::create_dir_all(r.join("feed")).unwrap();
+    std::fs::write(r.join("feed/a.rs"), "1").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "measured here"]);
+    let at = git(&["rev-parse", "HEAD"]);
+    let feeds = vec!["feed".to_string()];
+    std::fs::write(r.join("other.txt"), "x").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "unrelated"]);
+    assert_eq!(feed_changes_since(r, &at, &feeds), Ok(vec![]));
+    std::fs::write(r.join("feed/a.rs"), "2").unwrap();
+    git(&["commit", "-qam", "feeding change"]);
+    assert_eq!(feed_changes_since(r, &at, &feeds).unwrap().len(), 1);
+    assert!(feed_changes_since(r, "0000000000000000000000000000000000000000", &feeds).is_err());
+}
+
 #[test]
 fn ratchet_check_fails_on_regression_and_on_slack() {
     let ratchet = serde_json::json!({"shrink": {"a": 3}, "grow": {"b": 0.5}, "zero": {"c": 0}});
