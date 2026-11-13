@@ -1,7 +1,10 @@
 // Regenerate the committed expected-output vectors of the conformance corpus from its independent
-// reference models (tests/conformance_programs/<name>.ref.py, run with python3 -I).
+// reference models (tests/conformance_programs/<name>.ref.py, run with python3 -I). The same script serves the interpreter
+// corpus (it replaced tests/interpreter_corpus/regen_vectors.sh): pass tests/interpreter_corpus as DIR.
 //
 //   wj run scripts/wj/regen_conformance_vectors.wj [DIR]     (default DIR: tests/conformance_programs; run from the repository root)
+//
+// A vectors directory is rebuilt from scratch, so a seed dropped from the program's `// seeds:` line leaves no stale file.
 //
 // The reference models stay Python on purpose: they are the independent oracle.
 use std::env
@@ -54,6 +57,9 @@ fn main() {
         let parent = fs.parent(model) ?? "."
         let program = fs.read_to_string(parent + "/" + name + ".wj") ?? ""
         let out_dir = parent + "/" + name + ".vectors"
+        if fs.exists(out_dir) {
+            let _ = fs.remove_dir_all(out_dir)
+        }
         let _ = fs.create_dir_all(out_dir)
         for seed in seeds_of(program) {
             match capture("python3", ["-I", model, seed]) {
