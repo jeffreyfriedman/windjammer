@@ -48,12 +48,19 @@ pub fn run_inherit(program: &str, args: &[String]) -> Result<i32, String> {
 
 /// Exit the current process
 pub fn exit(code: i32) -> ! {
+    #[cfg(target_arch = "wasm32")]
+    panic!("process::exit({code}): a browser page has no process to exit");
+    #[cfg(not(target_arch = "wasm32"))]
     std::process::exit(code);
 }
 
 /// Current process id (`int` in Windjammer).
 pub fn pid() -> i64 {
-    std::process::id() as i64
+    // wasm32-unknown-unknown has no process id (`process::id` panics there)
+    #[cfg(target_arch = "wasm32")]
+    return 0;
+    #[cfg(not(target_arch = "wasm32"))]
+    return std::process::id() as i64;
 }
 
 /// Process output
