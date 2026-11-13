@@ -56,6 +56,20 @@ pub(super) fn has_bindings(p: &Parsed) -> bool {
     ["let", "for", "match", "|"].iter().any(|w| p.text.contains(w)) || items(&p.program.items)
 }
 
+/// A file with nothing the generated Rust could reject: no binding (so nothing is moved, WJ0007), and only functions
+/// without parameters or a return type, no method call, field, index or cast (so no two typed values meet: the width
+/// and string families of WJ0003). Such a file (`hello`) is not generated to Rust for the move and width predictions,
+/// which cost more than the rest of its check (26.6M of a 104.6M run). The text test errs only toward generating.
+fn nothing_to_predict(p: &Parsed) -> bool {
+    use crate::parser::Item;
+    let plain_fns = p.program.items.iter().all(|i| match i {
+        Item::Function { decl, .. } => decl.parameters.is_empty() && decl.return_type.is_none(),
+        Item::Use { .. } => true,
+        _ => false,
+    });
+    plain_fns && !has_bindings(p) && !["." , "[", " as "].iter().any(|w| p.text.contains(w))
+}
+
 /// `memo`: per-file reuse of the analysis phase (`file_cache.rs`); `None` computes everything.
 pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Option<&mut FileMemo>) {
     let parsed: Vec<&Parsed> = all.iter().filter(|p| !is_shader(p)).collect();
@@ -308,7 +322,9 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     // uses after a move rustc would reject, read from the generated Rust (ADR-0030); only for a file
     // that is otherwise clean, so a broken file does not report moves on top of its errors. (Integer widths are
     // predicted by the driver from the Rust `wj build` emits: `cli::widths_gate`, ADR-0033.)
-    if !out.iter().any(|d| d.is_error()) {
+    if nothing_to_predict(p) {
+        super::moves::skip(&p.file, &p.text);
+    } else if !out.iter().any(|d| d.is_error()) {
         out.extend(super::moves::predict(&p.program, &p.text, &p.file));
     }
     crate::debug_env::phase("check-moves");
