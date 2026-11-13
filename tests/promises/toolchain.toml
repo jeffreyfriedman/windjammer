@@ -188,3 +188,15 @@ env = { WJ_CHECKOUT_HEAD = "fffffffffffffffffffffffffffffffffffffff0@9999999999"
 args = ["eval", "1 + 1"]
 stdout_has = ["2"]
 stderr_has = ["is not built from this checkout's sources", "run `wj install-dev --from"]
+
+[[case]]
+name = "doctor --pin prints the pin line of the running wj"
+polarity = "positive"
+args = ["doctor", "--pin"]
+stdout_has = ["wj = \""]
+
+[[case]]
+name = "doctor --pin takes no positional arguments"
+polarity = "negative"
+args = ["doctor", "--pin", "extra"]
+exit = 2

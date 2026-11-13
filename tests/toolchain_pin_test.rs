@@ -167,3 +167,50 @@ fn unguarded_commands_ignore_the_pin() {
     let o = wj(d.path(), &["doctor", "--json"], &[]);
     assert!(!stderr(&o).contains("pins wj"), "{}", stderr(&o));
 }
+
+/// The source key of the build under test, as `wj doctor --pin` prints it (`wj = "<10 hex>"`).
+fn pin_key() -> String {
+    let o = Command::new(env!("CARGO_BIN_EXE_wj")).args(["doctor", "--pin"]).output().unwrap();
+    let line = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    let key = line.strip_prefix("wj = \"").and_then(|r| r.strip_suffix('"')).unwrap_or_else(|| panic!("doctor --pin: {line}"));
+    assert_eq!(key.len(), 10, "{line}");
+    assert_eq!(identity()["inputs_key"].as_str().unwrap()[..10], *key, "one source of truth for the key");
+    key.to_string()
+}
+
+#[test]
+fn a_source_key_pin_of_the_running_build_verifies() {
+    let key = pin_key();
+    for spec in [key.clone(), format!("+{key}")] {
+        let d = project(Some(&spec));
+        let f = d.path().join("main.wj").display().to_string();
+        let o = wj(d.path(), &["check", &f], &[]);
+        assert!(o.status.success(), "pin {spec}: {}", stderr(&o));
+    }
+}
+
+#[test]
+fn a_mismatching_source_key_pin_names_both_keys_and_the_override_warns() {
+    let key = pin_key();
+    let d = project(Some("+0123456789"));
+    let f = d.path().join("main.wj").display().to_string();
+    let o = wj(d.path(), &["check", &f], &[]);
+    assert_eq!(o.status.code(), Some(1));
+    let e = stderr(&o);
+    assert!(e.contains("a source key") && e.contains("expected: 0123456789") && e.contains(&format!("actual:   {key}")), "{e}");
+    let o = wj(d.path(), &["check", &f], &[("WJ_ALLOW_TOOLCHAIN_MISMATCH", "1")]);
+    assert!(o.status.success() && stderr(&o).contains("toolchain mismatch allowed"), "{}", stderr(&o));
+}
+
+#[test]
+fn a_commit_pin_needs_a_build_that_stamped_its_commit() {
+    // A dev build names no commit (build.rs never queries git): a commit pin only matches a build made with
+    // `WJ_GIT_HASH=<sha>` (unit-tested in src/toolchain/pin.rs). Here: the running build's commit, if stamped.
+    let d = project(Some("abcdef0123"));
+    let f = d.path().join("main.wj").display().to_string();
+    let o = wj(d.path(), &["check", &f], &[]);
+    match identity()["commit"].as_str() {
+        Some(c) if c.starts_with("abcdef0123") => assert!(o.status.success()),
+        _ => assert_eq!(o.status.code(), Some(1), "an unmatched commit pin must fail: {}", stderr(&o)),
+    }
+}
