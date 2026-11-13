@@ -146,5 +146,7 @@ fn cache_entries_of_another_key_are_ignored_not_errors() {
     }
     let planted = run();
     assert!(planted.status.success(), "{}", String::from_utf8_lossy(&planted.stderr));
-    assert_eq!(clean.stdout, planted.stdout);
+    // the summary line carries a timing (and a cache note): compare the verdict
+    let verdict = |o: &std::process::Output| String::from_utf8_lossy(&o.stdout).split(" (").next().unwrap_or_default().to_string();
+    assert_eq!(verdict(&clean), verdict(&planted));
 }
