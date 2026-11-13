@@ -1,6 +1,6 @@
 {
   "_generated": "bench/agent-dx/friction/replay.wj --write; do not edit",
-  "wj": "wj 0.50.0+37d4542cf2 (commit b25c128f7009 b25c128f7009, clean, release, built 2026-11-13T12:49:40Z)",
+  "wj": "wj 0.50.0+37d4542cf2 (commit b25c128f7009, clean, release, built 2026-11-13T12:49:40Z)",
   "events": {
     "p3-t003-B-2-c00": {"class": "unhelpful-message", "status": "open-compiler-bug", "first": "WJ0003: mismatched types: expected an owned `string`, found a borrowed `string`", "errors": 1, "human_bytes": 326, "agent_bytes": 145, "noise_lines": 0},
     "p3-t003-E-0-c00": {"class": "unhelpful-message", "status": "fixed", "first": "", "errors": 0, "human_bytes": 0, "agent_bytes": 0, "noise_lines": 0},
