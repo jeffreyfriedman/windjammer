@@ -44,3 +44,28 @@ fn a_declared_mut_receiver_of_a_trait_impl_survives_a_homonym_trait() {
     assert!(rs.contains("fn delta(&mut self, dx: f32) {"), "the impl keeps its declared `&mut self`:\n{rs}");
     test.cargo_check().expect("cargo-check");
 }
+
+/// An impl split from its struct's file reads a Copy field of `self` into a module function: the field type comes
+/// from the struct's own module, so the method borrows `self` (it was emitted owned, rustc E0507 at its `&mut self`
+/// callers).
+#[test]
+fn a_split_impl_passing_a_copy_field_to_a_module_function_borrows_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file("ffi/mod.wj", "pub mod api\n");
+    test.add_file("ffi/api.wj", "pub fn set_buffers(a: u32, b: u32) {\n    let _ = a + b\n}\n\npub fn set_enabled(on: bool) {\n    let _ = on\n}\n");
+    test.add_file("render/mod.wj", "pub mod config\npub mod renderer\npub mod passes\n");
+    test.add_file("render/config.wj", "pub struct Resources {\n    pub gbuffer: u32,\n    pub color: u32,\n}\n");
+    test.add_file(
+        "render/renderer.wj",
+        "use crate::render::config::Resources\n\npub struct Renderer {\n    pub resources: Resources,\n    pub width: u32,\n    pub ready: bool,\n}\n",
+    );
+    test.add_file(
+        "render/passes.wj",
+        "use crate::render::renderer::Renderer\nuse crate::ffi::api as gpu\n\nimpl Renderer {\n    pub fn sync_host(self) {\n        gpu::set_buffers(self.resources.gbuffer, self.resources.color)\n        gpu::set_enabled(self.ready)\n    }\n\n    pub fn resize(self, w: u32) {\n        self.width = w\n        self.sync_host()\n    }\n}\n",
+    );
+    let map = test.compile().expect("compile");
+    let rs = map.get("render/passes.rs").expect("render/passes.rs");
+    assert!(rs.contains("pub fn sync_host(&self)"), "a method reading Copy fields borrows `self`:\n{rs}");
+    assert!(rs.contains("pub fn resize(&mut self"), "{rs}");
+    test.cargo_check().expect("cargo-check");
+}
