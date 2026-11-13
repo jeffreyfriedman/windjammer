@@ -30,6 +30,7 @@ pub use function_metadata::{
 };
 pub use type_metadata::infer_copy_from_metadata_structs_pub;
 
+mod sidecar_policy;
 mod sorted_serde;
 
 /// Metadata for a single Windjammer module
@@ -201,21 +202,7 @@ pub fn merge_wj_meta_signatures_and_copy_structs_multi(
     let mut copy_structs = Vec::new();
     let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
     for root in roots {
-        let cache_root = crate_metadata::meta_cache_root(root);
-        if cache_root.exists() {
-            merge_wj_meta_signatures_from_dir_inner(
-                &cache_root,
-                registry,
-                &mut copy_structs,
-                &mut all_struct_fields,
-            );
-        }
-        merge_wj_meta_signatures_from_dir_inner(
-            root,
-            registry,
-            &mut copy_structs,
-            &mut all_struct_fields,
-        );
+        sidecar_policy::merge_root(root, registry, &mut copy_structs, &mut all_struct_fields);
     }
     // Project-root metadata.json is the authoritative source (full multi-pass
     // analysis). Load it last so it overrides stale per-file .wj.meta entries.
@@ -258,16 +245,7 @@ pub fn merge_wj_meta_signatures_from_dir_inner_pub(
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
-    let cache_root = crate_metadata::meta_cache_root(root);
-    if cache_root.exists() {
-        merge_wj_meta_signatures_from_dir_inner(
-            &cache_root,
-            registry,
-            copy_structs,
-            all_struct_fields,
-        );
-    }
-    merge_wj_meta_signatures_from_dir_inner(root, registry, copy_structs, all_struct_fields);
+    sidecar_policy::merge_root(root, registry, copy_structs, all_struct_fields);
     load_project_root_metadata(root, registry, copy_structs, all_struct_fields);
 }
 
@@ -367,10 +345,13 @@ fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
     if fp.compiler_version != crate::compiler::incremental::compiler_build_identity() {
         return false;
     }
-    let source_path = path.with_extension("");
-    match std::fs::read_to_string(&source_path) {
-        Ok(source) => fp.content_hash == crate::compiler::incremental::hash_source(&source),
-        Err(_) => true,
+    match sidecar_policy::sidecar_source(path) {
+        Some(source_path) => match std::fs::read_to_string(&source_path) {
+            Ok(source) => fp.content_hash == crate::compiler::incremental::hash_source(&source),
+            Err(_) => true,
+        },
+        // the source is not on disk beside the cache (a shipped dependency): nothing to compare against
+        None => true,
     }
 }
 
@@ -381,6 +362,8 @@ thread_local! {
     /// output of that file; reading it back as an input makes the result depend on whether an
     /// earlier build left a cache behind (cold and warm builds must emit identical code).
     static OWN_META_PATHS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// What the crate metadata of the root being merged declares (see `sidecar_policy`).
+    static DECLARED: std::cell::RefCell<Option<sidecar_policy::Declared>> = const { std::cell::RefCell::new(None) };
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -422,6 +405,8 @@ fn merge_single_wj_meta_file(
     if !wj_meta_is_current(path, &mod_meta) {
         return;
     }
+    let mut mod_meta = mod_meta;
+    DECLARED.with(|c| sidecar_policy::drop_declared(c.borrow().as_ref(), &mut mod_meta));
     merge_module_metadata(&mod_meta, registry, copy_structs, all_struct_fields);
 }
 
