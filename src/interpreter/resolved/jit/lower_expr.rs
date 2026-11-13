@@ -10,7 +10,7 @@ use super::kinds::{code, full_i64, int_ok, mutant, unsigned_repr, Class, Elem, S
 use crate::interpreter::int::IntTy;
 use crate::interpreter::ops::compound_to_binary;
 use crate::interpreter::value::{type_is_float, FloatTy};
-use crate::parser::{BinaryOp, CompoundOp, Expression, Literal, Type, UnaryOp};
+use crate::parser::{BinaryOp, CompoundOp, Expression, Literal, Statement, Type, UnaryOp};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{types, InstBuilder, Value as V};
 
@@ -42,7 +42,7 @@ enum Target {
 }
 
 impl Lo<'_, '_> {
-    fn k(&mut self, x: i64) -> V {
+    pub(super) fn k(&mut self, x: i64) -> V {
         self.b.ins().iconst(types::I64, x)
     }
 
@@ -94,6 +94,11 @@ impl Lo<'_, '_> {
                 }
             }
             Expression::MethodCall { object, method, type_args: None, arguments, .. } if arguments.is_empty() => self.method(object, method)?,
+            // `let c = match m.get(&k) { .. }`: a block whose only statement is the `match`
+            Expression::Block { statements, .. } => match statements.as_slice() {
+                [Statement::Match { value, arms, .. }] => self.map_match(value, arms, true)??,
+                _ => return None,
+            },
             _ => return None,
         })
     }
@@ -469,8 +474,11 @@ impl Lo<'_, '_> {
         Some(Val::of(r, v.ty))
     }
 
-    /// An expression statement: `v.push(x)` on a `Vec` local.
+    /// An expression statement: `v.push(x)` on a `Vec` local, `m.insert(k, x)` on a map local.
     pub(super) fn effect(&mut self, e: E) -> Option<()> {
+        if let Some(r) = self.map_insert(e) {
+            return r;
+        }
         let Expression::MethodCall { object: Expression::Identifier { name, .. }, method, type_args: None, arguments, .. } = e else { return None };
         let [(None, arg)] = arguments.as_slice() else { return None };
         if method != "push" {

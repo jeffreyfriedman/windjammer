@@ -661,6 +661,8 @@ pub(crate) struct FastHits {
     pub(crate) argcopy: u64,
     /// Compiled calls of a function that mutates a parameter, given the argument's place (compile time).
     pub(crate) placeargs: u64,
+    /// Map lookups and inserts lowered to machine code (`jit/lower_map.rs`, counted when a unit is compiled).
+    pub(crate) mapjit: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,
