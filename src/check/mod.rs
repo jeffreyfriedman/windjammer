@@ -12,6 +12,7 @@ mod fix;
 mod front;
 mod test_api;
 pub use test_api::compiler_identity_of;
+mod borrow_moves;
 pub mod moves;
 pub mod locate;
 pub mod local_mut;
