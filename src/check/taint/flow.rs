@@ -1,0 +1,799 @@
+//! The taint flow: which values hold data from a source, per function, with summaries so a flow through a helper is seen.
+//!
+//! A value's taint is the set of origins it may hold: a `Source` (a call that read untrusted data, with its place) or
+//! `Param(i)` (whatever the caller passes as parameter `i`; symbolic, for summaries). Each function is analyzed with every
+//! parameter symbolic. Its summary records which origins reach its result and which parameters reach a sink; a call applies
+//! the callee's summary to the arguments' taint. The summaries are iterated to a fixed point (recursion included).
+//!
+//! The walk is flow-sensitive in order and joins at branches: `let` and `=` replace the taint of a name, an `if`/`match`
+//! joins its arms, a loop body is walked twice. Operators that cannot carry text (comparisons, arithmetic on numbers,
+//! `len`, `parse`) produce clean values; values of scalar declared type are clean.
+//!
+//! Annotations (doc comments on a function): `/// wj-taint: sanitizer` makes its result clean for every sink;
+//! `/// wj-taint: trusted(<reason>)` reports nothing inside the function (the reason is required and is the review record).
+
+use super::catalog::{self, SinkRole};
+use crate::parser::ast::core::{EnumPatternBinding, Expression, FunctionDecl, Pattern, Statement};
+use crate::parser::ast::operators::{BinaryOp, UnaryOp};
+use crate::parser::ast::types::Type;
+use crate::resolve::{CallKind, CallResolution, DefId, ExprKey, Reason, ResolvedProgram, Res};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Place {
+    pub file: String,
+    pub line: usize,
+    pub column: usize,
+    /// The identifier at the place (`read_to_string`, `run`), for the span.
+    pub word: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Origin {
+    Source { what: String, callee: String, at: Place },
+    /// Parameter `i`, or the part of it reached through `path` (`page.filename` is `Param(i, ["filename"])`).
+    Param(usize, Vec<String>),
+    /// A value built as a struct: the origin holds in field `name` only (a struct literal's fields are tracked apart).
+    Field(String, Box<Origin>),
+}
+
+pub type Taint = BTreeSet<Origin>;
+
+/// The taint of member `name` of a value with taint `t`: the field's own origins, whole-value origins, and a parameter's
+/// member. Other fields' origins do not reach it.
+pub fn select(t: &Taint, name: &str) -> Taint {
+    t.iter()
+        .filter_map(|o| match o {
+            Origin::Field(n, inner) => (n == name).then(|| (**inner).clone()),
+            Origin::Param(i, path) => {
+                let mut p = path.clone();
+                p.push(name.to_string());
+                Some(Origin::Param(*i, p))
+            }
+            src => Some(src.clone()),
+        })
+        .collect()
+}
+
+fn select_path(t: &Taint, path: &[String]) -> Taint {
+    path.iter().fold(t.clone(), |acc, n| select(&acc, n))
+}
+
+/// Every origin of a value regardless of which field holds it (for a value consumed whole).
+pub fn flatten(t: &Taint) -> Taint {
+    t.iter()
+        .map(|o| {
+            let mut cur = o;
+            while let Origin::Field(_, inner) = cur {
+                cur = inner;
+            }
+            cur.clone()
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SinkSite {
+    pub role: SinkRole,
+    pub callee: String,
+    pub at: Place,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Summary {
+    pub ret: Taint,
+    /// Parameter index -> the sinks it reaches.
+    pub sinks: BTreeMap<(usize, Vec<String>), BTreeSet<SinkSite>>,
+    pub sanitizer: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Finding {
+    pub source_what: String,
+    pub source_callee: String,
+    pub source_at: Place,
+    pub sink: SinkSite,
+    /// Where it is reported: the sink call, or the call of the helper whose parameter reaches the sink.
+    pub report_at: Place,
+    /// The helpers the value passes through, outermost first.
+    pub via: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pragma {
+    None,
+    Sanitizer,
+    Trusted,
+    /// `trusted` without a reason.
+    TrustedNoReason,
+}
+
+pub fn pragma(decl: &FunctionDecl<'_>) -> Pragma {
+    let Some(doc) = &decl.doc_comment else { return Pragma::None };
+    for line in doc.lines() {
+        let l = line.trim().trim_start_matches('/').trim();
+        let Some(rest) = l.strip_prefix("wj-taint:") else { continue };
+        let rest = rest.trim();
+        if rest == "sanitizer" {
+            return Pragma::Sanitizer;
+        }
+        if let Some(r) = rest.strip_prefix("trusted") {
+            let r = r.trim();
+            let reason = r.strip_prefix('(').and_then(|x| x.strip_suffix(')')).map(str::trim).unwrap_or("");
+            return if reason.is_empty() { Pragma::TrustedNoReason } else { Pragma::Trusted };
+        }
+    }
+    Pragma::None
+}
+
+/// Everything the walk reads about the program.
+pub struct Program<'p, 'a> {
+    pub resolved: &'p ResolvedProgram<'a>,
+    pub by_key: HashMap<ExprKey, &'p CallResolution>,
+    /// Per file: `use std::fs` -> `fs` (a name that stands for a std module, so `fs.read(..)` is `fs::read`).
+    pub modules: HashMap<String, HashSet<String>>,
+}
+
+impl<'p, 'a> Program<'p, 'a> {
+    pub fn new(resolved: &'p ResolvedProgram<'a>, modules: HashMap<String, HashSet<String>>) -> Self {
+        let by_key = resolved.calls.iter().map(|c| (c.key, c)).collect();
+        Program { resolved, by_key, modules }
+    }
+}
+
+fn is_scalar(t: &Type) -> bool {
+    match t {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::Custom(n) => matches!(
+            n.as_str(),
+            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "f32" | "f64" | "bool" | "char"
+        ),
+        Type::Option(i) | Type::Reference(i) | Type::MutableReference(i) | Type::Vec(i) | Type::Array(i, _) => is_scalar(i),
+        Type::Result(ok, _) => is_scalar(ok),
+        Type::Tuple(ts) => ts.iter().all(is_scalar),
+        _ => false,
+    }
+}
+
+fn strip_refs(t: &Type) -> &Type {
+    match t {
+        Type::Reference(i) | Type::MutableReference(i) => strip_refs(i),
+        o => o,
+    }
+}
+
+fn pattern_names(p: &Pattern<'_>, out: &mut Vec<String>) {
+    match p {
+        Pattern::Identifier(n) | Pattern::Ref(n) | Pattern::RefMut(n) | Pattern::MutBinding(n) => out.push(n.clone()),
+        Pattern::EnumVariant(_, b) => match b {
+            EnumPatternBinding::Single(n) => out.push(n.clone()),
+            EnumPatternBinding::Tuple(ps) => ps.iter().for_each(|p| pattern_names(p, out)),
+            EnumPatternBinding::Struct(fs, _) => fs.iter().for_each(|(_, p)| pattern_names(p, out)),
+            _ => {}
+        },
+        Pattern::Tuple(ps) | Pattern::Or(ps) => ps.iter().for_each(|p| pattern_names(p, out)),
+        Pattern::Reference(p) => pattern_names(p, out),
+        _ => {}
+    }
+}
+
+type Env = HashMap<String, Taint>;
+
+fn join_into(a: &mut Env, b: &Env) {
+    for (k, v) in b {
+        a.entry(k.clone()).or_default().extend(v.iter().cloned());
+    }
+}
+
+pub struct Walker<'w, 'p, 'a> {
+    prog: &'w Program<'p, 'a>,
+    summaries: &'w HashMap<DefId, Summary>,
+    file: String,
+    env: Env,
+    bound: HashSet<String>,
+    conns: HashSet<String>,
+    request_types: HashMap<String, String>,
+    ret: Taint,
+    sinks: BTreeMap<(usize, Vec<String>), BTreeSet<SinkSite>>,
+    pub findings: Vec<Finding>,
+    quiet: bool,
+    request_cache: HashMap<String, bool>,
+}
+
+pub struct Outcome {
+    pub summary: Summary,
+    pub findings: Vec<Finding>,
+}
+
+/// Analyze one function with symbolic parameters.
+pub fn analyze_fn(prog: &Program<'_, '_>, summaries: &HashMap<DefId, Summary>, decl: &FunctionDecl<'_>, file: &str) -> Outcome {
+    let pr = pragma(decl);
+    let mut w = Walker {
+        prog,
+        summaries,
+        file: file.to_string(),
+        env: HashMap::new(),
+        bound: HashSet::new(),
+        conns: HashSet::new(),
+        request_types: HashMap::new(),
+        ret: Taint::new(),
+        sinks: BTreeMap::new(),
+        findings: Vec::new(),
+        quiet: matches!(pr, Pragma::Trusted),
+        request_cache: HashMap::new(),
+    };
+    for (i, p) in decl.parameters.iter().enumerate() {
+        w.bound.insert(p.name.clone());
+        let ty = strip_refs(&p.type_);
+        if is_scalar(ty) {
+            continue;
+        }
+        if let Type::Custom(n) = ty {
+            let base = n.rsplit("::").next().unwrap_or(n);
+            if base == "Connection" {
+                w.conns.insert(p.name.clone());
+            }
+            w.request_types.insert(p.name.clone(), base.to_string());
+        }
+        let mut t = Taint::new();
+        t.insert(Origin::Param(i, Vec::new()));
+        w.env.insert(p.name.clone(), t);
+    }
+    let tail = w.block(&decl.body);
+    w.ret.extend(tail);
+    let mut summary = Summary { ret: std::mem::take(&mut w.ret), sinks: std::mem::take(&mut w.sinks), sanitizer: pr == Pragma::Sanitizer };
+    if decl.return_type.as_ref().map_or(true, is_scalar) || summary.sanitizer {
+        summary.ret.clear();
+    }
+    if matches!(pr, Pragma::Trusted | Pragma::TrustedNoReason) {
+        summary.sinks.clear();
+    }
+    let findings = if w.quiet { Vec::new() } else { w.findings };
+    Outcome { summary, findings }
+}
+
+impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
+    fn place(&self, loc: &crate::parser::ast::types::SourceLocation, word: &str) -> Place {
+        let (line, column) = loc
+            .as_ref()
+            .map(|l| (l.line, crate::source_map::display_column(l.column)))
+            .unwrap_or((0, 0));
+        Place { file: self.file.clone(), line, column, word: word.to_string() }
+    }
+
+    fn block(&mut self, stmts: &[&Statement<'_>]) -> Taint {
+        let mut tail = Taint::new();
+        for (i, s) in stmts.iter().enumerate() {
+            let last = i + 1 == stmts.len();
+            let t = self.stmt(s);
+            if last {
+                tail = t;
+            }
+        }
+        tail
+    }
+
+    fn branch(&mut self, stmts: &[&Statement<'_>], base: &Env) -> (Env, Taint) {
+        let saved = std::mem::replace(&mut self.env, base.clone());
+        let t = self.block(stmts);
+        (std::mem::replace(&mut self.env, saved), t)
+    }
+
+    fn bind(&mut self, p: &Pattern<'_>, t: &Taint) {
+        let mut names = Vec::new();
+        pattern_names(p, &mut names);
+        for n in names {
+            self.bound.insert(n.clone());
+            self.conns.remove(&n);
+            self.env.insert(n, t.clone());
+        }
+    }
+
+    fn stmt(&mut self, s: &Statement<'_>) -> Taint {
+        match s {
+            Statement::Let { pattern, type_, value, else_block, .. } => {
+                let mut t = self.expr(value);
+                if type_.as_ref().is_some_and(is_scalar) {
+                    t.clear();
+                }
+                let is_conn = self.is_connect(value);
+                self.bind(pattern, &t);
+                if is_conn {
+                    if let Pattern::Identifier(n) | Pattern::MutBinding(n) = pattern {
+                        self.conns.insert(n.clone());
+                    }
+                }
+                if let Some(e) = else_block {
+                    let base = self.env.clone();
+                    self.branch(e, &base);
+                }
+                Taint::new()
+            }
+            Statement::Assignment { target, value, compound_op, .. } => {
+                let t = self.expr(value);
+                match target {
+                    Expression::Identifier { name, .. } => {
+                        if compound_op.is_some() {
+                            self.env.entry(name.clone()).or_default().extend(t);
+                        } else {
+                            self.env.insert(name.clone(), t);
+                        }
+                    }
+                    other => {
+                        if let Some(root) = root_ident(other) {
+                            self.env.entry(root).or_default().extend(t);
+                        }
+                        self.sub_exprs(other);
+                    }
+                }
+                Taint::new()
+            }
+            Statement::Return { value, .. } => {
+                if let Some(v) = value {
+                    let t = self.expr(v);
+                    self.ret.extend(t);
+                }
+                Taint::new()
+            }
+            Statement::Expression { expr, .. } => self.expr(expr),
+            Statement::If { condition, then_block, else_block, .. } => {
+                self.expr(condition);
+                let base = self.env.clone();
+                let (mut env, mut tail) = self.branch(then_block, &base);
+                match else_block {
+                    Some(e) => {
+                        let (env2, t2) = self.branch(e, &base);
+                        join_into(&mut env, &env2);
+                        tail.extend(t2);
+                    }
+                    None => join_into(&mut env, &base),
+                }
+                self.env = env;
+                tail
+            }
+            Statement::Match { value, arms, .. } => {
+                let scrut = self.expr(value);
+                let base = self.env.clone();
+                let mut joined: Option<Env> = None;
+                let mut tail = Taint::new();
+                for arm in arms {
+                    let saved = std::mem::replace(&mut self.env, base.clone());
+                    self.bind(&arm.pattern, &scrut);
+                    if let Some(g) = arm.guard {
+                        self.expr(g);
+                    }
+                    tail.extend(self.expr(arm.body));
+                    let e = std::mem::replace(&mut self.env, saved);
+                    match joined.as_mut() {
+                        Some(j) => join_into(j, &e),
+                        None => joined = Some(e),
+                    }
+                }
+                if let Some(j) = joined {
+                    self.env = j;
+                }
+                tail
+            }
+            Statement::For { pattern, iterable, body, .. } => {
+                let it = self.expr(iterable);
+                for _ in 0..2 {
+                    let base = self.env.clone();
+                    self.bind(pattern, &it);
+                    self.block(body);
+                    join_into(&mut self.env, &base);
+                }
+                Taint::new()
+            }
+            Statement::While { condition, body, .. } => {
+                for _ in 0..2 {
+                    self.expr(condition);
+                    let base = self.env.clone();
+                    self.block(body);
+                    join_into(&mut self.env, &base);
+                }
+                Taint::new()
+            }
+            Statement::Loop { body, .. } => {
+                for _ in 0..2 {
+                    let base = self.env.clone();
+                    self.block(body);
+                    join_into(&mut self.env, &base);
+                }
+                Taint::new()
+            }
+            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
+                self.block(body);
+                Taint::new()
+            }
+            Statement::Defer { statement, .. } => {
+                self.stmt(statement);
+                Taint::new()
+            }
+            Statement::Break { value: Some(v), .. } => {
+                self.expr(v);
+                Taint::new()
+            }
+            Statement::Const { .. } | Statement::Static { .. } | Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => Taint::new(),
+        }
+    }
+
+    /// Walk the sub-expressions of a place expression (index operands) for the calls in them.
+    fn sub_exprs(&mut self, e: &Expression<'_>) {
+        match e {
+            Expression::Index { object, index, .. } => {
+                self.sub_exprs(object);
+                self.expr(index);
+            }
+            Expression::FieldAccess { object, .. } => self.sub_exprs(object),
+            Expression::MethodCall { .. } | Expression::Call { .. } => {
+                self.expr(e);
+            }
+            _ => {}
+        }
+    }
+
+    /// `db::connect(..)`, possibly through `?`, `.unwrap()` or `.expect(..)`.
+    fn is_connect(&self, e: &Expression<'_>) -> bool {
+        match e {
+            Expression::TryOp { expr, .. } => self.is_connect(expr),
+            Expression::MethodCall { object, method, .. } if matches!(method.as_str(), "unwrap" | "expect") => self.is_connect(object),
+            Expression::Call { function: Expression::Identifier { name, .. }, .. } => {
+                matches!(self.std_path_of(e, name).as_deref(), Some(p) if p.ends_with("db::connect"))
+            }
+            _ => false,
+        }
+    }
+
+    fn std_path_of(&self, call: &Expression<'_>, name: &str) -> Option<String> {
+        let key = ExprKey(call as *const Expression<'_> as usize);
+        let c = self.prog.by_key.get(&key)?;
+        match &c.res {
+            Res::Unresolved(Reason::External(p)) | Res::Prim(p) => Some(full(p, name)),
+            Res::Unresolved(Reason::NotFound(_)) if c.kind == CallKind::Free => Some(name.to_string()),
+            _ => None,
+        }
+    }
+
+    fn expr(&mut self, e: &Expression<'_>) -> Taint {
+        match e {
+            Expression::Literal { .. } => Taint::new(),
+            Expression::Identifier { name, .. } => self.env.get(name).cloned().unwrap_or_default(),
+            Expression::Binary { left, op, right, .. } => {
+                let l = self.expr(left);
+                let r = self.expr(right);
+                match op {
+                    BinaryOp::Add => union(l, r),
+                    _ => Taint::new(),
+                }
+            }
+            Expression::Unary { op, operand, .. } => {
+                let t = self.expr(operand);
+                match op {
+                    UnaryOp::Not | UnaryOp::Neg => Taint::new(),
+                    _ => t,
+                }
+            }
+            Expression::Call { function, arguments, location } => self.call(e, function, arguments, location),
+            Expression::MethodCall { object, method, arguments, location, .. } => self.method_call(e, object, method, arguments, location),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if let Some(t) = self.request_member(name, field, e) {
+                        return t;
+                    }
+                }
+                let t = self.expr(object);
+                select(&t, field)
+            }
+            Expression::StructLiteral { fields, .. } => {
+                let mut out = Taint::new();
+                for (n, v) in fields {
+                    let t = self.expr(v);
+                    out.extend(t.into_iter().map(|o| Origin::Field(n.clone(), Box::new(o))));
+                }
+                out
+            }
+            Expression::MapLiteral { pairs, .. } => pairs.iter().fold(Taint::new(), |acc, (k, v)| {
+                let a = union(acc, self.expr(k));
+                union(a, self.expr(v))
+            }),
+            Expression::Range { start, end, .. } => union(self.expr(start), self.expr(end)),
+            Expression::Closure { parameters, body, .. } => {
+                let saved: Vec<_> = parameters.iter().map(|p| (p.clone(), self.env.remove(p))).collect();
+                let t = self.expr(body);
+                for (p, old) in saved {
+                    match old {
+                        Some(o) => {
+                            self.env.insert(p, o);
+                        }
+                        None => {
+                            self.env.remove(&p);
+                        }
+                    }
+                }
+                t
+            }
+            Expression::Cast { expr, type_, .. } => {
+                let t = self.expr(expr);
+                if is_scalar(type_) {
+                    Taint::new()
+                } else {
+                    t
+                }
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr(index);
+                self.expr(object)
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements.iter().fold(Taint::new(), |acc, x| union(acc, self.expr(x))),
+            Expression::MacroInvocation { args, .. } => args.iter().fold(Taint::new(), |acc, x| union(acc, self.expr(x))),
+            Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. }
+            | Expression::AsyncCall { expr, .. }
+            | Expression::SpawnCall { expr, .. } => self.expr(expr),
+            Expression::ChannelSend { channel, value, .. } => {
+                self.expr(channel);
+                self.expr(value);
+                Taint::new()
+            }
+            Expression::ChannelRecv { channel, .. } => self.expr(channel),
+            Expression::Block { statements, .. } => {
+                self.block(statements)
+            }
+        }
+    }
+
+    /// `req.body`, `req.query`: a member of a value of an HTTP request type (decided by the std struct's fields).
+    fn request_member(&mut self, var: &str, member: &str, at: &Expression<'_>) -> Option<Taint> {
+        let ty = self.request_types.get(var)?.clone();
+        let key = format!("{ty}::{member}");
+        let hit = *self.request_cache.entry(key.clone()).or_insert_with(|| crate::ir::taint::taint_source_for_callee(&key).is_some());
+        hit.then(|| {
+            let kind = crate::ir::taint::taint_source_for_callee(&key);
+            let what = format!("an HTTP request ({})", member_what(&kind));
+            self.source(&what, &key, &at.location(), member)
+        })
+    }
+
+    fn source(&self, what: &str, callee: &str, loc: &crate::parser::ast::types::SourceLocation, word: &str) -> Taint {
+        let mut t = Taint::new();
+        t.insert(Origin::Source { what: what.to_string(), callee: callee.to_string(), at: self.place(loc, word) });
+        t
+    }
+
+    fn args(&mut self, arguments: &[(Option<String>, &Expression<'_>)]) -> Vec<Taint> {
+        arguments.iter().map(|(_, a)| self.expr(a)).collect()
+    }
+
+    fn call(&mut self, e: &Expression<'_>, function: &Expression<'_>, arguments: &[(Option<String>, &Expression<'_>)], loc: &crate::parser::ast::types::SourceLocation) -> Taint {
+        let name = match function {
+            Expression::Identifier { name, .. } => name.clone(),
+            other => {
+                self.expr(other);
+                String::new()
+            }
+        };
+        let args = self.args(arguments);
+        let key = ExprKey(e as *const Expression<'_> as usize);
+        let prog = self.prog;
+        let Some(res) = prog.by_key.get(&key).map(|c| (&c.res, c.kind)) else { return args.into_iter().fold(Taint::new(), union) };
+        let word = name.rsplit("::").next().unwrap_or(&name).to_string();
+        match res.0 {
+            Res::Def(id) => self.apply_user(&[*id], None, &args, loc, &word, res.1),
+            Res::Unresolved(Reason::External(p)) | Res::Prim(p) => {
+                let path = full(p, &name);
+                self.std_call(&path, &word, &args, loc, e)
+            }
+            Res::Unresolved(Reason::NotFound(_)) if res.1 == CallKind::Free => self.std_call(&name, &word, &args, loc, e),
+            _ => args.into_iter().fold(Taint::new(), union),
+        }
+    }
+
+    fn method_call(&mut self, e: &Expression<'_>, object: &Expression<'_>, method: &str, arguments: &[(Option<String>, &Expression<'_>)], loc: &crate::parser::ast::types::SourceLocation) -> Taint {
+        // `fs.read_to_string(..)` with `use std::fs`: a call of the module's function
+        if let Expression::Identifier { name, .. } = object {
+            if !self.bound.contains(name) && self.prog.modules.get(&self.file).is_some_and(|m| m.contains(name)) {
+                let args = self.args(arguments);
+                return self.std_call(&format!("{name}::{method}"), method, &args, loc, e);
+            }
+        }
+        let recv = self.expr(object);
+        // a closure argument sees the elements of the receiver (`lines.map(|l| ..)`)
+        let mut args = Vec::new();
+        for (_, a) in arguments {
+            if let Expression::Closure { parameters, body, .. } = a {
+                let saved: Vec<_> = parameters.iter().map(|p| (p.clone(), self.env.insert(p.clone(), recv.clone()))).collect();
+                let t = self.expr(body);
+                for (p, old) in saved {
+                    match old {
+                        Some(o) => {
+                            self.env.insert(p, o);
+                        }
+                        None => {
+                            self.env.remove(&p);
+                        }
+                    }
+                }
+                args.push(t);
+            } else {
+                args.push(self.expr(a));
+            }
+        }
+        // SQL text of a database connection
+        if let (Some(role), Expression::Identifier { name, .. }) = (catalog::db_method_role(method), object) {
+            if self.conns.contains(name) {
+                self.check_sink(&role, &format!("Connection::{method}"), method, &args, loc);
+                return Taint::new();
+            }
+        }
+        // a member of an HTTP request value
+        if let Expression::Identifier { name, .. } = object {
+            if let Some(t) = self.request_member(name, method, e) {
+                return t;
+            }
+        }
+        let key = ExprKey(e as *const Expression<'_> as usize);
+        let prog = self.prog;
+        if let Some(c) = prog.by_key.get(&key) {
+            if let Res::MethodCandidates(ids) = &c.res {
+                let ids = ids.clone();
+                return self.apply_user(&ids, Some(recv), &args, loc, method, CallKind::Method);
+            }
+        }
+        if catalog::NARROWING_METHODS.contains(&method) {
+            return Taint::new();
+        }
+        let all = args.into_iter().fold(recv.clone(), union);
+        if catalog::STORING_METHODS.contains(&method) {
+            if let Some(root) = root_ident(object) {
+                self.env.entry(root).or_default().extend(all.clone());
+            }
+        }
+        all
+    }
+
+    fn std_call(&mut self, path: &str, word: &str, args: &[Taint], loc: &crate::parser::ast::types::SourceLocation, _e: &Expression<'_>) -> Taint {
+        for role in catalog::sink_roles(path) {
+            self.check_sink(&role, path, word, args, loc);
+        }
+        if catalog::std_sanitizer(path).is_some() {
+            return Taint::new();
+        }
+        if let Some(src) = catalog::source(path) {
+            return self.source(src.what, &canonical(path), loc, word);
+        }
+        if crate::ir::taint::is_sanitizer_callee(path) {
+            return Taint::new();
+        }
+        args.iter().cloned().fold(Taint::new(), union)
+    }
+
+    fn check_sink(&mut self, role: &SinkRole, callee: &str, word: &str, args: &[Taint], loc: &crate::parser::ast::types::SourceLocation) {
+        let Some(t) = args.get(role.arg).map(flatten) else { return };
+        let at = self.place(loc, word);
+        let site = SinkSite { role: role.clone(), callee: canonical(callee), at: at.clone() };
+        for o in &t {
+            match o {
+                Origin::Source { what, callee: sc, at: sat } => self.findings.push(Finding {
+                    source_what: what.clone(),
+                    source_callee: sc.clone(),
+                    source_at: sat.clone(),
+                    sink: site.clone(),
+                    report_at: at.clone(),
+                    via: Vec::new(),
+                }),
+                Origin::Param(i, path) => {
+                    self.sinks.entry((*i, path.clone())).or_default().insert(site.clone());
+                }
+                Origin::Field(..) => {}
+            }
+        }
+    }
+
+    fn apply_user(&mut self, ids: &[DefId], recv: Option<Taint>, args: &[Taint], loc: &crate::parser::ast::types::SourceLocation, word: &str, kind: CallKind) -> Taint {
+        let (prog, summaries) = (self.prog, self.summaries);
+        let defs = prog.resolved.defs();
+        let mut result = Taint::new();
+        for id in ids {
+            let Some(sum) = summaries.get(id) else { continue };
+            let d = defs.get(*id);
+            let off = usize::from(d.has_self && kind == CallKind::Method);
+            let param = |p: usize| -> Taint {
+                if kind == CallKind::Method && d.has_self && p == 0 {
+                    return recv.clone().unwrap_or_default();
+                }
+                args.get(p - off).cloned().unwrap_or_default()
+            };
+            for o in &sum.ret {
+                match o {
+                    Origin::Param(p, path) => result.extend(select_path(&param(*p), path)),
+                    Origin::Field(n, inner) => {
+                        // a struct built in the callee: its field holds what the inner origin resolves to
+                        let mut one = Taint::new();
+                        one.insert((**inner).clone());
+                        let resolved = self.resolve_in_callee(&one, &param);
+                        result.extend(resolved.into_iter().map(|r| Origin::Field(n.clone(), Box::new(r))));
+                    }
+                    src => {
+                        result.insert(src.clone());
+                    }
+                }
+            }
+            if ids.len() == 1 {
+                for ((p, path), sites) in &sum.sinks {
+                    let t = flatten(&select_path(&param(*p), path));
+                    for o in t {
+                        match o {
+                            Origin::Source { what, callee, at } => {
+                                for s in sites {
+                                    self.findings.push(Finding {
+                                        source_what: what.clone(),
+                                        source_callee: callee.clone(),
+                                        source_at: at.clone(),
+                                        sink: s.clone(),
+                                        report_at: self.place(loc, word),
+                                        via: vec![d.name.clone()],
+                                    });
+                                }
+                            }
+                            Origin::Param(q, qpath) => {
+                                self.sinks.entry((q, qpath)).or_default().extend(sites.iter().cloned());
+                            }
+                            Origin::Field(..) => {}
+                        }
+                    }
+                }
+            }
+        }
+        result
+    }
+}
+
+impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
+    /// A callee origin (possibly a parameter's member) as it reads in the caller.
+    fn resolve_in_callee(&self, one: &Taint, param: &dyn Fn(usize) -> Taint) -> Taint {
+        one.iter()
+            .flat_map(|o| match o {
+                Origin::Param(p, path) => select_path(&param(*p), path),
+                other => [other.clone()].into_iter().collect(),
+            })
+            .collect()
+    }
+}
+
+fn union(mut a: Taint, b: Taint) -> Taint {
+    a.extend(b);
+    a
+}
+
+fn root_ident(e: &Expression<'_>) -> Option<String> {
+    match e {
+        Expression::Identifier { name, .. } => Some(name.clone()),
+        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => root_ident(object),
+        _ => None,
+    }
+}
+
+fn full(external: &str, callee: &str) -> String {
+    let last = callee.rsplit("::").next().unwrap_or(callee);
+    if external == last || external.ends_with(&format!("::{last}")) {
+        external.to_string()
+    } else {
+        format!("{external}::{last}")
+    }
+}
+
+/// `std::fs::read_to_string` -> `fs::read_to_string`.
+fn canonical(path: &str) -> String {
+    let segs: Vec<&str> = path.split("::").collect();
+    segs[segs.len().saturating_sub(2)..].join("::")
+}
+
+fn member_what(kind: &Option<crate::ir::taint::TaintSourceKind>) -> &'static str {
+    use crate::ir::taint::TaintSourceKind as K;
+    match kind {
+        Some(K::HttpRequestBody) => "body",
+        Some(K::HttpRequestQuery) => "query",
+        Some(K::HttpRequestHeader) => "headers",
+        _ => "request",
+    }
+}

@@ -1,0 +1,8 @@
+// Tainted data written to a fixed file: only the path is a sink.
+use std::fs
+
+fn main() {
+    let note = fs::read_to_string("note.txt").unwrap_or("")
+    let result = fs::write("notes.txt", note)
+    println("${result}")
+}

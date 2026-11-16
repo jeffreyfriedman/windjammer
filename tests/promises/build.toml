@@ -263,3 +263,11 @@ polarity = "negative"
 args = ["build", "{w}/nope.wj", "--no-cargo", "--unchecked-arithmetic", "-o", "{w}/out"]
 output_has = ["path not found"]
 output_lacks = ["Success"]
+
+[[case]]
+name = "build stops on untrusted data reaching a command (WJ0173)"
+polarity = "negative"
+files = { "m.wj" = "use std::fs\nuse std::process\n\nfn main() {\n    let name = fs::read_to_string(\"name.txt\").unwrap_or(\"\")\n    let out = process::run(\"echo ${name}\")\n    println(\"${out}\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--no-generate-cargo-toml", "-o", "{w}/out"]
+exit = 1
+output_has = ["WJ0173", "before generating code"]

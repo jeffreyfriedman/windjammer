@@ -1,0 +1,17 @@
+// The flow crosses two helpers and a recursive call.
+use std::fs
+
+fn save(path: string, depth: int) {
+    if depth > 0 {
+        save(path, depth - 1)
+    }
+    fs::write(path, "x")
+}
+
+fn outer(path: string) {
+    save(path, 2)
+}
+
+fn main() {
+    outer(fs::read_to_string("out.txt").unwrap_or("")) //~ WJ0173
+}

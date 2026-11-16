@@ -1,0 +1,20 @@
+// The field that holds file contents is the one used as the path.
+use std::fs
+
+struct Page {
+    name: string,
+    body: string,
+}
+
+fn load(name: string) -> Page {
+    let body = fs::read_to_string("${name}.md").unwrap_or("")
+    Page { name: name, body: body }
+}
+
+fn save(page: Page) {
+    let _ = fs::write(page.body, "x")
+}
+
+fn main() {
+    save(load("index")) //~ WJ0173
+}

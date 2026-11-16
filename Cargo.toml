@@ -195,6 +195,11 @@ path = "tests/diag_schema_suite.rs"
 name = "diag_hints_corpus"
 path = "tests/diag_hints_corpus.rs"
 
+# Untrusted data into a command, file path or SQL text (ADR-0009, WJ0173): cargo test --release --test taint_flow
+[[test]]
+name = "taint_flow"
+path = "tests/taint_flow_test.rs"
+
 [[test]]
 name = "all"
 path = "tests/all.rs"

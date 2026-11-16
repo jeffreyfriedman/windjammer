@@ -1,0 +1,182 @@
+// Precision gate for WJ0173 (ADR-0009): runs `wj check` over everything we can check and fails when an untrusted-data finding
+// appears that the ledger does not explain, or when a ledger entry no longer fires (the ledger only shrinks).
+//
+//   wj run scripts/wj/taint_precision.wj <wj-binary> [ecosystem-root]
+//
+// Scanned: every `.wj` file of tests/, examples/ and scripts/ that mentions both a sink module and a source (one file at a
+// time), every project of tests/drift_corpus/eco (the pinned ecosystem snapshot) and, when given, every package and app
+// of a windjammer-ecosystem checkout. Ledger: tests/taint/precision_ledger.tsv, `path <TAB> source <TAB> sink <TAB> reason`
+// (a path under the ecosystem checkout is written `eco:<path>`). A finding is reported by file, source kind and sink kind,
+// not by line, so editing a file does not invalidate its entry.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+const LEDGER: string = "tests/taint/precision_ledger.tsv"
+
+struct Finding {
+    path: string,
+    source: string,
+    sink: string,
+}
+
+fn read_ledger() -> Vec<Finding> {
+    let mut out: Vec<Finding> = Vec::new()
+    for line in strings.split_lines(fs.read_to_string(LEDGER).unwrap_or("")) {
+        if line == "" || strings.starts_with(line, "#") {
+            continue
+        }
+        let f = strings.split(line, "\t")
+        if f.len() == 4 {
+            if f[3] == "" {
+                println("precision: ledger entry for ${f[0]} has no reason")
+                process.exit(1)
+            }
+            out.push(Finding { path: f[0], source: f[1], sink: f[2] })
+        }
+    }
+    out
+}
+
+// "error[WJ0173]: data from file contents reaches SQL text without being sanitized" -> (file contents, SQL text)
+fn parse_message(line: string) -> Option<Vec<string>> {
+    let prefix = "error[WJ0173]: data from "
+    if !strings.starts_with(line, prefix) {
+        return None
+    }
+    let rest = line[prefix.len()..].to_string()
+    let parts = strings.split(rest, " reaches ")
+    if parts.len() != 2 {
+        return None
+    }
+    let sink = strings.replace(parts[1], " without being sanitized", "")
+    Some([parts[0], sink])
+}
+
+// the findings of one `wj check` output
+fn findings_in(prefix: string, text: string) -> Vec<Finding> {
+    let mut out: Vec<Finding> = Vec::new()
+    let mut pending: Vec<string> = Vec::new()
+    for line in strings.split_lines(text) {
+        match parse_message(line) {
+            Some(m) => { pending = m },
+            None => {
+                let t = strings.trim(line)
+                if pending.len() == 2 && strings.starts_with(t, "--> ") {
+                    let loc = t[4..].to_string()
+                    let path = strings.split(loc, ":")[0]
+                    out.push(Finding { path: prefix + path, source: pending[0], sink: pending[1] })
+                    pending = Vec::new()
+                }
+            },
+        }
+    }
+    out
+}
+
+fn run_check(wj: string, dir: string, target: string) -> string {
+    match sh("cd ${quote(dir)} && WJ_ALLOW_TOOLCHAIN_MISMATCH=1 ${quote(wj)} check ${quote(target)} 2>&1") {
+        Ok(r) => r.stdout,
+        Err(_) => "",
+    }
+}
+
+fn lines_of(cmd: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    match sh(cmd) {
+        Ok(r) => {
+            for l in strings.split_lines(r.stdout) {
+                if l != "" {
+                    out.push(l)
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    out
+}
+
+fn same(a: Finding, b: Finding) -> bool {
+    a.path == b.path && a.source == b.source && a.sink == b.sink
+}
+
+fn has(list: Vec<Finding>, f: Finding) -> bool {
+    for x in list {
+        if same(x, f) {
+            return true
+        }
+    }
+    false
+}
+
+fn selftest() -> bool {
+    let text = "error[WJ0173]: data from file contents reaches SQL text without being sanitized\n  --> a/b.wj:3:4\n  |\nerror[WJ0001]: x\n  --> c.wj:1:1\n"
+    let f = findings_in("eco:", text)
+    f.len() == 1 && f[0].path == "eco:a/b.wj" && f[0].source == "file contents" && f[0].sink == "SQL text"
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() >= 2 && args[1] == "--selftest" {
+        if selftest() {
+            println("precision selftest: one planted finding parsed, a different code ignored")
+            return
+        }
+        println("precision selftest: FAILED")
+        process.exit(1)
+    }
+    if args.len() < 2 {
+        println("usage: taint_precision.wj <wj-binary> [ecosystem-root] | --selftest")
+        process.exit(2)
+    }
+    let wj = args[1]
+    let eco = if args.len() > 2 { args[2] } else { "" }
+    let mut found: Vec<Finding> = Vec::new()
+    let mut scanned = 0
+    // files that can hold a flow: a sink module and a source
+    let files = lines_of("find tests examples scripts -name '*.wj' -not -path 'tests/taint/*' -not -path 'tests/drift_corpus/eco/*' | xargs grep -l 'process\\|fs\\|db\\|Connection' | xargs grep -l 'env\\|io\\|args\\|Request\\|read'")
+    for f in files {
+        found.extend(findings_in("", run_check(wj, ".", f)))
+        scanned += 1
+    }
+    for d in lines_of("ls -d tests/drift_corpus/eco/packages/* tests/drift_corpus/eco/apps/*") {
+        found.extend(findings_in("", run_check(wj, ".", d)))
+        scanned += 1
+    }
+    if eco != "" {
+        for d in lines_of("cd ${quote(eco)} && ls -d packages/* apps/*") {
+            found.extend(findings_in("eco:", run_check(wj, eco, d)))
+            scanned += 1
+        }
+    }
+    let ledger = read_ledger()
+    let mut problems = 0
+    let mut seen: Vec<Finding> = Vec::new()
+    for f in found {
+        if has(seen, f) {
+            continue
+        }
+        seen.push(f)
+        if !has(ledger, f) {
+            println("precision: unexplained finding: ${f.path}: data from ${f.source} reaches ${f.sink}")
+            problems += 1
+        }
+    }
+    for l in ledger {
+        // an ecosystem entry only counts when the ecosystem was scanned
+        if strings.starts_with(l.path, "eco:") && eco == "" {
+            continue
+        }
+        if !has(seen, l) {
+            println("precision: ledger entry no longer fires, remove it: ${l.path}: ${l.source} -> ${l.sink}")
+            problems += 1
+        }
+    }
+    println("precision: ${scanned} targets scanned, ${seen.len()} distinct finding(s), ${ledger.len()} ledger entr(ies)")
+    if problems > 0 {
+        process.exit(1)
+    }
+}

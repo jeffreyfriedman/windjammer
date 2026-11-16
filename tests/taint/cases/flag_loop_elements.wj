@@ -1,0 +1,11 @@
+// Lines of a file are commands.
+use std::fs
+use std::process
+
+fn main() {
+    let text = fs::read_to_string("jobs.txt").unwrap_or("")
+    for line in text.split("\n") {
+        let out = process::run(line) //~ WJ0173
+        println("${out}")
+    }
+}

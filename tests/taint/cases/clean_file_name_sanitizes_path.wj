@@ -1,0 +1,10 @@
+// Keeping the final path component makes a name safe to join to a fixed directory.
+use std::fs
+use std::io
+use std::path
+
+fn main() {
+    let name = path::file_name(io::read_line().unwrap_or("")).unwrap_or("out.txt")
+    let result = fs::write("out/" + name, "data")
+    println("${result}")
+}

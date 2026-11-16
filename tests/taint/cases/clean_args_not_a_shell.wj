@@ -1,0 +1,9 @@
+// The program is a literal; the tainted value is an argument of a process without a shell.
+use std::fs
+use std::process
+
+fn main() {
+    let name = fs::read_to_string("user.txt").unwrap_or("")
+    let out = process::run_with_args("echo", [name])
+    println("${out}")
+}

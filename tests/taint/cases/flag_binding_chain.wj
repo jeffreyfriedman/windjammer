@@ -1,0 +1,12 @@
+// The value passes through several bindings, a method and a concatenation before the sink.
+use std::fs
+use std::process
+
+fn main() {
+    let raw = fs::read_to_string("cmd.txt").unwrap_or("")
+    let trimmed = raw.trim()
+    let line = "run " + trimmed
+    let final_line = "${line} now"
+    let out = process::run(final_line) //~ WJ0173
+    println("${out}")
+}
