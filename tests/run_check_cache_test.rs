@@ -74,9 +74,9 @@ fn an_unchanged_program_replays_the_stored_check_and_a_changed_input_checks_agai
         assert!(!String::from_utf8_lossy(&out.stderr).contains(MARK), "{what} changes the key");
     }
 
-    // a sibling module (never the entry file) gains a parameter: the call in prog.wj is now an error
+    // a sibling module (never the entry file) now names an unknown variable: the program is an error
     mark_entries(dir);
-    std::fs::write(dir.join("dep.wj"), DEP.replace("(x: int)", "(x: int, y: int)")).unwrap();
+    std::fs::write(dir.join("dep.wj"), DEP.replace("x + 1", "x + missing_name")).unwrap();
     let broken = run(dir, dir, &[], &[]);
     assert!(!broken.status.success(), "the edited program is refused, not replayed");
     assert!(!String::from_utf8_lossy(&broken.stderr).contains(MARK));
