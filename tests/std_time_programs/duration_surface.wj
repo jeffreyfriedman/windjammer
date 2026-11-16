@@ -1,0 +1,35 @@
+// `std::time::Duration` and `Instant` are the standard library's types, interpreted and compiled alike.
+// expect: 10
+// expect: 2500
+// expect: 2.5
+// expect: 3
+// expect: 1500000
+// expect: 250
+// expect: 7
+// expect: true
+// expect: true
+// expect: 0 5
+use std::time::Duration
+use std::time::Instant
+
+struct Timeout {
+    limit: Duration,
+}
+
+fn main() {
+    let d = Duration::from_millis(10)
+    println("${d.as_millis()}")
+    let long = Duration::from_secs_f64(2.5)
+    println("${long.as_millis()}")
+    println("${long.as_secs_f64()}")
+    println("${Duration::from_secs(3).as_secs()}")
+    println("${Duration::from_micros(1500000).as_micros()}")
+    let t = Timeout { limit: Duration::from_nanos(250_000_000) }
+    println("${t.limit.subsec_millis()}")
+    println("${Duration::new(7, 5).as_secs()}")
+    println("${Duration::from_secs(0).is_zero()}")
+    let start = Instant::now()
+    println("${start.elapsed().as_secs() < 5}")
+    let sub = Duration::new(0, 5)
+    println("${sub.as_secs()} ${sub.as_nanos()}")
+}

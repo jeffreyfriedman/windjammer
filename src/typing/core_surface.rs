@@ -245,8 +245,8 @@ pub fn self_type(type_name: &str, generics: &[String]) -> Type {
 
 /// The surface type a receiver type names, with its type arguments (`&Vec<int>` -> `Vec`, `[int]`).
 fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
-    const NAMES: [&str; 13] =
-        ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List", "JoinHandle", "thread"];
+    const NAMES: [&str; 15] =
+        ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List", "JoinHandle", "thread", "Duration", "Instant"];
     // Windjammer's `List<T>` (the enumerable methods' result) is the surface's `Vec<T>`; the `thread` module's
     // functions are declared on the surface trait `Thread` (`thread` is a keyword, so it cannot name a trait).
     const SYNONYMS: [(&str, &str); 2] = [("List", "Vec"), ("thread", "Thread")];

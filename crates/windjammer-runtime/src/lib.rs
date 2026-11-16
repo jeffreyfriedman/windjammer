@@ -77,7 +77,6 @@ pub mod test;
 pub mod test_output;
 pub mod testing;
 pub mod thread;
-#[cfg(feature = "datetime")]
 pub mod time;
 pub mod timeout;
 pub mod url;

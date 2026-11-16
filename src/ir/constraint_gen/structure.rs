@@ -241,6 +241,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     #[allow(clippy::type_complexity)]
     pub(super) fn surface_static(&self, callee: &str) -> Option<(&'static str, (Vec<String>, Vec<String>, Vec<Type>, Option<Type>))> {
         let (ty, method) = callee.rsplit_once("::")?;
+        // A struct the program declares under a surface name (`struct Duration`) is not the std type.
+        if self.struct_field_types.is_some_and(|m| m.contains_key(ty)) {
+            return None;
+        }
         let type_name = crate::typing::core_surface::surface_type_name(&Type::Parameterized(ty.to_string(), Vec::new()))?;
         let entry = self.core_surface?.declared_static(type_name, method)?;
         Some((type_name, entry))

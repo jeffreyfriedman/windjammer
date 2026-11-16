@@ -110,9 +110,16 @@ impl FeatureMap {
         if let Some(f) = self.items.get(first)?.clone() {
             need.insert(f);
         }
+        // `time` is always compiled (`Duration`, `Instant`, `SystemTime` are std's); its calendar part needs chrono.
+        if first == "time" && !path.split("::").nth(1).is_some_and(|item| UNGATED_TIME_ITEMS.contains(&item)) {
+            need.insert("datetime".to_string());
+        }
         Some(())
     }
 }
+
+/// The items of the runtime's `time` module that need no feature (checked against `time.rs` below).
+const UNGATED_TIME_ITEMS: &[&str] = &["Duration", "Instant", "SystemTime", "instant_now", "sleep", "sleep_millis"];
 
 /// Feature list for a program: the union over `sources`, or `["full"]` when any file is unclear.
 pub(crate) fn runtime_features<'a>(map: Option<&FeatureMap>, sources: impl Iterator<Item = &'a str>) -> Vec<String> {
@@ -162,6 +169,36 @@ mod tests {
     fn native_platform_modules_use_their_own_gates() {
         assert_eq!(feats("windjammer_runtime::platform::native::compute::join"), vec!["parallel"]);
         assert!(feats("windjammer_runtime::platform::native::fs::read").is_empty());
+    }
+
+    #[test]
+    fn time_durations_need_nothing_and_calendar_needs_datetime() {
+        let lib = "pub mod time;\n";
+        let m = FeatureMap::from_sources(lib, NATIVE);
+        let f = |src: &str| runtime_features(Some(&m), std::iter::once(src));
+        assert!(f("windjammer_runtime::time::Duration::from_millis(1)").is_empty());
+        assert!(f("use windjammer_runtime::time::Instant;").is_empty());
+        assert_eq!(f("windjammer_runtime::time::now()"), vec!["datetime"]);
+        assert_eq!(f("use windjammer_runtime::time;"), vec!["datetime"]);
+    }
+
+    /// The ungated list is exactly the runtime's ungated `time` items (everything before the calendar `mod`).
+    #[test]
+    fn ungated_time_items_match_the_runtime() {
+        let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/crates/windjammer-runtime/src/time.rs")).unwrap();
+        let ungated = src.split("#[cfg(feature = \"datetime\")]").next().unwrap();
+        let mut names: Vec<String> = Vec::new();
+        for line in ungated.lines() {
+            if let Some(r) = line.trim().strip_prefix("pub use std::time::{") {
+                names.extend(r.trim_end_matches("};").split(',').map(|n| n.trim().to_string()));
+            } else if let Some(r) = line.trim().strip_prefix("pub fn ") {
+                names.push(r.split('(').next().unwrap().to_string());
+            }
+        }
+        names.sort();
+        let mut want: Vec<String> = UNGATED_TIME_ITEMS.iter().map(|s| s.to_string()).collect();
+        want.sort();
+        assert_eq!(names, want);
     }
 
     #[test]
