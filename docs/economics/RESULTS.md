@@ -92,6 +92,45 @@ reported, not gated). Gate: `cargo test --release --test meta_scan_locality` (fi
 unrelated cached modules; a file in a project opens no more than a file alone); mutation check: counting the read
 before the reachability check (the old order) fails both tests (2 vs 40, 40 vs 0).
 
+## C4: release profile and overflow checks (measured)
+
+`economics.wj --profiles` (`bench/economics/results/mac-20261116-profiles.{json,md}`): the 17 std-only kernels (the
+generated Rust, and each Rust twin) built with eight rustc flag sets, best of 3 runs, load average 11 to 15. Ratios
+are Windjammer with the profile / the Rust twin with cargo's default release flags (`-C opt-level=3`, 16 codegen
+units, no LTO, no overflow checks), geometric mean:
+
+| profile | run cycles vs twin | stripped size vs twin | compile CPU vs twin | run cycles vs own default |
+|---|---:|---:|---:|---:|
+| cargo default (`-C opt-level=3`) | 1.12 | 1.00 | 1.05 | 1.00 |
+| fat LTO (today's generated default, without overflow checks) | 1.16 | 0.88 | 14.2 | 1.04 |
+| thin LTO | 1.13 | 0.99 | 19.1 | 1.01 |
+| fat LTO + 1 codegen unit | 1.16 | 0.88 | 14.1 | 1.04 |
+| fat LTO + 1 codegen unit + overflow checks (closest to what ships today) | 1.29 | 0.88 | 14.2 | 1.15 |
+| thin LTO + overflow checks | 1.23 | 0.99 | 19.2 | 1.10 |
+| cargo default + overflow checks | 1.25 | 1.00 | 1.03 | 1.12 |
+| fat LTO + 1 codegen unit + `panic=abort` | 1.15 | 0.88 | 13.9 | 1.02 |
+
+Per program, fat LTO costs about 2 s more CPU to compile (0.13-0.27 s without, 2.0-2.4 s with) to save 40 KB of a
+340 KB binary, and runs no faster on these single-crate programs. Overflow checks cost 1.12x run cycles on average
+(Windjammer and Rust alike: the twin with checks is 1.25x its own default) and up to 1.77x (`interp/loop5m`), 1.35x
+(`collatz`), 1.34x (`structs`), 1.27x (`fib`); about half the kernels are within 5%. (`interp/closures` is excluded:
+its generated Rust does not compile with this wj.)
+
+Proposal (owner decision; no default changed yet):
+
+- **Overflow checks stay on** in shipped Windjammer binaries. The spec says integer overflow panics; dropping the checks
+  would make Windjammer silently less safe than its own definition. The opt-out already exists and is explicit:
+  `wj build --unchecked-arithmetic`, or `[build] overflow_checks = false` in `wj.toml` (`docs/spec/numeric.md`). The
+  cost is now measured per kernel; the way to earn it back is C10 (prove ranges in the numeric solver and emit
+  unchecked arithmetic only where overflow is impossible).
+- **LTO only where it can pay**: for a crate with no Windjammer/path dependencies, fat LTO buys 12% size for 14x
+  compile CPU and no speed. Proposed default: `lto = false` for std-only crates; keep `lto = true` when the crate
+  depends on other Windjammer crates (the cross-crate case the current default was chosen for; to be measured on the
+  runtime-using `dx` programs once C2b lands); a size profile (fat LTO, `codegen-units = 1`, strip) on request.
+- **`panic = "abort"` not by default**: about 1% faster, but it changes a panicking program's exit status (101 to 134)
+  and skips unwinding, which the spec's panic semantics fix.
+- **One codegen unit**: no measurable effect on these programs; no default change.
+
 ## Cold dependency build of a generated crate (measured)
 
 `wj build --no-cargo` of `dx/t001_gcd_lcm`, then `cargo build` and `cargo build --release` into an empty target
