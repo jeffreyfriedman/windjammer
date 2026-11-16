@@ -10,25 +10,29 @@ repository = "https://github.com/jeffreyfriedman/windjammer"
 [features]
 # Generated programs start from `default-features = false` and enable only the groups their code
 # references (src/cargo_toml/runtime_features.rs); the default set is everything.
-default = ["db", "full"]
-full = ["net", "async", "cli", "crypto", "datetime", "jwt", "regex", "parallel", "yaml", "compress", "csv", "log"]
-server = ["tower", "tower-http"]
-async = ["dep:tokio"]
-net = ["async", "dep:axum", "dep:reqwest"]
-db = ["async", "dep:sqlx"]
-cli = ["dep:clap"]
-crypto = ["dep:argon2", "dep:bcrypt", "dep:sha1", "dep:sha2", "dep:hmac", "dep:subtle"]
-datetime = ["dep:chrono"]
-jwt = ["datetime", "dep:jsonwebtoken"]
-regex = ["dep:regex"]
-parallel = ["dep:rayon"]
-yaml = ["dep:serde_yaml", "dep:toml"]
-compress = ["dep:flate2"]
-csv = ["dep:csv"]
-log = ["dep:log", "dep:env_logger"]
-wasm = ["wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook", "wasm-bindgen-futures"]
+# `base`: the dependencies of the modules most programs never touch (json, url, uuid, encoding, random, arena, durable,
+# platform, ...). A program whose generated code names only io/fs/env/process/thread/sync builds the runtime with no
+# feature and no third-party crate except libc (docs/economics C2). Every other feature implies `base`.
+base = ["dep:serde", "dep:serde_json", "dep:serde_path_to_error", "dep:mime_guess", "dep:async-trait", "dep:anyhow", "dep:thiserror", "dep:once_cell", "dep:url", "dep:uuid", "dep:base64", "dep:hex", "dep:urlencoding", "dep:dirs", "dep:rand", "dep:getrandom", "dep:bumpalo"]
+default = ["db", "full", "base"]
+full = ["base", "net", "async", "cli", "crypto", "datetime", "jwt", "regex", "parallel", "yaml", "compress", "csv", "log"]
+server = ["base", "tower", "tower-http"]
+async = ["base", "dep:tokio"]
+net = ["base", "async", "dep:axum", "dep:reqwest"]
+db = ["base", "async", "dep:sqlx"]
+cli = ["base", "dep:clap"]
+crypto = ["base", "dep:argon2", "dep:bcrypt", "dep:sha1", "dep:sha2", "dep:hmac", "dep:subtle"]
+datetime = ["base", "dep:chrono"]
+jwt = ["base", "datetime", "dep:jsonwebtoken"]
+regex = ["base", "dep:regex"]
+parallel = ["base", "dep:rayon"]
+yaml = ["base", "dep:serde_yaml", "dep:toml"]
+compress = ["base", "dep:flate2"]
+csv = ["base", "dep:csv"]
+log = ["base", "dep:log", "dep:env_logger"]
+wasm = ["base", "wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook", "wasm-bindgen-futures"]
 # Tracy profiler zones (`@profile("…")` in Windjammer → `windjammer_runtime::profiling::tracy_zone`).
-tracy = ["dep:tracy-client"]
+tracy = ["base", "dep:tracy-client"]
 
 [dependencies]
 # HTTP Client & Server (axum/tokio always included for std::http server)
@@ -38,25 +42,25 @@ tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["fs", "trace"], optional = true }
 
 # JSON
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_path_to_error = "0.1"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+serde_path_to_error = { version = "0.1", optional = true }
 
 # MIME types
-mime_guess = "2.0"
+mime_guess = { version = "2.0", optional = true }
 
 # File system (uses std::fs, no extra deps needed)
 
 # Async runtime
-async-trait = "0.1"
+async-trait = { version = "0.1", optional = true }
 
 # Error handling
-anyhow = "1.0"
-thiserror = "1.0"
-once_cell = "1.21"
+anyhow = { version = "1.0", optional = true }
+thiserror = { version = "1.0", optional = true }
+once_cell = { version = "1.21", optional = true }
 
 # URL parsing
-url = "2.5"
+url = { version = "2.5", optional = true }
 
 # Additional stdlib modules
 clap = { version = "4.5", features = ["derive"], optional = true }
@@ -66,26 +70,26 @@ bcrypt = { version = "0.17", optional = true }
 argon2 = { version = "0.5", features = ["std", "password-hash", "rand"], optional = true }
 hmac = { version = "0.12", optional = true }
 subtle = { version = "2.6", optional = true }
-uuid = { version = "1", features = ["v4", "v7"] }
+uuid = { version = "1", features = ["v4", "v7"], optional = true }
 serde_yaml = { version = "0.9", optional = true }
 toml = { version = "0.8", default-features = false, features = ["parse"], optional = true }
-base64 = "0.21"
-hex = "0.4"
-urlencoding = "2.1"
-dirs = "5.0"
+base64 = { version = "0.21", optional = true }
+hex = { version = "0.4", optional = true }
+urlencoding = { version = "2.1", optional = true }
+dirs = { version = "5.0", optional = true }
 csv = { version = "1.3", optional = true }
 flate2 = { version = "1.0", optional = true }
 sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "sqlite", "postgres"], default-features = false, optional = true }
 log = { version = "0.4", optional = true }
 env_logger = { version = "0.11", optional = true }
-rand = "0.8"
-getrandom = { version = "0.2", features = ["js"] }
+rand = { version = "0.8", optional = true }
+getrandom = { version = "0.2", features = ["js"], optional = true }
 regex = { version = "1.10", optional = true }
 chrono = { version = "0.4", optional = true }
 jsonwebtoken = { version = "9", optional = true }
 
 # Arenas (std::arena Scratch)
-bumpalo = { version = "3.19", features = ["collections"] }
+bumpalo = { version = "3.19", features = ["collections"], optional = true }
 
 # Parallel computation
 rayon = { version = "1.8", optional = true }
@@ -131,7 +135,7 @@ libc = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # uuid has no randomness source on wasm32-unknown-unknown unless told to use the browser's.
-uuid = { version = "1", features = ["v4", "v7", "js"] }
+uuid = { version = "1", features = ["v4", "v7", "js"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }

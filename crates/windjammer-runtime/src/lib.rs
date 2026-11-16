@@ -5,30 +5,39 @@
 //! functions from this crate.
 
 // Re-export rand for property testing
+#[cfg(feature = "base")]
 pub use rand;
 
 // Platform-specific implementations
+#[cfg(feature = "base")]
 pub mod platform;
 
 // Core modules (fully implemented)
+// `cap` reaches `random` (a capability-checked Rng), so it carries the `base` dependencies too
+#[cfg(feature = "base")]
 pub mod cap;
 pub mod caps;
 pub mod caps_core;
+#[cfg(feature = "base")]
 pub mod durable;
+#[cfg(feature = "base")]
 pub mod durable_core;
 pub mod net_core;
 pub mod fs;
 #[cfg(feature = "net")]
 pub mod http;
+#[cfg(feature = "base")]
 pub mod json;
 #[cfg(feature = "jwt")]
 pub mod jwt;
+#[cfg(feature = "base")]
 pub mod mime;
 
 // Profiling (Tracy zones; optional `tracy` feature)
 pub mod profiling;
 
 // Additional stdlib modules
+#[cfg(feature = "base")]
 pub mod arena;
 #[cfg(feature = "async")]
 pub mod async_runtime;
@@ -50,6 +59,7 @@ pub mod db;
 #[cfg(feature = "db")]
 pub mod db_pg_decode;
 pub mod doc_test;
+#[cfg(feature = "base")]
 pub mod encoding;
 pub mod enumerable;
 pub mod env;
@@ -65,12 +75,15 @@ pub mod mock_function;
 pub mod mock_interface;
 pub mod path;
 pub mod process;
+#[cfg(feature = "base")]
 pub mod property;
+#[cfg(feature = "base")]
 pub mod random;
 #[cfg(feature = "regex")]
 pub mod regex_mod;
 pub mod setup_teardown;
 pub mod strings;
+#[cfg(feature = "base")]
 pub mod subprocess;
 pub mod sync;
 pub mod test;
@@ -80,7 +93,9 @@ pub mod thread;
 #[cfg(feature = "datetime")]
 pub mod time;
 pub mod timeout;
+#[cfg(feature = "base")]
 pub mod url;
+#[cfg(feature = "base")]
 pub mod uuid;
 #[cfg(feature = "yaml")]
 pub mod yaml;

@@ -114,6 +114,29 @@ head the first check inside the repository costs 0.58-1.13 G instructions agains
 checkouts (this worktree, the concurrency worktree, the main checkout with a 3.5 GB `target/`); the gate now covers
 `wj check` and `wj run --interpret` too (`check_and_run_open_no_metadata_of_unrelated_modules_either`).
 
+## C2 step 5: runtime dependencies behind a feature (measured before/after)
+
+`windjammer-runtime`'s third-party dependencies (serde, serde_json, url and its ICU stack, uuid, rand, base64, hex,
+mime_guess, dirs, bumpalo, anyhow, thiserror, async-trait, once_cell, ...) are now optional, behind a `base` feature
+that every other feature implies and the default set includes. The modules that use them (`json`, `url`, `uuid`,
+`encoding`, `random`, `property`, `arena`, `durable`, `mime`, `subprocess`, `platform`, `cap`) carry
+`#[cfg(feature = "base")]`, so `cargo_toml/runtime_features.rs` (which reads that map from the runtime's `lib.rs`)
+enables `base` exactly when the generated code names one of them. A program that uses only `io`, `fs`, `env`,
+`process`, `thread` and `sync` builds the runtime with no feature and only `libc`.
+
+Cold `cargo build` (debug) of the generated crate into an empty target directory:
+
+| program | before: CPU / peak RSS / rlibs / target | after: CPU / peak RSS / rlibs / target | output |
+|---|---|---|---|
+| `dx/t001_gcd_lcm` (stdin through `io`) | 28.4 s / 459 MB / 61 / 193 MB | **2.9 s / 252 MB / 2 / 40 MB** | `6 36` (expected) |
+| `dx/t048_wc_clone` (files through `fs`) | (same tree) | 3.0 s / 250 MB / 2 / 41 MB | runs |
+| `dx/t043_channel_pipeline` (threads, channels) | (same tree) | 3.2 s / 239 MB / 2 / 45 MB | runs |
+
+With step 4, every program in the suite that uses only the core modules now builds from cold in about a tenth of the
+CPU (and the std-only ones in about 1/170th). Gates: `cargo check -p windjammer-runtime` with no features, `base`,
+`net` and the default set (all compile); `tests/lean_manifest.rs`; the full compiled `dx` oracle run on the PC is
+the remaining check.
+
 ## C4: release profile and overflow checks (measured)
 
 `economics.wj --profiles` (`bench/economics/results/mac-20261116-profiles.{json,md}`): the 17 std-only kernels (the
