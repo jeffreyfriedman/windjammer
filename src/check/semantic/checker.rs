@@ -622,6 +622,10 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         if super::std_methods::is_known(method) || self.cx.idx.declares_member(method) {
             return;
         }
+        // A type imported from this crate but not in the checked set (a file checked alone) has unseen methods.
+        if self.cx.names.crate_types.iter().any(|t| !self.cx.idx.types.contains(t)) {
+            return;
+        }
         let mut d = Diagnostic::error("WJ0015", format!("no method named `{method}` exists on any type in scope"));
         let span = self.cx.loc.word(loc, method).or_else(|| self.cx.loc.first_use(method));
         if let Some(sp) = &span {
