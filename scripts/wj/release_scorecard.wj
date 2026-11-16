@@ -932,6 +932,21 @@ fn selftest(base_now: int, scratch: string) -> bool {
     let t = base_now
     let red = collect(fixture_ctx(red_dir, t, red_dir + "/eco"))
     let green = collect(fixture_ctx(green_dir, t, ""))
+    // gate for the name assumption: a checkout in a directory with ANY name is the ecosystem when WJ_ECOSYSTEM names it
+    let renamed = red_dir + "-checkout-not-called-ecosystem"
+    let _ = sh("rm -rf " + quote(renamed) + " && cp -R " + quote(red_dir + "/eco") + " " + quote(renamed))
+    let r1 = resolve_ecosystem(green_dir, renamed)
+    fails = expect(r1 == renamed, "resolve_ecosystem(WJ_ECOSYSTEM=<renamed dir>) gave '${r1}', want the renamed dir", fails)
+    fails = expect(resolve_ecosystem(green_dir, red_dir + "/no-such-dir") == "", "a WJ_ECOSYSTEM that is not a directory must resolve to nothing", fails)
+    fails = expect(resolve_ecosystem(green_dir, "") == "", "no WJ_ECOSYSTEM and no root-level windjammer-ecosystem must resolve to nothing", fails)
+    let named = collect(fixture_ctx(green_dir, t, r1))
+    let direct = collect(fixture_ctx(green_dir, t, red_dir + "/eco"))
+    for id in ["eco_packages", "eco_without_tests"] {
+        let a = named[find(named, id) as usize]
+        let b = direct[find(direct, id) as usize]
+        fails = expect(status(a) == status(b) && status(a) != "MISSING", "${id}: renamed checkout gave ${status(a)}, direct path gave ${status(b)}", fails)
+    }
+    let _ = sh("rm -rf " + quote(renamed))
     for x in specs() {
         let rx = red[find(red, x.id) as usize]
         let gx = green[find(green, x.id) as usize]
@@ -1018,6 +1033,22 @@ fn has(args: Vec<string>, name: string) -> bool {
 
 // Sibling public repos: WJ_ECOSYSTEM / WJ_UI name them (grant read access: `--allow fs.read=DIR`), or they are checked
 // out (or symlinked) at the repository root as windjammer-ecosystem/ and windjammer-ui/.
+// The ecosystem checkout: the directory WJ_ECOSYSTEM names (any directory name), else <root>/windjammer-ecosystem; "" when neither exists.
+// Never recognised by its folder name (the selftest runs it on a differently named checkout).
+fn resolve_ecosystem(root: string, eco_env: string) -> string {
+    if eco_env != "" {
+        if fs.is_dir(eco_env) {
+            return eco_env
+        }
+        return ""
+    }
+    let d = root + "/windjammer-ecosystem"
+    if fs.is_dir(d) {
+        return d
+    }
+    ""
+}
+
 fn discover_siblings(root: string) -> Vec<string> {
     let mut out: Vec<string> = Vec::new()
     let eco_env = env.get_or("WJ_ECOSYSTEM", "")
@@ -1050,12 +1081,7 @@ fn main() {
         return
     }
     let siblings = discover_siblings(root)
-    let mut eco = ""
-    for s in siblings {
-        if strings.ends_with(s, "windjammer-ecosystem") {
-            eco = s
-        }
-    }
+    let eco = resolve_ecosystem(root, env.get_or("WJ_ECOSYSTEM", ""))
     let c = Ctx { root: root, results: flag(args, "--results", root + "/results"), now: now, max_age: flag(args, "--max-age", "8").parse::<f64>().unwrap_or(8.0), eco: eco, siblings: siblings }
     let ms = collect(c)
     let head = head_of(c)
