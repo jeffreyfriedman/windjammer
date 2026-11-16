@@ -280,6 +280,16 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
     }
 
     fn bind(&mut self, p: &Pattern<'_>, t: &Taint) {
+        // `Ok(x)` / `Err(e)`: x holds the `Ok` payload of the matched value, e its `Err` payload
+        if let Pattern::EnumVariant(v, EnumPatternBinding::Single(n)) = p {
+            if v == "Ok" || v == "Err" {
+                let payload = select(t, v);
+                self.bound.insert(n.clone());
+                self.conns.remove(n);
+                self.env.insert(n.clone(), payload);
+                return;
+            }
+        }
         let mut names = Vec::new();
         pattern_names(p, &mut names);
         for n in names {
@@ -526,8 +536,11 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements.iter().fold(Taint::new(), |acc, x| union(acc, self.expr(x))),
             Expression::MacroInvocation { args, .. } => args.iter().fold(Taint::new(), |acc, x| union(acc, self.expr(x))),
-            Expression::TryOp { expr, .. }
-            | Expression::Await { expr, .. }
+            Expression::TryOp { expr, .. } => {
+                let t = self.expr(expr);
+                select(&t, "Ok")
+            }
+            Expression::Await { expr, .. }
             | Expression::AsyncCall { expr, .. }
             | Expression::SpawnCall { expr, .. } => self.expr(expr),
             Expression::ChannelSend { channel, value, .. } => {
@@ -643,6 +656,9 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
             return Taint::new();
         }
         let all = args.into_iter().fold(recv.clone(), union);
+        if catalog::UNWRAP_METHODS.contains(&method) {
+            return select(&all, "Ok");
+        }
         if catalog::STORING_METHODS.contains(&method) {
             if let Some(root) = root_ident(object) {
                 self.env.entry(root).or_default().extend(all.clone());
@@ -655,11 +671,20 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         for role in catalog::sink_roles(path) {
             self.check_sink(&role, path, word, args, loc);
         }
+        let variant = path.rsplit("::").next().unwrap_or(path);
+        if matches!(variant, "Ok" | "Err") {
+            let all = args.iter().cloned().fold(Taint::new(), union);
+            return all.into_iter().map(|o| Origin::Field(variant.to_string(), Box::new(o))).collect();
+        }
         if catalog::std_sanitizer(path).is_some() {
             return Taint::new();
         }
         if let Some(src) = catalog::source(path) {
-            return self.source(src.what, &canonical(path), loc, word);
+            let t = self.source(src.what, &canonical(path), loc, word);
+            if src.result {
+                return t.into_iter().map(|o| Origin::Field("Ok".to_string(), Box::new(o))).collect();
+            }
+            return t;
         }
         if crate::ir::taint::is_sanitizer_callee(path) {
             return Taint::new();

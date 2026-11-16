@@ -134,6 +134,7 @@ fn run(wj: string, engine: string, file: string) -> string {
     }
 }
 
+/// wj-taint: trusted(the case directories are named after functions parsed from this repository's own runtime sources, never from outside input)
 fn main() {
     let args = env::args()
     let wj = args[1]

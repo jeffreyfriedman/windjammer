@@ -219,8 +219,8 @@ fn judge(p: Program, status: int, stdout: string, stderr: string) -> string {
 fn first_line(text: string) -> string {
     let mut first = ""
     for line in strings.split_lines(text) {
-        let t = strings.trim(line)
-        if t == "" {
+        let t = strings.split(strings.trim(line), " [/")[0]
+        if t == "" || strings.starts_with(t, "wj: this wj") {
             continue
         }
         if first == "" {
@@ -231,6 +231,22 @@ fn first_line(text: string) -> string {
         }
     }
     first
+}
+
+// where the output first differs from the expectation
+fn mismatch(p: Program, stdout: string) -> string {
+    let got = strings.split_lines(strings.trim_end(stdout))
+    let mut i = 0
+    while i < p.expect.len() && i < got.len() {
+        if strings.trim_end(got[i]) != strings.trim_end(p.expect[i]) {
+            return "output line ${i + 1}: got `${got[i]}`, wanted `${p.expect[i]}`"
+        }
+        i += 1
+    }
+    if got.len() != p.expect.len() {
+        return "output has ${got.len()} line(s), wanted ${p.expect.len()}"
+    }
+    "output differs"
 }
 
 fn limited(cmd: string) -> string {
@@ -281,7 +297,10 @@ fn run_one(wj: string, backend: string, p: Program, scratch: string) -> string {
         Ok(r) => {
             let verdict = judge(p, r.status, r.stdout, r.stderr)
             if verdict != "pass" {
-                return "${verdict}|exit ${r.status}: ${first_line(r.stderr)}"
+                if r.status == p.expect_exit && p.mode == "run" {
+                    return "${verdict}|${mismatch(p, r.stdout)}"
+                }
+                return "${verdict}|exit ${r.status} (wanted ${p.expect_exit}): ${first_line(r.stderr)}"
             }
             verdict
         },

@@ -1,0 +1,3 @@
+# path	source	sink	reason (the ledger only shrinks: scripts/wj/taint_precision.wj fails when an entry no longer fires)
+tests/drift_corpus/eco/packages/wj-migrate/src/db_apply.wj	file contents	SQL text	Migration files are the application's own schema code and are executed by design; the pinned ecosystem snapshot cannot be edited, the package itself takes a `/// wj-taint: trusted(..)` annotation on the function that applies a migration
+eco:packages/wj-migrate/src/db_apply.wj	file contents	SQL text	The same function in the ecosystem checkout: it runs the migration file it was handed; to be annotated `/// wj-taint: trusted(migration files are the application's own schema code)` in windjammer-ecosystem

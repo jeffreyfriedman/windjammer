@@ -11,16 +11,18 @@ pub struct Source {
     pub path: &'static str,
     /// Reads as "data from <what>".
     pub what: &'static str,
+    /// The function returns a `Result`: the data is the `Ok` payload, the `Err` payload is an error message.
+    pub result: bool,
 }
 
 pub static SOURCES: &[Source] = &[
     // The environment and the command line are NOT sources: they belong to the operator who starts the program and who
     // already holds all of its authority (a command or a path they name is not an injection). ADR-0009, amended.
-    Source { path: "fs::read_to_string", what: "file contents" },
-    Source { path: "fs::read", what: "file contents" },
-    Source { path: "fs::read_bytes", what: "file contents" },
-    Source { path: "io::read_line", what: "standard input" },
-    Source { path: "io::read_to_string", what: "standard input" },
+    Source { path: "fs::read_to_string", what: "file contents", result: true },
+    Source { path: "fs::read", what: "file contents", result: true },
+    Source { path: "fs::read_bytes", what: "file contents", result: true },
+    Source { path: "io::read_line", what: "standard input", result: false },
+    Source { path: "io::read_to_string", what: "standard input", result: false },
 ];
 
 /// Std functions that make text safe for one kind of sink. `protects` names the sink role it makes safe; a value that has
@@ -45,6 +47,9 @@ pub static NARROWING_METHODS: &[&str] = &[
 ];
 
 /// Methods that store their arguments in the receiver (`list.push(x)`): the receiver then holds the argument's taint.
+/// Methods that return the `Ok` payload of a `Result` (or the value of an `Option`): the `Err` payload does not reach the result.
+pub static UNWRAP_METHODS: &[&str] = &["unwrap", "expect", "unwrap_or", "unwrap_or_default", "unwrap_or_else"];
+
 pub static STORING_METHODS: &[&str] = &["push", "push_str", "insert", "extend", "append", "add", "set", "push_back", "push_front"];
 
 pub fn source(path: &str) -> Option<&'static Source> {
