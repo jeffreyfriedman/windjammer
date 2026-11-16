@@ -37,6 +37,7 @@ mod field_cloneability;
 mod implicit_self;
 mod self_return_and_consumption;
 mod signature_registry;
+mod trait_key_set;
 pub mod simd_loops;
 pub mod stdlib_method_traits;
 mod string_optimization;

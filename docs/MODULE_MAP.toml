@@ -85,7 +85,7 @@ known_violations = []
 layer = "driver"
 owner_stage = "command-line subcommands"
 module_md = "src/cli/MODULE.md"
-allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "check", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "diagnostics", "doctest", "ejector", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "formatter", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "reduce", "resolve", "rust_integration_tests", "source_map", "stdlib_scanner", "stdlib_surface", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "toolchain"]
+allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "check", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "diagnostics", "doctest", "ejector", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "formatter", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "intrinsics", "ir", "lexer", "linter", "mem_report", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "reduce", "resolve", "rust_integration_tests", "source_map", "stdlib_scanner", "stdlib_surface", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "toolchain"]
 known_violations = []
 
 [modules.cli_args]
@@ -141,7 +141,7 @@ known_violations = []
 layer = "driver"
 owner_stage = "compilation orchestration (driver)"
 module_md = "src/compiler/MODULE.md"
-allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler_config", "compiler_database", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "rust_integration_tests", "source_map", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "stdlib_surface", "doctest"]
+allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler_config", "compiler_database", "component_analyzer", "config", "debug_env", "mem_report", "decorator_registry", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "rust_integration_tests", "source_map", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "stdlib_surface", "doctest"]
 known_violations = ["resolve"]
 
 [modules.compiler_database]
@@ -541,6 +541,13 @@ module_md = ""
 allowed_imports = ["stdlib_surface"]
 known_violations = ["codegen"]
 
+[modules.mem_report]
+layer = "support"
+owner_stage = "build memory report (`wj build --mem-report`, diagnostics only)"
+module_md = ""
+allowed_imports = ["debug_env", "stdlib_surface"]
+known_violations = []
+
 [modules.debug_env]
 layer = "support"
 owner_stage = "diagnostic env toggles (debug only)"
@@ -558,6 +565,7 @@ known_violations = []
 # Library API that no driver (wj, wj-lint, LSP, MCP) reaches on purpose: "src path prefix" = "who uses it".
 # Read by tests/capability_reachability_test.rs (dead-capability gate); everything else must be reachable.
 [library_api]
+"src/mem_report.rs" = "report-line parsers for the build memory meter: `parse_line` and `parse_work_line` read `--mem-report` output in tests/library_build_memory.rs; the build only writes the lines"
 "src/codegen/rust/copy_semantics.rs" = "Rust auto-deref/auto-copy model (CopySemantics, DerefContext): specified by copy_semantics_test and rust_coercion_rules_test, not yet consulted by codegen"
 "src/type_registry.rs" = "type name -> defining module registry: specified by the type_registry_* tests, not yet consulted by import generation"
 "src/check/test_api.rs" = "entry points for the test suites and tools that no `wj` command calls: `compiler_identity_of` (verdict-cache tests key entries by the binary they run) and `predicted_moves` (the WJ0007 precision gates)"

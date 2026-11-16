@@ -124,6 +124,10 @@ pub enum Commands {
         /// Discrepancies are reported as errors instead of warnings (CI gate).
         #[arg(long)]
         ir_shadow_validate: bool,
+
+        /// Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines
+        #[arg(long)]
+        mem_report: bool,
     },
 
     /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be

@@ -354,7 +354,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                 .split("::")
                 .next()
                 .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
-            Some(&gen.enum_variant_types),
+            Some(gen.enum_variant_types.as_map()),
         ) || sig.as_ref().is_some_and(|s| {
             let idx = s.arg_param_index(i);
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, idx) {

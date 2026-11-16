@@ -57,7 +57,8 @@ pub struct FloatInference {
     /// Sequential ID counter for generating unique ExprIds
     next_seq_id: usize,
     /// Struct field types: struct_name → field_name → Type
-    struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Shared between per-file clones; written via make_mut.
+    struct_field_types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
     /// THE WINDJAMMER WAY: Cache ExprIds by location to ensure same expression = same ID
     /// Key: (file_id, line, col), Value: the first ExprId assigned to that location
     expr_id_cache: HashMap<(usize, usize, usize), ExprId>,
@@ -106,7 +107,7 @@ impl FloatInference {
             var_assignments: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
-            struct_field_types: HashMap::new(),
+            struct_field_types: Default::default(),
             expr_id_cache: HashMap::new(),
             source_root: None,
             current_impl_type: None,
@@ -235,7 +236,7 @@ impl FloatInference {
         field_types: &HashMap<String, HashMap<String, Type>>,
     ) {
         for (struct_name, fields) in field_types {
-            self.struct_field_types
+            std::sync::Arc::make_mut(&mut self.struct_field_types)
                 .insert(struct_name.clone(), fields.clone());
         }
     }

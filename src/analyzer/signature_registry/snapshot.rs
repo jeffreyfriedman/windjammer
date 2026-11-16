@@ -74,7 +74,7 @@ struct Stored {
     type_collision_keys: StrSet,
     ownership_collision_keys: StrSet,
     method_index: StrMap<Vec<String>>,
-    trait_method_keys: StrSet,
+    trait_method_keys: Vec<String>,
     trait_impl_method_keys: StrSet,
     runtime_std_modules: StrSet,
     runtime_std_rust_stems: StrMap<String>,
@@ -93,7 +93,7 @@ impl Stored {
         r.type_collision_keys = self.type_collision_keys;
         r.ownership_collision_keys = self.ownership_collision_keys;
         r.method_index = self.method_index;
-        r.trait_method_keys = self.trait_method_keys;
+        r.trait_method_keys = self.trait_method_keys.into_iter().collect();
         r.trait_impl_method_keys = self.trait_impl_method_keys;
         r.runtime_std_modules = self.runtime_std_modules;
         r.runtime_std_rust_stems = self.runtime_std_rust_stems;
@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(format!("{:?}", back.signatures), format!("{:?}", scanned.signatures));
         let sorted = |s: &HashSetOfStrings| -> Vec<String> { let mut v: Vec<String> = s.iter().cloned().collect(); v.sort(); v };
         assert_eq!(sorted(&back.runtime_non_copy_types), sorted(&scanned.runtime_non_copy_types));
-        assert_eq!(sorted(&back.trait_method_keys), sorted(&scanned.trait_method_keys));
+        assert_eq!(back.trait_method_keys, scanned.trait_method_keys);
         assert_eq!(back.runtime_type_fields.len(), scanned.runtime_type_fields.len());
         let mut again = SignatureRegistry::empty();
         crate::stdlib_scanner::populate_runtime_signatures(&mut again).expect("scan");

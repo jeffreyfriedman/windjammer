@@ -3706,7 +3706,7 @@ impl<'ast> CodeGenerator<'ast> {
             arg_expr,
             &mut coerced,
             receiver_type_name,
-            Some(&self.enum_variant_types),
+            Some(self.enum_variant_types.as_map()),
         );
         if self.is_collection_key_lookup_at_site(&sig, arg_index, receiver_type_name)
             && matches!(
@@ -5753,7 +5753,7 @@ impl<'ast> CodeGenerator<'ast> {
             arg_expr,
             coerced,
             receiver_type_name,
-            Some(&self.enum_variant_types),
+            Some(self.enum_variant_types.as_map()),
         );
         if self.is_collection_key_lookup_at_site(
             &text_sig,

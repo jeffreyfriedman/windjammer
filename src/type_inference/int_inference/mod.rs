@@ -66,7 +66,8 @@ pub struct IntInference {
     var_collection_elements: HashMap<String, Vec<ExprId>>,
     var_types: HashMap<String, Type>,
     next_seq_id: usize,
-    struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Shared between per-file clones; written via make_mut.
+    struct_field_types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
     /// Library multipass: module path for the current `.wj` file (`dialogue/examples` → `["dialogue","examples"]`).
     current_file_module_path: Vec<String>,
     /// For each bare struct name, all module prefixes where that name is defined (disambiguate duplicates).
@@ -103,7 +104,7 @@ impl IntInference {
             var_collection_elements: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1,
-            struct_field_types: HashMap::new(),
+            struct_field_types: Default::default(),
             current_file_module_path: Vec::new(),
             struct_defining_module_paths: HashMap::new(),
             imported_type_registry_keys: HashMap::new(),
@@ -174,7 +175,7 @@ impl IntInference {
         field_types: &HashMap<String, HashMap<String, Type>>,
     ) {
         for (struct_name, fields) in field_types {
-            self.struct_field_types
+            std::sync::Arc::make_mut(&mut self.struct_field_types)
                 .insert(struct_name.clone(), fields.clone());
         }
     }
@@ -449,7 +450,7 @@ impl IntInference {
                 for field in &decl.fields {
                     field_map.insert(field.name.clone(), field.field_type.clone());
                 }
-                self.struct_field_types.insert(key, field_map);
+                std::sync::Arc::make_mut(&mut self.struct_field_types).insert(key, field_map);
             }
             Item::Mod { name, items, .. } => {
                 let mut next = module_prefix.to_vec();

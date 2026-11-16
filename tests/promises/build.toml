@@ -88,6 +88,21 @@ args = ["build", "{w}/src", "--no-cargo", "--library", "-o", "{w}/out"]
 output_has = ["Parse error"]
 
 [[case]]
+name = "build --mem-report prints resident memory per build phase"
+polarity = "positive"
+files = { "src/lib.wj" = "pub fn add(a: int, b: int) -> int {\n    a + b\n}\n", "src/util.wj" = "pub fn twice(a: int) -> int {\n    a * 2\n}\n" }
+args = ["build", "{w}/src", "--no-cargo", "--library", "--mem-report", "-o", "{w}/out"]
+creates = ["out/lib.rs"]
+output_has = ["[wj-mem] t_ms=", " rss_mib=", " peak_mib=", "phase=build start", "phase=build end"]
+
+[[case]]
+name = "build --mem-report still reports a failed build and its memory"
+polarity = "negative"
+files = { "src/lib.wj" = "pub fn add(a: int, b: int -> int {\n" }
+args = ["build", "{w}/src", "--no-cargo", "--library", "--mem-report", "-o", "{w}/out"]
+output_has = ["Parse error", "phase=build end"]
+
+[[case]]
 name = "build --module-file writes a module root for a source dir"
 polarity = "positive"
 files = { "src/util.wj" = "pub fn twice(a: int) -> int {\n    a * 2\n}\n" }

@@ -192,6 +192,10 @@ id = "wj build --library"
 statement = "Library mode: exclude test main() functions from output"
 
 [[promise]]
+id = "wj build --mem-report"
+statement = "Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines"
+
+[[promise]]
 id = "wj build --metadata"
 statement = "External crate metadata for cross-crate type inference (NAME=PATH, repeatable)"
 

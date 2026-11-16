@@ -97,8 +97,29 @@ fn warm_builds_fit_the_cpu_budget_share_the_cache_and_keep_outputs() {
     let st = Command::new(&wj).args(["build", &main_s, "-o", &b2.display().to_string(), "--no-cargo"]).output().unwrap();
     assert!(st.status.success());
     for f in ["main.rs", "Cargo.toml"] {
-        assert_eq!(std::fs::read(b1.join(f)).unwrap(), std::fs::read(b2.join(f)).unwrap(), "{f} differs");
+        let read = |dir: &std::path::Path| mask_crate_identity(&std::fs::read_to_string(dir.join(f)).unwrap());
+        assert_eq!(read(&b1), read(&b2), "{f} differs");
     }
+}
+
+/// A generated crate's version carries `+wj<16 hex digits>`, a hash of its own canonical output directory (two
+/// same-named projects never share a cargo build, `cargo_cache::crate_version`). The two builds above write to
+/// different directories by design, so the hash is masked (as in tests/codegen_determinism_test.rs).
+fn mask_crate_identity(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("+wj") {
+        let (head, tail) = rest.split_at(i + 3);
+        out.push_str(head);
+        if tail.bytes().take_while(|b| b.is_ascii_hexdigit()).count() == 16 {
+            out.push_str("<ID>");
+            rest = &tail[16..];
+        } else {
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 #[test]

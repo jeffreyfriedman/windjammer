@@ -9,6 +9,10 @@ use std::collections::HashMap;
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
 
+pub(crate) use super::trait_owned_string_write_back::{
+    trait_owned_string_write_back_is_noop, write_back_trait_owned_string_to_impls,
+};
+
 pub(crate) use super::signature_promotion::{
     best_method_signature_for_receiver, best_method_signature_for_receiver_in_module,
     body_borrow_must_not_replace_owned_copy_formal, body_borrow_must_not_replace_owned_formal_stub,
@@ -759,24 +763,19 @@ fn trait_declares_owned_text_param(sig: &FunctionSignature, idx: usize) -> bool 
 /// (e.g. `Registry::register` must not affect `ComponentRegistry::register`).
 /// True when any trait definition in `global` declares an owned plain `string` at `arg_index`
 /// for instance method `method` (port-trait E0053 keep-owned at call sites).
-fn trait_definition_sigs_for_method(
+pub(super) fn trait_definition_sigs_for_method(
     registry: &SignatureRegistry,
     method: &str,
 ) -> Vec<(String, FunctionSignature)> {
     // P3.622: only walk `trait_method_keys` (typically tens of keys). Scanning every
     // registry signature + `is_trait_method_key` per method call is O(|sigs|) and
     // hung a large multi-crate project multipass (~12GB / 45m in `memcmp` on trait-key checks).
-    let suffix = format!("::{method}");
+    // Only the keys naming `method` are collected (in key order), never a sorted copy of every trait key
+    // per call: this runs per call site and per impl method, so that copy made codegen quadratic.
     let mut out = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    for tk in registry.all_trait_method_keys() {
-        if tk != method && !tk.ends_with(&suffix) {
-            continue;
-        }
+    for tk in registry.trait_method_keys_for_method(method) {
         if let Some(sig) = registry.get_signature(&tk).cloned() {
-            if seen.insert(tk.clone()) {
-                out.push((tk, sig));
-            }
+            out.push((tk, sig));
         }
     }
     out
@@ -799,27 +798,6 @@ pub(crate) fn global_trait_owned_plain_string_arg(
     false
 }
 
-/// Write trait AST `string` (E0053) onto `impl Trait for Type` method signatures
-/// in `registry`. Inherent homonyms are left alone (`trait_impl_method_keys`).
-pub(crate) fn write_back_trait_owned_string_to_impls(registry: &mut SignatureRegistry) {
-    let impl_keys = registry.all_trait_impl_method_keys();
-    if impl_keys.is_empty() {
-        return;
-    }
-    let mut updates: Vec<(String, FunctionSignature)> = Vec::new();
-    for key in impl_keys {
-        let Some(mut sig) = registry.get_signature(&key).cloned() else {
-            continue;
-        };
-        let method = key.rsplit("::").next().unwrap_or(&key).to_string();
-        apply_trait_owned_string_call_site_contracts(registry, &method, &mut sig);
-        updates.push((key, sig));
-    }
-    for (key, sig) in updates {
-        registry.add_function(key, sig);
-    }
-}
-
 pub(crate) fn apply_trait_owned_string_call_site_contracts(
     global: &SignatureRegistry,
     method: &str,
@@ -831,8 +809,22 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
     if !sig.has_self_receiver || global.is_inherent_method_of(method, sig) {
         return;
     }
-    for (key, trait_sig) in trait_definition_sigs_for_method(global, method) {
-        if key == sig.name || !sig.may_implement(&trait_sig) {
+    let trait_sigs = trait_definition_sigs_for_method(global, method);
+    apply_trait_owned_string_contracts_from(global, &trait_sigs, sig);
+}
+
+/// [`apply_trait_owned_string_call_site_contracts`] with the trait definitions of the method given.
+pub(super) fn apply_trait_owned_string_contracts_from(
+    global: &SignatureRegistry,
+    trait_sigs: &[(String, FunctionSignature)],
+    sig: &mut FunctionSignature,
+) {
+    if !sig.has_self_receiver {
+        return;
+    }
+    for (key, trait_sig) in trait_sigs {
+        let (key, trait_sig) = (key.as_str(), trait_sig);
+        if key == sig.name || !sig.may_implement(trait_sig) {
             continue;
         }
         for idx in 0..sig.param_ownership.len() {

@@ -79,67 +79,76 @@ impl FormalScope {
     ) -> bool {
         let mut changed = false;
         for (ir_fn, af) in ir_functions.iter().zip(analyzed) {
-            let keys: Vec<String> = if ir_fn.name.contains("::") {
-                if self.trait_impl_methods.contains(&ir_fn.name) {
-                    continue;
-                }
-                // `Host::run` and the module-qualified `graph::Host::run` other files read
-                let mut keys = vec![ir_fn.name.clone()];
-                keys.extend(file_stem.map(|stem| format!("{stem}::{}", ir_fn.name)));
-                keys
-            } else {
-                let mut keys: Vec<String> = file_stem.map(|stem| format!("{stem}::{}", af.decl.name)).into_iter().collect();
-                if self.bare_name_counts.get(&af.decl.name) == Some(&1) {
-                    keys.push(af.decl.name.clone());
-                }
-                keys
-            };
-            for key in keys {
-                let Some(mut sig) = registry.signatures.get(&key).cloned() else {
-                    continue;
-                };
-                if sig.param_ownership.len() != af.decl.parameters.len() {
-                    continue;
-                }
-                let mut touched = false;
-                for (idx, param) in af.decl.parameters.iter().enumerate() {
-                    // Receivers outside trait impls are spelled from the IR mode too (`self_receiver`).
-                    let receiver = param.name == "self";
-                    if !receiver && !self.spelled(param) {
-                        continue;
-                    }
-                    let Some(solved) = ir_fn.param_types.get(&param.name).map(|t| &t.ownership) else {
-                        continue;
-                    };
-                    let mode = match solved {
-                        _ if param.is_mutable && !receiver => OwnershipMode::Owned,
-                        OwnedType::Inferred => continue,
-                        other => crate::ir::signature_bridge::owned_type_to_ownership_mode(other),
-                    };
-                    if sig.param_ownership[idx] == mode {
-                        continue;
-                    }
-                    sig.param_ownership[idx] = mode;
-                    let bare = param.type_.clone();
-                    if let Some(slot) = sig.param_types.get_mut(idx).filter(|_| !receiver) {
-                        *slot = match mode {
-                            OwnershipMode::Borrowed => Type::Reference(Box::new(bare)),
-                            OwnershipMode::MutBorrowed => Type::MutableReference(Box::new(bare)),
-                            OwnershipMode::Owned => bare,
-                        };
-                    }
-                    if let Some(flag) = sig.emitted_rust_ref_params.as_mut().and_then(|f| f.get_mut(idx)).filter(|_| !receiver) {
-                        *flag = mode == OwnershipMode::Borrowed;
-                    }
-                    touched = true;
-                }
-                if touched {
-                    registry.signatures.insert(key, sig);
-                    changed = true;
-                }
+            for key in self.publish_keys(file_stem, ir_fn, af) {
+                changed |= self.publish_key(registry, key, ir_fn, af);
             }
         }
         changed
+    }
+
+    /// The registry keys one function's solved modes are published under (none for a trait impl method).
+    pub(crate) fn publish_keys(&self, file_stem: Option<&str>, ir_fn: &IrFunction, af: &AnalyzedFunction) -> Vec<String> {
+        if ir_fn.name.contains("::") {
+            if self.trait_impl_methods.contains(&ir_fn.name) {
+                return Vec::new();
+            }
+            // `Host::run` and the module-qualified `graph::Host::run` other files read
+            let mut keys = vec![ir_fn.name.clone()];
+            keys.extend(file_stem.map(|stem| format!("{stem}::{}", ir_fn.name)));
+            keys
+        } else {
+            let mut keys: Vec<String> = file_stem.map(|stem| format!("{stem}::{}", af.decl.name)).into_iter().collect();
+            if self.bare_name_counts.get(&af.decl.name) == Some(&1) {
+                keys.push(af.decl.name.clone());
+            }
+            keys
+        }
+    }
+
+    /// Publish one function's solved modes under `key` when `registry` holds it. True when a mode changed.
+    pub(crate) fn publish_key(&self, registry: &mut SignatureRegistry, key: String, ir_fn: &IrFunction, af: &AnalyzedFunction) -> bool {
+        let Some(mut sig) = registry.signatures.get(&key).cloned() else {
+            return false;
+        };
+        if sig.param_ownership.len() != af.decl.parameters.len() {
+            return false;
+        }
+        let mut touched = false;
+        for (idx, param) in af.decl.parameters.iter().enumerate() {
+            // Receivers outside trait impls are spelled from the IR mode too (`self_receiver`).
+            let receiver = param.name == "self";
+            if !receiver && !self.spelled(param) {
+                continue;
+            }
+            let Some(solved) = ir_fn.param_types.get(&param.name).map(|t| &t.ownership) else {
+                continue;
+            };
+            let mode = match solved {
+                _ if param.is_mutable && !receiver => OwnershipMode::Owned,
+                OwnedType::Inferred => continue,
+                other => crate::ir::signature_bridge::owned_type_to_ownership_mode(other),
+            };
+            if sig.param_ownership[idx] == mode {
+                continue;
+            }
+            sig.param_ownership[idx] = mode;
+            let bare = param.type_.clone();
+            if let Some(slot) = sig.param_types.get_mut(idx).filter(|_| !receiver) {
+                *slot = match mode {
+                    OwnershipMode::Borrowed => Type::Reference(Box::new(bare)),
+                    OwnershipMode::MutBorrowed => Type::MutableReference(Box::new(bare)),
+                    OwnershipMode::Owned => bare,
+                };
+            }
+            if let Some(flag) = sig.emitted_rust_ref_params.as_mut().and_then(|f| f.get_mut(idx)).filter(|_| !receiver) {
+                *flag = mode == OwnershipMode::Borrowed;
+            }
+            touched = true;
+        }
+        if touched {
+            registry.signatures.insert(key, sig);
+        }
+        touched
     }
 }
 

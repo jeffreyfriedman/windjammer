@@ -170,7 +170,9 @@ impl IrPipeline {
         registry: &crate::analyzer::SignatureRegistry,
         struct_field_types: Option<&HashMap<String, HashMap<String, crate::parser::Type>>>,
     ) -> IrModule {
-        let struct_field_types = struct_field_types.cloned().unwrap_or_default();
+        // Borrowed, never copied: the table is library-wide and this runs per file (and per fixed-point round).
+        let no_fields = HashMap::new();
+        let struct_field_types = struct_field_types.unwrap_or(&no_fields);
         let mut diagnostics = Vec::new();
 
         // Stage 1: Convert AnalyzedFunctions to IrFunctions (lossless bridge)
@@ -198,7 +200,7 @@ impl IrPipeline {
         let core_surface = self.core_surface();
 
         for (i, af) in analyzed.iter().enumerate() {
-            let fc = constraint_gen::generate_constraints_typed(af, Some(registry), Some(&struct_field_types), Some(&core_surface));
+            let fc = constraint_gen::generate_constraints_typed(af, Some(registry), Some(struct_field_types), Some(&core_surface));
             total_constraints += fc.constraints.len();
 
             // Forward effect constraints to the domain solver.

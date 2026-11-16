@@ -6,6 +6,7 @@
 
 use crate::parser::Type;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// Parameter types and return type of a function.
 pub type Sig = (Vec<Type>, Option<Type>);
@@ -22,19 +23,20 @@ fn empty() -> &'static BTreeMap<String, Sig> {
 #[derive(Clone, Debug)]
 pub struct SigTable {
     base: Base,
-    own: BTreeMap<String, Sig>,
+    /// Shared between per-file clones (library builds clone the prepared state per file); written via `make_mut`.
+    own: Arc<BTreeMap<String, Sig>>,
 }
 
 impl Default for SigTable {
     fn default() -> SigTable {
-        SigTable { base: empty, own: BTreeMap::new() }
+        SigTable { base: empty, own: Arc::default() }
     }
 }
 
 impl SigTable {
     /// A table over the shared `base` with no entries of its own.
     pub fn over(base: Base) -> SigTable {
-        SigTable { base, own: BTreeMap::new() }
+        SigTable { base, own: Arc::default() }
     }
 
     pub fn get(&self, key: &str) -> Option<&Sig> {
@@ -47,7 +49,7 @@ impl SigTable {
 
     /// Insert or replace the entry for `key` (a stdlib entry is shadowed, never changed).
     pub fn insert(&mut self, key: String, sig: Sig) {
-        self.own.insert(key, sig);
+        Arc::make_mut(&mut self.own).insert(key, sig);
     }
 
     pub fn extend<I: IntoIterator<Item = (String, Sig)>>(&mut self, entries: I) {

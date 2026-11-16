@@ -47,7 +47,7 @@ impl FloatInference {
                                         }
                                     }
                                     if !field_map.is_empty() {
-                                        self.struct_field_types.insert(ty_name.clone(), field_map);
+                                        std::sync::Arc::make_mut(&mut self.struct_field_types).insert(ty_name.clone(), field_map);
                                     }
                                 }
                                 // Load function signatures (shared helper with int inference)
@@ -184,7 +184,7 @@ impl FloatInference {
                                     }
                                 }
                                 if !field_map.is_empty() {
-                                    self.struct_field_types.insert(struct_name, field_map);
+                                    std::sync::Arc::make_mut(&mut self.struct_field_types).insert(struct_name, field_map);
                                 }
                             }
                             found_metadata = true;
