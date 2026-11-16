@@ -9,7 +9,7 @@
     "book.features": 44,
     "book.features_uncovered": 0,
     "book.pages": 62,
-    "book.promises_uncovered": 1,
+    "book.promises_uncovered": 0,
     "cli.subcommands": 43,
     "conformance.backends": 3,
     "conformance.programs": 156,
@@ -23,7 +23,7 @@
     "lints.w_codes": 7,
     "spec.example_files": 294,
     "stdlib.files": 43,
-    "tests.rust_files": 2064,
+    "tests.rust_files": 2065,
     "tests.wj_programs": 2148
   }
 }
