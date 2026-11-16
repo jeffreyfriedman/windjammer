@@ -33,7 +33,7 @@ fn trait_owned_string_impl_updates(registry: &SignatureRegistry) -> (Vec<(String
     // name are looked up once per call instead of once per impl method.
     let mut trait_sigs_by_method: HashMap<String, Vec<(String, FunctionSignature)>> = HashMap::new();
     for key in impl_keys {
-        let Some(mut sig) = registry.get_signature(&key).cloned() else {
+        let Some(mut sig) = registry.signature_declared_at(&key).cloned() else {
             continue;
         };
         let method = key.rsplit("::").next().unwrap_or(&key).to_string();

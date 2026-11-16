@@ -839,6 +839,11 @@ impl SignatureRegistry {
         std::iter::successors(Some(self), |reg| reg.global_fallback.as_deref())
     }
 
+    /// The signature registered under exactly `key` (a declaration key from the registry's own key lists).
+    pub fn signature_declared_at(&self, key: &str) -> Option<&FunctionSignature> {
+        self.layers().find_map(|r| r.signatures.get(key))
+    }
+
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
         if let Some(sig) = self.signatures.get(name) {
             return Some(sig);
