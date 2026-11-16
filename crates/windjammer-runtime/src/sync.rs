@@ -146,7 +146,17 @@ impl<T> crate::task::Selectable for Receiver<T> {
     }
 
     fn closed(&self) -> bool {
-        self.stash.borrow().is_none() && matches!(self.rx.try_recv(), Err(mpsc::TryRecvError::Disconnected))
+        if self.stash.borrow().is_some() {
+            return false;
+        }
+        match self.rx.try_recv() {
+            // a value that arrived since `ready()`: keep it for the next receive
+            Ok(v) => {
+                *self.stash.borrow_mut() = Some(v);
+                false
+            }
+            Err(e) => e == mpsc::TryRecvError::Disconnected,
+        }
     }
 }
 

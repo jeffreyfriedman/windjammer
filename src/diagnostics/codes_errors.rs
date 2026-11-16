@@ -656,7 +656,7 @@ pub static ERRORS: &[CodeInfo] = &[
         category: C::Type,
         origin: O::FrontEnd,
         maturity: "high_confidence",
-        rust_codes: &["E0277"],
+        rust_codes: &[],
         explanation: "A `spawn` task runs on another thread and takes its own copy of what it reads (ADR-0004). A value built with `Rc::new`, `RefCell::new`, `Cell::new` or `Weak::new` (or declared with such a type) is bound to the thread that made it. Windjammer reports this itself; the generated Rust never fails with a `Send` error.",
         cause: "A `spawn { .. }` block or `spawn f(x)` that reads a local holding an `Rc`, `RefCell`, `Cell` or `Weak`.",
         fix: "Start the task with `async` (it stays on the current thread), or build the value inside the task.",

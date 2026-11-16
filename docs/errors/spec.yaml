@@ -46,7 +46,7 @@ codes:
     rust_codes: []
   - code: WJ0193
     title: Value cannot move to another thread
-    rust_codes: [E0277]
+    rust_codes: []
   - code: WJ0160
     title: Arena value escapes its arena
     rust_codes: []

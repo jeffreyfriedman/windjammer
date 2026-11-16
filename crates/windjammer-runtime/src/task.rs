@@ -250,8 +250,26 @@ impl<T> Selectable for Task<T> {
 pub struct Deadline(Instant);
 
 impl Deadline {
-    pub fn after(d: Duration) -> Deadline {
-        Deadline(Instant::now() + d)
+    pub fn after<D: IntoTimeout>(d: D) -> Deadline {
+        Deadline(Instant::now() + d.into_timeout())
+    }
+}
+
+/// What `timeout(d)` accepts: `std::time::Duration`, and the runtime's `time::Duration` when it is chrono's.
+pub trait IntoTimeout {
+    fn into_timeout(self) -> Duration;
+}
+
+impl IntoTimeout for Duration {
+    fn into_timeout(self) -> Duration {
+        self
+    }
+}
+
+#[cfg(feature = "datetime")]
+impl IntoTimeout for chrono::Duration {
+    fn into_timeout(self) -> Duration {
+        self.to_std().unwrap_or(Duration::ZERO)
     }
 }
 

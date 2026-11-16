@@ -404,7 +404,7 @@ fn label() -> string {
             causes: vec!["`spawn { .. }` reading a local made with `Rc::new`".to_string()],
             solutions: vec!["Start the task with `async`".to_string(), "Build the value inside the task".to_string()],
             example: None,
-            rust_codes: vec!["E0277".to_string()],
+            rust_codes: vec![],
             maturity: GuaranteeMaturity::HighConfidence,
         });
     }
