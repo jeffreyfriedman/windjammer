@@ -99,6 +99,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.auto_clone_counter = 0;
         self.load_clone_facts(func);
         self.current_function_params = func.parameters.clone();
+        self.current_function_is_async = func.is_async || func.decorators.iter().any(|d| d.name == "async");
         self.current_field_moved_params = analyzed.field_moved_parameters.clone();
         self.current_function_name = Some(func.name.to_string());
         let mut all_bounds: Vec<(String, Vec<String>)> = func

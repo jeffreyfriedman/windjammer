@@ -134,21 +134,21 @@ fn conformance_programs_pass_wj_check() {
     }
 }
 
-/// Stage 1 leaves the Rust backend for stage 2: it must say so in the generated code (a `compile_error!` naming the
-/// plan), never emit code with other semantics. When stage 2 lands this test is replaced by compiled runs of the
-/// conformance programs (PLAN.md, "Rust backend").
+/// Stage 2b (docs/concurrency/PLAN.md): every conformance program, compiled through the Rust backend
+/// (`windjammer_runtime::task`, OS threads, a local queue for `async`), prints exactly the expected output, and
+/// `wj run --verify` finds the compiled run identical to the interpreted one.
 #[test]
-fn the_rust_backend_refuses_tasks_until_stage_2() {
-    let dir = TempDir::new().unwrap();
-    let src = "fn work(n: int) -> int {\n    n * 2\n}\n\nfn main() {\n    let t = spawn work(4)\n    println(\"${t.wait()}\")\n}\n";
-    write(&dir, src);
-    wj(&["build", "main.wj", "--no-cargo"], dir.path());
-    let rust = fs::read_to_string(dir.path().join("build/main.rs")).unwrap_or_default();
-    assert!(
-        rust.contains("compile_error!(\"`spawn` tasks are not lowered for the Rust backend yet"),
-        "generated:\n{rust}"
-    );
-    assert!(!rust.contains("tokio::spawn"), "generated:\n{rust}");
+fn conformance_programs_compiled_match_the_interpreter() {
+    for p in conformance_programs() {
+        let src = fs::read_to_string(&p).unwrap();
+        let want = expected_output(&src);
+        let dir = TempDir::new().unwrap();
+        let f = write(&dir, &src);
+        let o = wj(&["run", "--verify", f.to_str().unwrap()], dir.path());
+        assert_eq!(o.stdout, want, "{}:\n{}", p.display(), o.stderr);
+        assert!(o.stderr.contains("the compiled run matches"), "{}:\n{}", p.display(), o.stderr);
+        assert_eq!(o.exit, 0, "{}:\n{}", p.display(), o.stderr);
+    }
 }
 
 #[test]

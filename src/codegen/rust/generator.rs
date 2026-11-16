@@ -108,6 +108,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_function_params: Vec<crate::parser::Parameter<'ast>>,
     pub(crate) current_field_moved_params: std::collections::HashSet<String>,
     pub(crate) current_function_name: Option<String>,
+    /// The function being generated is an `async fn` (Rust `.await`; elsewhere `t.await` is `t.wait()`, ADR-0004).
+    pub(crate) current_function_is_async: bool,
     pub(crate) current_function_type_bounds: Vec<(String, Vec<String>)>,
     pub(crate) current_function_return_type: Option<Type>,
     // WINDJAMMER TRAIT INFERENCE: Analyzed trait methods with inferred signatures from ALL impls
@@ -651,6 +653,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_params: Vec::new(),
             current_field_moved_params: std::collections::HashSet::new(),
             current_function_name: None,
+            current_function_is_async: false,
             current_function_type_bounds: Vec::new(),
             current_function_return_type: None,
             current_function_body: Vec::new(),

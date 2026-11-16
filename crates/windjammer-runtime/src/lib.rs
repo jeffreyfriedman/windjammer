@@ -76,6 +76,7 @@ pub mod sync;
 pub mod test;
 pub mod test_output;
 pub mod testing;
+pub mod task;
 pub mod thread;
 #[cfg(feature = "datetime")]
 pub mod time;

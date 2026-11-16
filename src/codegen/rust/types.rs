@@ -159,8 +159,11 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
             format!("impl {}", trait_name)
         }
         Type::Parameterized(base, args) => {
+            // ADR-0004 `Task<T>` -> the runtime's task handle
+            if base == "Task" && args.len() == 1 {
+                format!("windjammer_runtime::task::Task<{}>", type_to_rust_mapped(&args[0], map_custom))
             // Special case: Signal<T> -> windjammer_ui::reactivity::Signal<T>
-            if base == "Signal" {
+            } else if base == "Signal" {
                 let rust_args: Vec<String> = args
                     .iter()
                     .map(|a| type_to_rust_mapped(a, map_custom))

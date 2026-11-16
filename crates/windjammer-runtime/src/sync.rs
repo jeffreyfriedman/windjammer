@@ -64,9 +64,90 @@ pub fn try_write<T>(rwlock: &RwLock<T>) -> Option<RwLockWriteGuard<'_, T>> {
     rwlock.try_write().ok()
 }
 
-/// Create a channel
-pub fn channel<T>() -> (mpsc::Sender<T>, mpsc::Receiver<T>) {
-    mpsc::channel()
+/// ADR-0004 `sync::channel()`: `tx.send(v)` / `rx.recv()` (the value; panics when every sender is gone and nothing is
+/// queued), the same contract as the interpreter's `std::sync::channel()`.
+pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
+    let (tx, rx) = mpsc::channel();
+    (Sender(tx), Receiver { rx, stash: std::cell::RefCell::new(None) })
+}
+
+/// Sending end of a [`channel`]; clone it for every producer. The channel closes when every sender is gone.
+pub struct Sender<T>(mpsc::Sender<T>);
+
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        Sender(self.0.clone())
+    }
+}
+
+impl<T> Sender<T> {
+    /// Queue a value; panics when the receiver is gone.
+    pub fn send(&self, value: T) {
+        if self.0.send(value).is_err() {
+            panic!("sending on a closed channel");
+        }
+    }
+}
+
+/// Receiving end of a [`channel`].
+pub struct Receiver<T> {
+    rx: mpsc::Receiver<T>,
+    /// A value taken by `select` to see whether one is ready, handed out by the next receive.
+    stash: std::cell::RefCell<Option<T>>,
+}
+
+impl<T> Receiver<T> {
+    /// Wait for the next value (running this thread's pending `async` tasks first); panics when the channel is
+    /// closed and empty.
+    pub fn recv(&self) -> T {
+        if let Some(v) = self.stash.borrow_mut().take() {
+            return v;
+        }
+        if let Ok(v) = self.rx.try_recv() {
+            return v;
+        }
+        crate::task::run_pending_local();
+        match self.rx.recv() {
+            Ok(v) => v,
+            Err(_) => panic!("receiving on a closed channel"),
+        }
+    }
+
+    /// The next value if one is queued; never waits.
+    pub fn try_recv(&self) -> Result<T, mpsc::TryRecvError> {
+        match self.stash.borrow_mut().take() {
+            Some(v) => Ok(v),
+            None => self.rx.try_recv(),
+        }
+    }
+
+    /// Wait at most `d` for the next value.
+    pub fn recv_timeout(&self, d: std::time::Duration) -> Result<T, mpsc::RecvTimeoutError> {
+        if let Some(v) = self.stash.borrow_mut().take() {
+            return Ok(v);
+        }
+        crate::task::run_pending_local();
+        self.rx.recv_timeout(d)
+    }
+}
+
+impl<T> crate::task::Selectable for Receiver<T> {
+    fn ready(&self) -> bool {
+        if self.stash.borrow().is_some() {
+            return true;
+        }
+        match self.rx.try_recv() {
+            Ok(v) => {
+                *self.stash.borrow_mut() = Some(v);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    fn closed(&self) -> bool {
+        self.stash.borrow().is_none() && matches!(self.rx.try_recv(), Err(mpsc::TryRecvError::Disconnected))
+    }
 }
 
 /// Idiomatic alias for [`channel`] — `std::sync::unbounded` graduation vocabulary.
@@ -157,8 +238,10 @@ mod tests {
     fn test_channel() {
         let (tx, rx) = channel();
 
-        tx.send(42).unwrap();
-        assert_eq!(rx.recv().unwrap(), 42);
+        tx.send(42);
+        assert_eq!(rx.recv(), 42);
+        drop(tx);
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| rx.recv())).is_err());
     }
 
     #[test]

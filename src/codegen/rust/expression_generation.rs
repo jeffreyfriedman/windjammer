@@ -891,7 +891,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::AsyncCall { expr: inner, .. } => self.generate_async_call(inner),
             Expression::SpawnCall { expr: inner, .. } => self.generate_spawn_call(inner),
             Expression::Scope { body, .. } => self.generate_scope(body),
-            Expression::Select { .. } => self.generate_select(),
+            Expression::Select { arms, .. } => self.generate_select(arms),
             Expression::Range {
                 start,
                 end,
