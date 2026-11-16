@@ -141,6 +141,7 @@ corpus_tests!(
     vec_macro_tuple_string_slots,
     bitwise_vs_comparison_precedence,
     slice_to_vec_extend_argument,
+    collect_owned_from_unknown_receiver,
 );
 
 // ------------------------------------------------------------------ generated programs
