@@ -1,6 +1,8 @@
 //! `wj run --verify` (ADR-0033 option b): interpret the program, then build it compiled and, when that is safe,
 //! run the compiled program a second time and compare.
 //!
+//! - An interpreted run that panics (exit status 101) ends the verification there, before the build: the compiled
+//!   program would panic at the same point, and the build is the expensive half of the loop.
 //! - The interpreted run is the normal one (`wj run --interpret` in a child process), its stdout streamed to ours
 //!   as the program prints and kept for the comparison (once, and while the program runs). Stdin is read once and given to both runs (it is never read twice from the terminal).
 //! - The build is the same as `wj run --compiled`'s (`run::build_native`) and records the compiled verdict.
@@ -90,6 +92,14 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     if interp_code != 0 && refused(&entry, no_lint) {
         return interp_code;
     }
+    // the interpreted run panicked: the compiled program panics at the same point (the interpreter contract), so the
+    // build would only add its cost to the loop. Stop here; fix the panic first (docs/economics C1).
+    if stops_before_build(interp_code) {
+        say(&format!(
+            "the interpreted run panicked (exit status {interp_code}); fix that first: the compiled build is skipped, it would panic the same way"
+        ));
+        return interp_code;
+    }
 
     // what `wj run --compiled` builds: the source root for a crate root `main.wj`, else the file
     let input = match crate::cli::run_dev::build_input(&target) {
@@ -157,6 +167,16 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     } else {
         1
     }
+}
+
+/// Exit status of a Windjammer panic (runtime error), in the interpreter and in compiled programs (SPEC-NUM-002 and the
+/// runtime-errors contract).
+pub const PANIC_EXIT_STATUS: i32 = 101;
+
+/// `--verify` builds only after an interpreted run that did not panic. Any other exit status (a program may exit 1 on
+/// purpose) still gets the compiled comparison.
+pub fn stops_before_build(interp_code: i32) -> bool {
+    interp_code == PANIC_EXIT_STATUS
 }
 
 /// How long `--verify` waits for the first byte of a non-terminal stdin before treating it as empty.

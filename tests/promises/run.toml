@@ -479,14 +479,14 @@ stdout_has = ["row 0;", "row 1;"]
 output_lacks = ["error"]
 
 [[case]]
-name = "run --verify shows the output printed before a panic; agreeing runs exit 0 and the line names the status"
+name = "run --verify shows the output printed before a panic, stops before the build and exits with the panic's status"
 polarity = "negative"
-needs = "toolchain"
 files = { "m.wj" = "fn main() {\n    println(\"before-panic\")\n    panic(\"verify boom\")\n}\n" }
 args = ["run", "--verify", "{w}/m.wj"]
-exit = 0
+exit = 101
 stdout_has = ["before-panic"]
-stderr_has = ["verify boom", "program exit status 101"]
+stderr_has = ["verify boom", "the interpreted run panicked"]
+output_lacks = ["compiled build", "program exit status"]
 
 [[case]]
 name = "run --verify: a correct program that exits 1 on purpose verifies OK and exits 0"

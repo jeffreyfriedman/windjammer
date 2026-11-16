@@ -189,10 +189,21 @@ fn a_program_that_prints_then_panics_streams_its_output_and_keeps_the_contract()
     let o = windjammer::cli::verify::run_streaming(cmd, Some(b""), &mut sink).unwrap();
     assert_eq!(String::from_utf8_lossy(&sink), "before\n");
     assert_eq!(o.status.code(), Some(101));
-    // and through `wj run --verify`: stdout once, the interpreted status, the panic on stderr
+    // and through `wj run --verify`: stdout once, the panic on stderr, status 101, and no build (docs/economics C1)
     let (out, err, code) = verify(&f, "");
     assert_eq!(out, "before\n", "{err}");
-    assert_eq!(code, Some(0), "both runs panic the same way: they agree, and the line names status 101: {err}");
-    assert!(err.contains("program exit status 101"), "{err}");
+    assert_eq!(code, Some(101), "a panic ends the verification with the panic's status: {err}");
     assert!(err.contains("boom now"), "{err}");
+    assert!(err.contains("the interpreted run panicked"), "{err}");
+    assert!(!err.contains("compiled build") && !err.contains("compiled run"), "no build after a panic: {err}");
+}
+
+/// The rule itself: only a panic stops the loop before the build; a program's own non-zero exit is still compared.
+#[test]
+fn only_a_panic_stops_before_the_build() {
+    use windjammer::cli::verify::{stops_before_build, PANIC_EXIT_STATUS};
+    assert!(stops_before_build(PANIC_EXIT_STATUS));
+    for code in [0, 1, 2, 3, 100, 102, 126] {
+        assert!(!stops_before_build(code), "exit status {code}");
+    }
 }

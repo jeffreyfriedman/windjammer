@@ -82,7 +82,8 @@ get:
   output streams as the program prints; the comparison comes at the end, on stderr. Standard input is read once and given
   to both runs. When the two runs agree, `--verify` prints `wj verify: OK, ...` (naming the program's own exit status) and
   exits 0, whatever that status is: a correct program that exits 1 on purpose verifies. A difference or a failed build exits
-  non-zero.
+  non-zero. If the interpreted run panics, `--verify` stops there with the panic's status (101) and skips the build: the
+  compiled program would panic at the same point, so fix the panic first.
 - `--compiled` builds and runs the compiled program. A compiled run prints only your program's output and real
   diagnostics: the build's own progress lines stay out of the way.
 - `--error-format agent` (or `json`) changes how problems are reported, for tools that read them.
