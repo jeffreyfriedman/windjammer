@@ -293,8 +293,13 @@ ledger ceiling rises 89 to 91 for these two lines.
 
 `match i % 2 { 0 => m.insert(i, i * 10), _ => println(..) }` as a statement: one arm is `Option<int>`, the other unit.
 Compiled: WJ0003 `mismatched types: expected Option<i64>, found void` (rustc E0308; Rust needs both arms unit in
-statement position, so the insert arm wants `let _ = ..` or a `;`-terminated block). Interpreted: runs and prints
-`odd 1` and `2`. Case `repros/match_arm_option_next_to_unit.wj`.
+statement position, so the insert arm wants `let _ = ..` or a `;`-terminated block). Interpreted: ran and printed
+`odd 1` and `2`. **Fixed:** `wj check` (and so `wj run`) reports it as WJ0003 (`check/semantic/arms.rs`): a statement `match`
+in unit position with a bare `insert`/`remove` arm on a local every `let` of which binds a map or a set, next to a
+print or assignment arm. Precision: 0 reports on the 462 programs the compiled build accepts (drift corpus programs,
+passing ecosystem test files, oracle-accepted mutants); over all 2,490 tracked `.wj` files it fires only on the repro
+(thin positive evidence: one corpus firing plus three test shapes). Case renamed
+`repros/must_refuse_match_arm_option_next_to_unit.wj`; its ledger line is gone (ceiling 91 -> 90).
 
 ### O.2 A field moved out of a borrowed map value
 

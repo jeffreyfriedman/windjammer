@@ -1937,7 +1937,8 @@ tests/drift_corpus/repros/index_countdown_usize_underflow.wj#mainerr	none
 tests/drift_corpus/repros/index_countdown_usize_underflow.wj	exit101:10:498312895	
 tests/drift_corpus/repros/http_server_response_headers_map.wj#mainerr	none	
 tests/drift_corpus/repros/http_server_response_headers_map.wj	exit0:8:655597287	
-tests/drift_corpus/repros/match_arm_option_next_to_unit.wj#mainerr	none	
-tests/drift_corpus/repros/match_arm_option_next_to_unit.wj	exit1:0:17	
 tests/drift_corpus/repros/map_field_move_out_of_borrow.wj#mainerr	none	
 tests/drift_corpus/repros/map_field_move_out_of_borrow.wj	exit1:0:17	
+tests/drift_corpus/repros/must_refuse_match_arm_option_next_to_unit.wj#mainerr	none	
+tests/drift_corpus/repros/must_refuse_match_arm_option_next_to_unit.wj#refused	rejected	
+tests/drift_corpus/repros/must_refuse_match_arm_option_next_to_unit.wj	exit1:0:17	
