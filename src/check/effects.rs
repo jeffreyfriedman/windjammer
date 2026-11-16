@@ -186,7 +186,10 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                     chain.push(function.clone());
                 }
                 chain.push(sink.clone());
-                d = d.with_note(format!("reached through: {}", chain.join(" -> "))).with_note(format!("grant in force: {}", denial.grant));
+                d = d.with_note(format!("reached through: {}", chain.join(" -> "))).with_note(format!("grant in force: {} (from {})", denial.grant, a.manifest_dir.join("wj.toml").display()));
+                if let Some(up) = site.as_ref().and_then(|l| levels_above(&l.file, &a.manifest_dir)).filter(|n| *n > 2) {
+                    d = d.with_note(format!("that wj.toml is {up} directories above this file: if it belongs to another project, give this program its own wj.toml"));
+                }
                 let help = if package.is_empty() {
                     denial.fix.clone()
                 } else {
@@ -255,5 +258,28 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                 }
             }
         }
+    }
+}
+
+/// How many directories `file` sits below `dir` (`None`: not below it). A manifest found far above the program is
+/// usually a stray one (another project's `wj.toml` at the root of a shared temp tree), and its grant is then not
+/// the program's.
+fn levels_above(file: &Path, dir: &Path) -> Option<usize> {
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let (f, d) = (canon(file), canon(dir));
+    Some(f.parent()?.strip_prefix(&d).ok()?.components().count())
+}
+
+#[cfg(test)]
+mod stray_manifest_tests {
+    #[test]
+    fn levels_above_counts_the_directories_between_a_file_and_its_manifest() {
+        let root = std::env::temp_dir().join(format!("wj-levels-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("a/b/c")).unwrap();
+        std::fs::write(root.join("a/b/c/main.wj"), "").unwrap();
+        assert_eq!(super::levels_above(&root.join("a/b/c/main.wj"), &root), Some(3));
+        assert_eq!(super::levels_above(&root.join("a/b/c/main.wj"), &root.join("a/b/c")), Some(0));
+        assert_eq!(super::levels_above(&root.join("a/b/c/main.wj"), &root.join("x")), None);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
