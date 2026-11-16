@@ -20,7 +20,7 @@ const LEN_CAST: string = "(\\.(len|count|capacity)\\(\\))\\s+as\\s+(int|i64)\\b"
 const USIZE_CAST: string = "\\s+as\\s+usize\\b"
 
 fn programs() -> Vec<string> {
-    let mut out: Vec<string> = Vec::new()
+    let mut out: Vec<string> = []
     let args = ["ls-files", "--", ":(glob)bench/agent-dx/solutions/wj*/**/*.wj", ":(glob)examples/**/*.wj"]
     let listed = process.run_with_args("git", args) ?? ""
     for f in listed.lines() {

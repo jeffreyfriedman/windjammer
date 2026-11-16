@@ -5,7 +5,7 @@ last_verified: af4e69ade
 # ADR-0039: One correct way: the standard library surface
 
 - **Status:** Proposed. Owner answers (2026-11-16): decision A, keep lazy iterators with `.collect()` as the one way to a
-  list; decision D, remove `unwrap`; decision B, open (the analysis below is written for that decision).
+  list; decision D, remove `unwrap`; decision B, open; the analysis, two experiments and a revised recommendation (B2+) are below.
 - **Date:** 2026-11-16
 - **Related:** [ADR-0014](0014-surface-syntax-rust-isms.md) (macros and Rust-isms; this ADR finishes its migration),
   [ADR-0015](0015-language-consistency-proposals.md) section 1 (`int` default), [ADR-0018](0018-expressiveness-phase-2.md)
@@ -96,8 +96,8 @@ run time in any way a benchmark would notice.
 
 **What differs.** Meaning, in three places.
 - Negative values. `xs.len() - 1` on an empty list is `-1` as an `int`, and an index of `-1` panics with Windjammer's
-  out-of-range message. As a `usize` the same subtraction underflows: a panic with overflow checks on, a huge number
-  without them. Loops such as `while i >= 0` or `for i in 0..n - 1` are natural with `int` and traps with `usize`.
+  out-of-range message. As a `usize` the same subtraction underflows: a panic (Windjammer keeps overflow checks on in
+  release builds too, unless `--unchecked-arithmetic`), a huge number in plain Rust release builds.
 - Mixing. `int + usize` is a type error, so every place where a length meets a number the program declared (`count: int`
   in a struct, `fn f(n: int)`, `let n: int = ...`) needs a cast in today's compiled code.
 - The web. `usize` is 32 bits on wasm32, so a `usize` value wraps at about four billion on the web and not natively; an
@@ -112,36 +112,128 @@ casts and 80 `as usize`.
 **What the compiler already infers.** ADR-0028 (accepted, in progress) gives the width solver an index class: an
 integer the program leaves undeclared becomes `usize` when it meets `len()` or an index
 (`let mut i = 0; while i < xs.len() { xs[i] }` needs no cast), and a declared width wins, with the `len()` result
-converted to it (`let n: int = xs.len()` is accepted). ADR-0029 (proposed) moves that decision into one type checker. So the solver already removes
-the casts for undeclared integers; the casts that remain are where a declared `int` meets a length or an index. How many
-of the 1,097 are strictly needed today can only be counted by a compiled sweep with them deleted (stream S5, step 1:
-one build of the golden set and the examples).
+converted to it (`let n: int = xs.len()` is accepted).
+
+**Experiment 1: delete the casts and build (S5 step 1, done).** `scripts/wj/width_experiment.wj` took every agent-dx
+reference solution and example that contains a cast, deleted the casts, transpiled with today's compiler (the installed
+`wj` 0.50.0, commit `37d50458e`) and type-checked the generated Rust with one `cargo check` run per variant:
+
+| Variant | Programs | Type-check with today's compiler | Casts deleted |
+|---|---:|---|---:|
+| unchanged | 32 | 25 accepted, 7 rejected for unrelated reasons (ownership, std gaps) | 0 |
+| length casts to `int`/`i64` deleted | 15 | the same 10 of 15 accepted; no new error anywhere | 35 |
+| `as usize` deleted | 20 | the same 18 of 20 accepted; 2 that already failed gain errors | 80 |
+| both deleted | 32 | the same 25 of 32 accepted; the same 2 gain errors | 115 |
+
+In plain words: in every program that compiled before, all 97 of its casts (20 length casts, 77 `as usize`) can be
+deleted and it still compiles today. ADR-0028's solver already converts a length into a declared `int` and already
+types an undeclared index as `usize`; the casts are there because authors and agents were told to write them (the
+agent sheet says so), not because today's compiler needs them. The two programs that gained errors show what still
+needs a cast today, and both are outside index sites:
+`pairs.take(k)` with `k: int` (a std count argument), and an `int` "not found" sentinel mixed with a length,
+`let wend = if split >= 0 { split } else { lines.len() }` followed by `i = split + 1` used as a position.
+Limits: one compiler build (the installed 0.50.0), type-checking only (the programs were not run compiled), a sample of 32.
+
+**Experiment 2: can the compiler prove an index is never negative?** `scripts/wj/nonneg_analysis.wj` is a prototype of
+the dataflow a compiler would run under B1, over 2,847 files: lengths, counts, `abs()`, non-negative literals, range
+loop variables with a non-negative start, `enumerate` indices, declared unsigned values, sums, products and quotients of
+non-negatives are non-negative; subtraction, negation and any other assignment are not.
+
+| corpus | files | integer index sites | proved non-negative | not proved | `len() - k` sites | with a guard before | without |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| examples | 240 | 112 | 86 (76%) | 26 | 2 | 0 | 2 |
+| golden | 83 | 908 | 600 (66%) | 308 | 24 | 16 | 8 |
+| tests | 2061 | 981 | 856 (87%) | 125 | 41 | 15 | 26 |
+| eco | 463 | 1217 | 968 (79%) | 249 | 38 | 24 | 14 |
+
+- 78% of the 3,218 integer index and slice sites are proved non-negative by this simple per-function analysis, so B1's
+  conversion check there is removable at compile time. The other 708 (22%) take a value from a parameter, a struct
+  field, a collection element or a subtraction (312 plain variables, 183 already cast to `usize` today, 127
+  subtractions, 60 fields or method results, 26 other); a field-aware, cross-function analysis proves more, and the
+  rest keep a run-time check, exactly as Rust keeps its bounds check on every index. No site needs a human annotation:
+  an unproved site is checked at run time, never rejected.
+- The lint "`len() - k` used without a non-empty guard" was tried on all 105 such sites: 55 have a guard the analysis
+  recognises, 50 do not. Reading the surrounding code of 30 of the 50: **none is a reachable underflow.** 25 are safe
+  by program logic a lint cannot see (the list was just pushed to, `split` always yields a piece, the subtraction is
+  inside `while i < xs.len()`, a fixed literal list), 5 have a guard the lexical recogniser missed (`xs.len() == 0 ||`
+  on the same line, a guard on a parallel list, `d > out.len() as int`), and 1 (`stat(v)` in
+  `tests/interpreter_corpus/len_index_arith.wj`) would fail on an empty input that no caller passes; it panics under
+  every option. A compile-time warning would be wrong about 29 times in 30, so it is not worth shipping; the run-time
+  check is the right tool, as it is in Rust.
+
+**The checked conversion (B1, and B2+ at index sites and count arguments).** Every place an `int` becomes a position or a length is checked, in debug and release
+builds alike, and `--unchecked-arithmetic` never turns it off:
+
+| Site | Check | Message (both engines) |
+|---|---|---|
+| `xs[i]`, `s[i]` | `0 <= i < len`, one unsigned compare that also replaces Rust's own bounds check | `index out of bounds: the len is 3 but the index is -1` (the interpreter's message today) |
+| `xs[a..b]`, `s[a..b]` | `0 <= a <= b <= len` | `range start -1 is negative` / Rust's own messages for the rest |
+| `insert`, `remove`, `swap`, `split_at`, `split_off`, `truncate`, `resize`, `take`, `skip`, `step_by`, `nth`, `repeat`, `[x; n]`, `with_capacity` | the argument is `>= 0` | ``take: the count is -1, but it must be 0 or more`` (method name and argument) |
+| `n as usize` from an `int` (an explicit conversion the program writes) | ADR-0015 section 2's checked conversion: panics when `n < 0` | `cannot convert -1 to usize: it is negative` |
+| `xs.len()` to `int` | none needed: a length always fits in an `int` on every target | |
+
+Proved-non-negative sites (experiment 2) skip the sign test; the bounds test stays, as in Rust.
+
+**Every case where B1 behaves differently from Rust's `usize`.**
+1. A length subtraction that goes below zero: Rust panics at the subtraction (with overflow checks) or wraps (plain
+   release builds); B1 gives a negative `int`. If that value then indexes, slices or sizes something, B1 panics there
+   with the messages above; if it is only compared or printed, the program goes on: `for i in 0..xs.len() - 1` on an
+   empty list runs zero times instead of panicking, `i == parts.len() - 1` is false, `t.len() - p.len()` is a negative
+   penalty. In the sample above no program reached this case.
+2. Comparisons with negatives: `i >= 0` and `i < xs.len()` with `i = -1` mean what they say under B1; under `usize`, `-1`
+   cannot be written and a wrapped value is huge.
+3. Slices: identical except that a negative bound has its own message.
+4. Casts of a length to `u32`, `u64`, `i32`: identical results for every real length (a length is never negative and fits
+   in 63 bits); the casts stay where the program wants another declared width.
+5. wasm32: B1 lengths are 64-bit, so `xs.len() * 1_000_000` does not overflow at about four billion on the web; under
+   `usize` it does on wasm32 and not natively. A `Vec<int>` of stored positions takes 8 bytes per element on wasm32
+   instead of 4; a program that cares declares `Vec<u32>`.
+6. Rust crate boundaries: a crate function taking or returning `usize` gets the checked conversion inserted at the call;
+   values the program declares `usize` stay `usize` and are untouched.
 
 **The options.**
 
 | Option | In practice | Casts it removes (of 321 length + 776 `as usize`) | Agent sheet |
 |---|---|---|---|
-| **B1** lengths are ordinary numbers (surface `int`, compiler-inserted conversions) | `len()`, `count()`, positions and `enumerate` indices are `int`; `xs[i]` and every length parameter accept `int` or any declared width; the compiled code converts at the boundary | about 300 length casts + 674 index casts + 21 argument casts, about 995; left: 21 narrowing casts to `i32`/`u32` and about 80 casts into a declared `usize` | the `len()` bullet is deleted |
-| **B2** lengths stay machine-size, indexes convert (Rust's `usize`, inference, checked conversion at index sites only) | `len()` is `usize`; undeclared integers that meet it become `usize` (ADR-0028); `xs[i]` with an `int` converts automatically | the 674 index casts; the 321 length casts stay wherever a declared `int` meets a length | keeps a rule: "`len()` is `usize`; to keep it in an `int`, write `as int`" |
-| **B3** status quo | as today | none (beyond the ones ADR-0028 already makes unnecessary) | unchanged |
+| **B1** lengths are ordinary numbers (surface `int`, compiler-inserted checked conversions) | `len()`, `count()`, positions and `enumerate` indices are `int`; `xs[i]` and every length parameter accept `int` or any declared width; the compiled code converts and checks at the boundary | about 300 length casts + 674 index casts + 21 argument casts, about 995; left: 21 narrowing casts to `i32`/`u32` and about 80 casts into a declared `usize` | the `len()` bullet is deleted |
+| **B2+** lengths stay machine-size, the compiler converts where an `int` meets an index or a count (Rust's `usize`, ADR-0028 inference, checked conversion at index sites and std count arguments) | `len()` is `usize`; undeclared integers that meet it become `usize`; a declared `int` receives a length through an inserted conversion (today); `xs[i]`, `take(k)`, `truncate(n)` with an `int` convert and check | all 97 casts in the programs that compile today (experiment 1) plus the std-argument class (`take(k)`); left: an `int` sentinel mixed with a length in one expression, fixed by a one-edit diagnostic | the cast rule is deleted |
+| **B3** status quo | as today | the same 97 (they were never needed), but `take(k)`-style arguments still need a cast | the cast rule should be deleted anyway: experiment 1 shows it is wrong for most programs |
 
-Golden set: B1 removes all 30 length casts and 61 of the 80 `as usize` (54 index, 7 argument); B2 removes the 54 index
-casts; B3 none.
+Golden set: in the reference solutions that compile today, every cast can already be deleted; B1 and B2+ also cover the
+std-argument and (B1 only) the sentinel shapes.
 
 **The "performance pass" idea** (let the compiler pick `usize` or `int` per value, for speed). It would decide from
 run-time cost, and run-time cost is identical for both types on 64-bit targets and differs by one free instruction on
-wasm32, so the pass would have nothing to decide from. The one place width matters for performance is memory: a large
-`Vec<u32>` of indices is half the size of a `Vec<int>`. That is a layout choice that also changes which values fit, so
-it must stay the program's declaration (`Vec<u32>`), which every option keeps. What such a pass would add is one more
-place that decides integer widths, which is the class of code (the W2-W12 deciders) ADR-0029 is deleting. It adds
-nothing here.
+wasm32, so the pass would have nothing to decide from. Experiment 2 shows the useful compile-time pass is a different
+one: proving indexes non-negative so the sign check disappears, which B1 includes. The one place width matters for
+performance is memory (`Vec<u32>` against `Vec<int>`), and that stays the program's declaration under every option.
 
-**Recommendation: B1**, confidence medium-high: high that it removes the most casts and gives the same meaning on every
-target (no underflow traps, no 32-bit surprise on the web), medium on the solver work (S5). What would change it: the
-S5 step-1 sweep showing that today's solver already accepts nearly every program with its casts deleted (then B2 costs
-less for the same result), or a wasm benchmark where 64-bit index arithmetic costs more than 5%.
+**Can the compiler catch B1's weak spot at compile time?** Partly, and as much as matters. B1's one weakness against
+Rust is case 1 above: a negative length difference that is never used as an index runs on instead of stopping. The
+compiler proves 78% of index sites safe outright; the rest are checked at run time with a clear message, which is also
+how Rust catches them. A compile-time warning for unguarded `len() - k` was measured and is wrong 29 times in 30, so the
+honest answer is that neither B1 nor Rust catches this class at compile time; both catch it at run time, Rust one step
+earlier (at the subtraction), B1 at the first use that matters.
 
-Breaks under B1: R030, R031 (counted as `pending` until the owner decides). Under B2: the index-site part of R031.
+**Recommendation: B2, extended ("B2+")**, confidence medium-high. Keep Rust's `usize` for `len()`, `count()` and
+positions, keep ADR-0028's inference, and add one thing: an `int` that flows into an index, a slice bound or a std
+count/length argument (`take`, `skip`, `truncate`, `insert`, `remove`, `[x; n]`, ...) gets the checked conversion of the
+table above inserted, in both engines. Then delete the agent sheet's cast rule and let `wj fix` delete the casts.
+Why, with the data:
+- Experiment 1: today's compiler already accepts every compiling program with all its casts deleted (all 97 casts). Most
+  of B1's benefit is available without changing what `len()` is; the casts are a documentation problem.
+- The remaining failures are the two shapes B2+ targets (a std count argument) or that a one-edit diagnostic fixes
+  (an `int` sentinel mixed with a length; WJ0003 offers `as usize`).
+- B2+ keeps Rust's meaning exactly: an underflowing length subtraction stops at the subtraction, as the owner prefers,
+  and the interpreter already behaves that way (`attempt to subtract with overflow`).
+- B1 stays the cleaner long-term design (identical integers on the web, natural `-1` sentinels), and nothing in B2+
+  blocks moving to it later; B1 costs 5-8 agent-days of solver work now against 2-3 for B2+.
+
+What would change it to B1: (1) after B2+ and the sheet fix, an offline replay or a pilot still shows integer-width
+errors costing agents turns (more than about 0.2 extra turns per trial); (2) the web becomes a first-class target where
+32-bit `usize` differences show up in user programs; (3) ADR-0029's checker misses its kill criterion and the `usize`
+inference stops being dependable. What would change it to B3: nothing in the data; B3 leaves the `take(k)` class and the
+sheet's cast rule in place.
 
 ### C. `min` / `max` and numbers
 
@@ -716,7 +808,7 @@ mechanical rows behind a gate). Agent-days are for one agent; builds go through 
 | S2 WJ0180 | removed-form check from the table: lexical rows in the checker's token pass, typed rows from `src/typing`; catalog entry, retired W-codes, oracle cases | `src/check/removed_forms.rs` (new), `src/error_catalog.rs`, `src/linter/{surface_syntax,rust_leakage,redundant_as_str}.rs` (deleted into it), `src/diagnostics/codes_lints.rs`, `tests/diagnostics_oracle/check/removed/` | G5; diagnostics goldens | opus review, sonnet | 3-4 |
 | S3 `wj fix` | the table-driven engine above, plus `wj check --fix` / `wj run --fix` | `src/cli/fix.rs`, `src/intrinsics/surface_fix.rs` -> `src/fix/{lexical,typed,report}.rs` | idempotence property; parses-and-checks-after; interpreted differential on verified examples and spec cases | sonnet | 4-5 |
 | S4 iterator used as a list | decision H's diagnostic and fixes from static types; `collect` target rule; Rust lowering emits `collect::<T>()` with the resolved type; std declarations of the lazy rows (`split`, `keys`, set operations) | `src/check/semantic/checker.rs`, `src/diagnostics/codes_errors.rs` (WJ0035), `std/rust_core.wji`, `src/typing/core_surface.rs`, `src/codegen/rust/*method*`, `src/interpreter/builtins/{iter,seq,text}.rs` (run-time check becomes an assertion), `tests/diagnostics_oracle/check/iter_as_list/` | G8; G3 for every `seq` row; drift corpus (walker / resolved / compiled) | sonnet, opus review | 3-4 |
-| S5 integer widths | after the owner decides B. Step 1 (any option): delete the casts of the golden set and the examples, build once, count what the current solver rejects. Then for B1: surface types, boundary conversions in the Rust lowering, retire ADR-0028's index sources and the W5 decider; for B2: automatic conversion at index sites | `src/ir/solver.rs`, `src/ir/constraint_gen.rs`, `src/codegen/rust/usize_expression_type_inference.rs`, `docs/spec/inference.md`, `docs/spec/numeric.md` | golden rustc rejects only fall; narrowing-cast ledger only falls; `D-WIDTH-OWNERS` only falls; `scripts/ecosystem_width_gate.wj` green | opus design, sonnet | 1 + (5-8 for B1, 2-3 for B2) |
+| S5 integer widths | after the owner decides B (step 1, the cast-deletion build, is done: experiment 1). For B2+: checked conversion of an `int` at index sites, slice bounds and std count arguments, in the Rust lowering and the interpreter, and the WJ0003 fix for an `int` mixed with a length. For B1: surface types, boundary conversions, retire ADR-0028's index sources and the W5 decider | `src/ir/solver.rs`, `src/ir/constraint_gen.rs`, `src/codegen/rust/usize_expression_type_inference.rs`, `docs/spec/inference.md`, `docs/spec/numeric.md` | golden rustc rejects only fall; narrowing-cast ledger only falls; `D-WIDTH-OWNERS` only falls; `scripts/ecosystem_width_gate.wj` green | opus design, sonnet | 2-3 for B2+, 5-8 for B1 |
 | S6 std modules | delete `std/strings.wj` and the free functions of `std/math.wj` (constants stay); regenerate `std_functions_table.rs` | `std/strings.wj`, `std/math.wj`, `src/stdlib_surface/std_functions_table.rs`, `src/interpreter/builtins/std_fns.rs` | `tests/std_functions_surface_test.rs`; G6 rows R058/R070 at 0 | haiku | 1 |
 | S7 interpreter registry | remove every removed method from the registry; mark internals; registry == surface | `src/interpreter/builtins/*.rs` | G2 with an empty ledger (the ledger file is deleted) | haiku, sonnet review | 2 |
 | S8 corpus migration | `wj fix` over std/, tests/ (including Windjammer embedded in `tests/*.rs` fixtures), examples/, bench/, scripts/, docs/ and the book (`--docs`); manual rows by hand; then the ecosystem in its own repository | the corpora | G6 to 0 outside the ADR and oracle fixtures; full `cargo test`; compiled health sweep; ecosystem gates | haiku (mechanical), sonnet (manual rows) | 3 + 3 (ecosystem) |
@@ -734,7 +826,8 @@ below. Total about 24-34 agent-days depending on B; with three build slots, abou
 - "`split`, `split_whitespace`, `lines`, `chars` give an iterator, not a list ... `.collect()` first" stays true and
   becomes cheap: "they are lazy; `.collect()` gives a list. Forgetting it is WJ0035, which `--fix` applies for you";
 - "never ... `.unwrap()`" becomes "absence: `x?`, `x ?? default`, `match`; `.expect("why")` for invariants";
-- "`len()` is `usize` when compiled: `let n: int = v.len() as int`" is deleted under B1, rewritten under B2, kept under B3;
+- "`len()` is `usize` when compiled: `let n: int = v.len() as int`" is deleted under every option: experiment 1 shows the
+  cast is unnecessary in every program that compiles today;
 - added: "run `wj check --fix FILE` / `wj run --fix FILE`: removed forms and a missing `.collect()` are fixed in place".
 
 The golden set (`bench/agent-dx/solutions`, the reference programs the offline levers of ADR-0037 score) is migrated by
@@ -756,14 +849,14 @@ arm only after the offline numbers move.
 - **Behaviour changes.** Unicode-aware predicates (R057, R060, R062: 40 sites), eager `ok_or` (R047: 0 sites), string
   `substring` was character-indexed in the interpreter (R053: 474 sites, rewritten to a character-safe form when the
   receiver may be non-ASCII). Each is listed in the row's `note` and printed by `wj fix`.
-- **Decision B.** Until it is taken, lengths keep today's behaviour and the agent sheet keeps its cast rule; S5's step 1
-  is the cheapest way to turn the open question into a number.
+- **Decision B.** Until it is taken, lengths keep today's behaviour. The agent sheet's cast rule can be deleted now
+  whatever is decided (experiment 1).
 - **First drafts.** Agents will still write `unwrap`, `iter` and `Vec::new()`; each is one WJ0180 with a
   machine-applicable edit, applied by `--fix` without a turn.
 
 ## Decision needed from: project owner
 
-1. **Decision B:** B1 (lengths and positions are `int`, the compiler converts), B2 (lengths stay `usize`, index sites
-   convert), or B3 (status quo). Recommendation B1, medium-high confidence; S5 step 1 can measure first.
+1. **Decision B:** B2+ (lengths stay `usize` as in Rust; the compiler converts and checks where an `int` meets an index
+   or a count), B1 (lengths and positions are `int`), or B3 (status quo). Recommendation B2+, medium-high confidence.
 2. **Decision I:** keep `Vec` / `HashMap` / `HashSet` rather than renaming to `List` / `Map` / `Set`.
 3. Accept the removal list and the stream plan; S1 can start on acceptance.

@@ -4,7 +4,7 @@
 //
 // Run from the repository root. A lexical prototype of the dataflow a compiler would run under option B1 (lengths are
 // `int`), per function:
-//   non-negative sources  len() count() capacity() abs(), integer literals, `for v in a..b` with a non-negative a,
+//   non-negative sources  lengths, counts, capacities, absolute values, integer literals, `for v in a..b` with a non-negative a,
 //                         the index of `enumerate()`, declared unsigned (`usize`, `u8`, ...) values, position/find
 //                         results defaulted with `?? k`, sums, products, quotients and remainders of non-negatives,
 //                         `a.max(b)` with one non-negative side, `a.min(b)` with both
@@ -39,7 +39,7 @@ fn files_of(c: Corpus) -> Vec<string> {
         args.push(s)
     }
     let listed = process.run_with_args("git", args) ?? ""
-    let mut out: Vec<string> = Vec::new()
+    let mut out: Vec<string> = []
     for l in listed.lines() {
         if l.trim() != "" {
             out.push(c.root + "/" + l)
@@ -66,7 +66,7 @@ fn is_int_literal(e: string) -> bool {
     }
     let mut digits = 0
     for c in t.chars() {
-        if c.is_ascii_digit() {
+        if c >= '0' && c <= '9' {
             digits = digits + 1
         } else {
             // a literal suffix such as 0usize or 3i64
@@ -87,7 +87,7 @@ fn contains_word(xs: Vec<string>, w: string) -> bool {
 
 // Split `e` at top-level occurrences of `op` (outside parentheses, brackets and strings).
 fn split_top(e: string, op: char) -> Vec<string> {
-    let mut parts: Vec<string> = Vec::new()
+    let mut parts: Vec<string> = []
     let mut depth = 0
     let mut cur = ""
     let mut in_str = false
@@ -183,13 +183,14 @@ fn nonneg(e0: string, nn: Vec<string>) -> bool {
         }
         return false
     }
-    for m in [".len()", ".count()", ".capacity()", ".abs()", ".count_ones()"] {
+    for m in [".len()", ".count()", ".abs()", ".count_ones()"] {
         if e.ends_with(m) {
             return true
         }
     }
     let char_count = ".char" + "_count()"
-    if e.ends_with(char_count) {
+    let capacity = ".cap" + "acity()"
+    if e.ends_with(char_count) || e.ends_with(capacity) {
         return true
     }
     if e.ends_with(")") {
@@ -229,7 +230,7 @@ fn nonneg(e0: string, nn: Vec<string>) -> bool {
 }
 
 fn without(xs: Vec<string>, w: string) -> Vec<string> {
-    let mut out: Vec<string> = Vec::new()
+    let mut out: Vec<string> = []
     for x in xs {
         if x != w {
             out.push(x)
@@ -245,7 +246,7 @@ fn is_unsigned_type(t: string) -> bool {
 
 // Map-typed names in a file: `name: HashMap<`, `name = HashMap::new()`, `name = {"`.
 fn map_names(text: string) -> Vec<string> {
-    let mut out: Vec<string> = Vec::new()
+    let mut out: Vec<string> = []
     let pats = ["(\\w+)\\s*:\\s*&?(mut\\s+)?(std::collections::)?(HashMap|BTreeMap|Map)<", "(\\w+)\\s*(:[^=]*)?=\\s*(HashMap|BTreeMap)::(new|with_capacity)", "(\\w+)\\s*=\\s*\\{\\s*\""]
     for p in pats {
         match regex.compile(p) {
@@ -285,7 +286,7 @@ fn base_before(line: string, at: usize) -> string {
 
 // The bracket contents of every postfix index on a line, with the base name.
 fn index_sites(line: string) -> Vec<(string, string)> {
-    let mut out: Vec<(string, string)> = Vec::new()
+    let mut out: Vec<(string, string)> = []
     let cs: Vec<char> = line.chars().collect()
     let mut i = 0
     let mut in_str = false
@@ -328,8 +329,8 @@ fn analyse(text: string, t: Tally, hits: Vec<string>, file: string) -> (Tally, V
     let mut tally = t
     let mut out = hits
     let maps = map_names(text)
-    let mut nn: Vec<string> = Vec::new()
-    let mut fn_lines: Vec<string> = Vec::new()
+    let mut nn: Vec<string> = []
+    let mut fn_lines: Vec<string> = []
     let let_re = regex.compile("^\\s*let\\s+(mut\\s+)?(\\w+)\\s*(:\\s*([\\w<>]+))?\\s*=\\s*(.+)$") ?? regex.compile("x") ?? panic("re")
     let assign_re = regex.compile("^\\s*([\\w.]+)\\s*(\\+=|\\*=|-=|/=|=)\\s*(.+)$") ?? regex.compile("x") ?? panic("re")
     let for_range = regex.compile("^\\s*for\\s+(\\w+)\\s+in\\s+\\(?(.+?)\\.\\.=?") ?? regex.compile("x") ?? panic("re")
@@ -345,8 +346,8 @@ fn analyse(text: string, t: Tally, hits: Vec<string>, file: string) -> (Tally, V
         }
         let t2 = line.trim()
         if t2.starts_with("fn ") || t2.starts_with("pub fn ") || t2.starts_with("async fn ") || t2.starts_with("pub(crate) fn ") {
-            nn = Vec::new()
-            fn_lines = Vec::new()
+            nn = []
+            fn_lines = []
             for c in param_re.captures_all(line) {
                 nn.push(c.get(1) ?? "")
             }
@@ -356,7 +357,7 @@ fn analyse(text: string, t: Tally, hits: Vec<string>, file: string) -> (Tally, V
             if skip_index(base, inner, maps) {
                 continue
             }
-            let mut parts: Vec<string> = Vec::new()
+            let mut parts: Vec<string> = []
             if inner.contains("..") {
                 for p in inner.replace("..=", "..").split("..") {
                     if p.trim() != "" {
@@ -477,7 +478,7 @@ fn main() {
     if eco != "" {
         corpora.push(Corpus { name: "eco", root: eco, specs: [":(glob)**/*.wj"] })
     }
-    let mut all_hits: Vec<string> = Vec::new()
+    let mut all_hits: Vec<string> = []
     println("| corpus | files | integer index sites | proved non-negative | not proved | `len() - k` sites | with a guard before | without |")
     println("|---|---:|---:|---:|---:|---:|---:|---:|")
     for c in corpora {
