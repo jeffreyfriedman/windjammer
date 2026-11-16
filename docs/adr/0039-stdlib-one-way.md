@@ -4,17 +4,19 @@ last_verified: af4e69ade
 ---
 # ADR-0039: One correct way: the standard library surface
 
-- **Status:** Proposed
+- **Status:** Proposed. Owner answers (2026-11-16): decision A, keep lazy iterators with `.collect()` as the one way to a
+  list; decision D, remove `unwrap`; decision B, open (the analysis below is written for that decision).
 - **Date:** 2026-11-16
 - **Related:** [ADR-0014](0014-surface-syntax-rust-isms.md) (macros and Rust-isms; this ADR finishes its migration),
-  [ADR-0015](0015-language-consistency-proposals.md) section 1 (`int` default; indexing and `len()` accept `int`),
-  [ADR-0018](0018-expressiveness-phase-2.md) (`T?`, `??`, enumerable methods), [ADR-0028](0028-usize-class-in-the-numeric-solver.md)
-  and [ADR-0029](0029-int-at-the-surface.md) (widths; `usize` stays), [ADR-0030](0030-interpreter-rejects-what-rustc-rejects.md)
+  [ADR-0015](0015-language-consistency-proposals.md) section 1 (`int` default), [ADR-0018](0018-expressiveness-phase-2.md)
+  (`T?`, `??`, enumerable methods), [ADR-0028](0028-usize-class-in-the-numeric-solver.md) and
+  [ADR-0029](0029-int-at-the-surface.md) (integer widths; `usize` stays), [ADR-0030](0030-interpreter-rejects-what-rustc-rejects.md)
   (interpreter == compiled), [ADR-0037](0037-agent-cost-levers.md) (agent cost, measured offline), ADR-0002 (explicit
   `let mut`, unchanged). Design notes settled here: `docs/design/split-returns-list.md`, `docs/design/list-max-min.md`.
-- **Machine-readable surface:** [`docs/std_surface.toml`](../std_surface.toml) (254 canonical rows, 64 removal rows).
-- **Inventory:** `wj run --interpret scripts/wj/std_inventory.wj --eco <ecosystem checkout>` ->
-  `docs/generated/std_removal_inventory.tsv` (counts below at `db4328b43`).
+- **Machine-readable surface:** [`docs/std_surface.toml`](../std_surface.toml) (254 canonical rows, 62 removal rows,
+  two of them pending decision B).
+- **Inventory:** `wj run --interpret scripts/wj/std_inventory.wj --eco <ecosystem checkout>` writes
+  `docs/generated/std_removal_inventory.tsv`; `--widths` measures the casts behind decision B (counts below at `b71288999`).
 
 ## Context
 
@@ -26,12 +28,12 @@ What agents hit (pilot data; failures that were not harness denials):
 
 | Failure class | Where it comes from today |
 |---|---|
-| forgot `.collect()` after `split` (2 of 8 failures; 12 of 40 trials in pilot 7) | `split`, `lines`, `chars`, `split_whitespace` return an iterator; a list is one `.collect()` away |
+| forgot `.collect()` after `split` (2 of 8 failures; 12 of 40 trials in pilot 7) | `split`, `lines`, `chars` return a lazy iterator; the checker catches indexing it but not every list-only use, and the interpreter accepts `.len()` on it |
 | hand-rolled `abs`, `min`, `max`, `contains`, `parse`, char predicates, `[x; n]` | the forms exist but are spread across methods, free functions in `std::strings` / `std::math`, and ASCII/Unicode twins |
 | `.len() as int` / `as usize` casts (321 length casts and 776 `as usize` across the corpora) | `len()` is `usize` when compiled; the agent sheet itself says `let n: int = v.len() as int` |
 | `parse().unwrap()` flagged W0002 with no obvious clean path | `unwrap` is an error-level lint, `expect` too; `?` / `??` exist but are not presented as the path |
 | list `max()` / `min()` lowering to `Ord::max(self, other)` (E0061) | the same name means "two numbers" and "largest element"; the lowering guessed |
-| `items.map(..).collect()` lowering to `items.as_ref().iter()` (E0282) | adapters need an annotation-driven `collect` whose target the lowering must guess |
+| `items.map(..).collect()` lowering to `items.as_ref().iter()` (E0282) | the lowering leaves the collect target to rustc instead of emitting the type the checker knows |
 | interpreter accepting what the compiled build rejects | engine-specific aliases: 69 interpreter methods are not in the documented surface |
 | deprecated forms still accepted | `vec![x; n]`, `println!`, `{}` templates, `String` warn or are lowered, not refused |
 | Rust aliases next to Windjammer forms | `iter`, `unwrap`, `push_back`, `to_owned`, `contains_key`, `strings.to_upper` next to `for x in xs`, `??`, `to_uppercase` |
@@ -48,14 +50,16 @@ Today there are six hand-maintained descriptions of the built-in surface: `agent
 2. **One vocabulary across types.** The same operation has the same name on every type that has it: `len`, `contains`,
    `first`, `last`, `get`, `is_empty`, `to_uppercase`, `is_digit`, `cmp`, `min`, `max`. A name never means two different
    operations on types an agent cannot tell apart at a glance.
-3. **Sequences are lists.** Every built-in method that yields several values yields a `Vec`. Laziness is opt-in with one
-   distinct name, `.lazy()`.
+3. **Sequences are lazy; `.collect()` makes a list.** Every built-in that yields several values (`split`, `lines`,
+   `chars`, `keys`, `values`, set operations, every adapter) returns a lazy `Iter`. `.collect()` is the one way to a
+   list. Using an `Iter` where a list is needed is a hard error with a one-edit fix, identical in `wj check`, the
+   interpreter and `wj build`.
 4. **Absence is a value, handled with `?`, `??` or `match`.** No method silently crashes on absence; `expect("why")` is the
    one explicit crash, for invariants.
-5. **`int` is the default integer at the surface.** Lengths, counts and positions are `int`; `usize` and every other
-   width stay first-class declared types.
+5. **Integer widths are explicit where the program declares them.** `usize` and every other width stay first-class
+   declared types. Which type a length or a position has when the program declares nothing is decision B (open).
 6. **No Rust spelling survives for compatibility.** A Rust name stays only where it is also the best Windjammer name
-   (`push`, `pop`, `map`, `filter`, `split`, `trim`, `parse`, `entry().or_insert()`).
+   (`push`, `pop`, `map`, `filter`, `split`, `collect`, `rev`, `trim`, `parse`, `entry().or_insert()`).
 7. **Every canonical row is documented, discoverable, tested and type-checked, identically in both engines.** Each row of
    `docs/std_surface.toml` has a `wj docs` entry (generated), an interpreter implementation, a lowering that rustc accepts
    (a row in the per-type lowering table gate), and a verified example run interpreted and compiled. A removed form is
@@ -66,60 +70,83 @@ Today there are six hand-maintained descriptions of the built-in surface: `agent
 Each decision gives the options, one recommendation, its strongest counter-argument, what it breaks (counts from the
 inventory below; "code" is std + tests + examples + golden + bench + scripts + ecosystem `.wj`), and a confidence.
 
-### A. `split` and every multi-value string method: lists
+### A. `split` and every multi-value method: lazy iterators (owner: decided 2026-11-16)
 
-Options. (1) Keep iterators (today), with the WJ0035/WJ0015 diagnostic and its `.collect()` fix. (2) `split` returns
-`Vec<string>`; no lazy form. (3) `split`, `splitn`, `lines`, `split_whitespace`, `chars`, `char_indices`, `bytes`,
-`matches` return a `Vec`; a lazy single-pass view exists under one distinct name, `.lazy()`, on every sequence.
+`split`, `splitn`, `rsplit`, `lines`, `split_whitespace`, `chars`, `char_indices`, `bytes`, `matches`, `keys`, `values`,
+the set operations and every adapter return a lazy `Iter`, as in Rust. `for part in s.split(",")` never allocates;
+`let parts = s.split(",").collect()` is a list. The cost of this choice, the forgotten `.collect()`, is designed out by
+decision H's diagnostic: a hard error whose machine-applicable fix inserts `.collect()` (or `.count()`) at the exact place,
+reported the same way by `wj check`, `wj run --interpret` and `wj build`. Of the 1,040 `split` / `lines` /
+`split_whitespace` / `chars` calls in the corpora, 437 are `for` loops and 186 end in `.collect()` today.
 
-**Recommendation: (3).** Indexing, `len()`, `contains`, slicing and printing the result just work, as in Python, Go, JS,
-Kotlin and Swift; the un-collected-iterator surprise cannot happen because no built-in returns an iterator unless the
-program wrote `.lazy()`. The element type is owned `string`, which also removes the borrowed-versus-owned piece class
-(WJ0029, `.map(|s| s.to_string())`). Loops stay allocation-free: `for part in s.split(",")` and a chain ending in a
-consumer (`.len()`, `.sum()`, `.any(..)`, `.join(..)`) lower to Rust's lazy adapters (decision H), so the eager meaning
-costs nothing where a list is never observed. Of the 1,040 `split`/`lines`/`split_whitespace`/`chars` calls in the
-corpora, 437 are `for` loops (lowered lazily, unchanged cost) and 186 already end in `.collect()`.
+Breaks: nothing beyond decision H's redundant spellings. Confidence: high (owner decision).
 
-Counter-argument: Rust programmers expect laziness, and `let parts = s.split(",")` followed by a single loop now
-allocates where Rust would not. Answer: the allocation is one `Vec` per bound result; the bench gate below measures it,
-and binding-then-looping is fusable later by escape analysis without a surface change.
+### B. The integer type of `len()`, counts and positions (open: owner decision needed)
 
-Breaks: R011 `.collect()` (428 in code), R016, R054. Confidence: high.
+**In plain terms.** Windjammer has two integer types that matter here. `int` is a signed 64-bit number on every
+platform. `usize` (Rust's "machine-size unsigned integer") can never be negative and is as wide as a memory address: 64
+bits on desktops and servers, 32 bits on the web (wasm32). Rust gives lengths and positions the type `usize`; Windjammer
+gives every number a program writes the type `int`. Where the two meet, Rust demands a conversion, and that is where the
+casts come from.
 
-### B. `len()`, `count()` and positions are `int` (owner veto point)
+**What is the same either way.** Speed. On a 64-bit machine both are one 64-bit register; `x as usize` compiles to no
+instruction at all, and the bounds check on `xs[i]` is the same compare. On wasm32 converting a 64-bit `int` index to a
+32-bit `usize` is one wrap instruction, and wasm has native 64-bit arithmetic. No option below is faster or slower at
+run time in any way a benchmark would notice.
 
-`usize` stays a first-class type: declared `usize` is exact, `as usize` remains a valid conversion, ADR-0028's rule that
-a declared `usize` wins in its class is unchanged. The question is only what the built-in surface returns and accepts.
+**What differs.** Meaning, in three places.
+- Negative values. `xs.len() - 1` on an empty list is `-1` as an `int`, and an index of `-1` panics with Windjammer's
+  out-of-range message. As a `usize` the same subtraction underflows: a panic with overflow checks on, a huge number
+  without them. Loops such as `while i >= 0` or `for i in 0..n - 1` are natural with `int` and traps with `usize`.
+- Mixing. `int + usize` is a type error, so every place where a length meets a number the program declared (`count: int`
+  in a struct, `fn f(n: int)`, `let n: int = ...`) needs a cast in today's compiled code.
+- The web. `usize` is 32 bits on wasm32, so a `usize` value wraps at about four billion on the web and not natively; an
+  `int` behaves identically on every target.
 
-Options. (1) `usize` everywhere (Rust; today when compiled). (2) `int` at the surface: `len()`, `position`, `find`,
-`index_of`, `enumerate` indices, `char_indices`, `binary_search` results are `int`; every index and length parameter
-(`xs[i]`, `insert`, `remove`, `truncate`, `take`, `skip`, `[x; n]`, `repeat`) accepts `int`, and also any declared
-integer type. (3) Polymorphic: today's index class, which makes `len()` `usize` or `int` depending on its neighbours.
+**Why the casts appear (measured, `std_inventory.wj --widths`).** Programs declare `int` (the default every agent and
+example uses) and then meet `.len()`, or use an `int` as an index. In code: 321 casts of a length (about 300 to `int` or
+`i64`, 21 to `i32`/`u32`), 674 `as usize` inside an index or slice, 21 in a std length argument, 776 `as usize` in all;
+59 `let x: int = ...len()` and 102 `let x: usize` annotations. The agent-dx reference solutions alone carry 30 length
+casts and 80 `as usize`.
 
-**Recommendation: (2).** ADR-0015 section 1 (accepted) already says "indexing and `len()` accept `int` via a checked
-conversion"; this makes the std declarations say it. Evidence: 321 casts of a length (`.len() as int` and siblings) and
-776 `as usize` in the corpora, 30 and 80 of them in the agent-dx reference solutions; the agent sheet instructs the cast.
-Under (2) all 321 length casts and the index-feeding share of the 776 disappear, and the program's own declared widths
-are never touched. Lowering: `xs.len()` emits `xs.len() as i64` (lossless on every 64-bit target, and checked on 32-bit
-targets); `xs[i]` with an `int` index emits `xs[i as usize]` behind the bounds check, and a negative index panics with
-Windjammer's out-of-range message in both engines (the interpreter already does). ADR-0028's *index sources* rule
-(`len()` makes its class `usize`) is retired: a class containing `len()` is `int` unless something declares another
-width. Its *declared wins* rule stays, and `let n: usize = xs.len()` is exact (the conversion is emitted once).
+**What the compiler already infers.** ADR-0028 (accepted, in progress) gives the width solver an index class: an
+integer the program leaves undeclared becomes `usize` when it meets `len()` or an index
+(`let mut i = 0; while i < xs.len() { xs[i] }` needs no cast), and a declared width wins, with the `len()` result
+converted to it (`let n: int = xs.len()` is accepted). ADR-0029 (proposed) moves that decision into one type checker. So the solver already removes
+the casts for undeclared integers; the casts that remain are where a declared `int` meets a length or an index. How many
+of the 1,097 are strictly needed today can only be counted by a compiled sweep with them deleted (stream S5, step 1:
+one build of the golden set and the examples).
 
-Counter-argument: Rust's choice makes negative indices unrepresentable, and an `i64 -> usize` conversion on every index
-costs a compare in hot loops. Answer: the bounds check Rust already performs subsumes the sign check (a negative `i64`
-cast to `usize` is out of range), so the cost is the cast, which is free; performance code can declare `usize` and get
-exactly today's code.
+**The options.**
 
-Breaks: R030 (321 casts, `wj fix` deletes them), R031 (the index-feeding part of 776, typed rewrite); every program that
-declared `fn f(n: usize)` and passes `xs.len()` gets a conversion emitted for it (no source change). The numeric solver
-loses the W5 decider (`usize_expression_type_inference.rs`) and the index-source half of NUM-USIZE. Confidence: high on
-the surface choice, medium on the solver work estimate.
+| Option | In practice | Casts it removes (of 321 length + 776 `as usize`) | Agent sheet |
+|---|---|---|---|
+| **B1** lengths are ordinary numbers (surface `int`, compiler-inserted conversions) | `len()`, `count()`, positions and `enumerate` indices are `int`; `xs[i]` and every length parameter accept `int` or any declared width; the compiled code converts at the boundary | about 300 length casts + 674 index casts + 21 argument casts, about 995; left: 21 narrowing casts to `i32`/`u32` and about 80 casts into a declared `usize` | the `len()` bullet is deleted |
+| **B2** lengths stay machine-size, indexes convert (Rust's `usize`, inference, checked conversion at index sites only) | `len()` is `usize`; undeclared integers that meet it become `usize` (ADR-0028); `xs[i]` with an `int` converts automatically | the 674 index casts; the 321 length casts stay wherever a declared `int` meets a length | keeps a rule: "`len()` is `usize`; to keep it in an `int`, write `as int`" |
+| **B3** status quo | as today | none (beyond the ones ADR-0028 already makes unnecessary) | unchanged |
+
+Golden set: B1 removes all 30 length casts and 61 of the 80 `as usize` (54 index, 7 argument); B2 removes the 54 index
+casts; B3 none.
+
+**The "performance pass" idea** (let the compiler pick `usize` or `int` per value, for speed). It would decide from
+run-time cost, and run-time cost is identical for both types on 64-bit targets and differs by one free instruction on
+wasm32, so the pass would have nothing to decide from. The one place width matters for performance is memory: a large
+`Vec<u32>` of indices is half the size of a `Vec<int>`. That is a layout choice that also changes which values fit, so
+it must stay the program's declaration (`Vec<u32>`), which every option keeps. What such a pass would add is one more
+place that decides integer widths, which is the class of code (the W2-W12 deciders) ADR-0029 is deleting. It adds
+nothing here.
+
+**Recommendation: B1**, confidence medium-high: high that it removes the most casts and gives the same meaning on every
+target (no underflow traps, no 32-bit surprise on the web), medium on the solver work (S5). What would change it: the
+S5 step-1 sweep showing that today's solver already accepts nearly every program with its casts deleted (then B2 costs
+less for the same result), or a wasm benchmark where 64-bit index arithmetic costs more than 5%.
+
+Breaks under B1: R030, R031 (counted as `pending` until the owner decides). Under B2: the index-site part of R031.
 
 ### C. `min` / `max` and numbers
 
-Options for lists. (1) `xs.max() -> T?` (lowered `.iter().max().cloned()`). (2) Drop list `max()`; use `fold`. Options
-for numbers. (a) Methods `a.max(b)`, `x.abs()` (Rust). (b) Free functions `max(a, b)`, `abs(x)` (Python, Go, Swift).
+Options for sequences. (1) `xs.max() -> T?` (lowered `.iter().max().cloned()` on a list). (2) Drop it; use `fold`.
+Options for numbers. (a) Methods `a.max(b)`, `x.abs()` (Rust). (b) Free functions `max(a, b)`, `abs(x)` (Python, Go, Swift).
 
 **Recommendation: (1) + (a).** Operations are methods on the value, everywhere: `x.abs()`, `x.sqrt()`, `x.pow(n)`,
 `a.max(b)`, `xs.max() ?? 0`. The arity tells the two `max` apart, and so does the receiver's declared type, which the
@@ -127,18 +154,15 @@ lowering now reads instead of guessing (the E0061 came from the guess). `std::ma
 `SQRT_2`) only; its free functions (`math.abs_i64`, `math.max_f64`, `math.sqrt`) are removed (R070). `powi`/`powf`
 become `pow` (the exponent's type picks the lowering). Floats get `cmp` with total order (NaN last), so
 `xs.sort_by(|a, b| a.cmp(b))` and `xs.sort()` work on floats and the `partial_cmp(..).unwrap()` idiom disappears (R072).
-An agent that writes `max(a, b)` or `abs(x)` gets WJ0180 R073 with the method form as the fix: the free spelling is
-never accepted, but it is always answered.
+An agent that writes `max(a, b)` or `abs(x)` gets WJ0180 R073 with the method form as the fix.
 
-Counter-argument: `max(a, b)` is symmetric and is what most agents write first (Python, Go 1.21, Swift). Answer: a
-free-function family would duplicate every numeric method (`sqrt(x)`, `floor(x)`, ...) or leave an arbitrary split; the
-did-you-mean diagnostic turns the first-draft spelling into a one-edit fix.
+Counter-argument: `max(a, b)` is symmetric and is what most agents write first. Answer: a free-function family would
+duplicate every numeric method or leave an arbitrary split; the did-you-mean diagnostic turns the first-draft spelling
+into a one-edit fix.
 
 Breaks: R070 (34), R071 (5), R072 (5); R073 is a did-you-mean, not a removal. Confidence: high.
 
-### D. Parsing, validation and the Option / Result idioms
-
-The canonical idioms, in order of preference:
+### D. Parsing, validation and the Option / Result idioms (owner: decided 2026-11-16)
 
 | Situation | Write |
 |---|---|
@@ -147,20 +171,14 @@ The canonical idioms, in order of preference:
 | both cases need code | `match s.parse::<int>() { Ok(n) => .., Err(e) => .. }` or `if let Some(x) = o { .. }` |
 | absence is a bug (an invariant) | `o.expect("config was validated above")` |
 
-`unwrap()` is removed (R040): it is the one form that crashes without saying why. `expect(why)` is canonical and no
-longer linted, so W0002 retires. `unwrap_or(d)`, `unwrap_or_else(f)`, `unwrap_or_default()`, `map_or`, `is_some_and`
-and their Result twins become `??` compositions (R041-R047): `o.map(f) ?? d`, `o.map(p) ?? false`. The Option surface
-is `is_some is_none map and_then filter or ok_or take replace zip flatten expect`; Result is
-`is_ok is_err ok err map map_err and_then expect`. `parse::<T>()` keeps its name and its turbofish (it is the generic
-call form, not an alias), and returns `Result<T, string>`.
+`unwrap()` is removed (R040). `expect(why)` is canonical and no longer linted, so W0002 retires. `unwrap_or(d)`,
+`unwrap_or_else(f)`, `unwrap_or_default()`, `map_or`, `is_some_and` and their Result twins become `??` compositions
+(R041-R047): `o.map(f) ?? d`, `o.map(p) ?? false`. The Option surface is `is_some`, `is_none`, `map`, `and_then`,
+`filter`, `or`, `ok_or`, `take`, `replace`, `zip`, `flatten`, `expect`; Result is `is_ok`, `is_err`, `ok`, `err`, `map`,
+`map_err`, `and_then`, `expect`. `parse::<T>()` keeps its name and returns `Result<T, string>`. `wj fix` writes `?` where
+the function returns Option/Result, otherwise `.expect("<expr> is present")`.
 
-Counter-argument: `unwrap()` is concise in tests and throwaway scripts, and agents write it reflexively. Answer: tests
-read better with `expect("parsed fixture")`, the fix is mechanical (`wj fix` writes `?` where the function returns
-Option/Result, otherwise `.expect("<expr> is present")`), and keeping `unwrap` is exactly the "flagged with no clean path"
-state the pilots measured.
-
-Breaks: R040 (314 in code), R041 (1,207, auto), R042-R048 (35). Confidence: high on the idiom table, medium on removing
-`unwrap` outright rather than keeping it as a warning; it is listed as a secondary veto point.
+Breaks: R040 (314 in code), R041 (1,207, auto), R042-R048 (35). Confidence: high (owner decision).
 
 ### E. Char predicates and string naming
 
@@ -169,17 +187,17 @@ Options. (1) Keep Rust's two families (`is_alphabetic` / `is_ascii_alphabetic`, 
 
 **Recommendation: (2).** The char surface is `is_alphabetic`, `is_alphanumeric`, `is_digit(radix = 10)`,
 `is_whitespace`, `is_uppercase`, `is_lowercase`, `is_punctuation`, `is_control`, `is_ascii`, `to_uppercase`,
-`to_lowercase`, `to_digit(radix = 10)`. ASCII-only tests are
-`c.is_ascii() && c.is_alphabetic()`. Bytes (`u8`) answer the same names. Strings: `to_uppercase`, `to_lowercase`,
-`eq_ignore_case`, `trim*`, `strip_prefix`/`strip_suffix -> string?`, `find -> int?` (byte offsets throughout: `len()`,
-`find`, `s[a..b]` all count bytes; characters are `s.chars()`). Appending is `s += t` (string or char); `push_str`,
-string `push`, `insert_str`, `substring`, `char_count`, `to_owned`, `as_str`, `as_bytes` go. The `std::strings` module,
-whose free functions duplicate the methods under other names (`strings.to_upper`, `strings.split` returning a list while
-the method returned an iterator), is deleted (R058).
+`to_lowercase`, `to_digit(radix = 10)`. ASCII-only tests are `c.is_ascii() && c.is_alphabetic()`. Bytes (`u8`) answer
+the same names. Strings: `to_uppercase`, `to_lowercase`, `eq_ignore_case`, `trim*`, `strip_prefix`/`strip_suffix`
+(returning `string?`), `find` (returning `int?`) (byte offsets throughout: `len()`, `find`, `s[a..b]` all count bytes; characters are
+`s.chars()`, their number `s.chars().count()`). Appending is `s += t` (string or char); `push_str`, string `push`,
+`insert_str`, `substring`, `char_count`, `to_owned`, `as_str`, `as_bytes` go. The `std::strings` module, whose free
+functions duplicate the methods under other names (`strings.to_upper`, and `strings.split` returning a list where the
+method is lazy), is deleted (R058).
 
-Counter-argument: `is_ascii_digit` and `to_ascii_uppercase` are what Rust programmers (and agents) know, and the
-Unicode forms change behaviour on non-ASCII input. Answer: the change is confined to non-ASCII letters, where the
-Unicode answer is the intended one in nearly every program; 20 call sites in code use the ASCII twins.
+Counter-argument: `is_ascii_digit` and `to_ascii_uppercase` are what Rust programmers and agents know, and the Unicode
+forms change behaviour on non-ASCII input. Answer: the change is confined to non-ASCII letters, where the Unicode answer
+is the intended one in nearly every program; 20 call sites in code use the ASCII twins.
 
 Breaks: R050-R058 (4,086 in code, 3,518 of them `strings.` calls, 1,766 in the ecosystem), R060-R063 (21).
 Confidence: high.
@@ -187,51 +205,75 @@ Confidence: high.
 ### F. Filled lists and construction
 
 `[a, b]`, `[x; n]` and `[]` build lists; `{k: v}` builds a map; `HashMap::new()`, `HashSet::new()`, `VecDeque::new()`
-build the empty ones that have no literal; `xs.to_set()` and `pairs.to_map()` convert. `Vec::new()` (1,888 in code)
-becomes `[]` (R008): the empty-list literal already infers its element type from later use. `vec![..]` (R001, 180) and
-`Vec::repeat` / `fill` go. `Vec::with_capacity(n)` stays as the one performance hint. Confidence: high.
+build the empty ones that have no literal; a set or a map from a sequence is `.collect()` into an annotated target
+(`let seen: HashSet<int> = xs.collect()`). `Vec::new()` (1,888 in code) becomes `[]` (R008): the empty-list literal
+already infers its element type from later use. `vec![..]` (R001, 180) and `Vec::repeat` / `fill` go.
+`Vec::with_capacity(n)` stays as the one performance hint. Confidence: high.
 
 ### G. Maps and sets
 
 `m[k]` reads (panics when missing), `m[k] = v` writes, `m.get(k) -> V?`, `m.insert(k, v) -> V?`, `m.remove(k) -> V?`,
-`m.contains(k)` (the same name as list, set and string; R090 replaces `contains_key`, 86 in code), `keys()` and `values()`
-return lists, `for (k, v) in m` iterates, and `m.entry(k).or_insert(v)` is the one get-or-insert form
-(`*m.entry(w).or_insert(0) += 1`). Arguments are values: `m[&k]` and `xs.contains(&x)` become `m[k]`, `xs.contains(x)`
-(R086, 89). Ordered maps and sets add `first`, `last`, `range` with the list names (R093). Sets have `insert`, `remove`, `contains`, `union`, `intersection`, `difference`,
-`symmetric_difference`, `is_subset`, `is_superset`, `is_disjoint`, `retain`, `extend`, and the set operations return sets, not iterators.
+`m.contains(k)` (the same name as list, set and string; R090 replaces `contains_key`, 86 in code), `keys()` and
+`values()` are lazy (`m.keys().sorted()` is a sorted list), `for (k, v) in m` iterates, and `m.entry(k).or_insert(v)` is
+the one get-or-insert form (`*m.entry(w).or_insert(0) += 1`). Arguments are values: `m[&k]` and `xs.contains(&x)` become
+`m[k]`, `xs.contains(x)` (R086, 89). Ordered maps and sets add `first`, `last`, `range` with the list names (R093).
+Sets have `insert`, `remove`, `contains`, `union`, `intersection`, `difference`, `symmetric_difference`, `is_subset`,
+`is_superset`, `is_disjoint`, `retain`, `extend`; the set operations are lazy like every other multi-value method.
 
-Counter-argument: `contains_key` is unambiguous on a map whose values could be confused with keys. Answer: `contains`
-on a map has only one sensible meaning (keys, as in Python's `in` and Kotlin's `contains`), and one membership name across
-every collection is worth more. Confidence: high (contains), medium (keeping `entry().or_insert()` over a new
+Counter-argument: `contains_key` is unambiguous on a map whose values could be confused with keys. Answer: `contains` on
+a map has one sensible meaning (keys, as in Python's `in` and Kotlin's `contains`), and one membership name across every
+collection is worth more. Confidence: high (contains), medium (keeping `entry().or_insert()` over a new
 `m.update(k, default, f)`; the entry form works compiled today and is a single row).
 
-### H. Iteration, adapters and materialisation
+### H. Iteration, adapters and `.collect()`
 
-`for x in xs` iterates any sequence; `for (i, x) in xs.enumerate()` gives `int` indices; `for (k, v) in m` iterates a
-map. Adapters (`map`, `filter`, `filter_map`, `flat_map`, `flatten`, `enumerate`, `zip`, `chain`, `take`, `skip`,
-`take_while`, `skip_while`, `step_by`, `scan`, `reversed`, the `sorted` and `unique` families, `chunk_by`, `intersperse`,
-`partition`, `group_by`, `count_by`, `tally`) on a list, set, map or range return a
-`Vec`; on an `Iter` (from `.lazy()`) they return an `Iter`. There is no `.collect()` and so no collect annotation rule:
-the target is always a list, and other collections are reached by name (`to_set`, `to_map`, `join`, `try_map` for
-`Result<Vec<U>, E>`). There is no `.iter()`, `.into_iter()`, `.cloned()`, `.copied()`, `.count()` (it is `len()`), and
-no `rev()` (`reversed()`, pairing with in-place `reverse()` as `sorted()` pairs with `sort()`).
+`for x in xs` iterates any sequence; `for (i, x) in xs.enumerate()` and `for (k, v) in m` destructure. Adapters start at
+the collection (`xs.map(f)`, never `xs.iter().map(f)`) and return a lazy `Iter`: `map`, `filter`, `filter_map`,
+`flat_map`, `flatten`, `enumerate`, `zip`, `chain`, `take`, `skip`, `take_while`, `skip_while`, `step_by`, `scan`, `rev`,
+`peekable`. Consumers end a chain: `collect`, `count`, `sum`, `product`, `fold`, `min`, `max`, `min_by_key`,
+`max_by_key`, `any`, `all`, `find`, `position`, `nth`, `last`, `join`. The enumerable methods of ADR-0018 that build a
+collection (`sorted*`, `unique*`, `group_by`, `count_by`, `tally`, `partition`, `chunk_by`) return it directly.
 
-Semantics, identical in both engines: a chain of adapters runs element by element (fused) and allocates once, where the
-chain's value is used as a list (bound, passed, returned, indexed). A chain that ends in a consumer or feeds a `for`
-never allocates. Closures in a chain run in element order, one element at a time; `take(n)` stops the chain early. This
-is Rust's lazy order, so the Rust lowering is the plain adapter chain with one `.collect::<Vec<_>>()` at the
-materialisation point, and the lowering never has to guess a collect target (the E0282 class disappears). The
-interpreter's existing `Iter` value implements the same order and materialises at the same points.
+**`.collect()` is the one way to a list,** and its target follows one rule: the type declared where the value goes
+(a `let` annotation, a parameter, a return type, a field), else `Vec<T>`. `let words = s.split(" ").collect()` is a
+`Vec<string>`; `let seen: HashSet<int> = xs.collect()`, `let s: string = cs.rev().collect()`,
+`let r: Result<Vec<int>, string> = parts.map(|p| p.parse::<int>()).collect()`. The Rust lowering always emits
+`collect::<T>()` with the type the checker resolved, so rustc never has to infer a collect target (the E0282 class ends).
 
-`.lazy()` is for what a list cannot express: `next()`, `peek()`, `next_if(..)` (tokenizers), infinite ranges and
-`cycle()`, and early exit over huge inputs. `.lazy().map(..)` stays an `Iter`; `.to_list()` materialises it.
+**Redundant spellings, decided for lazy semantics.** `iter()`, `iter_mut()`, `into_iter()` go (adapters start at the
+collection; R010). `cloned()`, `copied()` go (elements are values; the lowering adds the copy; R012). `count()` stays:
+it is the consumer for an `Iter`, `len()` the size of a collection, and `.len()` on an `Iter` is the diagnostic below
+with `.count()` as its fix. `rev()` stays (lazy reverse; `reverse()` reverses a list in place). `peekable()` stays for
+`peek()`. `to_list()` goes (R024, it is `collect()`), `sum::<T>()` loses its turbofish (R017), `for_each` becomes a
+`for` loop (R015), `by_ref` and `fuse` go (R016).
 
-Counter-argument: materialisation points are a new rule the compiler and interpreter must agree on, and the eager
-reading invites programs that build large intermediate lists. Answer: the rule is syntactic (the value of a chain is used
-as something other than the receiver of another adapter or a consumer), the drift gate covers it, and the intermediate
-lists are never built because chains are fused.
+**The "iterator used as a list" diagnostic (WJ0035, broadened).** The checker knows every expression's static type, so
+it reports an `Iter` that reaches a place only a list can fill:
 
-Breaks: R010-R023 (647 in code). Confidence: high on the surface, medium on the cost of the interpreter change.
+| Use of an `Iter` | Machine-applicable fix |
+|---|---|
+| indexed or sliced: `parts[0]`, `parts[1..]` | `.collect()` |
+| `.len()` / `.is_empty()` | `.count()` / `.collect()` |
+| `.first()` | `.next()` |
+| `.contains(x)`, `.get(i)`, `.sort()`, `.push(..)` or any other list-only method | `.collect()` |
+| passed to a `Vec` parameter, returned from a function declared `-> Vec<T>`, stored in a `Vec` field, compared with a list, printed with `${it:?}` | `.collect()` |
+| a bound `Iter` used twice (the first use consumes it) | `.collect()` on the `let` |
+
+Placement: when the `Iter` is a `let` binding without an annotation, the fix goes on the initializer
+(`let parts = s.split(",").collect()`), so every later use works; otherwise it goes at the exact expression before the
+use (`s.split(",").collect()[1]`). The message prints the corrected line.
+
+One check, three entry points: it lives in the shared front end (`src/check/semantic/checker.rs`, which already reports
+WJ0035 for indexing a few std iterators), and `wj check`, `wj run --interpret` and `wj build` all run it before anything
+executes or compiles, so the three report the same code, span and fix. The interpreter's run-time "an iterator cannot be
+indexed" error becomes unreachable and stays only as an internal assertion. WJ0015's iterator cases defer to WJ0035.
+
+Zero extra turns: `wj check --fix` and `wj run --fix` (new flags) apply every machine-applicable WJ0035 and WJ0180 edit
+and run the result, and the agent sheet tells agents to run with `--fix`. Without the flag the cost is one edit that the
+message spells out.
+
+Breaks: R010, R012, R015-R024 (165 in code). Confidence: high on the surface; high on the diagnostic (it extends an
+existing check with type facts the checker already has).
 
 ### I. Collection type names (owner veto point)
 
@@ -241,8 +283,8 @@ already spells `List` and `Map`).
 
 **Recommendation: (1)**, with `T?` as the one spelling of an optional type (R007: `Option<T>` only for nesting, 741 in
 code, already rewritten by `wj fix`). The Rust names are what every agent writes first and what the whole corpus uses;
-renaming them would turn a correct first draft into an error in nearly every program, the opposite of the pilots'
-lesson. `std/enumerable.wj` is rewritten to `Vec` / `HashMap`, and prose calls a `Vec` a list.
+renaming them would turn a correct first draft into an error in nearly every program. `std/enumerable.wj` is rewritten
+to `Vec` / `HashMap`, and prose calls a `Vec` a list.
 
 Counter-argument: `List`/`Map`/`Set` read better, match the prose, and finish ADR-0014's direction. Answer: they are
 better names but not a better outcome; a rename is cheap now and can still be taken by the owner, at the price of an
@@ -280,8 +322,9 @@ A retired code stays in the catalog as "retired: see WJ0180" so `wj explain W000
 | G3 lowering | every canonical row has a row in the per-type lowering table (the model is `tests/list_method_lowering_typechecks_test.rs`) whose generated Rust type-checks; no `KNOWN_GAPS` | per-method spot fixes |
 | G4 typing | every row's `lower` names a method `std/rust_core.wji` declares, and the row's Windjammer signature matches the checker's | drift between surface and core types |
 | G5 removed | every `removed` row with `action = "error"` has a WJ0180 oracle case under `tests/diagnostics_oracle/check/removed/` whose fix, applied, type-checks | per-lint goldens |
-| G6 inventory | `scripts/wj/std_inventory.wj --check`: no count in `docs/generated/std_removal_inventory.tsv` rises and every known method name is canonical or removed; counts outside `docs/adr/` and the oracle fixtures reach 0 at the end of the migration and the gate then requires 0 | nothing (new) |
+| G6 inventory | `scripts/wj/std_inventory.wj --check`: no count in `docs/generated/std_removal_inventory.tsv` rises and every known method name is canonical or removed; counts outside `docs/adr/` and the oracle fixtures reach 0 at the end of the migration and the gate then requires 0 (`pending` rows excepted until decided) | nothing (new) |
 | G7 examples | every canonical row is exercised by an `examples/verified` program or a `tests/spec` case run walker, resolved and compiled with identical output | `wj docs` rows without evidence |
+| G8 iterator as list | one oracle case per row of decision H's table under `tests/diagnostics_oracle/check/iter_as_list/`; `wj check`, `wj run --interpret` and `wj build` give the same code, span and fix, and the fixed program runs with identical output in both engines | the run-time WJ0035 in the interpreter |
 
 Shrink-only rules: `methods` may grow only together with its G3 row, G7 example and a summary line; `removed` rows are
 permanent (they are the hint table); the inventory ledger may only fall. `known_methods.rs` keeps the external and
@@ -304,36 +347,36 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 | intrinsic | `debug` | `debug(x) -> T` | print "[file:line:col] expr = value" to stderr and return x |
 | intrinsic | `todo` | `todo()` | placeholder that panics with "not yet implemented" |
 | intrinsic | `unreachable` | `unreachable(msg: string = "")` | panic: this path cannot run |
-| literal | `[a, b]` | `[a, b, c]` | a list (Vec<T>); `[]` is the empty list |
+| literal | `[a, b]` | `[a, b, c]` | a list (Vec<T>); [] is the empty list |
 | literal | `[x; n]` | `[x; n: int]` | a list of n copies of x, e.g. [0; 10] |
 | literal | `{k: v}` | `{k1: v1, k2: v2}` | a map literal (HashMap<K, V>); the empty map is HashMap::new() |
-| literal | `a..b` | `a..b, a..=b` | an integer range; `for i in 0..n`; a sequence (every `seq` method applies) |
+| literal | `a..b` | `a..b, a..=b` | an integer range: for i in 0..n; (0..n).map(f) is an Iter |
 | operator | `??` | `x ?? default` | the value inside an Option (Some) or Result (Ok), else default; default is evaluated only when needed |
 | operator | `?` | `expr?` | return early with the None / Err from the enclosing function (main may return Result<(), E>) |
 | operator | `[i]` | `xs[i: int], m[k], s[a..b]` | index a list (panics out of range), a map (panics when the key is missing), slice a list or string |
 | operator | `+=` | `s += t` | append a string or a char to a `let mut` string; also numbers |
-| seq | `len` | `xs.len() -> int` | number of elements (the one size method; there is no count()) |
+| seq | `len` | `xs.len() -> int` | number of elements of a collection (an Iter has count()) |
 | seq | `is_empty` | `xs.is_empty() -> bool` | true if no elements |
 | seq | `contains` | `xs.contains(x) -> bool` | membership test, e.g. [1, 2].contains(2) |
-| seq | `map` | `xs.map(\|x\| expr) -> Vec<U>` | transform each element |
-| seq | `filter` | `xs.filter(\|x\| cond) -> Vec<T>` | keep elements where cond is true |
-| seq | `filter_map` | `xs.filter_map(\|x\| option) -> Vec<U>` | map and keep the Some values |
-| seq | `flat_map` | `xs.flat_map(\|x\| list) -> Vec<U>` | map then flatten |
-| seq | `flatten` | `xss.flatten() -> Vec<T>` | join a list of lists (or drop the None of a list of options) |
-| seq | `try_map` | `xs.try_map(\|x\| result) -> Result<Vec<U>, E>` | map with a fallible step; the first Err (or None) wins |
-| seq | `enumerate` | `xs.enumerate() -> Vec<(int, T)>` | pairs (index, element); `for (i, x) in xs.enumerate()` |
-| seq | `zip` | `xs.zip(ys) -> Vec<(T, U)>` | pairs of elements, up to the shorter length |
-| seq | `chain` | `xs.chain(ys) -> Vec<T>` | concatenate |
-| seq | `take` | `xs.take(n: int) -> Vec<T>` | first n elements |
-| seq | `skip` | `xs.skip(n: int) -> Vec<T>` | all but the first n elements |
-| seq | `take_while` | `xs.take_while(\|x\| cond) -> Vec<T>` | leading elements while cond holds |
-| seq | `skip_while` | `xs.skip_while(\|x\| cond) -> Vec<T>` | drop leading elements while cond holds |
-| seq | `step_by` | `xs.step_by(n: int) -> Vec<T>` | every nth element |
-| seq | `scan` | `xs.scan(init, \|acc, x\| expr) -> Vec<A>` | running accumulation, one result per element |
-| seq | `reversed` | `xs.reversed() -> Vec<T>` | a reversed copy (in place: `reverse()`) |
-| seq | `sorted` | `xs.sorted() -> Vec<T>` | a sorted copy (in place: `sort()`) |
+| seq | `count` | `it.count() -> int` | number of elements an Iter yields (consumes it), e.g. s.split(",").count() |
+| seq | `map` | `xs.map(\|x\| expr) -> Iter<U>` | transform each element |
+| seq | `filter` | `xs.filter(\|x\| cond) -> Iter<T>` | keep elements where cond is true |
+| seq | `filter_map` | `xs.filter_map(\|x\| option) -> Iter<U>` | map and keep the Some values |
+| seq | `flat_map` | `xs.flat_map(\|x\| list) -> Iter<U>` | map then flatten |
+| seq | `flatten` | `xss.flatten() -> Iter<T>` | join a list of lists (or drop the None of a list of options) |
+| seq | `enumerate` | `xs.enumerate() -> Iter<(int, T)>` | pairs (index, element); `for (i, x) in xs.enumerate()` |
+| seq | `zip` | `xs.zip(ys) -> Iter<(T, U)>` | pairs of elements, up to the shorter length |
+| seq | `chain` | `xs.chain(ys) -> Iter<T>` | concatenate |
+| seq | `take` | `xs.take(n: int) -> Iter<T>` | first n elements |
+| seq | `skip` | `xs.skip(n: int) -> Iter<T>` | all but the first n elements |
+| seq | `take_while` | `xs.take_while(\|x\| cond) -> Iter<T>` | leading elements while cond holds |
+| seq | `skip_while` | `xs.skip_while(\|x\| cond) -> Iter<T>` | drop leading elements while cond holds |
+| seq | `step_by` | `xs.step_by(n: int) -> Iter<T>` | every nth element |
+| seq | `scan` | `xs.scan(init, \|acc, x\| expr) -> Iter<A>` | running accumulation, one result per element |
+| seq | `rev` | `xs.rev() -> Iter<T>` | reverse order (in place on a list: reverse()) |
+| seq | `sorted` | `xs.sorted() -> Vec<T>` | a sorted list (in place: sort()) |
 | seq | `sorted_by` | `xs.sorted_by(\|a, b\| a.cmp(b)) -> Vec<T>` | a copy sorted with a comparator |
-| seq | `sorted_by_key` | `xs.sorted_by_key(\|x\| key) -> Vec<T>` | a copy sorted by key (stable) |
+| seq | `sorted_by_key` | `xs.sorted_by_key(\|x\| key) -> Vec<T>` | a sorted list by key (stable) |
 | seq | `sorted_by_key_desc` | `xs.sorted_by_key_desc(\|x\| key) -> Vec<T>` | a copy sorted by key, largest first (stable) |
 | seq | `unique` | `xs.unique() -> Vec<T>` | first occurrence of each distinct element, in order |
 | seq | `unique_by` | `xs.unique_by(\|x\| key) -> Vec<T>` | first element of each distinct key |
@@ -360,11 +403,10 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 | seq | `index_of` | `xs.index_of(x) -> int?` | index of the first element equal to x |
 | seq | `first` | `xs.first() -> T?` | first element |
 | seq | `last` | `xs.last() -> T?` | last element |
-| seq | `join` | `xs.join(sep: string) -> string` | join strings or chars, e.g. cs.join("") |
-| seq | `to_set` | `xs.to_set() -> HashSet<T>` | the distinct elements as a set |
-| seq | `to_map` | `pairs.to_map() -> HashMap<K, V>` | a map from (key, value) pairs; a later pair wins |
-| seq | `to_list` | `it.to_list() -> Vec<T>` | materialise an Iter (or copy any sequence) into a list |
-| seq | `lazy` | `xs.lazy() -> Iter<T>` | a lazy, single-pass view: next/peek, infinite ranges, early exit; adapters on it stay lazy |
+| seq | `join` | `xs.join(sep: string) -> string` | join strings with a separator, e.g. words.join(" ") |
+| seq | `collect` | `it.collect() -> Vec<T>` | gather into a list; the annotated target decides another collection: let s: HashSet<int> = it.collect() (also HashMap from pairs, string from chars or strings, Result<Vec<T>, E> from results) |
+| seq | `peekable` | `it.peekable() -> Iter<T>` | an Iter that can also peek() (tokenizers) |
+| seq | `nth` | `it.nth(i: int) -> T?` | the element at position i of an Iter (on a list: get(i)) |
 | Vec | `push` | `xs.push(x)` | append an element |
 | Vec | `pop` | `xs.pop() -> T?` | remove and return the last element |
 | Vec | `insert` | `xs.insert(i: int, x)` | insert x at index i |
@@ -381,7 +423,7 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 | Vec | `sort_by` | `xs.sort_by(\|a, b\| a.cmp(b))` | sort with a comparator returning Ordering |
 | Vec | `sort_by_key` | `xs.sort_by_key(\|x\| key)` | stable sort by key |
 | Vec | `sort_by_key_desc` | `xs.sort_by_key_desc(\|x\| key)` | stable sort by key, largest first |
-| Vec | `reverse` | `xs.reverse()` | reverse in place (a reversed copy: `reversed()`) |
+| Vec | `reverse` | `xs.reverse()` | reverse in place (lazily: rev()) |
 | Vec | `rotate_left` | `xs.rotate_left(n: int)` | rotate elements left |
 | Vec | `rotate_right` | `xs.rotate_right(n: int)` | rotate elements right |
 | Vec | `drain` | `xs.drain(a..b) -> Vec<T>` | remove a range and return it |
@@ -402,10 +444,10 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 | VecDeque | `pop_front` | `q.pop_front() -> T?` | remove from the front (queue order: push + pop_front) |
 | VecDeque | `new` | `VecDeque::new() -> VecDeque<T>` | an empty double-ended queue |
 | Iter | `next` | `it.next() -> T?` | the next element |
-| Iter | `peek` | `it.peek() -> T?` | the next element without consuming it |
+| Iter | `peek` | `it.peek() -> T?` | the next element without consuming it (after peekable()) |
 | Iter | `next_if` | `it.next_if(\|x\| cond) -> T?` | consume the next element only when cond holds |
 | Iter | `cycle` | `it.cycle() -> Iter<T>` | repeat forever (end the chain with take(n)) |
-| string | `len` | `s.len() -> int` | length in bytes (characters: s.chars().len()) |
+| string | `len` | `s.len() -> int` | length in bytes (characters: s.chars().count()) |
 | string | `is_empty` | `s.is_empty() -> bool` | true if length is 0 |
 | string | `contains` | `s.contains(pat) -> bool` | substring (or char) test |
 | string | `starts_with` | `s.starts_with(pat) -> bool` | prefix test |
@@ -422,16 +464,17 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 | string | `trim_end_matches` | `s.trim_end_matches(pat) -> string` | strip a suffix repeatedly |
 | string | `strip_prefix` | `s.strip_prefix(p) -> string?` | the rest after a prefix, None when absent |
 | string | `strip_suffix` | `s.strip_suffix(p) -> string?` | the rest before a suffix, None when absent |
-| string | `split` | `s.split(sep) -> Vec<string>` | the pieces between separators, as a list: parts[0], parts.len() work |
-| string | `splitn` | `s.splitn(n: int, sep) -> Vec<string>` | at most n pieces |
+| string | `split` | `s.split(sep) -> Iter<string>` | the pieces between separators, lazily: for p in s.split(",") { .. }; a list: let parts = s.split(",").collect() |
+| string | `splitn` | `s.splitn(n: int, sep) -> Iter<string>` | at most n pieces |
 | string | `split_once` | `s.split_once(sep) -> (string, string)?` | split at the first separator |
 | string | `rsplit_once` | `s.rsplit_once(sep) -> (string, string)?` | split at the last separator |
-| string | `split_whitespace` | `s.split_whitespace() -> Vec<string>` | the words between runs of whitespace |
-| string | `lines` | `s.lines() -> Vec<string>` | the lines, without line endings |
-| string | `chars` | `s.chars() -> Vec<char>` | the characters |
-| string | `char_indices` | `s.char_indices() -> Vec<(int, char)>` | (byte index, char) pairs |
-| string | `bytes` | `s.bytes() -> Vec<u8>` | the UTF-8 bytes |
-| string | `matches` | `s.matches(pat) -> Vec<string>` | the non-overlapping matches |
+| string | `split_whitespace` | `s.split_whitespace() -> Iter<string>` | the words between runs of whitespace |
+| string | `lines` | `s.lines() -> Iter<string>` | the lines, without line endings |
+| string | `chars` | `s.chars() -> Iter<char>` | the characters |
+| string | `char_indices` | `s.char_indices() -> Iter<(int, char)>` | (byte index, char) pairs |
+| string | `bytes` | `s.bytes() -> Iter<u8>` | the UTF-8 bytes |
+| string | `matches` | `s.matches(pat) -> Iter<string>` | the non-overlapping matches |
+| string | `rsplit` | `s.rsplit(sep) -> Iter<string>` | the pieces from the right |
 | string | `to_uppercase` | `s.to_uppercase() -> string` | upper-case copy (Unicode) |
 | string | `to_lowercase` | `s.to_lowercase() -> string` | lower-case copy (Unicode) |
 | string | `eq_ignore_case` | `s.eq_ignore_case(t) -> bool` | case-insensitive equality |
@@ -522,8 +565,8 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 | HashMap | `get_mut` | `m.get_mut(k) -> V?` | lookup for changing the value in place |
 | HashMap | `contains` | `m.contains(k) -> bool` | key test (same name as list, set and string) |
 | HashMap | `remove` | `m.remove(k) -> V?` | delete an entry, returning its value |
-| HashMap | `keys` | `m.keys() -> Vec<K>` | the keys (order unspecified: m.keys().sorted() to print) |
-| HashMap | `values` | `m.values() -> Vec<V>` | the values (order unspecified) |
+| HashMap | `keys` | `m.keys() -> Iter<K>` | the keys (order unspecified: m.keys().sorted() is a sorted list) |
+| HashMap | `values` | `m.values() -> Iter<V>` | the values (order unspecified) |
 | HashMap | `entry` | `m.entry(k).or_insert(v)` | the value for k, inserting v first when missing: `*m.entry(w).or_insert(0) += 1` |
 | HashMap | `retain` | `m.retain(\|k, v\| keep)` | keep entries where the closure is true |
 | HashMap | `extend` | `m.extend(other)` | add every entry of another map or pair list |
@@ -532,13 +575,13 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 | BTreeMap | `first` | `m.first() -> (K, V)?` | the entry with the smallest key |
 | BTreeMap | `last` | `m.last() -> (K, V)?` | the entry with the largest key |
 | BTreeMap | `range` | `m.range(a..b) -> Vec<(K, V)>` | the entries with keys in a range, in order |
-| HashSet | `new` | `HashSet::new() -> HashSet<T>` | an empty set (from a list: xs.to_set()) |
+| HashSet | `new` | `HashSet::new() -> HashSet<T>` | an empty set (from a sequence: let s: HashSet<T> = xs.collect()) |
 | HashSet | `insert` | `s.insert(x) -> bool` | add an element; false when it was present |
 | HashSet | `remove` | `s.remove(x) -> bool` | delete an element |
-| HashSet | `union` | `a.union(b) -> HashSet<T>` | elements in either set |
-| HashSet | `intersection` | `a.intersection(b) -> HashSet<T>` | elements in both sets |
-| HashSet | `difference` | `a.difference(b) -> HashSet<T>` | elements in a but not b |
-| HashSet | `symmetric_difference` | `a.symmetric_difference(b) -> HashSet<T>` | elements in exactly one set |
+| HashSet | `union` | `a.union(b) -> Iter<T>` | elements in either set (a set: .collect() into a HashSet) |
+| HashSet | `intersection` | `a.intersection(b) -> Iter<T>` | elements in both sets |
+| HashSet | `difference` | `a.difference(b) -> Iter<T>` | elements in a but not b |
+| HashSet | `symmetric_difference` | `a.symmetric_difference(b) -> Iter<T>` | elements in exactly one set |
 | HashSet | `is_subset` | `a.is_subset(b) -> bool` | every element of a is in b |
 | HashSet | `is_superset` | `a.is_superset(b) -> bool` | every element of b is in a |
 | HashSet | `is_disjoint` | `a.is_disjoint(b) -> bool` | no shared elements |
@@ -550,10 +593,11 @@ Generated by `wj run --interpret scripts/wj/std_inventory.wj --surface`; the tom
 
 ## Removal list with inventory
 
-Counts of each removed form at `db4328b43` (repository) and the ecosystem checkout (`eco`, `eco_docs`); "code total"
+Counts of each removed form at `b71288999` (repository) and the ecosystem checkout (`eco`, `eco_docs`); "code total"
 excludes the two docs columns. Lexical counts: matches inside strings and comments count, and Rust test files that embed
 Windjammer in string literals are not scanned (their fixtures are migrated with the `.wj` corpus by stream S8).
-`-` means not lexically countable (type-directed; counted by the checker in S2).
+`-` means not lexically countable (type-directed; counted by the checker in S2). Rows with action `pending` wait for
+decision B and are not removed.
 
 | id | action | fix | std | tests | examples | golden | bench | scripts | docs | eco | eco_docs | code total | form | replacement |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
@@ -564,23 +608,21 @@ Windjammer in string literals are not scanned (their fixtures are migrated with 
 | R005 | error | auto | 0 | 9 | 2 | 0 | 3 | 0 | 41 | 0 | 0 | 14 | `String::new() / String::from(x)` | "" / x |
 | R006 | error | auto | 0 | 54 | 0 | 4 | 0 | 1 | 46 | 1 | 0 | 60 | `"lit".to_string()` | "lit" |
 | R007 | error | auto | 131 | 329 | 24 | 14 | 5 | 21 | 292 | 217 | 1 | 741 | `Option<T> in a type` | T? (Option<T?> only for a nested option) |
-| R008 | error | auto | 4 | 696 | 6 | 116 | 41 | 179 | 45 | 846 | 5 | 1888 | `Vec::new()` | [] (annotate: let xs: Vec<int> = []) |
+| R008 | error | auto | 4 | 696 | 6 | 116 | 41 | 184 | 45 | 846 | 5 | 1893 | `Vec::new()` | [] (annotate: let xs: Vec<int> = []) |
 | R010 | error | auto | 1 | 68 | 7 | 3 | 8 | 1 | 117 | 0 | 0 | 88 | `.iter() / .iter_mut() / .into_iter()` | nothing: `for x in xs`, `xs.map(..)` |
-| R011 | error | typed | 11 | 119 | 47 | 110 | 114 | 12 | 101 | 15 | 0 | 428 | `.collect() / .collect::<T>()` | nothing (adapters return a list); .to_set(), .to_map(), .join(""), .try_map(..) |
 | R012 | error | auto | 0 | 11 | 23 | 7 | 2 | 0 | 18 | 0 | 0 | 43 | `.cloned() / .copied()` | nothing (elements are values) |
-| R013 | error | auto | 0 | 24 | 8 | 2 | 0 | 2 | 19 | 1 | 0 | 37 | `.count() (no arguments)` | .len() |
-| R014 | error | auto | 0 | 13 | 4 | 0 | 0 | 1 | 6 | 0 | 0 | 18 | `.rev()` | .reversed() |
 | R015 | error | manual | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | `.for_each(f)` | for x in xs { .. } |
-| R016 | error | auto | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | `.peekable() / .by_ref() / .fuse()` | .lazy() (an Iter has next and peek) |
+| R016 | delete | manual | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | `.by_ref() / .fuse()` | nothing: bind the Iter with let mut and keep calling next() |
 | R017 | delete | auto | 0 | 4 | 8 | 0 | 0 | 0 | 10 | 0 | 0 | 12 | `.sum::<T>() / .product::<T>()` | .sum() / .product() (the element type decides) |
 | R018 | delete | typed | 0 | 1 | 0 | 0 | 7 | 0 | 3 | 0 | 0 | 8 | `.nth(i) on a list` | .get(i) (an Iter keeps nth) |
 | R019 | delete | auto | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | `.frequencies()` | .tally() |
 | R020 | delete | auto | 0 | 2 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 2 | `.each_slice(n)` | .chunks(n) |
 | R021 | delete | auto | 0 | 2 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 2 | `.partition_by(p)` | .partition(p) |
 | R022 | delete | manual | 0 | 8 | 0 | 0 | 0 | 0 | 4 | 0 | 0 | 8 | `.zip_with(ys, f)` | .zip(ys).map(\|(a, b)\| f(a, b)) |
-| R023 | delete | manual | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | `.find_map(f) / .reduce(f) / .inspect(f) / .rposition(p) / .next_back()` | .filter_map(f).first() / .fold(..) / a for loop / .reversed().position(p) |
-| R030 | delete | auto | 10 | 87 | 6 | 30 | 83 | 11 | 33 | 94 | 1 | 321 | `.len() as int / .count() as int (any integer cast of a length)` | .len() (it is int) |
-| R031 | delete | typed | 0 | 54 | 0 | 80 | 408 | 31 | 28 | 203 | 3 | 776 | `x as usize in an index or a length argument` | nothing: xs[i] and xs.truncate(n) take int |
+| R023 | delete | manual | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | `.find_map(f) / .reduce(f) / .inspect(f) / .rposition(p) / .next_back()` | .filter_map(f).next() / .fold(..) / a for loop / .rev().position(p) |
+| R024 | delete | auto | 0 | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 1 | `.to_list() (enumerable)` | .collect() |
+| R030 | pending | auto | 10 | 87 | 6 | 30 | 83 | 11 | 33 | 94 | 1 | 321 | `.len() as int / .count() as int (any integer cast of a length)` | under B1: .len() (it is int); under B2/B3 only the `as usize` ones are redundant |
+| R031 | pending | typed | 0 | 54 | 0 | 80 | 408 | 31 | 28 | 203 | 3 | 776 | `x as usize in an index or a length argument` | under B1 and B2: nothing at an index (xs[i] converts); under B1 also std length arguments |
 | R040 | error | typed | 0 | 106 | 17 | 0 | 28 | 0 | 115 | 163 | 15 | 314 | `.unwrap()` | x? (propagate), x ?? default, match / if let, or x.expect("why") |
 | R041 | error | auto | 2 | 168 | 30 | 187 | 614 | 118 | 133 | 88 | 2 | 1207 | `.unwrap_or(d)` | x ?? d |
 | R042 | error | typed | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | `.unwrap_or_else(f)` | x ?? expr (lazy already); for an error-dependent default: match |
@@ -593,8 +635,8 @@ Windjammer in string literals are not scanned (their fixtures are migrated with 
 | R050 | error | typed | 0 | 29 | 1 | 0 | 5 | 0 | 20 | 0 | 0 | 35 | `s.push_str(t) / s.push(c) on a string` | s += t / s += c |
 | R051 | error | typed | 6 | 1 | 0 | 1 | 2 | 0 | 17 | 0 | 2 | 10 | `s.to_string() / .to_owned() / .as_str() / .into_string() on a string` | nothing (one string type) |
 | R052 | delete | auto | 5 | 6 | 0 | 1 | 1 | 9 | 5 | 5 | 0 | 27 | `s.as_bytes() / .into_bytes()` | s.bytes() |
-| R053 | delete | auto | 0 | 227 | 2 | 0 | 0 | 9 | 2 | 236 | 0 | 474 | `s.substring(a, b) / s.slice(a, b) / s.get(a..b) / s.char_count()` | s[a..b] / s.chars().len() |
-| R054 | delete | auto | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | `s.split_ascii_whitespace() / .split_terminator(p) / .rsplit(p) / .rsplitn(n, p)` | .split_whitespace() / .split(p) / .split(p).reversed() |
+| R053 | delete | auto | 0 | 227 | 2 | 0 | 0 | 9 | 2 | 236 | 0 | 474 | `s.substring(a, b) / s.slice(a, b) / s.get(a..b) / s.char_count()` | s[a..b] / s.chars().count() |
+| R054 | delete | auto | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | `s.split_ascii_whitespace() / .split_terminator(p) / .rsplitn(n, p)` | .split_whitespace() / .split(p) / .rsplit(p).take(n) |
 | R055 | delete | manual | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | `s.insert(i, c) / .insert_str(i, t) / .remove(i) on a string` | s[..i] + t + s[i..] |
 | R056 | delete | manual | 0 | 2 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 2 | `s.capacity() / .reserve(n) / .is_char_boundary(i)` | nothing (storage detail) |
 | R057 | error | auto | 0 | 7 | 2 | 0 | 11 | 0 | 1 | 0 | 0 | 20 | `s.to_ascii_uppercase() / .to_ascii_lowercase() / .eq_ignore_ascii_case(t)` | .to_uppercase() / .to_lowercase() / .eq_ignore_case(t) |
@@ -622,10 +664,25 @@ Windjammer in string literals are not scanned (their fixtures are migrated with 
 | R094 | delete | typed | - | - | - | - | - | - | - | - | - | 0 | `HashSet .first() / .last() / .take(x)` | BTreeSet first/last; s.remove(x) |
 | R099 | delete | manual | 0 | 1 | 0 | 0 | 0 | 0 | 5 | 1 | 1 | 2 | `__opt_chain (lowering of a?.b)` | a?.b |
 
-Totals: 64 removal rows, 11,411 occurrences in code and 1,969 in docs. The largest are mechanical: `strings.` free
-functions 3,518 (`auto`), `Vec::new()` 1,888 (`auto`), `.unwrap_or(` 1,207 (`auto`), `as usize` 776 (`typed`),
-`Option<` 741 (`auto`), `"{}"` templates 567 (`auto`), `.collect()` 428 (`typed`), length casts 321 (`auto`),
-`.unwrap()` 314 (`typed`). 86% of the occurrences are in `auto` rows, 14% in `typed` rows, 14 occurrences in `manual` rows.
+Totals: 62 removal rows, 10,934 occurrences in code and 1,845 in docs; 1,097 of the code occurrences are the two
+`pending` rows. Of the 9,837 that are removed now, 96% are `auto` rows, 388 occurrences need the checker's types and 14
+need a person. The largest are mechanical: `strings.` free functions 3,518, `Vec::new()` 1,888, `.unwrap_or(` 1,207,
+`Option<` 741, `"{}"` templates 567, `.unwrap()` 314 (typed).
+
+## Integer-width evidence (decision B)
+
+`wj run --interpret scripts/wj/std_inventory.wj --widths` at `b71288999`:
+
+| kind | std | tests | examples | golden | bench | scripts | docs | eco | eco_docs | code total |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| W1 length cast to usize (a no-op today) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| W2 length cast to another integer (int, i64, i32, u32, ...) | 10 | 87 | 6 | 30 | 83 | 11 | 33 | 94 | 1 | 321 |
+| W3 cast to usize inside an index or slice xs[..] | 0 | 22 | 0 | 54 | 382 | 27 | 13 | 189 | 1 | 674 |
+| W4 cast to usize in a std length or position argument | 0 | 2 | 0 | 7 | 11 | 1 | 1 | 0 | 0 | 21 |
+| W5 every cast to usize | 0 | 54 | 0 | 80 | 408 | 31 | 28 | 203 | 3 | 776 |
+| W6 every cast to int or i64 | 11 | 202 | 17 | 50 | 116 | 61 | 76 | 211 | 2 | 668 |
+| W7 a let annotated int whose value calls len()/count() | 0 | 7 | 0 | 0 | 49 | 1 | 29 | 2 | 0 | 59 |
+| W8 a let annotated usize | 0 | 19 | 0 | 77 | 1 | 2 | 6 | 3 | 0 | 102 |
 
 ## `wj fix`: the one-shot migration tool
 
@@ -633,15 +690,14 @@ One engine, driven by the `removed` table, replacing the per-feature passes in `
 `src/intrinsics/surface_fix.rs`:
 
 1. **Lexical rewrites (`fix = "auto"`).** The existing token-aware scanner (strings, comments, chars and `${..}`
-   understood) applies each row's rewrite: renames (`contains_key` -> `contains`, `rev` -> `reversed`,
-   `strings.to_upper(s)` -> `s.to_uppercase()`), deletions (`.iter()`, `.cloned()`, `.len() as int`), and shape
-   rewrites (`x.unwrap_or(d)` -> `x ?? d`, `x.map_or(d, f)` -> `x.map(f) ?? d`, `vec![..]` -> `[..]`, macros and `{}`
-   templates as today).
+   understood) applies each row's rewrite: renames (`contains_key` -> `contains`, `to_list` -> `collect`,
+   `strings.to_upper(s)` -> `s.to_uppercase()`), deletions (`.iter()`, `.cloned()`), and shape rewrites
+   (`x.unwrap_or(d)` -> `x ?? d`, `x.map_or(d, f)` -> `x.map(f) ?? d`, `vec![..]` -> `[..]`, macros and `{}` templates as
+   today).
 2. **Typed rewrites (`fix = "typed"`).** Run `wj check` first and read receiver and target types from `src/typing`:
-   `.collect()` is deleted for a `Vec` target, becomes `.to_set()` / `.to_map()` / `.join("")` / `.try_map(..)` for a set,
-   map, string or `Result<Vec<_>, _>` target; `.unwrap()` becomes `?` when the enclosing function returns a compatible
-   `Option`/`Result`, else `.expect("<expr> is present")`; `s.push_str(t)` / string `s.push(c)` become `s += t`;
-   `as usize` is deleted only where it feeds an index or a std length parameter; `.to_string()` on a `string` is deleted.
+   `.unwrap()` becomes `?` when the enclosing function returns a compatible `Option`/`Result`, else
+   `.expect("<expr> is present")`; `s.push_str(t)` / string `s.push(c)` become `s += t`; `.to_string()` on a `string` is
+   deleted; every WJ0035 fix of decision H is applied. Under decision B1 the `pending` cast rows join this class.
 3. **Manual rows (`fix = "manual"`).** Reported as `file:line:col: R0xx <form> -> <replacement>`; never guessed.
 4. **Safety.** A file is written only when it parses before and after and `wj check` reports no more errors after; the
    rewrite is idempotent (`fix(fix(x)) == fix(x)`, a property test over the corpus); `--check` lists what would change
@@ -658,56 +714,56 @@ mechanical rows behind a gate). Agent-days are for one agent; builds go through 
 |---|---|---|---|---|---|
 | S1 source of truth | toml loader (`include_str!`, `toml` crate), `wj agent-index` generates builtins.txt, G1, G2, G4, G6 wired into `cargo test`; `std/enumerable.wj` and `enumerable.rs` checked against `kind = "enumerable"` rows | `src/stdlib_surface/surface.rs` (new), `src/cli/agent_index.rs`, `tests/std_surface_test.rs`, `tests/agent_index_builtins_coverage_test.rs` | G1, G2 (ledger may only shrink), G4, G6 | sonnet | 2-3 |
 | S2 WJ0180 | removed-form check from the table: lexical rows in the checker's token pass, typed rows from `src/typing`; catalog entry, retired W-codes, oracle cases | `src/check/removed_forms.rs` (new), `src/error_catalog.rs`, `src/linter/{surface_syntax,rust_leakage,redundant_as_str}.rs` (deleted into it), `src/diagnostics/codes_lints.rs`, `tests/diagnostics_oracle/check/removed/` | G5; diagnostics goldens | opus review, sonnet | 3-4 |
-| S3 `wj fix` | the table-driven engine above | `src/cli/fix.rs`, `src/intrinsics/surface_fix.rs` -> `src/fix/{lexical,typed,report}.rs` | idempotence property; parses-and-checks-after; interpreted differential on verified examples and spec cases | sonnet | 4-5 |
-| S4 sequences are lists | decisions A and H: core surface types (`split -> Vec<string>`, adapters -> `Vec`), `.lazy()` and `Iter`, materialisation points in the checker, Rust lowering (fused chain + one collect), interpreter `Iter` materialisation, JS/Go backends | `std/rust_core.wji`, `src/typing/core_surface.rs`, `src/codegen/rust/*method*`, `src/interpreter/builtins/{iter,seq,text}.rs`, `src/codegen/portable/lower/call.rs`, `docs/spec/collections.md` | G3 for every `seq` row; drift corpus (walker / resolved / compiled); `bench/` string kernels within 5% | opus design, sonnet | 8-12 |
-| S5 `int` lengths | decision B: surface types, boundary conversions in the Rust lowering, retire index sources in the solver and the W5 decider | `src/ir/solver.rs`, `src/ir/constraint_gen.rs`, `src/codegen/rust/usize_expression_type_inference.rs` (deleted), `docs/spec/inference.md`, `docs/spec/numeric.md` | golden rustc rejects only fall; narrowing-cast ledger only falls; `D-WIDTH-OWNERS` only falls; `scripts/ecosystem_width_gate.wj` green | opus design, sonnet | 5-8 |
+| S3 `wj fix` | the table-driven engine above, plus `wj check --fix` / `wj run --fix` | `src/cli/fix.rs`, `src/intrinsics/surface_fix.rs` -> `src/fix/{lexical,typed,report}.rs` | idempotence property; parses-and-checks-after; interpreted differential on verified examples and spec cases | sonnet | 4-5 |
+| S4 iterator used as a list | decision H's diagnostic and fixes from static types; `collect` target rule; Rust lowering emits `collect::<T>()` with the resolved type; std declarations of the lazy rows (`split`, `keys`, set operations) | `src/check/semantic/checker.rs`, `src/diagnostics/codes_errors.rs` (WJ0035), `std/rust_core.wji`, `src/typing/core_surface.rs`, `src/codegen/rust/*method*`, `src/interpreter/builtins/{iter,seq,text}.rs` (run-time check becomes an assertion), `tests/diagnostics_oracle/check/iter_as_list/` | G8; G3 for every `seq` row; drift corpus (walker / resolved / compiled) | sonnet, opus review | 3-4 |
+| S5 integer widths | after the owner decides B. Step 1 (any option): delete the casts of the golden set and the examples, build once, count what the current solver rejects. Then for B1: surface types, boundary conversions in the Rust lowering, retire ADR-0028's index sources and the W5 decider; for B2: automatic conversion at index sites | `src/ir/solver.rs`, `src/ir/constraint_gen.rs`, `src/codegen/rust/usize_expression_type_inference.rs`, `docs/spec/inference.md`, `docs/spec/numeric.md` | golden rustc rejects only fall; narrowing-cast ledger only falls; `D-WIDTH-OWNERS` only falls; `scripts/ecosystem_width_gate.wj` green | opus design, sonnet | 1 + (5-8 for B1, 2-3 for B2) |
 | S6 std modules | delete `std/strings.wj` and the free functions of `std/math.wj` (constants stay); regenerate `std_functions_table.rs` | `std/strings.wj`, `std/math.wj`, `src/stdlib_surface/std_functions_table.rs`, `src/interpreter/builtins/std_fns.rs` | `tests/std_functions_surface_test.rs`; G6 rows R058/R070 at 0 | haiku | 1 |
 | S7 interpreter registry | remove every removed method from the registry; mark internals; registry == surface | `src/interpreter/builtins/*.rs` | G2 with an empty ledger (the ledger file is deleted) | haiku, sonnet review | 2 |
 | S8 corpus migration | `wj fix` over std/, tests/ (including Windjammer embedded in `tests/*.rs` fixtures), examples/, bench/, scripts/, docs/ and the book (`--docs`); manual rows by hand; then the ecosystem in its own repository | the corpora | G6 to 0 outside the ADR and oracle fixtures; full `cargo test`; compiled health sweep; ecosystem gates | haiku (mechanical), sonnet (manual rows) | 3 + 3 (ecosystem) |
-| S9 docs and agents | regenerate the index; rewrite the agent sheet, cheatsheets, spec chapters (`stdlib`, `collections`, `optionals`, `strings`, `numeric`), book chapters; settle the two design notes | `docs/agent/*`, `docs/spec/*`, `docs/book/src/*`, `docs/design/split-returns-list.md`, `docs/design/list-max-min.md` | `tests/agent_docs_test.rs`; book doctests; `docs_truth` | sonnet | 2 |
+| S9 docs and agents | regenerate the index; rewrite the agent sheet, cheatsheets, spec chapters (`stdlib`, `collections`, `optionals`, `strings`, `numeric`), book chapters | `docs/agent/*`, `docs/spec/*`, `docs/book/src/*` | `tests/agent_docs_test.rs`; book doctests; `docs_truth` | sonnet | 2 |
 
-Order: S1 first (everything reads the table). S2 and S3 next, in parallel. S4 and S5 are independent of each other and
-of S2/S3 and may start with S1. S8 runs per area once S3 lands, and its typed `collect`/`as usize` rows after S4/S5. S6
-and S7 delete code only after S8 has migrated its callers (their G6 rows at 0). S9 last, with the measurement below.
-Total about 33-43 agent-days; with three build slots, about three calendar weeks.
+Order: S1 first (everything reads the table). S2, S3 and S4 next, in parallel. S5 waits for the owner's decision B
+(its step 1 can run any time and informs that decision). S8 runs per area once S3 lands, and the WJ0035 fixes after S4.
+S6 and S7 delete code only after S8 has migrated their callers (their G6 rows at 0). S9 last, with the measurement
+below. Total about 24-34 agent-days depending on B; with three build slots, about two to three calendar weeks.
 
 ## Effect on the agent sheet and the golden set
 
-`docs/agent/WINDJAMMER_FOR_AGENTS.md` loses three rules an agent had to learn and gets one it already expects:
+`docs/agent/WINDJAMMER_FOR_AGENTS.md` changes:
 
-- removed: "`split`, `split_whitespace`, `lines`, `chars` give an iterator, not a list ... `.collect()` first";
-- removed: "`len()` is `usize` when compiled: `let n: int = v.len() as int`";
-- replaced: "never ... `.unwrap()`" becomes "absence: `x?`, `x ?? default`, `match`; `.expect("why")` for invariants";
-- added: "sequences are lists: `s.split(\",\")[0]`, `xs.map(f)` is a list; `.lazy()` for `next()`/`peek()`".
+- "`split`, `split_whitespace`, `lines`, `chars` give an iterator, not a list ... `.collect()` first" stays true and
+  becomes cheap: "they are lazy; `.collect()` gives a list. Forgetting it is WJ0035, which `--fix` applies for you";
+- "never ... `.unwrap()`" becomes "absence: `x?`, `x ?? default`, `match`; `.expect("why")` for invariants";
+- "`len()` is `usize` when compiled: `let n: int = v.len() as int`" is deleted under B1, rewritten under B2, kept under B3;
+- added: "run `wj check --fix FILE` / `wj run --fix FILE`: removed forms and a missing `.collect()` are fixed in place".
 
 The golden set (`bench/agent-dx/solutions`, the reference programs the offline levers of ADR-0037 score) is migrated by
-`wj fix` in S8: 187 `unwrap_or`, 116 `Vec::new()`, 110 `.collect()`, 80 `as usize`, 30 length casts, 14 `Option<`, 7
-`contains_key`, 7 free `max`/`min`/`abs` calls. `cost.write` (tokens to write the same tasks, Windjammer against Rust) is
-re-measured before and after; the friction corpus (`bench/agent-dx/friction/`) is re-replayed, and every event whose
-class no longer exists (collect after split, length casts, W0002, E0061, E0282, interpreter-only methods) is relabelled
-"designed out". The next paid pilot runs on the haiku arm only after the offline numbers move.
+`wj fix` in S8: 187 `unwrap_or`, 116 `Vec::new()`, 14 `Option<`, 7 `contains_key`, 7 free `max`/`min`/`abs` calls, plus
+the casts decision B removes (30 length casts and 61 `as usize` under B1, 54 under B2). `cost.write` (tokens to write the
+same tasks, Windjammer against Rust) is re-measured before and after; the friction corpus (`bench/agent-dx/friction/`) is
+re-replayed, and every event whose class no longer costs a turn (missing collect with `--fix`, W0002, E0061, E0282,
+interpreter-only methods, and length casts under B1) is relabelled "designed out". The next paid pilot runs on the haiku
+arm only after the offline numbers move.
 
 ## Risks
 
-- **Performance of lists.** A bound split result allocates. Kill criterion: if the `bench/` string-processing kernels
-  regress more than 5% after S4's fusion, add escape analysis for bound-then-looped results before S8 lands.
-- **Interpreter `Iter` change.** Materialisation points must agree across walker, resolved engine and compiled code; the
-  drift corpus and G7 gate it, and S4 is not merged while the drift ledger grows.
+- **Fix placement.** An `Iter` bound once and used in two places needs its `.collect()` on the `let`, not at the first
+  use; G8 has a case for each placement, and the fix is checked to type-check before it is offered.
+- **Interpreter divergence today.** The interpreter accepts `.len()` on a `split` result that the compiled build rejects;
+  S4 moves the decision to the shared checker, and the drift corpus gates that both engines agree.
 - **Ecosystem churn.** 3,518 `strings.` calls and most `Vec::new()` sites are in the ecosystem; all are `auto` rows, run
   by `wj fix` in its own repository with its own gates.
 - **Behaviour changes.** Unicode-aware predicates (R057, R060, R062: 40 sites), eager `ok_or` (R047: 0 sites), string
   `substring` was character-indexed in the interpreter (R053: 474 sites, rewritten to a character-safe form when the
   receiver may be non-ASCII). Each is listed in the row's `note` and printed by `wj fix`.
-- **Solver interplay.** Decision B narrows ADR-0028 and should be accepted together with ADR-0029's staging; S5 deletes
-  the W5 decider only behind its existing ratchets.
-- **First drafts.** Agents will still write `unwrap`, `collect` and `Vec::new()`; each is one WJ0180 with a
-  machine-applicable edit. `wj check --fix` applying WJ0180 edits keeps that to zero extra turns.
+- **Decision B.** Until it is taken, lengths keep today's behaviour and the agent sheet keeps its cast rule; S5's step 1
+  is the cheapest way to turn the open question into a number.
+- **First drafts.** Agents will still write `unwrap`, `iter` and `Vec::new()`; each is one WJ0180 with a
+  machine-applicable edit, applied by `--fix` without a turn.
 
 ## Decision needed from: project owner
 
-1. **Decision B (veto point):** built-in lengths, counts and positions are `int`; index and length parameters accept
-   `int` and any declared integer; `usize` stays a first-class type and declared `usize` stays exact.
-2. **Decision I (veto point):** keep `Vec` / `HashMap` / `HashSet` rather than renaming to `List` / `Map` / `Set`.
-3. Secondary: decision D removes `unwrap()` outright (not a warning); decision A/H makes every multi-value built-in a
-   list, with `.lazy()` as the only lazy form.
-4. Accept the removal list and the stream plan; S1 can start on acceptance.
+1. **Decision B:** B1 (lengths and positions are `int`, the compiler converts), B2 (lengths stay `usize`, index sites
+   convert), or B3 (status quo). Recommendation B1, medium-high confidence; S5 step 1 can measure first.
+2. **Decision I:** keep `Vec` / `HashMap` / `HashSet` rather than renaming to `List` / `Map` / `Set`.
+3. Accept the removal list and the stream plan; S1 can start on acceptance.

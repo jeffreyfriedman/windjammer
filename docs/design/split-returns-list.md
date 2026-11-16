@@ -1,7 +1,8 @@
 # Should `split` return a list?
 
-Status: settled by [ADR-0039](../adr/0039-stdlib-one-way.md) decision A (proposed): every multi-value string method
-returns a list, and `.lazy()` is the one lazy form. Nothing here is implemented yet; the options below are the record.
+Status: settled by the owner (2026-11-16), recorded in [ADR-0039](../adr/0039-stdlib-one-way.md) decision A: option A, keep the
+lazy iterators; `.collect()` is the one way to a list, and an iterator used as a list is a hard error (WJ0035) with a
+machine-applicable fix in `wj check`, the interpreter and `wj build` (decision H). The options below are the record.
 
 In one paragraph: keeping `split` an iterator matches Rust, keeps `for part in s.split(..)` and `.next()` / `.count()` allocation-free and gives the checker one declared source of truth, at the price of a rule agents get wrong about once per program (pilot 7: 12 of 40 trials; pilot 8: 2 of 8 failures forgot `.collect()`), which `wj check` now catches with a one-edit `wj fix`; making `split` return a `Vec<string>` removes that whole class and the borrowed-versus-owned element class with it, at the price of an eager list and one `String` per piece even for loops, a divergence from Rust's lazy adapters (`rev`, `take`, early exit), and a decision for every `split*` variant. Measure the allocation cost on the string-processing benchmarks before deciding.
 
