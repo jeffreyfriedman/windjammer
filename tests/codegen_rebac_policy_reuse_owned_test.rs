@@ -91,7 +91,10 @@ fn main() {
     let policy_formal_borrowed = rs.contains("resolve_check(policy: &Policy")
         || rs.contains("fn resolve_check(policy: &Policy")
         || rs.contains("pub fn resolve_check(policy: &Policy");
-    let policy_call_borrowed = rs.contains("resolve_check(&policy");
+    // A borrowed formal is passed on as the binding itself in the recursion (`resolve_check(policy, ..)`, already
+    // `&Policy`) and borrowed by the outside caller (`resolve_check(&p, ..)`).
+    let policy_call_borrowed = rs.contains("resolve_check(&policy")
+        || (rs.contains("resolve_check(policy, schema") && rs.contains("resolve_check(&p, "));
     assert!(
         policy_formal_borrowed == policy_call_borrowed,
         "resolve_check policy formal/call-site ownership must agree \

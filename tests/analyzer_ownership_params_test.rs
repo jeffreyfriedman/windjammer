@@ -288,7 +288,7 @@ pub fn process(d: Data) -> i32 {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_explicit_mut_borrowed_respected() {
+fn test_mut_param_is_the_callees_own_copy() {
     let code = r#"
 pub struct Data {
     value: i32,
@@ -301,9 +301,10 @@ pub fn modify(mut d: Data) {
     let (generated, success) = test_utils::compile_single_check(code);
     let err = if !success { "compilation failed" } else { "" };
 
+    // SPEC-OWN-008: `mut d: Data` is the callee's own copy (owned), not a mutable borrow of the caller's value.
     assert!(
-        generated.contains("&mut Data"),
-        "Explicit &mut should be preserved. Generated:\n{}",
+        generated.contains("modify(mut d: Data)") && !generated.contains("&mut Data"),
+        "A `mut` parameter is the callee's own copy. Generated:\n{}",
         generated
     );
     assert!(success, "Error: {}", err);

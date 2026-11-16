@@ -162,27 +162,20 @@ ann 3
 
 <!-- example: tests/spec/ownership/SPEC-OWN-008.wj -->
 ```windjammer
-struct S { n: int }
 fn f(mut n: int) -> int {
     n += 10
     n
 }
-fn bump(mut s: S) -> int {
-    s.n += 1
-    s.n
-}
 fn main() {
     let a = 1
     println("${f(a)} ${a}")
-    let s = S { n: 1 }
-    println("${bump(s)} ${s.n}")
 }
 ```
 Output:
 ```text
 11 1
-2 1
 ```
+The same holds for a struct: `fn bump(mut s: S)` changes its own copy and the caller's `s` is unchanged (compiled and interpreted: tests/drift_corpus/moves/mut_param_is_own_copy.wj).
 
 ## Inference specification
 
