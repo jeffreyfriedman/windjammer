@@ -441,12 +441,7 @@ fn build_project_single_crate(
             } else {
                 path
             };
-            build_utils::generate_nested_module_structure(source_dir, output)?;
-            if path.is_file() {
-                for f in ["lib.rs", "mod.rs"] {
-                    drop_undeclared_modules(&output.join(f), output);
-                }
-            }
+            generate_modules_for_build(path, source_dir, output)?;
 
             // CLEANUP: Remove stale .rs files that conflict with generated directory modules
             // Example: If lighting/ directory exists with mod.rs, remove lighting.rs (stale FFI file)
@@ -576,6 +571,17 @@ fn with_sibling_imports(path: &Path, mut files: Vec<PathBuf>) -> Vec<PathBuf> {
     }
     files.sort();
     files
+}
+
+/// The library's module declarations for this build; a build of one file declares only the modules it imported.
+fn generate_modules_for_build(path: &Path, source_dir: &Path, output: &Path) -> Result<()> {
+    build_utils::generate_nested_module_structure(source_dir, output)?;
+    if path.is_file() {
+        for f in ["lib.rs", "mod.rs"] {
+            drop_undeclared_modules(&output.join(f), output);
+        }
+    }
+    Ok(())
 }
 
 /// Drop `mod`/`pub use` lines of `lib_file` that name a module this build did not produce (a file build declares

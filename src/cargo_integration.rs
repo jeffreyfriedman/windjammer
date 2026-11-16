@@ -472,18 +472,16 @@ pub fn create_cargo_toml_with_deps(
 
     // Multi-file CLI: domain modules live in [lib]; src/main.wj is [[bin]].
     // Emitting only [lib] left main.rs orphaned (no cargo run target).
-    // Root-level files with their own `fn main` (runners, scripts) are further binaries of the library crate.
-    let extra_bins = if has_lib_rs { extra_bin_sections(output_dir) } else { String::new() };
     let lib_or_bin_section = if has_lib_rs && has_main_rs {
         format!(
             "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n{}",
-            lib_name_normalized, project_name, extra_bins
+            lib_name_normalized, project_name, extra_bin_sections(output_dir)
         )
     } else if has_lib_rs {
         // Library project - generate [lib] section
         format!(
             "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n{}",
-            lib_name_normalized, extra_bins
+            lib_name_normalized, extra_bin_sections(output_dir)
         )
     } else if has_main_rs {
         // Binary project with main.rs - generate [[bin]] section
