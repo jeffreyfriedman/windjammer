@@ -72,6 +72,14 @@ fn max_of(doc: Json, paths: Vec<string>) -> f64 {
 fn pair(p: Json, key: string) -> (f64, f64) {
     if key == "verify_interp_instr" {
         (num(p, "wj_interp_run.instr"), sum_of(p, ["rust_rustc_debug.instr", "rust_run_debug.instr"]))
+    } else if key == "verify_interp_cycles" {
+        (num(p, "wj_interp_run.cycles"), sum_of(p, ["rust_rustc_debug.cycles", "rust_run_debug.cycles"]))
+    } else if key == "compile_release_cycles" {
+        (sum_of(p, ["wj_transpile.cycles", "wj_rustc_release.cycles"]), num(p, "rust_rustc_release.cycles"))
+    } else if key == "transpile_share_cpu" {
+        (num(p, "wj_transpile.cpu"), num(p, "rust_rustc_debug.cpu"))
+    } else if key == "run_release_cycles" {
+        (num(p, "wj_run_release.cycles"), num(p, "rust_run_release.cycles"))
     } else if key == "verify_interp_cpu" {
         (num(p, "wj_interp_run.cpu"), sum_of(p, ["rust_rustc_debug.cpu", "rust_run_debug.cpu"]))
     } else if key == "verify_compiled_instr" {
@@ -110,14 +118,18 @@ fn pair(p: Json, key: string) -> (f64, f64) {
 fn metrics() -> Vec<Metric> {
     [
         Metric { key: "verify_interp_instr", what: "source to verified output: `wj run --interpret` vs `rustc` debug + run (instructions)", dim: "verify" },
-        Metric { key: "verify_interp_cpu", what: "same, user+sys CPU seconds", dim: "verify" },
+        Metric { key: "verify_interp_cycles", what: "same, CPU cycles of the measured process (the decision metric on a loaded Mac; instruction counts differ in IPC between programs)", dim: "verify" },
+        Metric { key: "verify_interp_cpu", what: "same, user+sys CPU seconds (children included: rustc's linker)", dim: "verify" },
         Metric { key: "verify_compiled_instr", what: "`wj build --no-cargo` + rustc debug + run vs rustc debug + run (instructions)", dim: "verify" },
         Metric { key: "compile_release_instr", what: "transpile + rustc -O3 (same flags, warm deps) vs rustc -O3 (instructions)", dim: "compile" },
+        Metric { key: "compile_release_cycles", what: "same, CPU cycles", dim: "compile" },
+        Metric { key: "transpile_share_cpu", what: "`wj build --no-cargo` alone (fresh output dir) vs rustc debug of the twin (CPU s)", dim: "compile" },
         Metric { key: "compile_shipped_cpu", what: "transpile + `cargo build --release` as shipped (lto, warm deps) vs rustc -O3 (CPU s)", dim: "compile" },
         Metric { key: "compile_release_rss", what: "peak RSS of the -O3 compile (same flags)", dim: "memory" },
         Metric { key: "compile_shipped_rss", what: "peak RSS of the shipped cargo build", dim: "memory" },
         Metric { key: "run_release_rss", what: "peak RSS of the -O3 binary at run time", dim: "memory" },
         Metric { key: "run_release_instr", what: "run, -O3 binaries (same flags) (instructions)", dim: "run" },
+        Metric { key: "run_release_cycles", what: "run, -O3 binaries (same flags) (cycles)", dim: "run" },
         Metric { key: "run_shipped_instr", what: "run, shipped binary vs Rust -O3 (instructions)", dim: "run" },
         Metric { key: "size_release", what: "stripped binary, -O3 same flags (bytes)", dim: "size" },
         Metric { key: "size_shipped", what: "stripped binary, shipped profile vs Rust -O3 (bytes)", dim: "size" },
@@ -162,7 +174,7 @@ fn summary_rows(progs: Vec<Json>, m: Metric, suite: string) -> Vec<string> {
 
 fn human(key: string, x: f64) -> string {
     if x < 0.0 { return "-" }
-    if key.contains("instr") { return fixed(x / 1000000.0, 1) + "M" }
+    if key.contains("instr") || key.contains("cycles") { return fixed(x / 1000000.0, 1) + "M" }
     if key.contains("rss") { return fixed(x / 1048576.0, 1) + "MB" }
     if key.contains("size") { return fixed(x / 1024.0, 0) + "KB" }
     if key.contains("cpu") { return fixed(x, 2) + "s" }
@@ -236,10 +248,10 @@ fn main() {
 
     // per-program detail
     md = md + "\n## Per program\n\nverify = source to verified output (interpreter vs rustc debug + run); compile/run/size = -O3, same flags. Cells are `wj / rust`.\n\n"
-    let mut dt = new(["program", "verify instr", "compile -O3 instr", "run instr", "size", "tokens", "ceremony", "problems"])
+    let mut dt = new(["program", "verify cycles", "compile -O3 cycles", "run cycles", "size", "tokens", "ceremony", "problems"])
     for p in progs {
         let mut row = [as_str(get(p, "id") ?? object()) ?? ""]
-        for key in ["verify_interp_instr", "compile_release_instr", "run_release_instr", "size_release", "src_tokens", "src_ceremony"] {
+        for key in ["verify_interp_cycles", "compile_release_cycles", "run_release_cycles", "size_release", "src_tokens", "src_ceremony"] {
             let (w, r) = pair(p, key)
             row.push(human(key, w) + " / " + human(key, r))
         }

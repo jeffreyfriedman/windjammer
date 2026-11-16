@@ -73,6 +73,7 @@ struct Prog {
 
 struct M {
     instr: int,
+    cycles: int,
     rss: int,
     cpu: f64,
     wall: f64,
@@ -108,8 +109,8 @@ fn counter_flag() -> string {
     if run_sh("uname -s").contains("Darwin") {
         return "-l"
     }
-    if run_sh("perf stat -x, -e instructions:u true 2>&1").contains("instructions") {
-        return "-v perf stat -x, -e instructions:u"
+    if run_sh("perf stat -x, -e instructions:u,cycles:u true 2>&1").contains("instructions") {
+        return "-v perf stat -x, -e instructions:u,cycles:u"
     }
     "-v"
 }
@@ -141,13 +142,17 @@ fn measure_once(dir: string, cmd: string, stdin_file: string, flag: string) -> M
         Some(i) => (out.stdout[0..i].to_string(), out.stdout[i + MARK.len()..].to_string()),
         None => (out.stdout, ""),
     }
-    let mut m = M { instr: 0, rss: 0, cpu: 0.0, wall: wall_outer, status: out.status, stdout: stdout, err: if err.len() > 400 { err[0..400].to_string() } else { err } }
+    let mut m = M { instr: 0, cycles: 0, rss: 0, cpu: 0.0, wall: wall_outer, status: out.status, stdout: stdout, err: if err.len() > 400 { err[0..400].to_string() } else { err } }
     for l in strings.split_lines(err) {
         if l.contains(" real ") && l.contains(" user ") && l.contains(" sys") {
             m.wall = num_word(l, 0)
             m.cpu = num_word(l, 2) + num_word(l, 4)
         } else if l.contains("instructions retired") {
             m.instr = num_word(l, 0) as int
+        } else if l.contains("cycles elapsed") {
+            m.cycles = num_word(l, 0) as int
+        } else if l.contains(",cycles") {
+            m.cycles = (l.split(",").collect::<Vec<string>>()[0].parse::<f64>() ?? 0.0) as int
         } else if l.contains(",instructions") {
             m.instr = (l.split(",").collect::<Vec<string>>()[0].parse::<f64>() ?? 0.0) as int
         } else if l.contains("maximum resident set size") {
@@ -171,6 +176,7 @@ fn measure(dir: string, cmd: string, stdin_file: string, runs: int, flag: string
         let m = measure_once(dir, cmd, stdin_file, flag)
         if m.instr > 0 && (best.instr == 0 || m.instr < best.instr) { best.instr = m.instr }
         if m.rss > 0 && m.rss < best.rss { best.rss = m.rss }
+        if m.cycles > 0 && (best.cycles == 0 || m.cycles < best.cycles) { best.cycles = m.cycles }
         if m.cpu < best.cpu { best.cpu = m.cpu }
         if m.wall < best.wall { best.wall = m.wall }
         i += 1
@@ -179,7 +185,7 @@ fn measure(dir: string, cmd: string, stdin_file: string, runs: int, flag: string
 }
 
 fn m_json(m: M) -> Json {
-    with(with(with(with(with(object(), "instr", from_int(m.instr as i64)), "rss", from_int(m.rss as i64)), "cpu", from_float(m.cpu)), "wall", from_float(m.wall)), "status", from_int(m.status as i64))
+    with(with(with(with(with(with(object(), "instr", from_int(m.instr as i64)), "cycles", from_int(m.cycles as i64)), "rss", from_int(m.rss as i64)), "cpu", from_float(m.cpu)), "wall", from_float(m.wall)), "status", from_int(m.status as i64))
 }
 
 fn file_size(path: string) -> int {
