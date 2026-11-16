@@ -2,6 +2,17 @@
   {
     "kind": "builtin",
     "module": "HashMap",
+    "name": "clear",
+    "signature": "m.clear()",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove every entry",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
     "name": "contains_key",
     "signature": "m.contains_key(k) -> bool",
     "source": "agent_index/builtins.txt",
@@ -24,10 +35,32 @@
   {
     "kind": "builtin",
     "module": "HashMap",
+    "name": "extend",
+    "signature": "m.extend(other)",
+    "source": "agent_index/builtins.txt",
+    "summary": "add every entry of another map",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
     "name": "get",
     "signature": "m.get(k) -> Option<V>",
     "source": "agent_index/builtins.txt",
     "summary": "lookup",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
+    "name": "get_mut",
+    "signature": "m.get_mut(k) -> Option<&mut V>",
+    "source": "agent_index/builtins.txt",
+    "summary": "mutable lookup",
     "tags": [
       "hashmap"
     ]
@@ -46,10 +79,54 @@
   {
     "kind": "builtin",
     "module": "HashMap",
+    "name": "into_keys",
+    "signature": "m.into_keys()",
+    "source": "agent_index/builtins.txt",
+    "summary": "consume the map into its keys",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
+    "name": "into_values",
+    "signature": "m.into_values()",
+    "source": "agent_index/builtins.txt",
+    "summary": "consume the map into its values",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
+    "name": "is_empty",
+    "signature": "m.is_empty() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "true if no entries",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
     "name": "keys",
     "signature": "m.keys()",
     "source": "agent_index/builtins.txt",
     "summary": "iterate keys (order unspecified; sort before printing)",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
+    "name": "len",
+    "signature": "m.len() -> int",
+    "source": "agent_index/builtins.txt",
+    "summary": "number of entries",
     "tags": [
       "hashmap"
     ]
@@ -68,6 +145,28 @@
   {
     "kind": "builtin",
     "module": "HashMap",
+    "name": "remove_entry",
+    "signature": "m.remove_entry(k) -> Option<(K, V)>",
+    "source": "agent_index/builtins.txt",
+    "summary": "delete and return the pair",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
+    "name": "retain",
+    "signature": "m.retain(",
+    "source": "agent_index/builtins.txt",
+    "summary": "k, v| cond) | keep entries where cond holds",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashMap",
     "name": "values",
     "signature": "m.values()",
     "source": "agent_index/builtins.txt",
@@ -78,11 +177,55 @@
   },
   {
     "kind": "builtin",
+    "module": "HashMap",
+    "name": "values_mut",
+    "signature": "m.values_mut()",
+    "source": "agent_index/builtins.txt",
+    "summary": "iterate values mutably",
+    "tags": [
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "clear",
+    "signature": "s.clear()",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove every element",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
     "module": "HashSet",
     "name": "contains",
     "signature": "s.contains(&x) -> bool",
     "source": "agent_index/builtins.txt",
     "summary": "membership",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "difference",
+    "signature": "a.difference(&b)",
+    "source": "agent_index/builtins.txt",
+    "summary": "elements in a but not b",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "extend",
+    "signature": "s.extend(items)",
+    "source": "agent_index/builtins.txt",
+    "summary": "add many elements",
     "tags": [
       "hashset"
     ]
@@ -105,6 +248,94 @@
     "signature": "a.intersection(&b)",
     "source": "agent_index/builtins.txt",
     "summary": "elements in both sets",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "is_disjoint",
+    "signature": "a.is_disjoint(&b) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "no shared elements",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "is_empty",
+    "signature": "s.is_empty() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "true if no elements",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "is_subset",
+    "signature": "a.is_subset(&b) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "every element of a is in b",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "is_superset",
+    "signature": "a.is_superset(&b) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "every element of b is in a",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "len",
+    "signature": "s.len() -> int",
+    "source": "agent_index/builtins.txt",
+    "summary": "number of elements",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "remove",
+    "signature": "s.remove(&x) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "delete an element",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "retain",
+    "signature": "s.retain(",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| cond) | keep elements where cond holds",
+    "tags": [
+      "hashset"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "HashSet",
+    "name": "symmetric_difference",
+    "signature": "a.symmetric_difference(&b)",
+    "source": "agent_index/builtins.txt",
+    "summary": "elements in exactly one set",
     "tags": [
       "hashset"
     ]
@@ -398,10 +629,43 @@
   {
     "kind": "builtin",
     "module": "Option",
+    "name": "and",
+    "signature": "a.and(b) -> Option<U>",
+    "source": "agent_index/builtins.txt",
+    "summary": "b if a is Some",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
     "name": "and_then",
     "signature": "o.and_then(",
     "source": "agent_index/builtins.txt",
     "summary": "x| option) -> Option<U> | chain fallible steps",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "filter",
+    "signature": "o.filter(",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| cond) -> Option<T> | keep Some only when cond holds",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "flatten",
+    "signature": "o.flatten() -> Option<T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "collapse Option<Option<T>>",
     "tags": [
       "option"
     ]
@@ -431,6 +695,17 @@
   {
     "kind": "builtin",
     "module": "Option",
+    "name": "is_some_and",
+    "signature": "o.is_some_and(",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| cond) -> bool | Some and the condition holds",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
     "name": "map",
     "signature": "o.map(",
     "source": "agent_index/builtins.txt",
@@ -442,10 +717,65 @@
   {
     "kind": "builtin",
     "module": "Option",
+    "name": "map_or",
+    "signature": "o.map_or(default,",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| expr) -> U | map or default",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
     "name": "ok_or",
     "signature": "o.ok_or(err) -> Result<T, E>",
     "source": "agent_index/builtins.txt",
     "summary": "convert to Result",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "ok_or_else",
+    "signature": "o.ok_or_else(",
+    "source": "agent_index/builtins.txt",
+    "summary": "| err) -> Result<T, E> | convert to Result with a computed error",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "or",
+    "signature": "a.or(b) -> Option<T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "a if Some, else b",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "or_else",
+    "signature": "o.or_else(",
+    "source": "agent_index/builtins.txt",
+    "summary": "| option) -> Option<T> | a if Some, else compute",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "replace",
+    "signature": "o.replace(x) -> Option<T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "store x, return the old value",
     "tags": [
       "option"
     ]
@@ -474,11 +804,121 @@
   },
   {
     "kind": "builtin",
+    "module": "Option",
+    "name": "unwrap_or_default",
+    "signature": "o.unwrap_or_default() -> T",
+    "source": "agent_index/builtins.txt",
+    "summary": "value or the type's default",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "unwrap_or_else",
+    "signature": "o.unwrap_or_else(",
+    "source": "agent_index/builtins.txt",
+    "summary": "| expr) -> T | value or computed default",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "xor",
+    "signature": "a.xor(b) -> Option<T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "whichever is Some, if exactly one is",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Option",
+    "name": "zip",
+    "signature": "a.zip(b) -> Option<(T, U)>",
+    "source": "agent_index/builtins.txt",
+    "summary": "pair two Somes",
+    "tags": [
+      "option"
+    ]
+  },
+  {
+    "kind": "builtin",
     "module": "Result",
     "name": "?",
     "signature": "expr?",
     "source": "agent_index/builtins.txt",
     "summary": "return early with the Err (or None) from the enclosing function",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "and_then",
+    "signature": "r.and_then(",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| result) -> Result<U, E> | chain fallible steps",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "err",
+    "signature": "r.err() -> Option<E>",
+    "source": "agent_index/builtins.txt",
+    "summary": "drop the Ok value",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "is_err",
+    "signature": "r.is_err() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "true for Err",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "is_ok",
+    "signature": "r.is_ok() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "true for Ok",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "is_ok_and",
+    "signature": "r.is_ok_and(",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| cond) -> bool | Ok and the condition holds",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "map",
+    "signature": "r.map(",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| expr) -> Result<U, E> | transform the Ok value",
     "tags": [
       "result"
     ]
@@ -497,10 +937,32 @@
   {
     "kind": "builtin",
     "module": "Result",
+    "name": "map_or",
+    "signature": "r.map_or(default,",
+    "source": "agent_index/builtins.txt",
+    "summary": "x| expr) -> U | map or default",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
     "name": "ok",
     "signature": "r.ok() -> Option<T>",
     "source": "agent_index/builtins.txt",
     "summary": "drop the error",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "or_else",
+    "signature": "r.or_else(",
+    "source": "agent_index/builtins.txt",
+    "summary": "e| result) -> Result<T, F> | recover from an Err",
     "tags": [
       "result"
     ]
@@ -518,6 +980,50 @@
   },
   {
     "kind": "builtin",
+    "module": "Result",
+    "name": "unwrap_or_default",
+    "signature": "r.unwrap_or_default() -> T",
+    "source": "agent_index/builtins.txt",
+    "summary": "Ok value or the type's default",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Result",
+    "name": "unwrap_or_else",
+    "signature": "r.unwrap_or_else(",
+    "source": "agent_index/builtins.txt",
+    "summary": "e| expr) -> T | Ok value or computed default",
+    "tags": [
+      "result"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "append",
+    "signature": "v.append(&mut other)",
+    "source": "agent_index/builtins.txt",
+    "summary": "move all of other onto the end",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "binary_search",
+    "signature": "v.binary_search(&x) -> Result<int, int>",
+    "source": "agent_index/builtins.txt",
+    "summary": "search a sorted list",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
     "module": "Vec",
     "name": "chunks",
     "signature": "v.chunks(n: int)",
@@ -530,10 +1036,32 @@
   {
     "kind": "builtin",
     "module": "Vec",
+    "name": "clear",
+    "signature": "v.clear()",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove every element",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "concat",
+    "signature": "v.concat()",
+    "source": "agent_index/builtins.txt",
+    "summary": "join a list of lists",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
     "name": "contains",
     "signature": "v.contains(&x) -> bool",
     "source": "agent_index/builtins.txt",
-    "summary": "membership test",
+    "summary": "membership test, e.g. [1, 2].contains(2)",
     "tags": [
       "vec"
     ]
@@ -552,10 +1080,54 @@
   {
     "kind": "builtin",
     "module": "Vec",
+    "name": "drain",
+    "signature": "v.drain(a..b)",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove and iterate a range",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "ends_with",
+    "signature": "v.ends_with(&p) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "suffix test",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
     "name": "extend",
     "signature": "v.extend(other)",
     "source": "agent_index/builtins.txt",
     "summary": "append all elements of another collection",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "extend_from_slice",
+    "signature": "v.extend_from_slice(&other)",
+    "source": "agent_index/builtins.txt",
+    "summary": "append a copy of another list",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "fill",
+    "signature": "[x; n]",
+    "source": "agent_index/builtins.txt",
+    "summary": "list of n copies of x, e.g. let zeros = [0; 10] (vec![x; n] is deprecated)",
     "tags": [
       "vec"
     ]
@@ -574,10 +1146,32 @@
   {
     "kind": "builtin",
     "module": "Vec",
+    "name": "first_mut",
+    "signature": "v.first_mut() -> Option<&mut T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "mutable first element",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
     "name": "get",
     "signature": "v.get(i: int) -> Option<T>",
     "source": "agent_index/builtins.txt",
     "summary": "bounds-checked access",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "get_mut",
+    "signature": "v.get_mut(i: int) -> Option<&mut T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "bounds-checked mutable access",
     "tags": [
       "vec"
     ]
@@ -629,6 +1223,17 @@
   {
     "kind": "builtin",
     "module": "Vec",
+    "name": "last_mut",
+    "signature": "v.last_mut() -> Option<&mut T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "mutable last element",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
     "name": "len",
     "signature": "v.len() -> int",
     "source": "agent_index/builtins.txt",
@@ -673,6 +1278,17 @@
   {
     "kind": "builtin",
     "module": "Vec",
+    "name": "resize",
+    "signature": "v.resize(n: int, x)",
+    "source": "agent_index/builtins.txt",
+    "summary": "grow with copies of x or shrink to n",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
     "name": "retain",
     "signature": "v.retain(",
     "source": "agent_index/builtins.txt",
@@ -688,6 +1304,39 @@
     "signature": "v.reverse()",
     "source": "agent_index/builtins.txt",
     "summary": "reverse in place",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "rotate_left",
+    "signature": "v.rotate_left(n: int)",
+    "source": "agent_index/builtins.txt",
+    "summary": "rotate elements left",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "rotate_right",
+    "signature": "v.rotate_right(n: int)",
+    "source": "agent_index/builtins.txt",
+    "summary": "rotate elements right",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "slice_from",
+    "signature": "v[from..]",
+    "source": "agent_index/builtins.txt",
+    "summary": "tail of a list, e.g. [1, 2, 3][1..] is [2, 3]",
     "tags": [
       "vec"
     ]
@@ -728,10 +1377,87 @@
   {
     "kind": "builtin",
     "module": "Vec",
+    "name": "sort_unstable",
+    "signature": "v.sort_unstable()",
+    "source": "agent_index/builtins.txt",
+    "summary": "faster sort, equal elements may reorder",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "split_at",
+    "signature": "v.split_at(i: int) -> (Vec<T>, Vec<T>)",
+    "source": "agent_index/builtins.txt",
+    "summary": "two halves at an index",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "split_off",
+    "signature": "v.split_off(at: int) -> Vec<T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "cut the list in two at an index",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "starts_with",
+    "signature": "v.starts_with(&p) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "prefix test",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
     "name": "swap",
     "signature": "v.swap(i: int, j: int)",
     "source": "agent_index/builtins.txt",
     "summary": "swap two elements",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "swap_remove",
+    "signature": "v.swap_remove(i: int) -> T",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove i by swapping in the last element",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "to_vec",
+    "signature": "v.to_vec() -> Vec<T>",
+    "source": "agent_index/builtins.txt",
+    "summary": "owned copy of a list or slice",
+    "tags": [
+      "vec"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "Vec",
+    "name": "truncate",
+    "signature": "v.truncate(n: int)",
+    "source": "agent_index/builtins.txt",
+    "summary": "keep the first n elements",
     "tags": [
       "vec"
     ]
@@ -783,10 +1509,197 @@
   {
     "kind": "builtin",
     "module": "char",
+    "name": "is_alphanumeric",
+    "signature": "c.is_alphanumeric() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "letter or digit test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii",
+    "signature": "c.is_ascii() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "true for code points below 128",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_alphabetic",
+    "signature": "c.is_ascii_alphabetic() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII letter test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_alphanumeric",
+    "signature": "c.is_ascii_alphanumeric() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII letter or digit test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_digit",
+    "signature": "c.is_ascii_digit() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "'0'..'9' test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_hexdigit",
+    "signature": "c.is_ascii_hexdigit() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "0-9, a-f, A-F test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_lowercase",
+    "signature": "c.is_ascii_lowercase() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "'a'..'z' test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_punctuation",
+    "signature": "c.is_ascii_punctuation() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII punctuation test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_uppercase",
+    "signature": "c.is_ascii_uppercase() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "'A'..'Z' test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_ascii_whitespace",
+    "signature": "c.is_ascii_whitespace() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII space, tab, newline test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_control",
+    "signature": "c.is_control() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "control character test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_digit",
+    "signature": "c.is_digit(radix: int) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "digit test in a radix, e.g. 'f'.is_digit(16)",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_lowercase",
+    "signature": "c.is_lowercase() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "lower-case letter test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
     "name": "is_numeric",
     "signature": "c.is_numeric() -> bool",
     "source": "agent_index/builtins.txt",
     "summary": "digit test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_uppercase",
+    "signature": "c.is_uppercase() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "upper-case letter test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "is_whitespace",
+    "signature": "c.is_whitespace() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "space, tab, newline test",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "len_utf8",
+    "signature": "c.len_utf8() -> int",
+    "source": "agent_index/builtins.txt",
+    "summary": "bytes needed to encode the char",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "to_ascii_lowercase",
+    "signature": "c.to_ascii_lowercase() -> char",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII lower-case",
     "tags": [
       "char"
     ]
@@ -815,11 +1728,176 @@
   },
   {
     "kind": "builtin",
+    "module": "char",
+    "name": "to_lowercase",
+    "signature": "c.to_lowercase() -> char",
+    "source": "agent_index/builtins.txt",
+    "summary": "lower-case char",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "to_string",
+    "signature": "c.to_string() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "one-character string",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "char",
+    "name": "to_uppercase",
+    "signature": "c.to_uppercase() -> char",
+    "source": "agent_index/builtins.txt",
+    "summary": "upper-case char",
+    "tags": [
+      "char"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "atan2",
+    "signature": "y.atan2(x: float) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "angle of the point (x, y)",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "clamp",
+    "signature": "x.clamp(lo, hi) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "limit to a range",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "copysign",
+    "signature": "x.copysign(y: float) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "x with the sign of y",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
     "module": "float",
     "name": "floor",
     "signature": "x.floor() -> float",
     "source": "agent_index/builtins.txt",
     "summary": "round down",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "hypot",
+    "signature": "x.hypot(y: float) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "sqrt(x*x + y*y)",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "is_finite",
+    "signature": "x.is_finite() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "neither infinite nor NaN",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "is_infinite",
+    "signature": "x.is_infinite() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "infinity test",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "is_nan",
+    "signature": "x.is_nan() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "not-a-number test",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "is_sign_negative",
+    "signature": "x.is_sign_negative() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "sign bit is set",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "log",
+    "signature": "x.log(base: float) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "logarithm in a base",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "max",
+    "signature": "a.max(b) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "larger of two",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "min",
+    "signature": "a.min(b) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "smaller of two",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "mul_add",
+    "signature": "x.mul_add(a: float, b: float) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "x*a + b",
     "tags": [
       "float"
     ]
@@ -838,10 +1916,32 @@
   {
     "kind": "builtin",
     "module": "float",
+    "name": "powf",
+    "signature": "x.powf(y: float) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "float power",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
     "name": "powi",
     "signature": "x.powi(n: int) -> float",
     "source": "agent_index/builtins.txt",
     "summary": "integer power",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "rem_euclid",
+    "signature": "x.rem_euclid(y: float) -> float",
+    "source": "agent_index/builtins.txt",
+    "summary": "non-negative remainder",
     "tags": [
       "float"
     ]
@@ -870,11 +1970,44 @@
   },
   {
     "kind": "builtin",
+    "module": "float",
+    "name": "to_bits",
+    "signature": "x.to_bits() -> u64",
+    "source": "agent_index/builtins.txt",
+    "summary": "IEEE-754 bit pattern",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "to_string",
+    "signature": "x.to_string() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "decimal text",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "total_cmp",
+    "signature": "a.total_cmp(&b) -> Ordering",
+    "source": "agent_index/builtins.txt",
+    "summary": "total order including NaN",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
     "module": "int",
     "name": "abs",
     "signature": "x.abs() -> int",
     "source": "agent_index/builtins.txt",
-    "summary": "absolute value",
+    "summary": "absolute value, e.g. (-3).abs() is 3",
     "tags": [
       "int"
     ]
@@ -904,10 +2037,43 @@
   {
     "kind": "builtin",
     "module": "int",
+    "name": "is_ascii_alphabetic",
+    "signature": "b.is_ascii_alphabetic() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "byte is an ASCII letter",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
+    "name": "is_ascii_digit",
+    "signature": "b.is_ascii_digit() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "byte is '0'..'9'",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
+    "name": "is_ascii_whitespace",
+    "signature": "b.is_ascii_whitespace() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "byte is ASCII whitespace",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
     "name": "max",
     "signature": "a.max(b) -> int",
     "source": "agent_index/builtins.txt",
-    "summary": "larger of two",
+    "summary": "larger of two, e.g. 3.max(5) is 5",
     "tags": [
       "int"
     ]
@@ -918,7 +2084,7 @@
     "name": "min",
     "signature": "a.min(b) -> int",
     "source": "agent_index/builtins.txt",
-    "summary": "smaller of two",
+    "summary": "smaller of two, e.g. 3.min(5) is 3",
     "tags": [
       "int"
     ]
@@ -930,6 +2096,61 @@
     "signature": "x.pow(n: int) -> int",
     "source": "agent_index/builtins.txt",
     "summary": "integer power",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
+    "name": "to_ascii_lowercase",
+    "signature": "b.to_ascii_lowercase() -> u8",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII lower-case byte",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
+    "name": "to_ascii_uppercase",
+    "signature": "b.to_ascii_uppercase() -> u8",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII upper-case byte",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
+    "name": "to_be_bytes",
+    "signature": "x.to_be_bytes() -> Vec<u8>",
+    "source": "agent_index/builtins.txt",
+    "summary": "big-endian bytes",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
+    "name": "to_le_bytes",
+    "signature": "x.to_le_bytes() -> Vec<u8>",
+    "source": "agent_index/builtins.txt",
+    "summary": "little-endian bytes",
+    "tags": [
+      "int"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "int",
+    "name": "to_string",
+    "signature": "x.to_string() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "decimal text",
     "tags": [
       "int"
     ]
@@ -1047,10 +2268,54 @@
   {
     "kind": "builtin",
     "module": "string",
+    "name": "as_bytes",
+    "signature": "s.as_bytes() -> Vec<u8>",
+    "source": "agent_index/builtins.txt",
+    "summary": "the UTF-8 bytes",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "bytes",
+    "signature": "s.bytes()",
+    "source": "agent_index/builtins.txt",
+    "summary": "iterate bytes",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "char_indices",
+    "signature": "s.char_indices()",
+    "source": "agent_index/builtins.txt",
+    "summary": "iterate (byte index, char) pairs",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
     "name": "chars",
     "signature": "s.chars()",
     "source": "agent_index/builtins.txt",
     "summary": "iterate characters",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "clear",
+    "signature": "s.clear()",
+    "source": "agent_index/builtins.txt",
+    "summary": "empty the string",
     "tags": [
       "string"
     ]
@@ -1080,10 +2345,32 @@
   {
     "kind": "builtin",
     "module": "string",
+    "name": "eq_ignore_ascii_case",
+    "signature": "s.eq_ignore_ascii_case(t: string) -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "case-insensitive ASCII equality",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
     "name": "find",
     "signature": "s.find(pat: string) -> Option<int>",
     "source": "agent_index/builtins.txt",
     "summary": "byte index of first match",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "insert",
+    "signature": "s.insert(i: int, c: char)",
+    "source": "agent_index/builtins.txt",
+    "summary": "insert a char at byte index i",
     "tags": [
       "string"
     ]
@@ -1124,10 +2411,43 @@
   {
     "kind": "builtin",
     "module": "string",
+    "name": "matches",
+    "signature": "s.matches(pat: string)",
+    "source": "agent_index/builtins.txt",
+    "summary": "iterate non-overlapping matches",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
     "name": "parse",
     "signature": "s.parse::<int>() -> Result<int, E>",
     "source": "agent_index/builtins.txt",
-    "summary": "parse a number; also ::<float>",
+    "summary": "parse a number; also ::<float>; write `s.parse::<int>() ?? 0` or `s.parse::<int>()?`, not `.unwrap()`",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "pop",
+    "signature": "s.pop() -> Option<char>",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove the last char",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "push",
+    "signature": "s.push(c: char)",
+    "source": "agent_index/builtins.txt",
+    "summary": "append one char (s must be `let mut`)",
     "tags": [
       "string"
     ]
@@ -1168,10 +2488,65 @@
   {
     "kind": "builtin",
     "module": "string",
+    "name": "replacen",
+    "signature": "s.replacen(from: string, to: string, n: int) -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "replace the first n matches",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "rfind",
+    "signature": "s.rfind(pat: string) -> Option<int>",
+    "source": "agent_index/builtins.txt",
+    "summary": "byte index of last match",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "rsplit",
+    "signature": "s.rsplit(sep: string)",
+    "source": "agent_index/builtins.txt",
+    "summary": "split from the right (iterator)",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "slice_from",
+    "signature": "s[from..]",
+    "source": "agent_index/builtins.txt",
+    "summary": "tail of a string from a byte index, e.g. \"hello\"[1..] is \"ello\"",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
     "name": "split",
     "signature": "s.split(sep: string)",
     "source": "agent_index/builtins.txt",
     "summary": "split on a separator",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "split_once",
+    "signature": "s.split_once(sep: string) -> Option<(string, string)>",
+    "source": "agent_index/builtins.txt",
+    "summary": "split at the first separator",
     "tags": [
       "string"
     ]
@@ -1190,6 +2565,17 @@
   {
     "kind": "builtin",
     "module": "string",
+    "name": "splitn",
+    "signature": "s.splitn(n: int, sep: string)",
+    "source": "agent_index/builtins.txt",
+    "summary": "split into at most n parts (iterator; .collect() for a list)",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
     "name": "starts_with",
     "signature": "s.starts_with(pat: string) -> bool",
     "source": "agent_index/builtins.txt",
@@ -1201,10 +2587,65 @@
   {
     "kind": "builtin",
     "module": "string",
+    "name": "strip_prefix",
+    "signature": "s.strip_prefix(p: string) -> Option<string>",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove a prefix if present",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "strip_suffix",
+    "signature": "s.strip_suffix(p: string) -> Option<string>",
+    "source": "agent_index/builtins.txt",
+    "summary": "remove a suffix if present",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "to_ascii_lowercase",
+    "signature": "s.to_ascii_lowercase() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII lower-case copy",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "to_ascii_uppercase",
+    "signature": "s.to_ascii_uppercase() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "ASCII upper-case copy",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
     "name": "to_lowercase",
     "signature": "s.to_lowercase() -> string",
     "source": "agent_index/builtins.txt",
     "summary": "lower-case copy",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "to_string",
+    "signature": "s.to_string() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "owned copy",
     "tags": [
       "string"
     ]
@@ -1227,6 +2668,50 @@
     "signature": "s.trim() -> string",
     "source": "agent_index/builtins.txt",
     "summary": "strip surrounding whitespace",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "trim_end",
+    "signature": "s.trim_end() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "trim trailing whitespace",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "trim_matches",
+    "signature": "s.trim_matches(c: char) -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "trim a char from both ends",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "trim_start",
+    "signature": "s.trim_start() -> string",
+    "source": "agent_index/builtins.txt",
+    "summary": "trim leading whitespace",
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "string",
+    "name": "truncate",
+    "signature": "s.truncate(n: int)",
+    "source": "agent_index/builtins.txt",
+    "summary": "keep the first n bytes",
     "tags": [
       "string"
     ]
@@ -3132,6 +4617,20 @@
   {
     "kind": "example",
     "module": "",
+    "name": "std_quick_reference",
+    "signature": "",
+    "source": "examples/verified/std_quick_reference.wj",
+    "summary": "verified program; first output line: true true true true true",
+    "tags": [
+      "chars",
+      "classify",
+      "parse",
+      "slices"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "strings_basics",
     "signature": "",
     "source": "examples/verified/strings_basics.wj",
@@ -3666,22 +5165,22 @@
       "vec",
       "hashmap",
       "keys",
+      "parse",
+      "true",
+      "line",
       "map",
       "string",
       "collect",
-      "line",
+      "main",
+      "method",
+      "write",
       "add",
       "collections",
       "double",
       "enumerate",
+      "every",
       "insert",
-      "iter",
-      "join",
-      "main",
-      "method",
-      "push",
-      "sort",
-      "squares"
+      "is_alphanumeric"
     ]
   },
   {
@@ -3962,8 +5461,8 @@
     "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "1. `println!(\"{}\", x)`: macros do not exist. Write `println(\"${x}\")` (W0007/W0008, ADR-0014).",
     "tags": [
-      "literal",
       "self",
+      "literal",
       "string",
       "write",
       "adr",
@@ -3974,14 +5473,14 @@
       "return",
       "vec",
       "abc",
+      "body",
       "build",
       "bytes",
       "clone",
       "display",
       "fails",
       "finding",
-      "first",
-      "inferred"
+      "first"
     ]
   },
   {
@@ -3993,25 +5492,25 @@
     "summary": "<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->",
     "tags": [
       "file",
+      "run",
+      "interpret",
       "cargo",
       "check",
-      "interpret",
-      "path",
-      "run",
-      "build",
-      "dir",
-      "exit",
-      "ignore",
-      "interpreter",
       "json",
-      "lint",
-      "program",
-      "rust",
-      "test",
-      "accepts",
-      "against",
-      "bash",
-      "built"
+      "line",
+      "locals",
+      "path",
+      "prints",
+      "values",
+      "build",
+      "diagnostics",
+      "dir",
+      "error",
+      "exit",
+      "failing",
+      "fix",
+      "ignore",
+      "interpreter"
     ]
   },
   {
@@ -6334,6 +7833,17 @@
     "summary": "",
     "tags": [
       "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::http",
+    "name": "content_type",
+    "signature": "fn content_type(value: string) -> HashMap<string, string>",
+    "source": "std/http.wj",
+    "summary": "ServerResponse - Build Responses",
+    "tags": [
+      "fn"
     ]
   },
   {

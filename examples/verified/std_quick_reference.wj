@@ -1,0 +1,21 @@
+// tags: chars, classify, parse, slices
+// rust: ok
+// expect: true true true true true
+// expect: 3 5 3 true
+// expect: 0 0 0
+// expect: [2, 3] ello
+// expect: 42 0
+fn main() {
+    let c = 'a'
+    println("${c.is_lowercase()} ${'Z'.is_uppercase()} ${c.is_alphanumeric()} ${' '.is_whitespace()} ${'7'.is_ascii_digit()}")
+    let n = -3
+    println("${n.abs()} ${3.max(5)} ${3.min(5)} ${[1, 2].contains(2)}")
+    let zeros = [0; 3]
+    println("${zeros[0]} ${zeros[1]} ${zeros[2]}")
+    let v = [1, 2, 3]
+    let tail = v[1..]
+    println("${tail:?} ${"hello"[1..]}")
+    let good = "42".parse::<int>() ?? 0
+    let bad = "x".parse::<int>() ?? 0
+    println("${good} ${bad}")
+}

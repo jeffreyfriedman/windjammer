@@ -1,5 +1,5 @@
 {
-  "count": 169,
+  "count": 170,
   "examples": [
     {
       "expect_lines": 2,
@@ -1550,6 +1550,18 @@
         "std",
         "math",
         "float"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "std_quick_reference.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "chars",
+        "classify",
+        "parse",
+        "slices"
       ]
     },
     {

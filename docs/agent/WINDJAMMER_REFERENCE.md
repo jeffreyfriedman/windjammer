@@ -226,6 +226,27 @@ fn main() {
 }
 ```
 
+Small helpers you do not need to write yourself (every line below runs as shown):
+
+```windjammer
+// expect: [0, 0, 0] [2, 3] ello
+// expect: 3 5 3 true
+// expect: true true true true 42 0
+fn main() {
+    let zeros = [0; 3]            // filled list: `[x; n]` (`vec![x; n]` is deprecated)
+    let tail = [1, 2, 3][1..]     // `v[from..]`, `v[a..b]`, `v[..b]`
+    println("${zeros:?} ${tail:?} ${"hello"[1..]}")
+    println("${(-3).abs()} ${3.max(5)} ${3.min(5)} ${[1, 2].contains(2)}")
+    let c = 'a'
+    println("${c.is_lowercase()} ${'Z'.is_uppercase()} ${c.is_alphanumeric()} ${' '.is_whitespace()} ${"42".parse::<int>() ?? 0} ${"x".parse::<int>() ?? 0}")
+}
+```
+
+Char tests: `is_alphabetic`, `is_numeric`, `is_alphanumeric`, `is_whitespace`, `is_uppercase`, `is_lowercase`,
+`is_ascii_digit`, `is_ascii_alphabetic`, `is_ascii_uppercase`, `is_ascii_lowercase`, `is_ascii_punctuation`;
+`c.to_digit(10)` gives `Option<int>`. For a parse, write `s.parse::<int>() ?? 0`, `s.parse::<int>()?` or a `match`, never `.unwrap()`.
+`wj docs <name>` lists every method with a signature.
+
 The pipe operator feeds the left value into a call: `x |> f(a)` is `f(x, a)`; `x |> .method(a)` is `x.method(a)`.
 It has the lowest precedence, so `a + 1 |> f` is `f(a + 1)`. A trailing `?` applies to that stage.
 
