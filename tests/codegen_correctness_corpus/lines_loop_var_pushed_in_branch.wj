@@ -1,0 +1,17 @@
+// expect: ["c"]
+// A `lines()` loop variable pushed into a `Vec<string>` inside nested branches is copied into an owned string.
+fn main() {
+    let text = "a\n---\nc"
+    let mut v: Vec<string> = []
+    let mut in_cmds = false
+    for line in text.lines() {
+        if line.len() > 0 {
+            if in_cmds {
+                v.push(line)
+            } else if line == "---" {
+                in_cmds = true
+            }
+        }
+    }
+    println("${v:?}")
+}

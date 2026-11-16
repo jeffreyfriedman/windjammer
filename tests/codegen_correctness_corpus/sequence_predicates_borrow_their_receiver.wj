@@ -1,0 +1,22 @@
+// expect: true true 1
+// `any`, `all` and `position` on a sequence parameter iterate it by reference (`v.iter().any(..)`): the parameter
+// is read, not changed, so a caller's immutable binding is fine (it was inferred `&mut`, WJ0051 at the caller).
+fn has(names: Vec<string>, who: string) -> bool {
+    names.any(|x| x == who)
+}
+
+fn all_short(names: Vec<string>) -> bool {
+    names.all(|x| x.len() < 3)
+}
+
+fn where_is(names: Vec<string>, who: string) -> int {
+    match names.position(|x| x == who) {
+        Some(i) => i as int,
+        None => -1,
+    }
+}
+
+fn main() {
+    let names = ["p", "q"]
+    println("${has(names, "q")} ${all_short(names)} ${where_is(names, "q")}")
+}

@@ -255,9 +255,11 @@ impl IrPipeline {
                 }
 
                 // Ensure mutated parameters retain MutRef after solver write-back.
-                // Returned params (e.g. `mut clip: T` consumed at return) stay owned.
+                // Returned params (e.g. `mut clip: T` consumed at return) stay owned, and so do params declared
+                // `mut`: the callee's own copy (SPEC-OWN-008, OWN-MUT-PARAM-COPY).
                 for param_name in &ir_fn.mutated_params.clone() {
-                    if af.returned_parameters.contains(param_name) {
+                    let declared_mut = af.decl.parameters.iter().any(|p| p.name == *param_name && p.is_mutable);
+                    if af.returned_parameters.contains(param_name) || declared_mut {
                         continue;
                     }
                     if let Some(st) = ir_fn.param_types.get_mut(param_name) {

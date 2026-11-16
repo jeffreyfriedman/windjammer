@@ -20,3 +20,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 }
+
+/// OWN-MUT-PARAM-COPY (SPEC-OWN-008): `fn f(mut s: S)` declares that the callee changes its own copy, so the
+/// parameter is owned and the caller's value is untouched (a mutated parameter without `mut` is a mutable
+/// borrow instead, OWN-MUT-ASSIGN).
+pub(super) fn seed_mut_declared_param(cs: &mut ConstraintSet, var: ConstraintVar, param: &crate::parser::ast::core::Parameter<'_>) {
+    if param.is_mutable && param.name != "self" && !matches!(param.type_, Type::Reference(_) | Type::MutableReference(_)) {
+        cs.add_because(
+            Constraint::OwnershipIs(var, OwnedType::Owned),
+            origin("OWN-MUT-PARAM-COPY", format!("`{}` is declared `mut`: the callee changes its own copy", param.name), &None),
+        );
+    }
+}

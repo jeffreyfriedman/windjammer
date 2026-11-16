@@ -1,0 +1,25 @@
+// `mut` on a parameter makes the callee's own copy mutable without affecting the caller (SPEC-OWN-008); a
+// parameter the body mutates without `mut` is a mutable borrow (SPEC-OWN-004).
+struct S {
+    n: int,
+    tag: string,
+}
+
+fn bump_copy(mut s: S) -> int {
+    s.n += 1
+    s.tag = "copy"
+    s.n
+}
+
+fn bump_shared(s: S) {
+    s.n += 10
+}
+
+fn main() {
+    let mut s = S { n: 0, tag: "orig" }
+    let c = bump_copy(s)
+    bump_shared(s)
+    println("${c} ${s.n} ${s.tag}")
+    let last = bump_copy(s)
+    println("${last}")
+}

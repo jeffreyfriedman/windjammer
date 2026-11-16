@@ -158,25 +158,31 @@ ann 3
 
 ## Immutable parameters
 
-**SPEC-OWN-008** Parameters are immutable inside the callee unless the body mutates them (which makes the parameter a mutable borrow, OWN-004); `mut` on a parameter makes the callee's own copy mutable without affecting the caller. [OPEN Q-015] the interpreter lets the callee's `mut` parameter write through to the caller.
+**SPEC-OWN-008** Parameters are immutable inside the callee unless the body mutates them (which makes the parameter a mutable borrow, OWN-004); `mut` on a parameter makes the callee's own copy mutable without affecting the caller.
 
 <!-- example: tests/spec/ownership/SPEC-OWN-008.wj -->
-<!-- ignore: known divergence Q-015; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
+struct S { n: int }
 fn f(mut n: int) -> int {
     n += 10
     n
 }
+fn bump(mut s: S) -> int {
+    s.n += 1
+    s.n
+}
 fn main() {
     let a = 1
     println("${f(a)} ${a}")
+    let s = S { n: 1 }
+    println("${bump(s)} ${s.n}")
 }
 ```
 Output:
 ```text
 11 1
+2 1
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-015](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 ## Inference specification
 

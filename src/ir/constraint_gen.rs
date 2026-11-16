@@ -241,7 +241,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                             );
                         }
                     }
-                    _ => {}
+                    _ => stored::seed_mut_declared_param(&mut cs, var, param),
                 }
             }
         }

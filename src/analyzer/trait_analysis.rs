@@ -65,6 +65,45 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// OWN-MUT-ASSIGN through a trait (SPEC-OWN-004): a trait method has no body of its own, so a by-value
+    /// parameter that an impl body mutates in place makes the trait's formal (and so every impl's and every
+    /// caller's) a mutable borrow, and the caller sees the change. A parameter declared `mut` stays the callee's
+    /// own copy (SPEC-OWN-008). Monotone: returns whether a formal was raised, so the passes run again.
+    pub(super) fn raise_trait_params_mutated_by_impls(&mut self, program: &Program<'ast>, registry: &SignatureRegistry) -> bool {
+        let by_value = |p: &Parameter<'_>| {
+            p.name != "self" && !p.is_mutable && matches!(p.ownership, OwnershipHint::Inferred)
+                && !matches!(p.type_, Type::Reference(_) | Type::MutableReference(_))
+        };
+        let mut raised = Vec::new();
+        for item in &program.items {
+            let Item::Impl { block, .. } = item else { continue };
+            let Some(trait_name) = block.trait_name.as_deref() else { continue };
+            let key = trait_name.rsplit("::").next().unwrap_or(trait_name);
+            let Some(methods) = self.analyzed_trait_methods.get(trait_name).or_else(|| self.analyzed_trait_methods.get(key)) else { continue };
+            for func in &block.functions {
+                let Some(trait_fn) = methods.get(&func.name) else { continue };
+                let trait_params = trait_fn.decl.parameters.iter().filter(|p| p.name != "self");
+                for (trait_param, impl_param) in trait_params.zip(func.parameters.iter().filter(|p| p.name != "self")) {
+                    if by_value(trait_param)
+                        && by_value(impl_param)
+                        && trait_fn.inferred_ownership.get(&trait_param.name) != Some(&OwnershipMode::MutBorrowed)
+                        && self.is_mutated_in_place(&impl_param.name, &func.body, registry, Some(&impl_param.type_))
+                    {
+                        raised.push((trait_name.to_string(), key.to_string(), func.name.clone(), trait_param.name.clone()));
+                    }
+                }
+            }
+        }
+        for (trait_name, key, method, param) in &raised {
+            for k in [trait_name, key] {
+                if let Some(m) = self.analyzed_trait_methods.get_mut(k).and_then(|ms| ms.get_mut(method)) {
+                    m.inferred_ownership.insert(param.clone(), OwnershipMode::MutBorrowed);
+                }
+            }
+        }
+        !raised.is_empty()
+    }
+
     /// Helper: Convert OwnershipHint to OwnershipMode
     pub(super) fn convert_ownership_hint_to_mode(
         &self,
