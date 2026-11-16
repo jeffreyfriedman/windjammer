@@ -132,9 +132,10 @@ impl FloatInference {
         // the stdlib's part is shared by every inference of the process and built on first use (`sig_table`)
         fn stdlib() -> &'static std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig> {
             struct FloatStdlibSigs(std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig>);
-            &crate::analyzer::SignatureRegistry::stdlib().derived().get_or_build(|| FloatStdlibSigs({
+            let reg = crate::analyzer::SignatureRegistry::stdlib();
+            &reg.derived().get_or_build(|| FloatStdlibSigs({
                 let mut table = std::collections::BTreeMap::new();
-                for (name, sig) in crate::analyzer::SignatureRegistry::stdlib().all_signatures() {
+                for (name, sig) in reg.all_signatures() {
                     let param_types = if !sig.formal_param_types.is_empty() {
                         sig.formal_param_types.clone()
                     } else {

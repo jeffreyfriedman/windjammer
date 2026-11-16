@@ -130,9 +130,10 @@ impl IntInference {
         // the stdlib's part is shared by every inference of the process and built on first use (`sig_table`)
         fn stdlib() -> &'static std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig> {
             struct IntStdlibSigs(std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig>);
-            &crate::analyzer::SignatureRegistry::stdlib().derived().get_or_build(|| IntStdlibSigs({
+            let reg = crate::analyzer::SignatureRegistry::stdlib();
+            &reg.derived().get_or_build(|| IntStdlibSigs({
                 let mut table = std::collections::BTreeMap::new();
-                for (name, sig) in crate::analyzer::SignatureRegistry::stdlib().all_signatures_for_suffix_search() {
+                for (name, sig) in reg.all_signatures_for_suffix_search() {
                     let param_types = if !sig.formal_param_types.is_empty() {
                         sig.formal_param_types.clone()
                     } else {
