@@ -1,6 +1,6 @@
 //! Dispatch handlers for the `wj` binary (`cargo`-friendly shim crate splits parsing vs logic).
 
-use crate::wj_cli_args::{CacheCommand, Cli, Commands, McpCommand};
+use crate::wj_cli_args::{CacheCommand, Cli, Commands, LockCommand, McpCommand};
 use anyhow::Result;
 
 /// Directory whose pin governs a build/run/test/check invocation.
@@ -145,8 +145,12 @@ pub fn run(cli: Cli) -> Result<()> {
             metadata,
             json,
             ir_shadow_validate,
+            locked,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
+            if locked {
+                windjammer::cli::build::require_locked(&path)?;
+            }
             windjammer::cli::build::execute(
                 &path,
                 output.as_deref(),
@@ -371,6 +375,11 @@ pub fn run(cli: Cli) -> Result<()> {
                 path.as_deref(),
             )?;
         }
+        Commands::Lock { command } => match command {
+            LockCommand::Update { dir } => windjammer::cli::lock::update(dir.as_deref())?,
+            LockCommand::Check { dir } => windjammer::cli::lock::check(dir.as_deref())?,
+        },
+
         Commands::Remove { package } => {
             windjammer::cli::remove::execute(&package)?;
         }

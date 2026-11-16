@@ -34,3 +34,10 @@ feature flag until a registry exists. Remove the default registry URL from code 
 
 ## Decision needed from: project owner
 Approve A, and the lock file name/location (`wj.lock` next to `wj.toml`).
+
+## Amendment: `wj.lock` (applied, option A)
+`wj.lock` sits next to `wj.toml`, version 2: one `[[package]]` per package of the whole dependency graph (the project's path and git dependencies and theirs), listed dependencies first, with `source` (`path+<as written in the manifest>` or `git+<url>`), `rev` (git commit), `hash` (`sha256:` of a path dependency's files, `git-tree:` of a git dependency's tree) and `dependencies` (the entries it needs). No absolute path and no time reach the file, so it is the same file on every machine. Version-only (Cargo) dependencies are not recorded: `Cargo.lock` owns them; the registry stays deferred.
+- `wj lock update [DIR]` re-resolves everything (floating git dependencies move to their branch head) and writes the file; `wj lock check [DIR]` exits 1 when the file is missing or differs.
+- `wj build` follows the lock when there is one: git dependencies stay at the recorded commit; a manifest whose `rev` or url disagrees with the lock, a dependency the lock does not list, or one it lists that nothing asks for, stops the build with `run wj lock update`; a path dependency whose files changed since the lock is a warning (it is under development). `wj build --locked` makes that an error and requires the file. The interpreter, the host bridge and `wj check` read the same graph (`package::graph::resolve`) and refuse a manifest/lock disagreement the same way.
+- Reproducibility: two builds from the same lock emit the same bytes into the same directory; into another directory only the generated crate's version tag (`0.1.0+wj<hash of its directory>`, `cargo_cache::crate_version`) differs, by design. Gate: `scripts/wj/lock_gate.wj`.
+- Open: cycle and same-name-two-sources errors exist; dependency version ranges and a registry source do not (deferred with the registry). The capability lock (ADR-0009/0021) keeps its own file.

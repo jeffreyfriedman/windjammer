@@ -26,6 +26,7 @@ pub mod new;
 mod new_templates;
 pub mod reduce;
 pub mod replay;
+pub mod lock;
 pub mod remove;
 pub mod run;
 pub mod rust_surface;

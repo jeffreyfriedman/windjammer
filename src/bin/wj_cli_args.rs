@@ -124,6 +124,10 @@ pub enum Commands {
         /// Discrepancies are reported as errors instead of warnings (CI gate).
         #[arg(long)]
         ir_shadow_validate: bool,
+
+        /// Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds)
+        #[arg(long)]
+        locked: bool,
     },
 
     /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
@@ -594,6 +598,12 @@ pub enum Commands {
         path: Option<String>,
     },
 
+    /// Resolve dependencies and write or verify wj.lock (exact revisions and content hashes)
+    Lock {
+        #[command(subcommand)]
+        command: LockCommand,
+    },
+
     /// Remove a dependency from wj.toml
     Remove {
         /// Package name
@@ -851,6 +861,22 @@ pub enum Commands {
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
+}
+
+#[derive(Subcommand)]
+pub enum LockCommand {
+    /// Re-resolve every path and git dependency, in dependency order, and write wj.lock
+    Update {
+        /// Project directory (default: the current directory)
+        #[arg(value_name = "DIR")]
+        dir: Option<PathBuf>,
+    },
+    /// Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not
+    Check {
+        /// Project directory (default: the current directory)
+        #[arg(value_name = "DIR")]
+        dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]

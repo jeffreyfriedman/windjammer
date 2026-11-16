@@ -1,0 +1,123 @@
+// wj.lock gate (ADR-0010): two builds from the same lock are byte-identical, and a dependency that moved without the lock
+// being updated fails with the command that fixes it.
+//
+//   wj run scripts/wj/lock_gate.wj <wj-binary>
+//
+// Builds a three-package graph in a scratch directory (app -> lib_a -> lib_b, app -> lib_c; written in an order that is not
+// the dependency order) and checks, against planted changes, that `wj lock update` writes dependencies first, that
+// `wj build --locked` and `wj lock check` accept the fresh lock, that two builds emit the same bytes, that a changed path
+// dependency fails `--locked` (and only warns in a plain build), that an added dependency fails every build, and that
+// `wj lock update` accepts the change. Exit status 1 when any check fails.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+fn write(path: string, text: string) {
+    let _ = fs.write(path, text)
+}
+
+fn setup(root: string) {
+    let _ = sh("rm -rf ${quote(root)} && mkdir -p ${quote(root)}/app/src ${quote(root)}/lib_a/src ${quote(root)}/lib_b/src ${quote(root)}/lib_c/src ${quote(root)}/lib_d/src")
+    write("${root}/app/wj.toml", "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nlib_c = { path = \"../lib_c\" }\nlib_a = { path = \"../lib_a\" }\n")
+    write("${root}/app/src/main.wj", "fn main() {\n    println(\"hello\")\n}\n")
+    write("${root}/lib_a/wj.toml", "[package]\nname = \"lib_a\"\nversion = \"0.1.0\"\n\n[dependencies]\nlib_b = { path = \"../lib_b\" }\n")
+    write("${root}/lib_a/src/lib.wj", "pub fn a() -> int { 1 }\n")
+    write("${root}/lib_b/wj.toml", "[package]\nname = \"lib_b\"\nversion = \"0.1.0\"\n")
+    write("${root}/lib_b/src/lib.wj", "pub fn b() -> int { 2 }\n")
+    write("${root}/lib_c/wj.toml", "[package]\nname = \"lib_c\"\nversion = \"0.1.0\"\n")
+    write("${root}/lib_c/src/lib.wj", "pub fn c() -> int { 3 }\n")
+    write("${root}/lib_d/wj.toml", "[package]\nname = \"lib_d\"\nversion = \"0.1.0\"\n")
+    write("${root}/lib_d/src/lib.wj", "pub fn d() -> int { 4 }\n")
+}
+
+struct Gate {
+    failed: int,
+    checks: int,
+}
+
+fn expect(g: Gate, ok: bool, what: string) -> Gate {
+    let mut out = Gate { failed: g.failed, checks: g.checks + 1 }
+    if ok {
+        println("  ok    ${what}")
+    } else {
+        println("  FAIL  ${what}")
+        out.failed = g.failed + 1
+    }
+    out
+}
+
+fn status_of(cmd: string) -> int {
+    match sh(cmd) {
+        Ok(r) => r.status,
+        Err(_) => -1,
+    }
+}
+
+fn output_of(cmd: string) -> string {
+    match sh(cmd + " 2>&1") {
+        Ok(r) => r.stdout,
+        Err(_) => "",
+    }
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() < 2 {
+        println("usage: lock_gate.wj <wj-binary>")
+        process.exit(2)
+    }
+    let wj = quote(args[1])
+    let root = match sh("mktemp -d") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-lock-gate",
+    }
+    setup(root)
+    let app = "${root}/app"
+    let mut g = Gate { failed: 0, checks: 0 }
+
+    g = expect(g, status_of("cd ${quote(app)} && ${wj} lock check") != 0, "no lock yet: `wj lock check` fails")
+    g = expect(g, status_of("cd ${quote(app)} && ${wj} build src --locked --no-cargo -o ${quote(root)}/o0") != 0, "no lock yet: `wj build --locked` fails")
+    g = expect(g, status_of("cd ${quote(app)} && ${wj} lock update") == 0, "`wj lock update` succeeds")
+    let lock = fs.read_to_string("${app}/wj.lock").unwrap_or("")
+    let before_a = strings.split(lock, "name = \"lib_a\"")[0]
+    g = expect(g, strings.contains(before_a, "name = \"lib_b\"") && strings.contains(lock, "name = \"lib_a\"") && strings.contains(lock, "name = \"lib_c\""), "wj.lock lists lib_b before lib_a, which needs it")
+    g = expect(g, strings.contains(lock, "hash = \"sha256:") && strings.contains(lock, "dependencies = [\"lib_b\"]"), "wj.lock records content hashes and the dependency edges")
+    g = expect(g, !strings.contains(lock, root), "wj.lock names no absolute path")
+    g = expect(g, status_of("cd ${quote(app)} && ${wj} lock check") == 0, "`wj lock check` accepts the fresh lock")
+    g = expect(g, status_of("cd ${quote(app)} && ${wj} lock update") == 0 && fs.read_to_string("${app}/wj.lock").unwrap_or("") == lock, "`wj lock update` twice writes the same bytes")
+
+    // reproducibility: two builds from the same lock emit the same bytes
+    // (the generated Cargo.toml names its own directory in the version's build metadata, `0.1.0+wj<hash of the path>`: that one
+    // line is location-specific by design, so the same-directory comparison is exact and the cross-directory one skips it)
+    let b1 = status_of("cd ${quote(app)} && ${wj} build src --locked --no-cargo -o ${quote(root)}/out")
+    g = expect(g, b1 == 0, "`wj build --locked` succeeds from the fresh lock")
+    let _ = sh("cp -R ${quote(root)}/out ${quote(root)}/out1 && rm -rf ${quote(root)}/out")
+    let b2 = status_of("cd ${quote(app)} && ${wj} build src --locked --no-cargo -o ${quote(root)}/out")
+    g = expect(g, b2 == 0 && status_of("diff -r ${quote(root)}/out ${quote(root)}/out1") == 0, "two builds from the same lock into one directory are byte-identical")
+    let b3 = status_of("cd ${quote(app)} && ${wj} build src --locked --no-cargo -o ${quote(root)}/out2")
+    let _ = sh("cp -R ${quote(root)}/out1 ${quote(root)}/out1n && perl -pi -e 's/\\+wj[0-9a-f]{16}//' ${quote(root)}/out1n/Cargo.toml ${quote(root)}/out2/Cargo.toml")
+    g = expect(g, b3 == 0 && status_of("diff -r ${quote(root)}/out2 ${quote(root)}/out1n") == 0, "a build into another directory differs only in that directory's version tag")
+
+    // a dependency changes without the lock being updated
+    write("${root}/lib_b/src/lib.wj", "pub fn b() -> int { 99 }\n")
+    let locked = output_of("cd ${quote(app)} && ${wj} build src --locked --no-cargo -o ${quote(root)}/out3")
+    g = expect(g, strings.contains(locked, "dependency `lib_b`") && strings.contains(locked, "wj lock update"), "a changed dependency fails `--locked`, naming it and the fix")
+    g = expect(g, status_of("cd ${quote(app)} && ${wj} lock check") == 1, "`wj lock check` exits 1 on the changed dependency")
+    let plain = output_of("cd ${quote(app)} && ${wj} build src --no-cargo -o ${quote(root)}/out4")
+    g = expect(g, strings.contains(plain, "warning: dependency `lib_b`"), "a plain build warns about the changed path dependency")
+    g = expect(g, status_of("cd ${quote(app)} && ${wj} lock update") == 0 && status_of("cd ${quote(app)} && ${wj} lock check") == 0, "`wj lock update` accepts the change")
+
+    // a dependency is added to the manifest without the lock being updated
+    write("${app}/wj.toml", "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nlib_c = { path = \"../lib_c\" }\nlib_a = { path = \"../lib_a\" }\nlib_d = { path = \"../lib_d\" }\n")
+    let added = output_of("cd ${quote(app)} && ${wj} build src --no-cargo -o ${quote(root)}/out5")
+    g = expect(g, strings.contains(added, "dependency `lib_d`") && strings.contains(added, "not in wj.lock"), "an added dependency stops even a plain build")
+
+    let _ = sh("rm -rf ${quote(root)}")
+    println("lock gate: ${g.checks - g.failed}/${g.checks} checks passed")
+    if g.failed > 0 {
+        process.exit(1)
+    }
+}
