@@ -20,6 +20,12 @@ Fixed on `wt/width-11` (moved to `tests/codegen_correctness_corpus/`, judged by 
 | `int_element_compared_with_len_and_used_as_index.wj` | an `int` element read compared with `.len()` and used as an index got mixed `i64`/`usize`; the element of a declared local `Vec` now has a static type, so the class is decided by the solver | t304 |
 | `struct_field_read_moves_literal_to_i32.wj` | a struct field read through a local `Vec` held the solver class and the legacy decider printed `0_i32`; the field now has its declared type, the class is published | t305 |
 
+Fixed on `wt/width-14` (pilot-7 trial repro, `tests/codegen_correctness_corpus/` and `tests/drift_corpus/repros/`):
+
+| Corpus case | Defect | Tasks |
+|---|---|---|
+| `text_slice_range_bounds_from_int.wj` | the bounds of a text slice `s[i..i + 1]` with `i: int` sit at declared `usize` slots that were not recorded as converted at the argument, so the class was held and the literal printed `1_i32` beside `i: i64`; the bounds now keep the class of `i` and are converted where they are passed | t306 |
+
 Open, with the owning stream:
 
 | Repro | Defect | Owner | Tasks |

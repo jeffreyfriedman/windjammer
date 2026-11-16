@@ -594,6 +594,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// flows into the slot (`FlowsInto`: an index class keeps its width and is converted at the argument); any other
     /// parameter type relates the argument structurally.
     fn bind_surface_argument(&mut self, param: &Type, arg: ConstraintVar, arg_expr: &Expression<'ast>, g: &mut SurfaceGenerics) {
+        // An argument at a declared `usize` slot (`s[i..i + 1]` is `s.slice(i, i + 1)`) keeps its class's width and is
+        // converted where it is passed, as at a user `usize` formal (NUM-USIZE-TO-INT).
+        if super::numeric::numeric_base_of(param) == Some(BaseType::Usize) {
+            if let Some(key) = crate::ir::numeric_facts::conversion_key(arg_expr) {
+                self.index_use_keys.push((key, arg));
+            }
+        }
         let (Type::Generic(n) | Type::Custom(n)) = param else {
             return self.bind_surface_type(param, arg, g, &arg_expr.location());
         };

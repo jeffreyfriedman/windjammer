@@ -18,6 +18,7 @@ pub trait Vec<T> {
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
     fn push(&mut self, value: T);
+    fn extend_from_slice(&mut self, other: &[T]);
     fn pop(&mut self) -> Option<T>;
     fn get(self, index: usize) -> Option<&T>;
     fn get_mut(&mut self, index: usize) -> Option<&mut T>;

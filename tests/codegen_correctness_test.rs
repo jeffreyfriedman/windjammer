@@ -161,6 +161,8 @@ corpus_tests!(
     slice_bounds_from_find_index,
     int_cast_operand_not_promoted_to_float,
     list_literal_local_into_array_field,
+    bytes_extended_from_slices_are_u8,
+    text_slice_range_bounds_from_int,
 );
 
 // ------------------------------------------------------------------ generated programs
