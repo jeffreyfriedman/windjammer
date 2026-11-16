@@ -10,10 +10,12 @@ static CWD: Mutex<()> = Mutex::new(());
 /// Run `f` with `dir` as the working directory (serialized: the working directory is process-wide).
 pub fn in_dir<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
     let _g = CWD.lock().unwrap_or_else(|e| e.into_inner());
-    let prev = std::env::current_dir().unwrap();
+    // Another test in this process may have left the working directory in a temp dir it then removed (the
+    // process cwd is shared by every test thread): fall back to the manifest dir instead of failing on it.
+    let prev = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
     std::env::set_current_dir(dir).unwrap();
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-    std::env::set_current_dir(prev).unwrap();
+    std::env::set_current_dir(&prev).unwrap_or_else(|_| std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap());
     r.unwrap_or_else(|e| std::panic::resume_unwind(e))
 }
 

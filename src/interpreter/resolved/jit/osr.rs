@@ -393,6 +393,10 @@ fn stmt_names(s: S, out: &mut Vec<&'static str>) {
             expr_names(condition, out);
             body.iter().for_each(|s| stmt_names(s, out));
         }
+        Statement::Match { value, arms, .. } => {
+            expr_names(value, out);
+            arms.iter().for_each(|a| expr_names(a.body, out));
+        }
         _ => {}
     }
 }
@@ -409,6 +413,7 @@ fn expr_names(e: &'static Expression<'static>, out: &mut Vec<&'static str>) {
             expr_names(object, out);
             arguments.iter().for_each(|(_, a)| expr_names(a, out));
         }
+        Expression::Block { statements, .. } => statements.iter().for_each(|s| stmt_names(s, out)),
         _ => {}
     }
 }

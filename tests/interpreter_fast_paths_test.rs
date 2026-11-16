@@ -15,12 +15,13 @@ const WJ: &str = env!("CARGO_BIN_EXE_wj");
 /// (program, the fast paths it must take).
 const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/structs.wj", &["inline"]),
-    ("bench/interp/hashmap.wj", &["mapget", "mapins", "unboxed", "matchval"]),
+    ("bench/interp/hashmap.wj", &["mapjit"]),
+    ("tests/engine_parity/jit_map_ops.wj", &["mapjit"]),
     ("bench/interp/sieve.wj", &["packed", "packedidx", "packedstore"]),
     ("bench/interp/nbody.wj", &["vecresolve", "rowview", "placeargs"]),
     ("tests/engine_parity/jit_row_views.wj", &["rowview"]),
     ("bench/interp/strings.wj", &["pushfmt", "lenfast"]),
-    ("bench/interp/closures.wj", &["closureenv", "closurescope"]),
+    ("bench/interp/closures.wj", &["closureenv", "closurescope", "closurecreate", "closurecopy"]),
     ("tests/engine_parity/str_fast.wj", &["fmt", "pushstr", "pushfmt"]),
     ("tests/engine_parity/jit_loop_inline.wj", &["inline"]),
     ("tests/engine_parity/map_get_match.wj", &["mapget", "mapins", "unboxed"]),

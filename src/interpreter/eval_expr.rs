@@ -129,6 +129,12 @@ impl Interpreter {
             return self.durable_step(e);
         }
         match e {
+            Expression::Literal { value: Literal::Int(i), location } => {
+                Ok(match self.literal_width(self.scope.module, location.as_ref()) {
+                    Some(t) => super::compiled_facts::int_literal(*i, t),
+                    None => Value::Int(*i as i128, IntTy::Lit),
+                })
+            }
             Expression::Literal { value, .. } => Ok(self.literal(value)),
 
             Expression::Identifier { name, location } => {
