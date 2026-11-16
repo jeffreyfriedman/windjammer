@@ -147,6 +147,49 @@ pub fn key_behind_text(id: &Identity, checkout: &Path) -> Option<String> {
     ))
 }
 
+/// How long a verdict of [`key_behind_text`] is reused: the check costs a `stat` per compiler source (about 33M
+/// instructions per `wj` run inside a checkout, ADR-0038), and the warning a developer or an agent needs after editing the
+/// compiler arrives at most this late.
+pub const VERDICT_TTL_SECS: i64 = 60;
+
+fn verdict_dir() -> std::path::PathBuf {
+    crate::cargo_cache::cache_root().join("toolchain").join("behind")
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
+
+/// [`key_behind_text`], reused for [`VERDICT_TTL_SECS`] from a file under `dir` named by the binary's key and the
+/// checkout (the shared cache root, not the temp dir). The file holds the time of the verdict and the line (empty when
+/// current); anything unreadable, older or from the future recomputes. A new build has a new key, so it never reads
+/// an old binary's verdict.
+pub fn cached_key_behind_text(id: &Identity, checkout: &Path, dir: &Path, now: i64) -> Option<String> {
+    let key = id.key.as_deref()?;
+    let canon = std::fs::canonicalize(checkout).unwrap_or_else(|_| checkout.to_path_buf());
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in key.bytes().chain([0u8]).chain(canon.to_string_lossy().bytes()) {
+        h = (h ^ b as u64).wrapping_mul(0x100000001b3);
+    }
+    let file = dir.join(format!("{h:016x}"));
+    if let Ok(text) = std::fs::read_to_string(&file) {
+        if let Some((at, line)) = text.split_once('\n') {
+            if let Ok(at) = at.trim().parse::<i64>() {
+                if at <= now && now - at < VERDICT_TTL_SECS {
+                    return (!line.is_empty()).then(|| line.to_string());
+                }
+            }
+        }
+    }
+    let verdict = key_behind_text(id, checkout);
+    let _ = std::fs::create_dir_all(dir);
+    let tmp = dir.join(format!("{h:016x}.{}", std::process::id()));
+    if std::fs::write(&tmp, format!("{now}\n{}", verdict.as_deref().unwrap_or(""))).is_ok() {
+        let _ = std::fs::rename(&tmp, &file);
+    }
+    verdict
+}
+
 /// What goes into a `wj` binary: the compiler's sources, the embedded std and runtime crates, the build script and the
 /// manifests. A commit that changes nothing here (documentation, tests, benchmark data, scripts) leaves a binary
 /// built before it current.
@@ -200,7 +243,12 @@ pub fn current_behind_text() -> Option<String> {
         .ok()
         .and_then(|d| super::stale::enclosing_checkout(&d))
         .or_else(|| std::env::current_exe().ok().and_then(|e| super::stale::enclosing_checkout(&e)))?;
-    behind_for(&super::identity::current(), &checkout)
+    let id = super::identity::current();
+    // the per-run path reuses a recent verdict ([`VERDICT_TTL_SECS`]); [`behind_for`] itself always judges afresh
+    if id.key.is_some() {
+        return cached_key_behind_text(&id, &checkout, &verdict_dir(), unix_now());
+    }
+    behind_for(&id, &checkout)
 }
 
 /// Print the line to stderr when this `wj` runs inside a compiler checkout it was not built from.
@@ -217,6 +265,26 @@ pub fn warn_if_behind() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A verdict is reused inside the TTL (no walk, even after an input changed), recomputed after it, and never shared
+    /// with another binary key.
+    #[test]
+    fn the_behind_verdict_is_reused_for_its_ttl_and_per_binary_key() {
+        let root = std::env::temp_dir().join(format!("wj-behind-ttl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (checkout, cache) = (root.join("co"), root.join("cache"));
+        std::fs::create_dir_all(checkout.join("src")).unwrap();
+        std::fs::write(checkout.join("src/a.rs"), "fn a() {}").unwrap();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let mut id = Identity { key: Some("0123456789abcdef".into()), version: "0.50.0".into(), commit: None, commit_ts: None, dirty: false, profile: None, build_ts: Some(now + 3600) };
+        assert_eq!(cached_key_behind_text(&id, &checkout, &cache, now), None, "built after every input: current");
+        id.build_ts = Some(now - 3600);
+        assert_eq!(cached_key_behind_text(&id, &checkout, &cache, now + 1), None, "inside the TTL the cached verdict stands");
+        assert!(cached_key_behind_text(&id, &checkout, &cache, now + VERDICT_TTL_SECS + 1).is_some(), "after the TTL the walk runs and sees the newer input");
+        id.key = Some("fedcba9876543210".into());
+        assert!(cached_key_behind_text(&id, &checkout, &cache, now + VERDICT_TTL_SECS + 2).is_some(), "another binary key computes its own verdict");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn an_input_newer_than_the_build_is_found_and_an_older_tree_is_not() {
