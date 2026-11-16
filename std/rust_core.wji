@@ -13,6 +13,7 @@
 
 pub trait Vec<T> {
     fn new() -> Vec<T>;
+    fn clone(self) -> Vec<T>;
     fn with_capacity(capacity: usize) -> Vec<T>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
@@ -78,6 +79,7 @@ pub trait Iterator<T> {
 
 pub trait VecDeque<T> {
     fn new() -> VecDeque<T>;
+    fn clone(self) -> VecDeque<T>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn push_back(&mut self, value: T);
@@ -98,6 +100,7 @@ pub trait VecDeque<T> {
 
 pub trait HashMap<K, V> {
     fn new() -> HashMap<K, V>;
+    fn clone(self) -> HashMap<K, V>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -110,6 +113,7 @@ pub trait HashMap<K, V> {
 
 pub trait BTreeMap<K, V> {
     fn new() -> BTreeMap<K, V>;
+    fn clone(self) -> BTreeMap<K, V>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn get(self, key: &K) -> Option<&V>;
@@ -121,6 +125,7 @@ pub trait BTreeMap<K, V> {
 
 pub trait HashSet<T> {
     fn new() -> HashSet<T>;
+    fn clone(self) -> HashSet<T>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -131,6 +136,7 @@ pub trait HashSet<T> {
 
 pub trait BTreeSet<T> {
     fn new() -> BTreeSet<T>;
+    fn clone(self) -> BTreeSet<T>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn insert(&mut self, value: T) -> bool;
@@ -164,6 +170,7 @@ pub trait Result<T, E> {
 
 pub trait String {
     fn new() -> String;
+    fn clone(self) -> String;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;

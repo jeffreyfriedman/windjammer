@@ -1,0 +1,14 @@
+// expect: 9223372036854775808
+// expect: 9223372036854775809
+// An unsigned constant of 2^63 keeps its value: it was emitted `-9223372036854775808_u64` (rustc rejects a negated
+// `u64`; the value is the `i64::MIN` bit pattern printed signed).
+const SIGN: u64 = 9223372036854775808
+
+fn flip(n: int) -> u64 {
+    (n as u64) ^ SIGN
+}
+
+fn main() {
+    println("${SIGN}")
+    println("${flip(1)}")
+}

@@ -44,8 +44,12 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn generate_vec_macro_arg_strings(&mut self, args: &[&Expression<'ast>]) -> Vec<String> {
         let peer = self.vec_macro_int_literal_peer(args);
+        // Elements of an owned `string` slot (`let v: Vec<string> = [match c { .. => "y" }]`) are owned: the literals
+        // in an element's branches and arms are too, as in a `let s: string` value.
+        let owned_text = self.vec_macro_expected_element_type().is_some_and(|t| crate::ir::formal_predicates::type_is_owned_string(&t));
         args.iter()
             .map(|e| {
+                let prev_coerce = std::mem::replace(&mut self.coerce_string_literals_to_owned, owned_text);
                 let prev = self.assignment_int_target_type.clone();
                 if let Some(t) = peer.clone() {
                     self.assignment_int_target_type = Some(t);
@@ -56,6 +60,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let s = self.generate_expression(e);
                 self.in_call_argument_generation = prev_call_arg;
                 self.assignment_int_target_type = prev;
+                self.coerce_string_literals_to_owned = prev_coerce;
                 s
             })
             .collect()

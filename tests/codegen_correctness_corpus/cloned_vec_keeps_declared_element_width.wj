@@ -1,0 +1,21 @@
+// expect: 3
+// A clone of a `Vec<u32>` parameter is a `Vec<u32>` (the core surface declares `clone(self) -> Vec<T>`): the literals
+// compared with its elements are `u32`. A same-named `clone(&self) -> Self` of another type typed the copy `Self`, so
+// the literals defaulted to `int` (`m2[k] == 1_i64` against `u32`).
+fn count_set(modes: Vec<u32>) -> u32 {
+    let mut m2 = modes.clone()
+    m2.push(1)
+    let mut d: u32 = 0
+    let mut k: usize = 0
+    while k < m2.len() {
+        if m2[k] == 1 || m2[k] == 2 {
+            d = d + 1
+        }
+        k = k + 1
+    }
+    d
+}
+
+fn main() {
+    println("${count_set([1, 2, 5])}")
+}

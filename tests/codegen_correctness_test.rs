@@ -163,6 +163,11 @@ corpus_tests!(
     list_literal_local_into_array_field,
     bytes_extended_from_slices_are_u8,
     text_slice_range_bounds_from_int,
+    text_and_list_slices_pushed_into_owned_vecs,
+    list_literal_of_if_text_into_owned_vec,
+    match_value_of_int_and_len_used_as_index,
+    cloned_vec_keeps_declared_element_width,
+    u64_constant_at_two_to_the_63,
 );
 
 // ------------------------------------------------------------------ generated programs

@@ -2491,7 +2491,7 @@ impl<'ast> CodeGenerator<'ast> {
         if rust_autoborrows_temp && matches!(resolved_kind, CoercionKind::Borrow) {
             resolved_kind = CoercionKind::Identity;
         }
-        let coerced = apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust);
+        let coerced = matches!(resolved_kind, CoercionKind::Clone).then(|| self.owned_copy_of_view_arg(arg_expr, &prepared_arg)).flatten().unwrap_or_else(|| apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust));
         let mut coerced = self.finalize_ir_call_arg(arg_expr, prepared_arg.as_str(), &coerced);
 
         // IR contract pass: when Identity was forced above but `expected` is still Ref,
@@ -3056,7 +3056,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 coerced = base.to_string();
                             }
                         } else {
-                            coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
+                            coerced = self.owned_copy_of_view_arg(arg_expr, &coerced).unwrap_or_else(|| format!("{}.clone()", coerced.trim_start_matches('&')));
                         }
                     }
                 }
