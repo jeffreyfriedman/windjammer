@@ -74,6 +74,24 @@ loses on compute kernels (6x CPU on `parity`: those are the programs to compile,
 - `interp/closures`: the generated Rust does not compile (E0308 in the iterator chain): compiler bug at 37d50458ec6a.
   The interpreter runs both correctly.
 
+## C12: single-file builds and the surrounding tree (measured before/after)
+
+`wj build --no-cargo` of `bench/agent-dx/solutions/wj/t001_gcd_lcm/main.wj` inside this repository against the same file
+alone in an empty directory, `WJ_META_SCAN_STATS=1` and `/usr/bin/time -l`, best of 3:
+
+| compiler | in repository: CPU / instructions / dirs listed / metadata files opened | alone |
+|---|---|---|
+| installed wj 37d50458ec6a (Nov 11) | 1.26 s / 6.7 G / - / - | 0.09 s / 0.58 G |
+| head f55f8b1 + counters, before the fix | 0.04 s / 404 M / 139 / 78 | 0.03 s / 312 M / 7 / 0-1 |
+| after the fix (open only reached peers) | 0.03 s / 384 M / 139 / **0** | 0.03 s / 310 M / 7 / 0 |
+
+Most of the 37d50458 cost was already gone on the head (peer metadata read only when current and reached, c52bfb52c);
+the fix removes the remaining reads of every cached module's metadata: a single-file build now opens only the
+metadata of modules it names. The 139 directory listings remain (finding peers by name in the project cache; cheap,
+reported, not gated). Gate: `cargo test --release --test meta_scan_locality` (files opened do not grow from 2 to 40
+unrelated cached modules; a file in a project opens no more than a file alone); mutation check: counting the read
+before the reachability check (the old order) fails both tests (2 vs 40, 40 vs 0).
+
 ## Cold dependency build of a generated crate (measured)
 
 `wj build --no-cargo` of `dx/t001_gcd_lcm`, then `cargo build` and `cargo build --release` into an empty target

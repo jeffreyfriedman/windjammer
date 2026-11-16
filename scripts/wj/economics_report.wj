@@ -201,6 +201,51 @@ fn gate(progs: Vec<Json>) -> int {
     failed
 }
 
+// Release-profile study (economics.wj --profiles): per profile, Windjammer kernels against the Rust twin built with
+// cargo's default release flags, and what overflow checks cost per kernel.
+fn profiles_md(rows: Vec<Json>) -> string {
+    let names = ["cargo-default", "lto-fat", "lto-thin", "lto-fat-cgu1", "lto-fat-cgu1-overflow", "lto-thin-overflow", "cargo-default-overflow", "lto-fat-cgu1-abort"]
+    let mut md = "## Release profiles (C4)\n\nRatios are Windjammer with the profile / Rust twin with cargo's default release flags (`-C opt-level=3`), geometric mean over the std-only kernels; `own` = Windjammer with the profile / Windjammer with `cargo-default`.\n\n"
+    let mut t = right_align(new(["profile", "n", "run cycles vs twin", "size vs twin", "compile CPU vs twin", "run cycles vs own default"]), [1, 2, 3, 4, 5])
+    for name in names {
+        let mut run: Vec<f64> = Vec::new()
+        let mut size: Vec<f64> = Vec::new()
+        let mut comp: Vec<f64> = Vec::new()
+        let mut own: Vec<f64> = Vec::new()
+        for r in rows {
+            if get(r, "skipped").is_some() { continue }
+            let w = "wj." + name
+            let ok = as_str(get(get(get(r, "wj") ?? object(), name) ?? object(), "ok") ?? object()) ?? ""
+            if ok != "yes" { continue }
+            let rc = num(r, "rust.cargo-default.run.cycles")
+            let wc = num(r, w + ".run.cycles")
+            if rc > 0.0 && wc > 0.0 { run.push(wc / rc) }
+            let wd = num(r, "wj.cargo-default.run.cycles")
+            if wd > 0.0 && wc > 0.0 { own.push(wc / wd) }
+            let rs = num(r, "rust.cargo-default.stripped")
+            let ws = num(r, w + ".stripped")
+            if rs > 0.0 && ws > 0.0 { size.push(ws / rs) }
+            let rp = num(r, "rust.cargo-default.compile.cpu")
+            let wp = num(r, w + ".compile.cpu")
+            if rp > 0.0 && wp > 0.0 { comp.push(wp / rp) }
+        }
+        t = add_row(t, [name, "${run.len()}", ratio_cell(run), ratio_cell(size), ratio_cell(comp), ratio_cell(own)])
+    }
+    md = md + markdown(t) + "\n\n### Overflow checks per kernel (Windjammer, `lto-fat-cgu1` with / without `-C overflow-checks=on`, run cycles)\n\n"
+    let mut o = right_align(new(["kernel", "with / without", "twin, cargo default: with / without"]), [1, 2])
+    for r in rows {
+        if get(r, "skipped").is_some() { continue }
+        let a = num(r, "wj.lto-fat-cgu1-overflow.run.cycles")
+        let b = num(r, "wj.lto-fat-cgu1.run.cycles")
+        let c = num(r, "rust.cargo-default-overflow.run.cycles")
+        let d = num(r, "rust.cargo-default.run.cycles")
+        let x = if a > 0.0 && b > 0.0 { fixed(a / b, 2) } else { "-" }
+        let y = if c > 0.0 && d > 0.0 { fixed(c / d, 2) } else { "-" }
+        o = add_row(o, [as_str(get(r, "id") ?? object()) ?? "", x, y])
+    }
+    md + markdown(o) + "\n"
+}
+
 fn main() {
     let args = env.args()
     let path = match first_positional(args) {
@@ -218,6 +263,12 @@ fn main() {
             process.exit(1)
             object()
         },
+    }
+    if get(doc, "profiles").is_some() {
+        let md = profiles_md(items(get(doc, "profiles") ?? array()))
+        let out = long_flag_value_or(args, "md", "")
+        if out == "" { println(md) } else { let _ = fs.write(out, md) }
+        return
     }
     let progs = items(get(doc, "programs") ?? array())
     if args.contains("--gate") {

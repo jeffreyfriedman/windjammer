@@ -21,3 +21,10 @@ Why it matters: build cost depends on where a file is checked out, not on the pr
 every single-file build in a large checkout pays it. Expected fix: a single-file build reads only the metadata of
 peers it reaches (`use`/`mod`), from the cache index, without walking directories; gate: the transpile CPU of a fixed
 file inside this repository within 1.5x of the same file in an empty directory.
+
+## Status (2026-11-16)
+
+Mostly fixed on the integration head before this report (0.04 s CPU in the repository); the remaining part (opening
+the metadata of every cached module, 78 files for this file) is fixed by checking reachability before opening a
+`.wj.meta` (`metadata::merge_single_wj_meta_file`). Gate: `tests/meta_scan_locality.rs`. Numbers:
+docs/economics/RESULTS.md "C12".
