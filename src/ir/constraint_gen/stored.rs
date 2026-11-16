@@ -32,7 +32,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             return;
         }
         let fields = self.struct_field_types.unwrap_or_else(|| super::empty_struct_field_types());
-        let user_struct = |t: &Type| matches!(t, Type::Custom(n) if fields.contains_key(n)) && !type_is_copy_by_fields(t, fields, 0);
+        let user_struct = |t: &Type| matches!(t, Type::Custom(n) if fields.contains_key(n)) && field_type_owns_data(t, fields, 0);
         let by_value = self.analyzed.decl.parameters.iter().any(|p| p.name == *name && matches!(p.ownership, crate::parser::OwnershipHint::Inferred) && user_struct(&p.type_));
         if let Some(&var) = self.param_vars.get(name).filter(|_| by_value) {
             self.cs.add_because(
@@ -42,14 +42,20 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
-    /// OWN-STORED for a field (`Vox::new(self.scene)`, `Holder { bag: p.bag }`, `let mut next = self.items`): storing
-    /// a non-Copy field of a by-value parameter or receiver somewhere that owns it takes the parameter owned, so the
-    /// field moves instead of being copied. A returned field (a getter, `fn name(self) -> string { self.name }`) is
+    /// OWN-STORED for a field (`Holder { bag: p.bag }`, `let mut next = self.items`) in a function that returns a value:
+    /// storing a non-Copy field of a by-value parameter or receiver somewhere that owns it takes the parameter owned,
+    /// so the field moves instead of being copied. A returned field (a getter, `fn name(self) -> string { self.name }`) is
     /// not: owning the whole receiver there costs every caller holding a borrow a copy of all of it. Not when the body also changes it (directly, through a field or a
     /// `&mut self` method): the caller sees that change, so the parameter stays a mutable borrow and the field is
     /// copied (owner decision, pilot-7 hygiene list).
     pub(super) fn emit_owned_for_moved_field(&mut self, value: &Expression<'ast>) {
         let Expression::FieldAccess { object, location, .. } = value else { return };
+        // Only a function that produces a value from its parameter (a builder, wither or consuming transform) owns
+        // it; a unit method (`flush(self) { store(self.path) }`) keeps its borrow and copies, so its `&mut self`
+        // callers need no copy of the whole receiver.
+        if self.analyzed.decl.return_type.as_ref().is_none_or(|t| matches!(t, Type::Tuple(items) if items.is_empty())) {
+            return;
+        }
         let Some(root) = self.root_identifier(object) else { return };
         if self.scopes.iter().any(|s| s.contains_key(&root)) {
             return;
@@ -65,7 +71,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let Some(&var) = self.param_vars.get(&root).filter(|_| by_value && !changed) else { return };
         let fields = self.struct_field_types.unwrap_or_else(|| super::empty_struct_field_types());
         let Some(ty) = crate::ir::receiver_type::infer_receiver_type(value, &a.decl, fields) else { return };
-        if type_is_copy_by_fields(&ty, fields, 0) {
+        if !field_type_owns_data(&ty, fields, 0) {
             return;
         }
         self.cs.add_because(
@@ -88,16 +94,16 @@ pub(super) fn seed_mut_declared_param(cs: &mut ConstraintSet, var: ConstraintVar
 
 }
 
-/// Numbers, `bool`, `char` and structs whose fields are all such (the auto-derived Copy structs) are copied, not moved.
-fn type_is_copy_by_fields(ty: &Type, fields: &HashMap<String, HashMap<String, Type>>, depth: usize) -> bool {
+/// Whether moving a value of `ty` moves owned data: text, a collection, a struct of this program with such a field.
+/// A name the program does not declare as a struct (an enum, a type from a crate) is left alone: only declarations
+/// decide here.
+fn field_type_owns_data(ty: &Type, fields: &HashMap<String, HashMap<String, Type>>, depth: usize) -> bool {
     match ty {
-        Type::String => false,
-        Type::Custom(name) if name == "string" || name == "String" => false,
-        Type::Custom(name) => {
-            crate::ir::node::param_ownership_seed_is_copy(ty)
-                || (depth < 4 && fields.get(name).is_some_and(|f| !f.is_empty() && f.values().all(|t| type_is_copy_by_fields(t, fields, depth + 1))))
-        }
-        Type::Tuple(items) => items.iter().all(|t| type_is_copy_by_fields(t, fields, depth + 1)),
-        other => crate::ir::node::param_ownership_seed_is_copy(other),
+        Type::String | Type::Vec(_) | Type::Parameterized(..) | Type::Result(..) => true,
+        Type::Option(inner) => field_type_owns_data(inner, fields, depth + 1),
+        Type::Array(inner, _) => field_type_owns_data(inner, fields, depth + 1),
+        Type::Tuple(items) => items.iter().any(|t| field_type_owns_data(t, fields, depth + 1)),
+        Type::Custom(name) => depth < 4 && fields.get(name).is_some_and(|f| f.values().any(|t| field_type_owns_data(t, fields, depth + 1))),
+        _ => false,
     }
 }

@@ -964,7 +964,11 @@ impl<'ast> Analyzer<'ast> {
                             // E0053: `fn foo(self, key: string)` in the trait item is owned `String`
                             // in Rust — merged borrow hints from read-only impl bodies must not
                             // downgrade to `&str` when the trait declaration uses plain `string`.
-                            if Self::trait_param_is_owned_string(&trait_param.type_) {
+                            // A Copy formal of a trait method is emitted by value (trait item and impl alike), so
+                            // a borrow there would make call sites pass `&x` to a by-value formal.
+                            if Self::trait_param_is_owned_string(&trait_param.type_)
+                                || (mode == OwnershipMode::Borrowed && self.is_copy_type(&trait_param.type_))
+                            {
                                 OwnershipMode::Owned
                             } else {
                                 mode
@@ -1251,6 +1255,7 @@ impl<'ast> Analyzer<'ast> {
             let Some(formal) = idx.checked_sub(decl_offset).and_then(|d| func.decl.parameters.get(d)).map(|p| &p.type_) else {
                 continue;
             };
+            if std::env::var_os("WJ_DBG_CAM").is_some() { eprintln!("TMPDBG sig {} idx={idx} formal={formal:?} copy={} own={:?} ty={:?} offset={decl_offset}", func.decl.name, self.is_copy_type(formal), param_ownership.get(idx), param_types.get(idx)); }
             // Copy scalars pass by value. Copy aggregates borrow only for field-enum-match
             // (`&T`) or mutation/passthrough (`&mut T`). Ref analysis may attach spurious
             // `Reference(T)` after field reads (e.g. `other.x`) — strip those to Owned.

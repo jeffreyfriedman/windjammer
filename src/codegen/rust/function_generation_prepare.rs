@@ -12078,7 +12078,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(methods) = self.method_signatures_by_type.get_mut(&impl_type) {
             if let Some(sig) = methods.get_mut(func.name.as_str()) {
                 let mut param_idx = 0;
-                let mut emitted_idx = 0;
+                let mut emitted_idx = super::function_self_helpers::first_declared_formal_index(func, &emitted_param_strings);
                 for param in &func.parameters {
                     if param.name == "self" {
                         if emitted_idx < emitted_param_strings.len() {
@@ -12152,7 +12152,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let mut ms_emitted = vec![false; sig.param_types.len()];
                 let mut user_param_idx = 0;
-                let mut emitted_idx = 0;
+                let mut emitted_idx = super::function_self_helpers::first_declared_formal_index(func, &emitted_param_strings);
                 for param in &func.parameters {
                     if param.name == "self" {
                         if emitted_idx < emitted_param_strings.len() {
@@ -12562,7 +12562,7 @@ impl<'ast> CodeGenerator<'ast> {
         emitted_param_strings: &[String],
     ) {
         let mut user_param_idx = 0;
-        let mut emitted_idx = 0;
+        let mut emitted_idx = super::function_self_helpers::first_declared_formal_index(func, &emitted_param_strings);
         for param in &func.parameters {
             if param.name == "self" {
                 if emitted_idx < emitted_param_strings.len() {
@@ -12684,7 +12684,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut emitted = vec![false; updated.param_ownership.len()];
         let mut user_param_idx = 0;
-        let mut emitted_idx = 0;
+        let mut emitted_idx = super::function_self_helpers::first_declared_formal_index(func, &emitted_param_strings);
         for param in &func.parameters {
             if param.name == "self" {
                 if emitted_idx < emitted_param_strings.len() {
@@ -12723,7 +12723,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Record `&String` formals (`@string_ref` / Phase-2 Vec::contains) separately from `&str`.
         let mut string_ref_flags = vec![false; updated.param_ownership.len()];
         let mut user_param_idx = 0;
-        let mut emitted_idx = 0;
+        let mut emitted_idx = super::function_self_helpers::first_declared_formal_index(func, &emitted_param_strings);
         for param in &func.parameters {
             if param.name == "self" {
                 if emitted_idx < emitted_param_strings.len() {

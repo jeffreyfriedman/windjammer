@@ -3534,7 +3534,8 @@ pub fn run() {
     let clone_path = wal_rs.contains("replay_to_lsn(self.path.clone(), through)")
         || wal_rs.contains("replay_to_lsn(self.path.clone(), &through)");
     let owned_self_move = (wal_rs.contains("fn replay_through(self)")
-        || wal_rs.contains("fn replay_through(mut self)"))
+        || wal_rs.contains("fn replay_through(mut self)")
+        || wal_rs.contains("fn replay_through(self,"))
         && wal_rs.contains("replay_to_lsn(self.path, through)");
     assert!(
         borrow_path || clone_path || owned_self_move,

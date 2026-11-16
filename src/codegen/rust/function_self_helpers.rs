@@ -6,6 +6,15 @@ use crate::parser::*;
 
 use super::CodeGenerator;
 
+/// Where the declared parameters start among the emitted formal strings: after an implicit receiver
+/// (`fn set(x: T) { self.a = x }` emits `&mut self, x: T` but declares only `x`), else at 0. A declared
+/// `self` is skipped by the callers' own loops.
+pub(super) fn first_declared_formal_index(func: &FunctionDecl, emitted: &[String]) -> usize {
+    let implicit = !func.parameters.iter().any(|p| p.name == "self")
+        && emitted.first().is_some_and(|s| s.trim_start_matches('&').trim_start_matches("'a ").trim_start_matches("mut ") == "self");
+    usize::from(implicit)
+}
+
 /// A receiver the source declares (`&self` / `&mut self`): the contract of a trait method and its impls (W0016).
 pub(super) fn declared_receiver(param: &Parameter) -> Option<&'static str> {
     match param.ownership {
