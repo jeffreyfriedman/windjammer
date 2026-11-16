@@ -24,9 +24,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     }
 
     /// OWN-CALL-FORMAL for a receiver: `store.add(t)` where `Store::add` takes `self` by value consumes `store`, so a
-    /// by-value parameter of a struct of this program passed there is owned (a field receiver is a moved field).
+    /// by-value parameter of a struct of this program passed there is owned. A field receiver (`self.a.take()`) does
+    /// not make its root owned: that would spread a consuming callee to every reader of the root.
     pub(super) fn emit_owned_for_consumed_receiver(&mut self, object: &Expression<'ast>) {
-        let Expression::Identifier { name, location } = object else { return self.emit_owned_for_moved_field(object) };
+        let Expression::Identifier { name, location } = object else { return };
         if name == "self" || self.scopes.iter().any(|s| s.contains_key(name)) {
             return;
         }
@@ -41,9 +42,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
-    /// OWN-RETURNED / OWN-STORED for a field (`Vox::new(self.scene)`, `return p.items`, `Holder { bag: p.bag }`,
-    /// `let mut next = self.items`): moving a non-Copy field out of a by-value parameter or receiver takes it owned,
-    /// so the field moves instead of being copied. Not when the body also changes it (directly, through a field or a
+    /// OWN-STORED for a field (`Vox::new(self.scene)`, `Holder { bag: p.bag }`, `let mut next = self.items`): storing
+    /// a non-Copy field of a by-value parameter or receiver somewhere that owns it takes the parameter owned, so the
+    /// field moves instead of being copied. A returned field (a getter, `fn name(self) -> string { self.name }`) is
+    /// not: owning the whole receiver there costs every caller holding a borrow a copy of all of it. Not when the body also changes it (directly, through a field or a
     /// `&mut self` method): the caller sees that change, so the parameter stays a mutable borrow and the field is
     /// copied (owner decision, pilot-7 hygiene list).
     pub(super) fn emit_owned_for_moved_field(&mut self, value: &Expression<'ast>) {
