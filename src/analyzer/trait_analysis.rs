@@ -104,6 +104,16 @@ impl<'ast> Analyzer<'ast> {
         !raised.is_empty()
     }
 
+    /// A formal an impl raised to `&mut` (`raise_trait_params_mutated_by_impls`) stays raised when the trait method
+    /// is analyzed again in a later pass.
+    pub(super) fn keep_trait_params_raised_by_impls(existing: &AnalyzedFunction<'ast>, analyzed: &mut AnalyzedFunction<'ast>) {
+        for (param, mode) in &existing.inferred_ownership {
+            if param != "self" && *mode == OwnershipMode::MutBorrowed {
+                analyzed.inferred_ownership.insert(param.clone(), *mode);
+            }
+        }
+    }
+
     /// Helper: Convert OwnershipHint to OwnershipMode
     pub(super) fn convert_ownership_hint_to_mode(
         &self,

@@ -3,7 +3,6 @@
 examples/verified/algo_binary_tree.wj | error[E0308]: mismatched types
 examples/verified/algo_lcs.wj | error[E0308]: mismatched types
 examples/verified/algo_stack_calculator.wj | error[E0658]: use of unstable library feature `str_as_str`
-examples/verified/algo_state_machine.wj | error[E0308]: mismatched types
 examples/verified/algo_word_frequency.wj | error[E0277]: a value of type `Vec<(String, i64)>` cannot be built from an iterator over elements of type `(&String, i64)`
 examples/verified/basics_main_exit_code.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 examples/verified/hashset_basics.wj | error[E0308]: mismatched types

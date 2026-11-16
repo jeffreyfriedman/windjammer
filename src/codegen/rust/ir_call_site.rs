@@ -8859,7 +8859,7 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_str.ends_with(".clone()") {
             if let Expression::Identifier { name, .. } = arg_expr {
                 let text_alias = self.explicit_ref_let_bindings.contains(name) && self.local_var_types.get(name).is_some_and(crate::codegen::rust::types::is_windjammer_text_type); // `let s = t` of a borrowed text `t`
-                if text_alias || self.emitted_rust_ref_formals.contains(name)
+                if text_alias || self.emitted_rust_ref_formals.contains(name) || self.idiom.str_slice_loop_vars.contains(name)
                     || (self.inferred_borrowed_params.contains(name)
                         && self.current_function_params.iter().any(|p| {
                             p.name == *name

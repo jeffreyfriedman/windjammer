@@ -31,7 +31,7 @@ fn main() {
     let mut s = State::Idle;
     let mut trail: Vec<String> = vec![name(State::Idle)];
     for e in ["start", "pause", "bogus", "resume", "stop"] {
-        s = next(s, e.clone());
+        s = next(s, e.to_string());
         if e != "bogus" {
             trail.push(name(s));
         }

@@ -599,13 +599,7 @@ impl<'ast> Analyzer<'ast> {
 
                         // Merge: if the impl body infers a stronger ownership
                         // than the abstract trait stub, upgrade the trait entry.
-                        if let Some(existing) = trait_methods.get(&func.name) {
-                            // A formal an impl raised to `&mut` (raise_trait_params_mutated_by_impls) stays raised.
-                            for (param, mode) in &existing.inferred_ownership {
-                                if param != "self" && *mode == OwnershipMode::MutBorrowed {
-                                    analyzed_func.inferred_ownership.insert(param.clone(), *mode);
-                                }
-                            }
+                        if let Some(existing) = trait_methods.get(&func.name).inspect(|e| Self::keep_trait_params_raised_by_impls(e, &mut analyzed_func)) {
                             let existing_self = existing.inferred_ownership.get("self").copied();
                             let new_self = analyzed_func.inferred_ownership.get("self").copied();
                             let should_upgrade = matches!(

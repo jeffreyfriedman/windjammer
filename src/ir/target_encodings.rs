@@ -394,7 +394,8 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
             if core.ends_with(".to_string()") || core.ends_with(".to_owned()") {
                 expr.to_string()
             } else {
-                format!("{}.to_string()", core)
+                // a copy of borrowed text is made once: `t.clone()` of a `&str` is still `&str`
+                format!("{}.to_string()", core.strip_suffix(".clone()").unwrap_or(core))
             }
         }
         (Target::Rust, CoercionKind::StripBorrow) => {

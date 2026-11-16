@@ -239,7 +239,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     reg,
                 )
             }));
-        if mut_self || self.core_surface_changes_receiver(object, method) {
+        if (mut_self && !self.core_surface_iterates_by_reference(object, method)) || self.core_surface_changes_receiver(object, method) {
             self.emit_mutref_on_receiver_root(object);
         }
 
@@ -868,6 +868,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let fields = self.struct_field_types.unwrap_or_else(|| super::empty_struct_field_types());
         crate::ir::receiver_type::infer_receiver_type(object, &self.analyzed.decl, fields)
             .is_some_and(|ty| surface.changes_receiver(&ty, method) == Some(true))
+    }
+
+    /// `v.any(f)` on a sequence is `v.iter().any(f)`: decided by the core surface, not by a same-named `&mut self`
+    /// iterator method.
+    fn core_surface_iterates_by_reference(&self, object: &Expression<'ast>, method: &str) -> bool {
+        let Some(surface) = self.core_surface else { return false };
+        let fields = self.struct_field_types.unwrap_or_else(|| super::empty_struct_field_types());
+        crate::ir::receiver_type::infer_receiver_type(object, &self.analyzed.decl, fields)
+            .is_some_and(|ty| surface.iterates_by_reference(&ty, method))
     }
 }
 
