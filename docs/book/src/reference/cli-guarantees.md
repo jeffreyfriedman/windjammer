@@ -135,6 +135,11 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs | tested |
 | `wj explain-effects --fn` | Only this function (`name` or `Type::name`) | tested |
 | `wj explain-effects --json` | Machine-readable JSON output | tested |
+| `wj optimize` | Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument | tested |
+| `wj optimize --explain` | Report each pass that changed the file: edit count, soundness section, default state | tested |
+| `wj optimize --pass` | Only this pass (an unknown name is an error that lists the known passes) | tested |
+| `wj optimize --list` | List every optimizer pass: name, default state, rewrite and soundness section | tested |
+| `wj optimize --json` | Machine-readable JSON output | tested |
 | `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) | tested |
 | `wj caps --json` | Machine-readable JSON output (show) | tested |
 | `wj run --sandbox` | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) | tested |
@@ -165,6 +170,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj run --jit-loop-hot` | Interpreted runs (internal, hidden from help; env WJ_JIT_LOOP_HOT): closure-engine iterations before a hot loop enters machine code; 0 makes every loop try at its first iteration (stress tests) | tested |
 | `wj run --jit-debug` | Interpreted runs (internal, hidden from help; env WJ_JIT_DEBUG): report on stderr which loops run as machine code and why others do not | tested |
 | `wj run --jit-mutant` | Interpreted runs (internal, hidden from help; env WJ_JIT_MUTANT): in debug builds, leave one machine-code check out for the mutation gate; release builds ignore it | tested |
+| `wj run --pair-list` | Interpreted runs (internal, hidden from help): run every program listed in FILE under the tree walker and the resolved engine in one process, without the check, and print a JSON line per program and engine (exit status, stdout, stderr); the drift fuzz step's batch mode (ADR-0038 C4) | tested |
 | `wj run --engine` | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) | tested |
 | `wj run --hash-seed` | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) | tested |
 | `wj run --error-format` | Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036) | tested |
@@ -187,6 +193,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj doctor` | Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems) | tested |
 | `wj doctor --expect-head` | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) | tested |
 | `wj doctor --strict` | Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout | tested |
+| `wj doctor --pin` | Print the toolchain pin line for this wj (its source key), ready to paste under `[toolchain]` in wj.toml | tested |
 | `wj doctor --json` | Machine-readable output | tested |
 | `wj install-dev` | Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup | tested |
 | `wj install-dev --dry-run` | Print what would happen without writing anything | tested |

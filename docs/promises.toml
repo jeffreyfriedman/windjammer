@@ -668,6 +668,26 @@ id = "wj explain-effects --json"
 statement = "Machine-readable JSON output"
 
 [[promise]]
+id = "wj optimize"
+statement = "Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument"
+
+[[promise]]
+id = "wj optimize --explain"
+statement = "Report each pass that changed the file: edit count, soundness section, default state"
+
+[[promise]]
+id = "wj optimize --pass"
+statement = "Only this pass (an unknown name is an error that lists the known passes)"
+
+[[promise]]
+id = "wj optimize --list"
+statement = "List every optimizer pass: name, default state, rewrite and soundness section"
+
+[[promise]]
+id = "wj optimize --json"
+statement = "Machine-readable JSON output"
+
+[[promise]]
 id = "wj caps"
 statement = "What the project's dependencies are known to do (per-package capabilities and the lock file)"
 

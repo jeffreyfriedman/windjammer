@@ -64,6 +64,9 @@ fn declares_macros(file: &syn::File) -> bool {
 /// Optimize with production defaults, plus the opt-in auto-arena pass when `auto_arena` is set
 /// (`CompilerConfig::auto_arena`).
 pub fn run_with_auto_arena(auto_arena: bool, rust_source: &str) -> String {
+    if disabled_for_explain() {
+        return rust_source.to_string();
+    }
     if auto_arena {
         run(&OptimizationConfig::with_auto_arena(), rust_source).code
     } else {
@@ -73,7 +76,16 @@ pub fn run_with_auto_arena(auto_arena: bool, rust_source: &str) -> String {
 
 /// Optimize with production defaults.
 pub fn run_default(rust_source: &str) -> String {
+    if disabled_for_explain() {
+        return rust_source.to_string();
+    }
     run(&OptimizationConfig::production(), rust_source).code
+}
+
+/// `WJ_OPTIMIZER=off`: the build hooks emit the code generator's output unchanged. Set only by `wj optimize` on the
+/// child build it runs to obtain the pre-optimizer text (src/cli/optimize.rs); not a user setting.
+fn disabled_for_explain() -> bool {
+    std::env::var_os("WJ_OPTIMIZER").is_some_and(|v| v == "off")
 }
 
 #[cfg(test)]

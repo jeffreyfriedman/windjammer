@@ -10,11 +10,11 @@
     "book.features_uncovered": 0,
     "book.pages": 62,
     "book.promises_uncovered": 0,
-    "cli.subcommands": 40,
+    "cli.subcommands": 41,
     "conformance.backends": 3,
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 27,
-    "drift.corpus_cases": 1934,
+    "drift.corpus_cases": 1940,
     "errors.codes_total": 74,
     "interpreter.features_supported": 44,
     "interpreter.features_unsupported": 0,
@@ -23,7 +23,7 @@
     "lints.w_codes": 7,
     "spec.example_files": 294,
     "stdlib.files": 43,
-    "tests.rust_files": 2046,
-    "tests.wj_programs": 2061
+    "tests.rust_files": 2063,
+    "tests.wj_programs": 2117
   }
 }

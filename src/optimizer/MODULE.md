@@ -33,6 +33,8 @@ argument in `docs/optimization/PASSES.md`; a pass without one stays off.
 ## Entry points
 `optimizer::run(&OptimizationConfig, &str)`, `optimizer::run_default(&str)`.
 Hooks: `file_compiler.rs`, `output_generation.rs`, `compiler_database.rs` (after `generate_program`).
+`WJ_OPTIMIZER=off` makes the hooks emit the code generator's text unchanged; only `wj optimize` (src/cli/optimize.rs) sets it,
+on the child build that yields the pre-optimizer text it reports against.
 
 ## Layout
 `config.rs` switches · `edit.rs` span edits · `facts.rs` per-fn binding facts ·

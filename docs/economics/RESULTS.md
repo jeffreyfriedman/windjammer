@@ -146,4 +146,5 @@ quiet".
 <slot> env WJ_ECOSYSTEM=<eco> wj run --interpret scripts/wj/economics.wj -- --wj $(command -v wj) --target <empty dir> --label mac-YYYYMMDD
 wj run --interpret scripts/wj/economics_report.wj -- bench/economics/results/mac-YYYYMMDD.json --md bench/economics/results/mac-YYYYMMDD.md
 wj run --interpret scripts/wj/economics.wj -- --static --check bench/economics/results/static.json   # D7 gate
+wj run --interpret scripts/wj/economics_report.wj -- bench/economics/results/mac-YYYYMMDD.json --gate  # claimed wins hold
 ```
