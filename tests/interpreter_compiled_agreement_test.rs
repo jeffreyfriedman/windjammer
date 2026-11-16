@@ -120,3 +120,15 @@ fn float_from_bits_round_trips_like_the_compiled_build() {
     );
     assert_eq!((code, out.as_str()), (0, "2.5 true 1.5\n"), "{err}");
 }
+
+/// A decode into `other::State` when no module `other` is in reach fails; it never falls back to the `State` the decoding
+/// module declares itself (the game host ran `skills.wj` without `state_model.wj`: every `world` input decoded into the
+/// skills module's own `State` and was rejected).
+#[test]
+fn a_decode_into_a_type_of_a_missing_module_never_uses_a_same_named_local_type() {
+    let (code, out, err) = run(
+        "missing-module-decode",
+        "use std::json\n\nstruct State {\n    level: int,\n}\n\nfn main() {\n    let r: Result<other::State, string> = json.parse_string(\"{\\\"level\\\":1}\")\n    match r {\n        Ok(_) => println(\"decoded\"),\n        Err(e) => println(\"err ${e}\"),\n    }\n}\n",
+    );
+    assert!(code != 0 || (out.starts_with("err ") && out.contains("other")), "decoded into the local State: {out}{err}");
+}
