@@ -84,8 +84,12 @@ pub fn check(program: &Program<'_>) -> Vec<UnwaitedTask> {
 }
 
 /// `Err` with the first finding, rendered (for the compiler and the interpreter loader).
+/// Also WJ0192/WJ0193 (`task_captures`).
 pub fn gate(program: &Program<'_>) -> Result<(), String> {
-    match check(program).first() {
+    if let Some(f) = check(program).first() {
+        return Err(f.render());
+    }
+    match super::task_captures::check(program).first() {
         Some(f) => Err(f.render()),
         None => Ok(()),
     }
@@ -275,7 +279,7 @@ impl Cx {
 }
 
 /// The direct sub-expressions of `e` (blocks are walked by the caller through `Block`).
-fn children<'a, 'ast>(e: &'a Expression<'ast>) -> Vec<&'a Expression<'ast>> {
+pub(super) fn children<'a, 'ast>(e: &'a Expression<'ast>) -> Vec<&'a Expression<'ast>> {
     match e {
         Expression::Literal { .. } | Expression::Identifier { .. } => vec![],
         Expression::Binary { left, right, .. } => vec![*left, *right],

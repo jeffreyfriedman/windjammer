@@ -387,6 +387,26 @@ fn label() -> string {
             rust_codes: vec![],
             maturity: GuaranteeMaturity::Proven,
         });
+        self.register(WjErrorCode {
+            code: "WJ0192".to_string(),
+            title: "Task changes a captured variable".to_string(),
+            explanation: "A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004).".to_string(),
+            causes: vec!["`spawn { total += x }` with `total` a local of the enclosing code".to_string()],
+            solutions: vec!["Return the value and read it with `t.wait()`, or send it on a channel".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0193".to_string(),
+            title: "Value cannot move to another thread".to_string(),
+            explanation: "A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004).".to_string(),
+            causes: vec!["`spawn { .. }` reading a local made with `Rc::new`".to_string()],
+            solutions: vec!["Start the task with `async`".to_string(), "Build the value inside the task".to_string()],
+            example: None,
+            rust_codes: vec!["E0277".to_string()],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
     }
 
     /// ADR-0002: explicit `let mut` (WJ0051).

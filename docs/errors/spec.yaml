@@ -41,6 +41,12 @@ codes:
   - code: WJ0191
     title: Removed concurrency syntax
     rust_codes: []
+  - code: WJ0192
+    title: Task changes a captured variable
+    rust_codes: []
+  - code: WJ0193
+    title: Value cannot move to another thread
+    rust_codes: [E0277]
   - code: WJ0160
     title: Arena value escapes its arena
     rust_codes: []

@@ -36,6 +36,17 @@ pub fn unwaited(p: &Parsed, ix: &SourceIndex, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// WJ0192 (a task changes a captured variable) and WJ0193 (a spawned task captures a thread-bound value).
+pub fn captures(p: &Parsed, ix: &SourceIndex, out: &mut Vec<Diagnostic>) {
+    for f in crate::analyzer::task_captures::check(&p.program) {
+        if f.line == 0 {
+            continue;
+        }
+        let at = ix.offset(f.line, f.column);
+        out.push(Diagnostic::error(f.code, f.message()).at(ix.word_span_from(at).with_label("this task")).with_help(f.help()));
+    }
+}
+
 /// Edits that put `scope {` before the statement on the line of byte `at` and `}` before the brace that closes its
 /// block, indenting the lines in between by four spaces. `None` when the block's end cannot be found.
 fn wrap_rest_in_scope(ix: &SourceIndex, at: usize) -> Option<Vec<Edit>> {

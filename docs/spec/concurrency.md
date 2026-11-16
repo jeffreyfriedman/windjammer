@@ -102,6 +102,21 @@ early
 2
 ```
 
+**SPEC-CONC-011** A task works on its own copy of every variable it reads from the code that started it. A task that assigns to such a variable is a compile-time error (WJ0192); a `spawn` task that reads a value bound to its thread (built with `Rc::new`, `RefCell::new`, `Cell::new` or `Weak::new`, or declared with such a type) is a compile-time error (WJ0193; `async` stays on the thread and may). `Send` is never written in source.
+
+<!-- example: tests/spec/concurrency/SPEC-CONC-011.wj -->
+<!-- should_fail: the rule says this program is rejected -->
+```windjammer,should_fail
+fn main() {
+    let mut total = 0
+    scope {
+        spawn { total += 1 }
+    }
+    println("${total}")
+}
+```
+Rejected at compile time (WJ0192).
+
 ## Channels
 
 **SPEC-CONC-004** Channels are library values with methods: `tx.send(x)` sends, `rx.recv()` waits for a value and returns it (and panics on a channel whose senders are all gone and which is empty). Values from one sender arrive in the order they were sent.

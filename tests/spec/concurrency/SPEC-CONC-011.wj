@@ -1,0 +1,12 @@
+// spec: SPEC-CONC-011
+// mode: check-error
+// expect-error: WJ0192
+// oracle: check
+fn main() {
+    let mut total = 0
+    scope {
+        spawn { total += 1 }
+//~     ^^^^^ ERROR WJ0192 changes `total`
+    }
+    println("${total}")
+}

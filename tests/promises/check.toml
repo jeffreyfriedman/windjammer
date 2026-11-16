@@ -251,3 +251,19 @@ polarity = "positive"
 files = { "m.wj" = "use std::sync\n\nfn main() {\n    let (tx, rx) = sync::channel()\n    tx.send(5)\n    println(\"${rx.recv()}\")\n}\n" }
 args = ["check", "{w}/m.wj"]
 output_has = ["0 error(s)"]
+
+[[case]]
+name = "check rejects a task that changes a captured variable (WJ0192)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut total = 0\n    scope {\n        spawn { total += 1 }\n    }\n    println(\"${total}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0192\""]
+
+[[case]]
+name = "check rejects a spawned task that captures an Rc (WJ0193) and accepts async"
+polarity = "negative"
+files = { "m.wj" = "use std::rc::Rc\n\nfn main() {\n    let r = Rc::new(5)\n    let a = async { *r + 1 }\n    let t = spawn { *r + 1 }\n    println(\"${a.wait() + t.wait()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0193\""]

@@ -158,11 +158,13 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     }
     if let Err(msg) = crate::analyzer::Analyzer::new().check_forbidden_rust_patterns(&p.program) {
         // un-waited tasks are reported by `check/tasks.rs` with their own code and fix
-        if !msg.starts_with(&format!("error[{}]", crate::analyzer::task_structure::CODE)) {
+        let task_code = ["WJ0190", "WJ0192", "WJ0193"].iter().any(|c| msg.starts_with(&format!("error[{c}]")));
+        if !task_code {
             out.push(forbidden(&msg, &ix));
         }
     }
     super::tasks::unwaited(p, &ix, out);
+    super::tasks::captures(p, &ix, out);
     crate::debug_env::phase("check-forbidden");
     let mut leak = crate::linter::rust_leakage::RustLeakageLinter::new(&p.file).with_receiver_spans(p.parser.span_snapshot()).with_source(&p.text);
     leak.lint_program(&p.program);

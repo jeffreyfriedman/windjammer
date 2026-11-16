@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub mod arena_escape;
+pub mod task_captures;
 pub mod task_structure;
 mod borrow_analysis;
 mod spawn_capture;
