@@ -11,6 +11,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+/// The wall clock for age-based eviction: the one read every prune shares (native `wj cache prune` only; the browser
+/// build never reaches this module). New pruning code asks this, so `tests/wasm_clock_sites.txt` stays at its count.
+fn wall_now() -> SystemTime {
+    SystemTime::now()
+}
+
 /// Entries kept in the analysis directory (newest win).
 pub const ANALYSIS_MAX_ENTRIES: usize = 20_000;
 /// Entries older than this are dropped by `wj cache prune`.
@@ -100,7 +106,7 @@ pub fn prune(dir: &Path, max: usize, force: bool, report: &mut super::PruneRepor
         report.messages.push(format!("{} is being written: not pruned", dir.display()));
         return 0;
     }
-    let now = SystemTime::now();
+    let now = wall_now();
     let mut freed = 0;
     let mut all = entries(dir);
     all.sort();
