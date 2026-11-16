@@ -1,0 +1,24 @@
+// expect: x 1
+// expect: x 1
+// A `match` value whose arms are an `int` binding and `len() - 1`, later used as an index: the arms are one class
+// with the `int` binding, so `len() - 1` is converted where it is produced and the index use converts the value
+// (it was predicted as `i64` against `usize` across the arms).
+fn slot(idx: Option<int>, v: Vec<string>) -> string {
+    let mut list = v
+    let s = match idx {
+        Some(i) => {
+            list[i] = "x"
+            i
+        },
+        None => {
+            list.push("x")
+            list.len() - 1
+        },
+    }
+    "${list[s]} ${list.len()}"
+}
+
+fn main() {
+    println(slot(Some(0), ["a"]))
+    println(slot(None, []))
+}

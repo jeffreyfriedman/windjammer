@@ -1,0 +1,13 @@
+// expect: 8 1
+// A vector filled by `extend_from_slice` holds the slice's elements: the core surface declares the slot `&[T]`, so the
+// argument `[u8; 4]` gives the element `u8` (the vector was emitted as `Vec<[u8; 4]>`).
+fn pack(a: u32, b: u32) {
+    let mut bytes = Vec::with_capacity(8)
+    bytes.extend_from_slice(a.to_le_bytes())
+    bytes.extend_from_slice(b.to_le_bytes())
+    println("${bytes.len()} ${bytes[0]}")
+}
+
+fn main() {
+    pack(1, 2)
+}

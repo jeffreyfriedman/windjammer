@@ -18,6 +18,7 @@ pub trait Vec<T> {
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
     fn push(&mut self, value: T);
+    fn extend_from_slice(&mut self, other: &[T]);
     fn pop(&mut self) -> Option<T>;
     fn get(self, index: usize) -> Option<&T>;
     fn get_mut(&mut self, index: usize) -> Option<&mut T>;
@@ -77,6 +78,7 @@ pub trait Iterator<T> {
 
 pub trait VecDeque<T> {
     fn new() -> VecDeque<T>;
+    fn clone(self) -> VecDeque<T>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn push_back(&mut self, value: T);
@@ -97,6 +99,7 @@ pub trait VecDeque<T> {
 
 pub trait HashMap<K, V> {
     fn new() -> HashMap<K, V>;
+    fn clone(self) -> HashMap<K, V>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -109,6 +112,7 @@ pub trait HashMap<K, V> {
 
 pub trait BTreeMap<K, V> {
     fn new() -> BTreeMap<K, V>;
+    fn clone(self) -> BTreeMap<K, V>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn get(self, key: &K) -> Option<&V>;
@@ -120,6 +124,7 @@ pub trait BTreeMap<K, V> {
 
 pub trait HashSet<T> {
     fn new() -> HashSet<T>;
+    fn clone(self) -> HashSet<T>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -130,6 +135,7 @@ pub trait HashSet<T> {
 
 pub trait BTreeSet<T> {
     fn new() -> BTreeSet<T>;
+    fn clone(self) -> BTreeSet<T>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn insert(&mut self, value: T) -> bool;
@@ -142,6 +148,7 @@ pub trait Option<T> {
     fn expect(self, message: &str) -> T;
     fn unwrap_or(self, default: T) -> T;
     fn unwrap_or_default(self) -> T;
+    fn ok_or<E>(self, err: E) -> Result<T, E>;
     fn is_some(self) -> bool;
     fn is_none(self) -> bool;
     // On `Option<&T>`: the copy of the referent (references carry no width).
@@ -163,6 +170,7 @@ pub trait Result<T, E> {
 
 pub trait String {
     fn new() -> String;
+    fn clone(self) -> String;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;

@@ -2491,7 +2491,7 @@ impl<'ast> CodeGenerator<'ast> {
         if rust_autoborrows_temp && matches!(resolved_kind, CoercionKind::Borrow) {
             resolved_kind = CoercionKind::Identity;
         }
-        let coerced = apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust);
+        let coerced = matches!(resolved_kind, CoercionKind::Clone).then(|| self.owned_copy_of_view_arg(arg_expr, &prepared_arg)).flatten().unwrap_or_else(|| apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust));
         let mut coerced = self.finalize_ir_call_arg(arg_expr, prepared_arg.as_str(), &coerced);
 
         // IR contract pass: when Identity was forced above but `expected` is still Ref,
@@ -3056,7 +3056,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 coerced = base.to_string();
                             }
                         } else {
-                            coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
+                            coerced = self.owned_copy_of_view_arg(arg_expr, &coerced).unwrap_or_else(|| format!("{}.clone()", coerced.trim_start_matches('&')));
                         }
                     }
                 }
@@ -5043,7 +5043,7 @@ impl<'ast> CodeGenerator<'ast> {
             // (Rust auto-copies). Never emit `*owned` — that E0614s when `owned`
             // is already a value local (IR may have stripped `&` already).
             let mut s = arg_str.trim().to_string();
-            if s.starts_with('(') && s.ends_with(')') {
+            if crate::ir::coercion::parens_wrap_whole(&s) {
                 let inner = s[1..s.len() - 1].trim().to_string();
                 if inner.starts_with('&') || inner.starts_with("&mut ") {
                     s = inner;
@@ -5053,7 +5053,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let inner = crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str);
         // Parenthesized unary refs from expression codegen: `(&x)`.
-        let inner = if arg_str.trim().starts_with('(') && arg_str.trim().ends_with(')') {
+        let inner = if crate::ir::coercion::parens_wrap_whole(arg_str.trim()) {
             let peeled = arg_str.trim();
             let mid = peeled[1..peeled.len() - 1].trim();
             if mid.starts_with('&') || mid.starts_with("&mut ") {
@@ -7727,7 +7727,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let mut s = coerced.trim().to_string();
         loop {
-            if s.starts_with('(') && s.ends_with(')') {
+            if crate::ir::coercion::parens_wrap_whole(&s) {
                 let inner = s[1..s.len() - 1].trim().to_string();
                 if inner.starts_with('&') || inner.starts_with("&mut ") {
                     s = inner;
@@ -7961,7 +7961,7 @@ impl<'ast> CodeGenerator<'ast> {
             let before = coerced.trim().to_string();
             let mut s = before.clone();
             loop {
-                if s.starts_with('(') && s.ends_with(')') {
+                if crate::ir::coercion::parens_wrap_whole(&s) {
                     let inner = s[1..s.len() - 1].trim().to_string();
                     if inner.starts_with('&') || inner.starts_with("&mut ") {
                         s = inner;
@@ -10184,7 +10184,7 @@ fn ownership_from_rust_expr(expr: &str) -> Option<OwnedType> {
         Some(OwnedType::MutRef(Region::fresh(1)))
     } else if trimmed.starts_with('&') {
         Some(OwnedType::Ref(Region::fresh(0)))
-    } else if trimmed.starts_with('(') && trimmed.ends_with(')') {
+    } else if crate::ir::coercion::parens_wrap_whole(trimmed) {
         ownership_from_rust_expr(&trimmed[1..trimmed.len() - 1])
     } else if trimmed.ends_with(".to_string()") || trimmed.ends_with(".to_owned()") {
         Some(OwnedType::Owned)

@@ -5,7 +5,7 @@ fn parse(s: &str) -> Result<i64, String> {
 
 #[inline]
 fn pick(xs: &Vec<i64>, i: i64) -> Result<i64, String> {
-    xs.get(i as usize).copied().ok_or(String::from("missing"))
+    xs.get((i as usize)).copied().ok_or(String::from("missing"))
 }
 
 fn main() {

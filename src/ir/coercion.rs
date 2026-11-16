@@ -218,7 +218,7 @@ fn emitted_rust_closure_value(expr: &str) -> bool {
 
 fn strip_rust_ref_expr(expr: &str) -> &str {
     let trimmed = expr.trim();
-    let inner = if trimmed.starts_with('(') && trimmed.ends_with(')') {
+    let inner = if parens_wrap_whole(trimmed) {
         trimmed[1..trimmed.len() - 1].trim()
     } else {
         trimmed
@@ -227,6 +227,27 @@ fn strip_rust_ref_expr(expr: &str) -> &str {
         .trim_start_matches("&mut ")
         .trim_start_matches('&')
         .trim()
+}
+
+/// `(x)` whose first `(` closes at the last character: `(&v[a..b]).to_vec().clone()` is not wrapped.
+pub(crate) fn parens_wrap_whole(s: &str) -> bool {
+    if !(s.starts_with('(') && s.ends_with(')')) {
+        return false;
+    }
+    let mut depth = 0i32;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i == s.len() - 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 /// `text[s..e]` / `&text[s..e]` are `str` subslices — owned `String` formals need `.to_string()`.
@@ -268,7 +289,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
             (true, coerced["&mut ".len()..].trim())
         } else if coerced.starts_with('&') {
             (true, coerced[1..].trim())
-        } else if coerced.starts_with('(') && coerced.ends_with(')') {
+        } else if parens_wrap_whole(coerced) {
             let inner_expr = coerced[1..coerced.len() - 1].trim();
             if inner_expr.starts_with("&mut ") {
                 (true, inner_expr["&mut ".len()..].trim())
@@ -282,10 +303,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         };
         // Owned / force-owned formals: strip both `&T` and `&mut T` (dogfood)` into `mut deps: AppDeps`).
         if is_ref {
-            let inner = inner
-                .strip_prefix('(')
-                .and_then(|s| s.strip_suffix(')'))
-                .unwrap_or(inner);
+            let inner = if parens_wrap_whole(inner) { &inner[1..inner.len() - 1] } else { inner };
             if inner.starts_with('*') {
                 *coerced = inner.to_string();
             } else if is_copy_base(&expected.base) && !matches!(expected.base, BaseType::Custom(_))

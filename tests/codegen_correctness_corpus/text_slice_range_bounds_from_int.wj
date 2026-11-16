@@ -1,0 +1,17 @@
+// expect: h
+// expect: e
+// expect: l
+// expect: el
+// A text slice `s[i..i + 1]` with `i: int`: its bounds are arguments at `usize` slots, so they keep the class of `i`
+// (`int`) and are converted where they are passed; the literal in `i + 1` is `int`, not the `i32` default.
+fn main() {
+    let s = "hello"
+    let mut i: int = 0
+    while i < 3 {
+        let c = s[i..i + 1]
+        println("${c}")
+        i += 1
+    }
+    let k: int = 1
+    println("${s[k..k + 2]}")
+}

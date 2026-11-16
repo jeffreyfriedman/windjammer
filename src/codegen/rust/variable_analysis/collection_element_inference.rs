@@ -76,6 +76,13 @@ fn concrete_vec_element_from_sig(sig: &FunctionSignature, arg_index: usize) -> O
     fallback
 }
 
+fn sequence_element(t: Type) -> Option<Type> {
+    match t {
+        Type::Vec(e) | Type::Array(e, _) => Some(*e),
+        _ => None,
+    }
+}
+
 fn method_stores_element_in_registry(method: &str, registry: &SignatureRegistry) -> bool {
     registry
         .signatures_for_method_name(method)
@@ -423,6 +430,20 @@ impl<'ast> CodeGenerator<'ast> {
                 return None;
             }
 
+            // A core surface `&[T]` slot (`extend_from_slice`) stores the argument's elements, not the argument.
+            if let (Some((generics, _, params, _)), Some((_, last))) =
+                (self.core_surface().declared("Vec", method), arguments.last())
+            {
+                let elem = generics.first()?;
+                if let Some(Type::Reference(inner)) = params.last() {
+                    if matches!(inner.as_ref(), Type::Vec(e) if matches!(e.as_ref(), Type::Custom(n) | Type::Generic(n) if n == elem)) {
+                        return match self.infer_expression_type(last)? {
+                            Type::Reference(t) => sequence_element(*t),
+                            t => sequence_element(t),
+                        };
+                    }
+                }
+            }
             let registry = self
                 .global_signature_registry
                 .as_deref()

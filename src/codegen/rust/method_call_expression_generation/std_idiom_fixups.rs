@@ -214,6 +214,23 @@ impl<'ast> CodeGenerator<'ast> {
         Some(format!("{obj_str}.iter().any(|m| *m == *{x})"))
     }
 
+    /// The owned copy of a borrowed view passed to an owned slot (`toks.push(s[i..j])` into `Vec<string>`), when the
+    /// core surface declares the call a view: a text view (`&str`) is copied with `.to_string()`, a sequence result
+    /// printed borrowed (`&v[a..b]`, a slice) with `.to_vec()`. `None` for anything else (it is cloned).
+    pub(in crate::codegen::rust) fn owned_copy_of_view_arg(&self, arg: &Expression<'ast>, emitted: &str) -> Option<String> {
+        let Expression::MethodCall { object, method, type_args, .. } = arg else { return None };
+        let base = emitted.strip_prefix('&').filter(|b| !b.starts_with("mut "))?;
+        let ret = self
+            .infer_expression_type(object)
+            .and_then(|recv| self.core_surface().method_signature(&recv, method, type_args.as_deref().unwrap_or(&[])))
+            .and_then(|sig| sig.ret)?;
+        match ret {
+            Type::Reference(inner) if crate::codegen::rust::types::is_windjammer_text_type(&inner) => Some(format!("{base}.to_string()")),
+            Type::Vec(_) => Some(format!("{base}.to_vec()")),
+            _ => None,
+        }
+    }
+
     /// `x[a..b]` (desugared to `.slice(a, b)`): bounds are `usize`, so bare non-negative literals and
     /// `as usize` for other integers.
     pub(super) fn mc_slice_expr(

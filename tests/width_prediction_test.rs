@@ -8,7 +8,7 @@
 //! rejects (tests/golden/rustc_rejects.txt).
 
 use std::path::{Path, PathBuf};
-use windjammer::check::widths::clashes;
+use windjammer::check::widths::{clashes, predict};
 use windjammer::cli::widths_gate::predicted_widths;
 
 fn root() -> PathBuf {
@@ -230,7 +230,6 @@ fn predictions_across_the_corpora() {
         "tests/check_negative/mutants/strings_format_specs__string_annotated_int.wj 1",
         "tests/check_negative/mutants/strings_unicode__string_annotated_int.wj 1",
         "tests/conformance_programs/174_closure_mut_capture.wj 3",
-        "tests/conformance_programs/62_vec_alias_semantics.wj 1",
         "tests/conformance_programs/98_bignum_factorial.wj 1",
         "tests/diagnostics/cases/let_string_to_int.wj 1",
         "tests/diagnostics/cases/numeric_string_to_int.wj 1",
@@ -303,4 +302,17 @@ fn flagged_goldens_are_ones_rustc_rejects() {
         let src = rel.trim_end_matches(".golden");
         assert!(rejects.lines().any(|l| l.starts_with(&format!("{src} |"))), "{src}: flagged, but rustc accepts its golden");
     }
+}
+
+/// A clash whose differing part is text (`Vec<String>` against `Vec<&str>`, from a list literal of an `if` of string
+/// literals) is reported as a `String`/`&str` mismatch: the help names the text conversion, never integer widths.
+#[test]
+fn text_inside_a_list_is_not_reported_as_a_width() {
+    let rust = "fn main() { let c = true; let v: Vec<String> = vec![{ if c { \"x\" } else { \"y\" } }]; }";
+    let source = "fn main() {\n    let c = true\n    let v: Vec<string> = [if c { \"x\" } else { \"y\" }]\n}\n";
+    let d = predict(rust, source, "a.wj");
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert!(!d[0].message.contains("integer"), "{}", d[0].message);
+    assert!(d[0].help.iter().all(|h| !h.contains("`int`")) && d[0].help.iter().any(|h| h.contains("&str")), "{:?}", d[0].help);
+    assert!(d[0].notes.iter().any(|n| n.contains("family C")), "{:?}", d[0].notes);
 }

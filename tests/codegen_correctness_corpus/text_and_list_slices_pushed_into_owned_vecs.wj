@@ -1,0 +1,21 @@
+// expect: ["world", "hello"] 2 [[1, 2]]
+// A text slice passed to an owned `string` slot (`toks.push(s[i..j])` into `Vec<string>`) is copied with `.to_string()`
+// and a list slice into `Vec<Vec<int>>` with `.to_vec()`: the core surface declares `String::slice` a `&str` view.
+// Both were emitted `s[i..j].clone()` / `v[0..2].clone()`, which rustc rejects (`str` and `[i64]` have no `clone`).
+fn take(x: string) -> int {
+    x.len()
+}
+
+fn main() {
+    let s = "hello world"
+    let mut toks: Vec<string> = []
+    let i = 6
+    let j = 11
+    toks.push(s[i..j])
+    toks.insert(1, s[0..5])
+    let n = take(s[0..2])
+    let mut parts: Vec<Vec<int>> = []
+    let v = [1, 2, 3]
+    parts.push(v[0..2])
+    println("${toks:?} ${n} ${parts:?}")
+}
