@@ -40,6 +40,11 @@ impl TraitKeySet {
         self.keys.iter()
     }
 
+    /// The keys `keep` accepts, in key order.
+    pub(crate) fn keys_matching<'a>(&'a self, keep: impl Fn(&String) -> bool + 'a) -> impl Iterator<Item = &'a String> {
+        self.keys.iter().filter(move |k| keep(k))
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.keys.len()
     }

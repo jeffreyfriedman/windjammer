@@ -1046,7 +1046,7 @@ impl SignatureRegistry {
         let mut found: std::collections::BTreeSet<&String> = std::collections::BTreeSet::new();
         for reg in self.layers() {
             if method.contains("::") {
-                found.extend(reg.trait_method_keys.iter().filter(|tk| tk.as_str() == method || tk.ends_with(&suffix)));
+                found.extend(reg.trait_method_keys.keys_matching(|tk| tk.as_str() == method || tk.ends_with(&suffix)));
             } else {
                 // A key names `method` exactly when its last path segment is `method`.
                 found.extend(reg.trait_method_keys.named(method));
