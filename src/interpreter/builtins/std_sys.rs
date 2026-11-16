@@ -279,13 +279,13 @@ fn register_fs(r: &mut Registry) {
         }
         Ok(Value::ok(Value::vec(out)))
     });
-    r.func("fs::current_dir", |_, _| {
-        Ok(match std::env::current_dir() {
+    r.func("fs::current_dir", |it, _| {
+        Ok(match it.current_dir_io() {
             Ok(p) => Value::ok(s(&p.to_string_lossy())),
             Err(e) => Value::err(Value::str(e.to_string())),
         })
     });
-    r.func("fs::set_current_dir", |_, a| unit_res(std::env::set_current_dir(arg_str(&a, 0, "set_current_dir")?.as_str())));
+    r.func("fs::set_current_dir", |it, a| unit_res(it.change_dir(arg_str(&a, 0, "set_current_dir")?.as_str())));
     r.func("fs::metadata", |_, a| Ok(meta_value(arg_str(&a, 0, "metadata")?.as_str())));
     r.func("fs::canonicalize", |_, a| {
         Ok(match std::fs::canonicalize(arg_str(&a, 0, "canonicalize")?.as_str()) {

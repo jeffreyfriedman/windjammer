@@ -57,6 +57,7 @@ pub mod repl;
 pub mod source_scan;
 pub mod runner;
 mod sched;
+mod virtual_cwd;
 mod scope;
 mod slicing;
 mod task_blocks;

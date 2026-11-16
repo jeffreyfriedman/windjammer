@@ -11,7 +11,7 @@ mod file_cache;
 mod fix;
 mod front;
 mod test_api;
-pub use test_api::compiler_identity_of;
+pub use test_api::{compiler_identity_of, uninstall_shared_cache};
 pub mod moves;
 pub mod locate;
 pub mod local_mut;
@@ -146,6 +146,20 @@ pub fn local_mutability(path: &Path) -> Result<Checked> {
     let (sources, _) = inputs(path)?;
     let found = local_mutability_sources(&sources);
     Ok(Checked { report: Report::new("check", found), sources: sources.into_iter().collect() })
+}
+
+/// The `WJ0006` diagnostics for bare `use` of a module that does not exist (`use state_model` with no such module
+/// beside the file or in the project, in the standard library or in `wj.toml`), exactly as `wj check` reports them;
+/// `wj build` prints these and stops. No cache, no other check.
+pub fn missing_modules(path: &Path) -> Result<Checked> {
+    let (sources, _) = inputs(path)?;
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut sink = Vec::new();
+    let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+    let found = project::module_imports_only(path, &parsed);
+    std::panic::set_hook(previous);
+    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 
 /// `local_mutability` over in-memory sources (one program); files that do not parse are left out.

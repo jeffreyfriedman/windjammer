@@ -129,9 +129,9 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     }
 }
 
-fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
-    // Module paths are relative to the package's source root: `src/shapes.wj` is module `shapes` whether the
-    // check starts at the package root or at `src`.
+/// Name resolution of every file, module paths relative to the package's source root: `src/shapes.wj` is module
+/// `shapes` whether the check starts at the package root or at `src`.
+fn resolve_files<'a>(root: &Path, parsed: &[&'a Parsed]) -> (resolve::ResolvedProgram<'a>, std::path::PathBuf) {
     let package_src = root.join("src");
     let base = if root.is_file() {
         root.parent().unwrap_or(root)
@@ -147,7 +147,70 @@ fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Par
             ParsedFile::new(resolve::module_path_from_file(base, path), path.to_path_buf(), &p.program)
         })
         .collect();
-    let r = resolve::resolve_program(&inputs);
+    (resolve::resolve_program(&inputs), base.to_path_buf())
+}
+
+/// `use state_model` where nothing is named `state_model`: no module of the program, no module file beside the
+/// importing file or in the package, no standard-library module, no declared dependency. (A qualified `use
+/// axum::Router` can name a Rust crate the program's `wj.toml` does not list; a bare module import cannot.)
+fn missing_module_imports(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, r: &resolve::ResolvedProgram<'_>, base: &Path, out: &mut Vec<Diagnostic>) {
+    let deps = manifest_deps(root);
+    let mut modules: Vec<String> = r.defs().iter().filter(|d| matches!(d.kind, DefKind::Module)).map(|d| d.name.clone()).filter(|n| !n.is_empty()).collect();
+    modules.sort();
+    modules.dedup();
+    let on_disk = |dir: &Path, name: &str| dir.join(format!("{name}.wj")).is_file() || dir.join(name).join("mod.wj").is_file() || dir.join(name).is_dir();
+    for scope in r.collected.modules.values() {
+        for u in &scope.uses {
+            let [head] = u.segments.as_slice() else { continue };
+            let Some(loc) = &u.location else { continue };
+            let known = matches!(head.as_str(), "self" | "super" | "crate")
+                || super::semantic::is_std_name(head)
+                || STD_LIKE_HEADS.contains(&head.as_str())
+                || deps.contains(head)
+                || modules.iter().any(|m| m == head)
+                || loc.file.parent().is_some_and(|d| on_disk(d, head))
+                || on_disk(base, head);
+            if known {
+                continue;
+            }
+            let mut d = Diagnostic::error("WJ0006", format!("unresolved import `{head}`: no module named `{head}`"));
+            if let Some(p) = by_file.get(loc.file.to_string_lossy().as_ref()) {
+                let ix = SourceIndex::new(p.file.clone(), &p.text);
+                let sl = Some(loc.clone());
+                if let Some(sp) = Locator::new(&ix).word(&sl, head) {
+                    d = d.at(sp.with_label("no such module"));
+                }
+            }
+            let near = modules
+                .iter()
+                .chain(deps.iter())
+                .map(|m| (crate::fuzzy_matcher::levenshtein_distance(head, m), m))
+                .filter(|(dist, _)| *dist <= (head.len() / 3).clamp(1, 3))
+                .min_by_key(|(dist, m)| (*dist, (*m).clone()));
+            d = match near {
+                Some((_, m)) => d.with_help(format!("a module with a similar name exists: `{m}`")),
+                None if modules.is_empty() => d.with_help("create the module file beside this one, or declare the crate under [dependencies] in wj.toml"),
+                None => d.with_help(format!("modules here: {}; or declare a crate under [dependencies] in wj.toml", modules.iter().take(8).cloned().collect::<Vec<_>>().join(", "))),
+            };
+            out.push(d);
+        }
+    }
+    let _ = parsed;
+}
+
+/// Only the unresolved bare module imports of the program at these files (`wj build` and `wj run` stop on them).
+pub(super) fn module_imports_only(root: &Path, all: &[Parsed]) -> Vec<Diagnostic> {
+    let parsed: Vec<&Parsed> = all.iter().filter(|p| !is_shader(p)).collect();
+    let by_file: HashMap<String, &Parsed> = parsed.iter().map(|p| (p.file.clone(), *p)).collect();
+    let (r, base) = resolve_files(root, &parsed);
+    let mut out = Vec::new();
+    missing_module_imports(root, &parsed, &by_file, &r, &base, &mut out);
+    out
+}
+
+fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
+    let (r, base) = resolve_files(root, parsed);
+    missing_module_imports(root, parsed, by_file, &r, &base, out);
     let span_for = |loc: &Option<crate::source_map::Location>, word: &str| {
         let l = loc.as_ref()?;
         let p = by_file.get(l.file.to_string_lossy().as_ref())?;

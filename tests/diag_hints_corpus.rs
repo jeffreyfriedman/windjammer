@@ -9,6 +9,8 @@
 //! Run: `cargo test --release --test diag_hints_corpus`.
 
 use std::collections::{BTreeMap, BTreeSet};
+#[path = "common/scratch.rs"]
+mod scratch;
 use std::path::{Path, PathBuf};
 use windjammer::diagnostics::{rustc_text, runtime_text};
 
@@ -22,7 +24,7 @@ fn materialize(recorded: &str) -> String {
     let rustup = std::env::var("RUSTUP_HOME").unwrap_or_else(|_| "<rustup-home>".into());
     recorded
         .replace("{REPO}", &root().to_string_lossy())
-        .replace("{TMP}", &std::env::temp_dir().to_string_lossy())
+        .replace("{TMP}", &scratch::os_temp_root().to_string_lossy())
         .replace("{CACHE}", &windjammer::cargo_cache::cache_root().to_string_lossy())
         .replace("{RUSTUP_HOME}", &rustup)
 }

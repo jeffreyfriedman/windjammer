@@ -55,6 +55,21 @@ fn report_local_mutability(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// A bare `use` of a module that does not exist stops the build before code generation (WJ0006, with the modules
+/// that do exist as suggestions), as `wj check` reports it.
+fn report_missing_modules(path: &Path) -> Result<()> {
+    let checked = crate::check::missing_modules(path)?;
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    for d in &checked.report.diagnostics {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    let errors = checked.report.diagnostics.iter().filter(|d| d.is_error()).count();
+    if errors > 0 {
+        anyhow::bail!("{errors} import(s) name a module that does not exist: the build stops before generating code");
+    }
+    Ok(())
+}
+
 /// The compiler configuration of a build of `path`: `config` plus what the project's effects decide (ADR-0021).
 /// Shared with the in-process generator of the predictions (`cli::widths_gate`), which must build as `wj build` does.
 pub(crate) fn with_project_facts(config: crate::compiler_config::CompilerConfig, path: &Path, library: bool) -> Result<crate::compiler_config::CompilerConfig> {
@@ -116,6 +131,7 @@ pub fn execute(
     // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
     stop_on_rust_crate_errors(path)?;
     report_local_mutability(path)?;
+    report_missing_modules(path)?;
     let config = with_project_facts(config, path, library)?;
 
     if target_str.eq_ignore_ascii_case("rust") {

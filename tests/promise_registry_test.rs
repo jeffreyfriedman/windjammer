@@ -16,6 +16,10 @@ mod wj_cli_args;
 #[path = "common/installed_sandbox.rs"]
 mod installed_sandbox;
 
+#[allow(dead_code)]
+#[path = "common/scratch.rs"]
+mod scratch;
+
 #[path = "common/promise/mod.rs"]
 mod promise;
 

@@ -225,6 +225,7 @@ pub fn use_segments(program: &crate::parser::Program) -> std::collections::BTree
 }
 
 /// Same as `merge_wj_meta_signatures_from_dir` but also populates the analyzer with Copy struct info.
+#[cfg(test)]
 pub fn merge_wj_meta_signatures_and_copy_structs(
     root: &Path,
     cache_root: &Path,
@@ -322,6 +323,7 @@ pub fn merge_wj_meta_signatures_and_copy_structs_multi(
 ///
 /// Used for the compiler's stdlib baseline so project/test caches cannot poison
 /// unqualified method consensus (`method_mutates_receiver("render")`).
+#[cfg(test)]
 pub fn merge_wj_meta_signatures_from_dir_only(
     root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,

@@ -1330,8 +1330,8 @@ pub(crate) fn build_library_multipass(
 
             // Crate-root main.wj is the binary entry ([[bin]]), not a library module.
             // Using new_for_module skipped `fn main` and injected `use super::*`.
-            let is_crate_root_main = file.file_name().and_then(|n| n.to_str()) == Some("main.wj")
-                && file.parent().is_some_and(|p| p == src_base.as_path());
+            let is_crate_root_main =
+                crate::module_system::module_graph::is_bin_entry_file(file, &src_base);
 
             let mut codegen = if is_crate_root_main {
                 CodeGenerator::new(full_registry, target)

@@ -113,6 +113,37 @@ fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
     }
 }
 
+/// `wj mcp bind`: turn an MCP tool list (file, stdin or a live server) into a Windjammer module.
+fn cmd_mcp_bind(server: &str, tools: Option<std::path::PathBuf>, stdio: Option<String>, only: &[String], out: Option<std::path::PathBuf>) -> Result<()> {
+    let text = match (tools, stdio) {
+        (Some(p), _) if p.as_os_str() == "-" => {
+            let mut t = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut t)?;
+            t
+        }
+        (Some(p), _) => std::fs::read_to_string(&p).map_err(|e| anyhow::anyhow!("cannot read {}: {e}", p.display()))?,
+        (None, Some(cmd)) => windjammer::interpreter::mcp_host::list_tools(&cmd).map_err(anyhow::Error::msg)?,
+        (None, None) => anyhow::bail!("give the tool list with --tools FILE (or - for stdin), or ask a live server with --stdio COMMAND"),
+    };
+    let module = windjammer::cli::mcp_bind::generate_only(&server, &text, &only).map_err(anyhow::Error::msg)?;
+    match out {
+        Some(p) => {
+            if let Some(dir) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(&p, module)?;
+        }
+        None => print!("{module}"),
+    }
+    Ok(())
+}
+
+/// `wj run --pair-list FILE`: run every listed program interpreted and exit with the batch status.
+fn run_pair_list_and_exit(list: &std::path::Path, (hash_seed, sched_seed): (u64, u64), no_jit: bool, jit_loop_hot: Option<u32>, caps: String) -> ! {
+    let opts = windjammer::interpreter::runner::RunOptions { hash_seed, sched_seed, no_jit, jit_loop_hot, caps_mode: caps, ..Default::default() };
+    std::process::exit(windjammer::interpreter::runner::run_pair_list(list, opts))
+}
+
 pub fn run(cli: Cli) -> Result<()> {
     if let Some(done) = toolchain_pre(&cli.command) { return done }
     match cli.command {
@@ -210,8 +241,7 @@ pub fn run(cli: Cli) -> Result<()> {
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             if let Some(list) = pair_list {
-                let opts = windjammer::interpreter::runner::RunOptions { hash_seed, sched_seed, no_jit: no_jit || jit == "off", jit_loop_hot, caps_mode: caps, ..Default::default() };
-                std::process::exit(windjammer::interpreter::runner::run_pair_list(&list, opts));
+                run_pair_list_and_exit(&list, (hash_seed, sched_seed), no_jit || jit == "off", jit_loop_hot, caps);
             }
             let output = output_of(error_format.as_deref());
             use windjammer::cli::run_dev::{execute, Mode, RunOptions};
@@ -231,28 +261,7 @@ pub fn run(cli: Cli) -> Result<()> {
         }
         Commands::Eval { code } => windjammer::cli::eval::exit_on_failure(windjammer::cli::eval::run(&code)?),
         Commands::Mcp { command } => match command {
-            McpCommand::Bind { server, tools, stdio, only, out } => {
-                let text = match (tools, stdio) {
-                    (Some(p), _) if p.as_os_str() == "-" => {
-                        let mut t = String::new();
-                        std::io::Read::read_to_string(&mut std::io::stdin(), &mut t)?;
-                        t
-                    }
-                    (Some(p), _) => std::fs::read_to_string(&p).map_err(|e| anyhow::anyhow!("cannot read {}: {e}", p.display()))?,
-                    (None, Some(cmd)) => windjammer::interpreter::mcp_host::list_tools(&cmd).map_err(anyhow::Error::msg)?,
-                    (None, None) => anyhow::bail!("give the tool list with --tools FILE (or - for stdin), or ask a live server with --stdio COMMAND"),
-                };
-                let module = windjammer::cli::mcp_bind::generate_only(&server, &text, &only).map_err(anyhow::Error::msg)?;
-                match out {
-                    Some(p) => {
-                        if let Some(dir) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
-                            std::fs::create_dir_all(dir)?;
-                        }
-                        std::fs::write(&p, module)?;
-                    }
-                    None => print!("{module}"),
-                }
-            }
+            McpCommand::Bind { server, tools, stdio, only, out } => cmd_mcp_bind(&server, tools, stdio, &only, out)?,
         },
         Commands::Repl {} => run_repl()?,
         Commands::Test {

@@ -6,6 +6,9 @@
 //! A count that grew is a regression; one that shrank is progress that must be recorded, so the ledger
 //! only ever moves on purpose. `WJ_FALLBACK_RECORD=1` rewrites the ledger from this run.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -125,14 +128,13 @@ fn the_ledger_judge_notices_growth_shrinkage_and_new_programs() {
 /// would make the ledger above vacuous).
 #[test]
 fn each_counter_counts_on_a_program_that_takes_its_path() {
-    let dir = std::env::temp_dir().join(format!("wj-fallbacks-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let scratch = Scratch::new("fallbacks");
+    let dir = scratch.path().to_path_buf();
     // a generic function is never compiled (walkercall); a loop over a closure-held value runs outside machine code
     let walker = dir.join("walker.wj");
     std::fs::write(&walker, "fn id<T>(x: T) -> T {\n    x\n}\n\nfn main() {\n    let mut s = 0\n    let mut i = 0\n    while i < 1000 {\n        s += id(i)\n        i += 1\n    }\n    println(\"${s}\")\n}\n").unwrap();
     let c = counts(&walker, &[]);
     assert!(c[1] >= 1000, "walkercall did not count the generic calls: {c:?}");
-    let _ = std::fs::remove_dir_all(&dir);
     let nbody = counts(&root().join("bench/interp/nbody.wj"), &[]);
     assert!(nbody[0] > 0, "the nbody main loop's call runs as an island today; island did not count: {nbody:?}");
     let closures = counts(&root().join("bench/interp/closures.wj"), &[]);

@@ -487,3 +487,17 @@ args = ["run", "--verify", "{w}/m.wj"]
 exit = 101
 stdout_has = ["before-panic"]
 stderr_has = ["verify boom"]
+
+[[case]]
+name = "run --pair-list runs each listed program under both engines and prints a JSON line each"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"pair-ok\")\n}\n", "list.txt" = "{w}/m.wj\n" }
+args = ["run", "--pair-list", "{w}/list.txt"]
+stdout_has = ["\"engine\":\"walker\"", "\"engine\":\"resolved\"", "pair-ok"]
+
+[[case]]
+name = "run --pair-list of a missing list file fails"
+polarity = "negative"
+args = ["run", "--pair-list", "{w}/nope.txt"]
+exit = 1
+output_has = ["cannot read"]

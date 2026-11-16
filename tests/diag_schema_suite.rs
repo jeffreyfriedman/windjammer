@@ -12,6 +12,9 @@
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::{Path, PathBuf};
 use windjammer::check::check_sources;
 use windjammer::diagnostics::{apply, Diagnostic, Report, SCHEMA_VERSION};
@@ -320,8 +323,8 @@ fn applying_any_corpus_fix_never_produces_a_new_diagnostic() {
 /// validator, for a panic and for `main` returning `Err`.
 #[test]
 fn runtime_error_reports_validate_against_the_schema() {
-    let dir = std::env::temp_dir().join(format!("wj-rt-schema-{}", std::process::id()));
-    fs::create_dir_all(&dir).unwrap();
+    let scratch = Scratch::new("rt-schema");
+    let dir = scratch.path().to_path_buf();
     let programs = [
         ("p.wj", "fn pick(v: Vec<int>, i: int) -> int {\n    v[i]\n}\n\nfn main() {\n    println(\"${pick([1, 2], 9)}\")\n}\n"),
         ("e.wj", "fn main() -> Result<(), string> {\n    Err(\"nope\")\n}\n"),
@@ -342,5 +345,4 @@ fn runtime_error_reports_validate_against_the_schema() {
         assert!(errs.is_empty(), "{name}: {errs:?}");
         assert_eq!(report["command"], "run");
     }
-    let _ = fs::remove_dir_all(&dir);
 }

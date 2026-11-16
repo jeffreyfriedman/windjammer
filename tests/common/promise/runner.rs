@@ -87,7 +87,8 @@ fn host_toolchain() -> &'static Result<Vec<(&'static str, String)>, String> {
             env.push(("RUSTUP_TOOLCHAIN", tc));
         }
         // Prove it works the way the cases will use it: isolated HOME, only this environment.
-        let iso = std::env::temp_dir();
+        let iso_dir = super::super::scratch::Scratch::new("promise-home");
+        let iso = iso_dir.path().to_path_buf();
         let probe = std::process::Command::new("cargo").arg("--version").env_clear().envs(env.iter().map(|(k, v)| (*k, v.as_str()))).env("HOME", &iso).output();
         match probe {
             Ok(o) if o.status.success() => Ok(env),

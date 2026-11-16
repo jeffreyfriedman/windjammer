@@ -204,8 +204,8 @@ pub fn register(r: &mut Registry) {
         Ok(Value::Unit)
     });
     // a Result, as the runtime's `current_dir() -> Result<String, String>`
-    r.func("env::current_dir", |_, _| {
-        Ok(match std::env::current_dir() {
+    r.func("env::current_dir", |it, _| {
+        Ok(match it.current_dir_io() {
             Ok(p) => Value::ok(Value::str(p.to_string_lossy().to_string())),
             Err(e) => Value::err(Value::str(e.to_string())),
         })

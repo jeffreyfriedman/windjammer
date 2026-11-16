@@ -34,6 +34,7 @@ impl RustBackend {
     }
 
     /// Point generated manifests at a local checkout of the crate `name` (`-` or `_` spelling).
+    #[cfg(test)]
     pub fn with_crate_path(mut self, name: &str, path: std::path::PathBuf) -> Self {
         self.crate_paths.insert(name.replace('_', "-"), path);
         self

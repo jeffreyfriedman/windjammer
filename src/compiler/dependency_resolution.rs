@@ -404,6 +404,73 @@ pub(crate) fn find_dependency_metadata_roots(
     roots
 }
 
+/// A build of one file includes the sibling modules it imports (`use name::...` with `name.wj` or `name/mod.wj`
+/// beside it), transitively: a program with imports has no other compiled form.
+pub(crate) fn with_sibling_imports(path: &Path, mut files: Vec<PathBuf>) -> Vec<PathBuf> {
+    if !path.is_file() || files.len() != 1 || path.file_name().and_then(|n| n.to_str()) == Some("mod.wj") {
+        return files;
+    }
+    let Some(dir) = path.parent().map(|d| if d.as_os_str().is_empty() { Path::new(".") } else { d }) else { return files };
+    let mut queue = vec![path.to_path_buf()];
+    while let Some(file) = queue.pop() {
+        let Ok(text) = std::fs::read_to_string(&file) else { continue };
+        for line in text.lines() {
+            let l = line.trim_start();
+            let Some(rest) = l.strip_prefix("use ").or_else(|| l.strip_prefix("pub use ")) else { continue };
+            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            if name.is_empty() {
+                continue;
+            }
+            let found = [dir.join(format!("{name}.wj")), dir.join(&name).join("mod.wj")].into_iter().find(|p| p.is_file());
+            if let Some(f) = found {
+                if !files.contains(&f) {
+                    files.push(f.clone());
+                    queue.push(f);
+                }
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+/// After a build of some of a directory's files: remove the `mod`/`pub use` lines for the root-level siblings this
+/// build left out (a file build declares the modules it imported, not every `.wj` beside it).
+pub(crate) fn drop_unbuilt_sibling_modules(output: &Path, base_path: &Path, built: &[PathBuf]) {
+    let stem = |p: &Path| p.file_stem().and_then(|s| s.to_str()).map(str::to_string);
+    let built: HashSet<String> = built.iter().filter_map(|p| stem(p)).collect();
+    let Ok(rd) = std::fs::read_dir(base_path) else { return };
+    let left_out: HashSet<String> = rd
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "wj"))
+        .filter_map(|p| stem(&p))
+        .filter(|n| n != "mod" && !built.contains(n))
+        .collect();
+    if left_out.is_empty() {
+        return;
+    }
+    for f in ["lib.rs", "mod.rs"] {
+        let file = output.join(f);
+        let Ok(text) = std::fs::read_to_string(&file) else { continue };
+        let kept: Vec<&str> = text
+            .lines()
+            .filter(|l| {
+                let t = l.trim();
+                let name = t
+                    .strip_prefix("pub mod ")
+                    .or_else(|| t.strip_prefix("mod "))
+                    .and_then(|r| r.strip_suffix(';'))
+                    .or_else(|| t.strip_prefix("pub use ").and_then(|r| r.strip_suffix("::*;")));
+                name.is_none_or(|n| !left_out.contains(n))
+            })
+            .collect();
+        if kept.len() != text.lines().count() {
+            let _ = std::fs::write(&file, kept.join("\n") + "\n");
+        }
+    }
+}
+
 pub(crate) fn find_wj_files(path: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     if path.is_file() {

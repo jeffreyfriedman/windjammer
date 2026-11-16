@@ -199,21 +199,17 @@ impl SignatureRegistry {
     /// reading stdlib / meta signatures — avoids cloning the full HashMap.
     pub fn stdlib() -> &'static SignatureRegistry {
         STDLIB_BASELINE.get_or_init(|| {
-            // Runtime Rust APIs (`&str` / `AsRef<str>`) live in the fallback layer so
-            // WJ `.wj` / stdlib_meta stubs that declare owned `string` can shadow them
-            // in `signatures` without erasing the borrow contract — call sites consult
-            // `get_fallback_signature` via prefer_shared_ref.
+            // Runtime `&str` APIs live in the fallback layer: owned-`string` stubs shadow them in
+            // `signatures` without erasing the borrow contract (`get_fallback_signature`, prefer_shared_ref).
             crate::debug_env::phase("registry-start");
             let runtime = snapshot::scanned_runtime_layer();
             crate::debug_env::phase("registry-runtime-layer");
-
             let mut registry = SignatureRegistry::layered(std::sync::Arc::new(runtime));
             Self::load_stdlib_meta(&mut registry);
             crate::debug_env::phase("registry-stdlib-meta");
             super::primitive_float_signatures::register_primitive_float_signatures(&mut registry);
             super::primitive_int_signatures::register_primitive_int_signatures(&mut registry);
-            // WJ `std/strings.wj` / stdlib_meta stubs shadow the fallback layer.
-            // Re-apply runtime boundary last so `get_signature` is the Rust API
+            // Re-apply the runtime boundary last so `get_signature` is the Rust API
             // (`strings::contains` needle `&str`, not owned `string`).
             crate::stdlib_scanner::register_rust_std_boundary_signatures(&mut registry);
             registry.restore_runtime_borrowed_strings_signatures();

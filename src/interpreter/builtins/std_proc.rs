@@ -83,7 +83,9 @@ pub fn register(r: &mut Registry) {
             .iter()
             .map(|v| if let Value::Str(s) = v { (**s).clone() } else { String::new() })
             .collect();
-        let spawned = std::process::Command::new(program.as_str())
+        let mut cmd = std::process::Command::new(program.as_str());
+        it.start_in_cwd(&mut cmd);
+        let spawned = cmd
             .args(&args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
