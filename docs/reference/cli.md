@@ -23,6 +23,9 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
 | `wj check` | Type check without building |
 | `wj add` | Add a dependency to wj.toml |
+| `wj lock` | Resolve dependencies and write or verify wj.lock (exact revisions and content hashes) |
+| `wj lock update` | Re-resolve every path and git dependency, in dependency order, and write wj.lock |
+| `wj lock check` | Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not |
 | `wj remove` | Remove a dependency from wj.toml |
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
@@ -97,6 +100,7 @@ Usage: wj build [OPTIONS] <FILE>
 | `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
 | `--ir-shadow-validate` | IR_SHADOW_VALIDATE |  | Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate) |
 | `--mem-report` | MEM_REPORT |  | Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines |
+| `--locked` | LOCKED |  | Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds) |
 
 ## `wj run`
 
@@ -340,6 +344,38 @@ Usage: wj add [OPTIONS] <PACKAGE>
 | `<PACKAGE>` | PACKAGE |  | Package name |
 | `-f`, `--features` | FEATURES |  | Comma-separated list of features |
 | `-p`, `--path` | PATH |  | Local path dependency |
+
+## `wj lock`
+
+Resolve dependencies and write or verify wj.lock (exact revisions and content hashes)
+
+```text
+Usage: wj lock <COMMAND>
+```
+
+## `wj lock update`
+
+Re-resolve every path and git dependency, in dependency order, and write wj.lock
+
+```text
+Usage: wj lock update [DIR]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<DIR>` | DIR |  | Project directory (default: the current directory) |
+
+## `wj lock check`
+
+Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not
+
+```text
+Usage: wj lock check [DIR]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<DIR>` | DIR |  | Project directory (default: the current directory) |
 
 ## `wj remove`
 

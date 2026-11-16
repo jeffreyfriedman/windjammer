@@ -34,7 +34,7 @@ windjammer-ecosystem repository, run under the tree-walking interpreter, the res
 backend, with each result compared. The number of cases:
 
 <!-- wj:gen name=metric key=drift.corpus_cases -->
-1938
+1946
 <!-- wj:end -->
 
 ## Differences are ledgers that shrink

@@ -80,7 +80,7 @@ Compiler bugs among them, each tracked with an owner in `bench/agent-dx/friction
 Tokens an agent reads per diagnostic from `wj check`, in the default format and with `--error-format agent`:
 
 <!-- wj:gen name=metric key=cost.diag.check_tokens_per_error_human -->
-278
+277
 <!-- wj:end -->
 
 <!-- wj:gen name=metric key=cost.diag.check_tokens_per_error_agent -->
