@@ -161,6 +161,18 @@ impl CoreSurface {
         (!e.is_static).then_some(e.changes_receiver)
     }
 
+    /// Whether `receiver.method(..)` on a collection is an iterator adapter: the collection does not declare the
+    /// method, `Iterator` does. The call runs on a fresh iterator over the collection, so an `&mut self` there
+    /// changes that iterator and never the collection (`names.any(..)`, `names.position(..)`).
+    pub fn is_adapter_on_collection(&self, receiver_name: &str, method: &str) -> bool {
+        let name = crate::type_classification::type_name_leaf(receiver_name);
+        is_element_container(name)
+            && name != ITERATOR
+            && !self.table.contains_key(&(name.to_string(), method.to_string()))
+            && !self.enumerable.contains_key(method)
+            && self.table.contains_key(&(ITERATOR.to_string(), method.to_string()))
+    }
+
     /// Whether `type_name::name` is declared without `self` (an associated function).
     pub fn is_static(&self, type_name: &str, name: &str) -> bool {
         self.table.get(&(type_name.to_string(), name.to_string())).is_some_and(|e| e.is_static)

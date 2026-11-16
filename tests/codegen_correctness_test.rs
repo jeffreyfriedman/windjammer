@@ -142,6 +142,7 @@ corpus_tests!(
     bitwise_vs_comparison_precedence,
     slice_to_vec_extend_argument,
     collect_owned_from_unknown_receiver,
+    list_adapter_owned_option_return,
 );
 
 // ------------------------------------------------------------------ generated programs

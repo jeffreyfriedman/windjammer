@@ -2149,7 +2149,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Iterator adapters yielding `Option<&T>` when the function needs `Option<T>`.
         // Gated by iterator-chain detection + type equivalence (not method-name lists).
-        if self.find_needs_cloned_for_owned_return(object) && !base_expr.ends_with(".cloned()") {
+        if (self.find_needs_cloned_for_owned_return(object) || self.collection_adapter_needs_cloned_for_owned_return(object, method))
+            && !base_expr.ends_with(".cloned()")
+        {
             return format!("{}.cloned()", base_expr);
         }
 

@@ -230,7 +230,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     reg,
                 )
             }));
-        if mut_self {
+        let adapter_on_collection = receiver_type.as_deref().zip(self.core_surface).is_some_and(|(ty, surface)| surface.is_adapter_on_collection(ty, method));
+        if mut_self && !adapter_on_collection {
             self.emit_mutref_on_receiver_root(object);
         }
 
