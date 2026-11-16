@@ -96,42 +96,45 @@ fn main() -> Result<(), string> {
     let file_count = args.files.len()
     let files = args.files.clone()
     
-    // Spawn worker threads
-    for file in files {
-        let tx_clone = tx.clone()
-        let args_copy = args.clone()
-        
-        thread {
-            let result = process_file(file, &args_copy)
-            tx_clone.send(result).unwrap()
-        }
-    }
-    
-    // Drop the original sender so the channel closes when done
-    drop(tx)
-    
-    // Collect results
     let mut total_lines = 0
     let mut success_count = 0
     let mut error_count = 0
-    
-    for result in rx {
-        match result {
-            Ok(res) => {
-                success_count += 1
-                total_lines += res.lines_processed
-                
-                if args.verbose {
-                    println("✓ ${res.input_file} -> ${res.output_file} (${res.lines_processed} lines)")
-                }
-            }
-            Err(e) => {
-                error_count += 1
-                eprintln("✗ Error: ${e}")
+    scope {
+        // Spawn worker tasks; the scope waits for all of them
+        for file in files {
+            let tx_clone = tx.clone()
+            let args_copy = args.clone()
+        
+            spawn {
+                let result = process_file(file, &args_copy)
+                tx_clone.send(result).unwrap()
             }
         }
-    }
     
+        // Drop the original sender so the channel closes when done
+        drop(tx)
+    
+        // Collect results
+    
+        for result in rx {
+            match result {
+                Ok(res) => {
+                    success_count += 1
+                    total_lines += res.lines_processed
+                
+                    if args.verbose {
+                        println("✓ ${res.input_file} -> ${res.output_file} (${res.lines_processed} lines)")
+                    }
+                }
+                Err(e) => {
+                    error_count += 1
+                    eprintln("✗ Error: ${e}")
+                }
+            }
+        }
+    
+    }
+
     // Print summary
     println("\nSummary:")
     println("  Files processed: ${success_count}/${file_count}")

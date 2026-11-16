@@ -90,12 +90,8 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
             Expression::AsyncCall { expr, .. } | Expression::SpawnCall { expr, .. } => {
                 check_expr(expr)?;
             }
-            Expression::ChannelSend { channel, value, .. } => {
-                check_expr(channel)?;
-                check_expr(value)?;
-            }
-            Expression::ChannelRecv { channel, .. } => {
-                check_expr(channel)?;
+            Expression::Scope { body, .. } => {
+                check_expr(body)?;
             }
             Expression::Block { statements, .. } => {
                 for stmt in statements {
@@ -175,9 +171,7 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
                     check_stmt(s)?;
                 }
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 for s in body {
                     check_stmt(s)?;
                 }

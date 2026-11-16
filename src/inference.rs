@@ -328,9 +328,6 @@ impl InferenceEngine {
             Statement::Loop { body, .. } => {
                 self.collect_constraints_from_statements(body, bounds);
             }
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                self.collect_constraints_from_statements(body, bounds);
-            }
             _ => {
                 // Other statement types don't contribute constraints yet
             }

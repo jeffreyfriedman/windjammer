@@ -54,9 +54,7 @@ fn nested_defers(stmts: &[&Statement], top: bool, f: &FunctionDecl, out: &mut Ve
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
-            | Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => nested_defers(body, false, f, out),
+            | Statement::Loop { body, .. } => nested_defers(body, false, f, out),
             _ => {}
         }
     }

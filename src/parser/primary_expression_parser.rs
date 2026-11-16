@@ -31,72 +31,20 @@ impl Parser {
         let expr = match self.current_token() {
             // `_`: a shorthand-closure parameter or a `|>` placeholder (parser/shorthand_closure.rs).
             Token::Underscore => self.shorthand_hole()?,
-            Token::Thread => {
-                // Check if this is a thread block or a module path
-                if self.peek(1) == Some(&Token::LBrace) {
-                    // Thread block: thread { ... }
-                    self.advance();
-                    self.expect(Token::LBrace)?;
-                    let body = self.parse_block_statements()?;
-                    self.expect(Token::RBrace)?;
-                    // Wrap in a statement expression
-                    let thread_stmt = self.alloc_stmt(Statement::Thread {
-                        body,
-                        location: self.current_location(),
-                    });
-                    self.alloc_expr(Expression::Block {
-                        statements: vec![thread_stmt],
-                        is_unsafe: false,
-                        location: self.current_location(),
-                    })
-                } else {
-                    // Module path like thread::sleep_seconds
-                    // Parse as identifier and let postfix operators handle ::
-                    let name = "thread".to_string();
-                    self.advance();
-                    self.alloc_expr(Expression::Identifier {
-                        name,
-                        location: self.current_location(),
-                    })
-                }
-            }
-            Token::Async => {
-                // Check if this is an async block or a module path
-                if self.peek(1) == Some(&Token::LBrace) {
-                    // Async block: async { ... }
-                    self.advance();
-                    self.expect(Token::LBrace)?;
-                    let body = self.parse_block_statements()?;
-                    self.expect(Token::RBrace)?;
-                    // Wrap in a statement expression
-                    let async_stmt = self.alloc_stmt(Statement::Async {
-                        body,
-                        location: self.current_location(),
-                    });
-                    self.alloc_expr(Expression::Block {
-                        statements: vec![async_stmt],
-                        is_unsafe: false,
-                        location: self.current_location(),
-                    })
-                } else {
-                    // Module path like async::something
-                    let name = "async".to_string();
-                    self.advance();
-                    self.alloc_expr(Expression::Identifier {
-                        name,
-                        location: self.current_location(),
-                    })
-                }
-            }
-            Token::LeftArrow => {
-                // Channel receive: <-ch
+            // `thread { }` was removed (WJ0191); `thread` before anything else is the `std::thread` module path
+            Token::Thread if self.peek(1) == Some(&Token::LBrace) => return Err(self.removed_thread_block()),
+            Token::Thread | Token::Async => {
+                // a module path like `thread::sleep(..)` / `async::x`; `async { }` and `async f()` are task forms
+                // (`parser/task_prefix.rs`) and never reach here
+                let name = if self.current_token() == &Token::Thread { "thread" } else { "async" }.to_string();
                 self.advance();
-                let channel = self.parse_primary_expression()?;
-                self.alloc_expr(Expression::ChannelRecv {
-                    channel,
+                self.alloc_expr(Expression::Identifier {
+                    name,
                     location: self.current_location(),
                 })
             }
+            // `<-ch` was removed (WJ0191)
+            Token::LeftArrow => return Err(self.removed_channel_recv()),
             Token::Ampersand => {
                 // Reference: &expr or &mut expr
                 self.advance();

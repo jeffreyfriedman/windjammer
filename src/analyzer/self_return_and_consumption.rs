@@ -586,9 +586,7 @@ impl<'ast> Analyzer<'ast> {
                     })
             }
             Statement::While { body, .. }
-            | Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
+            | Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| self.statement_consumes_self_field_elements(s, registry)),
             _ => false,
@@ -770,9 +768,7 @@ impl<'ast> Analyzer<'ast> {
             Statement::For { body, .. } => body
                 .iter()
                 .any(|s| self.statement_matches_on_self_consuming(s)),
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
+            Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| self.statement_matches_on_self_consuming(s)),
             Statement::Defer { statement, .. } => {

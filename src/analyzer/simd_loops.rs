@@ -154,10 +154,7 @@ fn expression_contains_call(expr: &Expression<'_>) -> bool {
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| statement_contains_call(s))
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            expression_contains_call(channel) || expression_contains_call(value)
-        }
-        Expression::ChannelRecv { channel, .. } => expression_contains_call(channel),
+        Expression::Scope { body, .. } => expression_contains_call(body),
         Expression::Closure { body, .. } => expression_contains_call(body),
         _ => false,
     }

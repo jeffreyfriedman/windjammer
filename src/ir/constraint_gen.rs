@@ -899,10 +899,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.walk_scoped(body);
             }
 
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                self.walk_scoped(body);
-            }
-
             Statement::Defer { statement, .. } => {
                 self.walk_statement(statement);
             }
@@ -1243,15 +1239,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 result
             }
 
-            Expression::ChannelSend { channel, value, .. } => {
-                self.walk_expression(channel);
-                self.walk_expression(value);
-                let result = self.cs.fresh_var();
-                result
-            }
 
-            Expression::ChannelRecv { channel, .. } => {
-                self.walk_expression(channel);
+            Expression::Scope { body, .. } => {
+                self.walk_expression(body);
                 let result = self.cs.fresh_var();
                 result
             }

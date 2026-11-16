@@ -1,0 +1,56 @@
+// Conformance Test: a task returned from a function is waited on by the caller (ADR-0004, SPEC-CONC-003)
+//
+// A function may return a `Task<T>`; the caller owns it and waits on it. Tasks are values: they can be stored in
+// collections and waited on in any order; the results do not depend on the order of completion.
+//
+// EXPECTED OUTPUT:
+// [returned] 10
+// [reverse_order] 9 4 1
+// [result_task] ok 21, err not a number: x
+// [all] PASSED
+
+fn slow_sum(n: int) -> int {
+    let mut s = 0
+    for i in 0..n + 1 {
+        s += i
+    }
+    s
+}
+
+fn start(n: int) -> Task<int> {
+    spawn slow_sum(n)
+}
+
+fn parse_twice(s: string) -> Result<int, string> {
+    match s.parse::<int>() {
+        Ok(v) => Ok(v * 2),
+        Err(_) => Err("not a number: ${s}"),
+    }
+}
+
+fn main() {
+    let t = start(4)
+    println("[returned] ${t.wait()}")
+
+    let tasks = [spawn { 1 * 1 }, spawn { 2 * 2 }, spawn { 3 * 3 }]
+    let mut out = Vec::new()
+    let mut i = tasks.len()
+    while i > 0 {
+        i -= 1
+        out.push("${tasks[i].wait()}")
+    }
+    println("[reverse_order] ${out.join(\" \")}")
+
+    let good = spawn parse_twice("10")
+    let bad = spawn parse_twice("x")
+    let g = match good.wait() {
+        Ok(v) => "ok ${v + 1}",
+        Err(e) => "err ${e}",
+    }
+    let b = match bad.wait() {
+        Ok(v) => "ok ${v}",
+        Err(e) => "err ${e}",
+    }
+    println("[result_task] ${g}, ${b}")
+    println("[all] PASSED")
+}

@@ -3764,10 +3764,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::MacroInvocation { args, .. } => {
                     args.iter().any(|a| expr_compares(param, a))
                 }
-                Expression::ChannelSend { channel, value, .. } => {
-                    expr_compares(param, channel) || expr_compares(param, value)
-                }
-                Expression::ChannelRecv { channel, .. } => expr_compares(param, channel),
+                Expression::Scope { body, .. } => expr_compares(param, body),
                 Expression::Literal { .. } | Expression::Identifier { .. } => false,
             }
         }
@@ -3808,9 +3805,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Statement::For { iterable, body, .. } => {
                     expr_compares(param, iterable) || body.iter().any(|s| stmt_compares(param, s))
                 }
-                Statement::Loop { body, .. }
-                | Statement::Thread { body, .. }
-                | Statement::Async { body, .. } => body.iter().any(|s| stmt_compares(param, s)),
+                Statement::Loop { body, .. } => body.iter().any(|s| stmt_compares(param, s)),
                 Statement::Match { value, arms, .. } => {
                     expr_compares(param, value)
                         || arms.iter().any(|arm| {

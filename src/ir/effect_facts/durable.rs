@@ -186,7 +186,7 @@ fn stmt_mutates(name: &str, s: &Statement<'_>) -> bool {
         }
         Statement::For { iterable, body, .. } => expr_mutates(name, iterable) || mutates(name, body),
         Statement::While { condition, body, .. } => expr_mutates(name, condition) || mutates(name, body),
-        Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => mutates(name, body),
+        Statement::Loop { body, .. } => mutates(name, body),
         Statement::Match { value, arms, .. } => expr_mutates(name, value) || arms.iter().any(|a| expr_mutates(name, a.body)),
         Statement::Defer { statement, .. } => stmt_mutates(name, statement),
         _ => false,
@@ -402,7 +402,7 @@ impl Pass<'_, '_> {
                 self.expr(condition);
                 self.block(body);
             }
-            Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => self.block(body),
+            Statement::Loop { body, .. } => self.block(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
             Statement::Use { .. } | Statement::Break { .. } | Statement::Continue { .. } => {}
         }
@@ -432,16 +432,6 @@ impl Pass<'_, '_> {
                 self.expr(object);
                 arguments.iter().for_each(|(_, a)| self.expr(a));
             }
-            Expression::ChannelRecv { channel, location } => {
-                self.finding(
-                    "WJ0047",
-                    format!("durable fn `{}` receives from a channel", self.function),
-                    location.clone(),
-                    "<-",
-                    "pass the value in as an argument, or do the receive inside a step that returns data",
-                );
-                self.expr(channel);
-            }
             Expression::Closure { body, .. } => self.expr(body),
             Expression::Block { statements, .. } => self.block(statements),
             Expression::Binary { left, right, .. } => {
@@ -463,17 +453,14 @@ impl Pass<'_, '_> {
             | Expression::TryOp { expr, .. }
             | Expression::Await { expr, .. }
             | Expression::AsyncCall { expr, .. }
-            | Expression::SpawnCall { expr, .. } => self.expr(expr),
+            | Expression::SpawnCall { expr, .. }
+            | Expression::Scope { body: expr, .. } => self.expr(expr),
             Expression::Index { object, index, .. } => {
                 self.expr(object);
                 self.expr(index);
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements.iter().for_each(|x| self.expr(x)),
             Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| self.expr(x)),
-            Expression::ChannelSend { channel, value, .. } => {
-                self.expr(channel);
-                self.expr(value);
-            }
             Expression::Literal { .. } | Expression::Identifier { .. } => {}
         }
     }

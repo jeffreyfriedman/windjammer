@@ -1,0 +1,72 @@
+// Conformance Test: structured concurrency (ADR-0004, SPEC-CONC-003)
+//
+// `scope { }` runs its block, then waits for every task started inside it, also tasks started by those tasks.
+// Its value is the block's value; `return` inside it leaves the enclosing function after the tasks finished.
+//
+// EXPECTED OUTPUT:
+// [scope_value] 30
+// [scope_waits] received 3, total 6
+// [nested_tasks] received 4
+// [early_return] 99
+// [early_return_tasks] 2
+// [all] PASSED
+
+use std::sync
+
+fn square(n: int) -> int {
+    n * n
+}
+
+fn early(tx: sync::Sender<int>) -> int {
+    scope {
+        spawn { tx.send(1) }
+        spawn { tx.send(1) }
+        return 99
+    }
+}
+
+fn main() {
+    let v = scope {
+        let a = spawn square(3)
+        let b = spawn square(4)
+        a.wait() + b.wait() + 5
+    }
+    println("[scope_value] ${v}")
+
+    let (tx, rx) = sync::channel()
+    scope {
+        for i in 1..4 {
+            spawn { tx.send(i) }
+        }
+    }
+    let mut total = 0
+    for _ in 0..3 {
+        total += rx.recv()
+    }
+    println("[scope_waits] received 3, total ${total}")
+
+    // a task started inside a scope that itself starts tasks: the scope waits for all of them
+    let (tx2, rx2) = sync::channel()
+    scope {
+        spawn {
+            spawn { tx2.send(1) }
+            spawn { tx2.send(1) }
+            tx2.send(1)
+        }
+        tx2.send(1)
+    }
+    let mut n = 0
+    while rx2.try_recv().is_ok() {
+        n += 1
+    }
+    println("[nested_tasks] received ${n}")
+
+    let (tx3, rx3) = sync::channel()
+    println("[early_return] ${early(tx3)}")
+    let mut m = 0
+    while rx3.try_recv().is_ok() {
+        m += 1
+    }
+    println("[early_return_tasks] ${m}")
+    println("[all] PASSED")
+}

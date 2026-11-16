@@ -101,8 +101,7 @@ fn expr_line(e: &Expression) -> usize {
         | Expression::Await { location, .. }
         | Expression::AsyncCall { location, .. }
         | Expression::SpawnCall { location, .. }
-        | Expression::ChannelSend { location, .. }
-        | Expression::ChannelRecv { location, .. }
+        | Expression::Scope { location, .. }
         | Expression::Block { location, .. } => line_of(location),
     }
 }
@@ -570,9 +569,7 @@ impl Checker {
                 self.bound_of(condition);
                 self.block(body);
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => self.block(body),
+            Statement::Loop { body, .. } => self.block(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
             Statement::Break { value: Some(v), .. } => {
                 self.bound_of(v);

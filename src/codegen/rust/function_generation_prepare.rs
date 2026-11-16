@@ -1429,9 +1429,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 usage
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 let mut usage = ProjectionUsage::None;
                 for s in body {
                     usage = usage.merge(
@@ -1658,9 +1656,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 usage
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 let mut usage = ProjectionUsage::None;
                 for s in body {
                     usage = usage.merge(self.statement_param_projection_usage(s, param_name));
@@ -2129,9 +2125,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 usage
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 let mut usage = OwnedMutFacadeUsage::None;
                 for s in body {
                     usage = usage.merge(self.statement_owned_mut_facade_usage(
@@ -2436,9 +2430,7 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     })
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_has_use_outside_call_arguments(body.as_slice(), param_name, func)
             }
             Statement::Assignment { value, .. } => {
@@ -3355,9 +3347,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.expression_uses_param_as_read_operand(iterable, param_name))
                     || self.param_used_as_read_operand(body.as_slice(), param_name)
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_used_as_read_operand(body.as_slice(), param_name)
             }
             Statement::Match { value, arms, .. } => {
@@ -3734,9 +3724,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_has_owning_method_use(iterable, param_name, func)
                     || self.param_has_owning_method_use(body.as_slice(), param_name, func)
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_has_owning_method_use(body.as_slice(), param_name, func)
             }
             Statement::Match { value, arms, .. } => {
@@ -4138,9 +4126,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expr_mentions_param_name(param_name, iterable)
                     || self.stmts_mention_param_name(param_name, body)
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => self.stmts_mention_param_name(param_name, body),
+            Statement::Loop { body, .. } => self.stmts_mention_param_name(param_name, body),
             Statement::Match { value, arms, .. } => {
                 self.expr_mentions_param_name(param_name, value)
                     || arms
@@ -4291,9 +4277,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_has_nested_call_passing_param(iterable, param_name, func)
                     || self.param_passed_as_call_argument(body.as_slice(), param_name, func)
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_passed_as_call_argument(body.as_slice(), param_name, func)
             }
             Statement::Match { value, arms, .. } => {
@@ -4888,9 +4872,7 @@ impl<'ast> CodeGenerator<'ast> {
                     visitor,
                 );
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.collect_param_direct_method_arg_uses(
                     body.as_slice(),
                     param_name,
@@ -5232,9 +5214,7 @@ impl<'ast> CodeGenerator<'ast> {
                     visitor,
                 );
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.collect_param_borrowing_method_uses(
                     body.as_slice(),
                     param_name,
@@ -5395,9 +5375,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_passes_param_to_mut_borrowing_callee(iterable, param_name, func)
                     || self.param_passed_to_mut_borrowing_callee(body.as_slice(), param_name, func)
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_passed_to_mut_borrowing_callee(body.as_slice(), param_name, func)
             }
             Statement::Match { value, arms, .. } => {
@@ -5465,9 +5443,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_passes_param_to_borrowing_callee(iterable, param_name, func)
                     || self.param_passed_to_borrowing_callee(body.as_slice(), param_name, func)
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_passed_to_borrowing_callee(body.as_slice(), param_name, func)
             }
             Statement::Match { value, arms, .. } => {
@@ -5523,9 +5499,7 @@ impl<'ast> CodeGenerator<'ast> {
                     blocks
                 }
                 Statement::While { body, .. }
-                | Statement::Loop { body, .. }
-                | Statement::Thread { body, .. }
-                | Statement::Async { body, .. } => vec![body.as_slice()],
+                | Statement::Loop { body, .. } => vec![body.as_slice()],
                 Statement::For { body, .. } => vec![body.as_slice()],
                 Statement::Match { arms, .. } => arms
                     .iter()
@@ -5881,9 +5855,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Self::expr_mentions_field_access_of(iterable, param_name)
                     || Self::expression_mentions_field_access_of(body.as_slice(), param_name)
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 Self::expression_mentions_field_access_of(body.as_slice(), param_name)
             }
             Statement::Match { value, arms, .. } => {
@@ -6148,9 +6120,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .iter()
                         .any(|arm| Self::expression_mentions_identifier(&arm.body, name))
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
+            Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| Self::statement_mentions_identifier(s, name)),
             Statement::Defer { statement, .. } => {
@@ -6332,9 +6302,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Statement::While { body, .. }
             | Statement::Loop { body, .. }
-            | Statement::For { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            | Statement::For { body, .. } => {
                 self.param_stored_in_owned_payload(body.as_slice(), param_name)
             }
             Statement::Match { value, arms, .. } => {
@@ -6846,9 +6814,7 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     })
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => self
+            Statement::Loop { body, .. } => self
                 .param_passed_to_other_param_receiver_method_arg(body.as_slice(), param_name, func),
             Statement::Match { value, arms, .. } => {
                 self.expression_passes_to_other_param_receiver_method_arg(value, param_name, func)
@@ -6999,9 +6965,7 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     })
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => self
+            Statement::Loop { body, .. } => self
                 .param_passed_to_self_or_field_receiver_method_arg(
                     body.as_slice(),
                     param_name,
@@ -7153,9 +7117,7 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     })
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_passed_to_non_self_receiver_method_arg(body.as_slice(), param_name, func)
             }
             Statement::Match { value, arms, .. } => {
@@ -7303,9 +7265,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.param_passed_to_owned_self_method_arg(b.as_slice(), param_name, func)
                     })
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_passed_to_owned_self_method_arg(body.as_slice(), param_name, func)
             }
             Statement::Match { value, arms, .. } => {
@@ -7409,9 +7369,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.param_passes_to_wj_owned_sibling_call(b.as_slice(), param_name, func)
                     })
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.param_passes_to_wj_owned_sibling_call(body.as_slice(), param_name, func)
             }
             Statement::Match { value, arms, .. } => {
@@ -10489,9 +10447,7 @@ impl<'ast> CodeGenerator<'ast> {
                     );
                 }
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 for s in body {
                     self.statement_visit_explicit_user_clone_of_param(s, param_name, found);
                 }
@@ -10553,9 +10509,7 @@ impl<'ast> CodeGenerator<'ast> {
             | Expression::Await { expr: operand, .. }
             | Expression::AsyncCall { expr: operand, .. }
             | Expression::SpawnCall { expr: operand, .. }
-            | Expression::ChannelRecv {
-                channel: operand, ..
-            } => {
+            | Expression::Scope { body: operand, .. } => {
                 self.expression_visit_explicit_user_clone_of_param(operand, param_name, found);
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
@@ -10574,12 +10528,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.expression_visit_explicit_user_clone_of_param(v, param_name, found);
                 }
             }
-            Expression::Range { start, end, .. }
-            | Expression::ChannelSend {
-                channel: start,
-                value: end,
-                ..
-            } => {
+            Expression::Range { start, end, .. } => {
                 self.expression_visit_explicit_user_clone_of_param(start, param_name, found);
                 self.expression_visit_explicit_user_clone_of_param(end, param_name, found);
             }
@@ -10859,9 +10808,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 for s in body {
                     self.statement_check_explicit_clone_mut_borrow_forward(
                         s,
@@ -11204,9 +11151,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 self.for_each_param_call_argument_site(body.as_slice(), param_name, func, visit);
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.for_each_param_call_argument_site(body.as_slice(), param_name, func, visit);
             }
             Statement::Match { value, arms, .. } => {

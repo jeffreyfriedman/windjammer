@@ -239,10 +239,7 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
         Expression::Range { start, end, .. } => {
             expr_may_need_generic_clone_bound(start) || expr_may_need_generic_clone_bound(end)
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            expr_may_need_generic_clone_bound(channel) || expr_may_need_generic_clone_bound(value)
-        }
-        Expression::ChannelRecv { channel, .. } => expr_may_need_generic_clone_bound(channel),
+        Expression::Scope { body, .. } => expr_may_need_generic_clone_bound(body),
         _ => false,
     }
 }
@@ -306,9 +303,7 @@ fn stmt_may_need_generic_clone_bound(stmt: &Statement<'_>) -> bool {
             expr_may_need_generic_clone_bound(condition)
                 || body.iter().any(|s| stmt_may_need_generic_clone_bound(s))
         }
-        Statement::Loop { body, .. }
-        | Statement::Thread { body, .. }
-        | Statement::Async { body, .. } => {
+        Statement::Loop { body, .. } => {
             body.iter().any(|s| stmt_may_need_generic_clone_bound(s))
         }
         Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => false,

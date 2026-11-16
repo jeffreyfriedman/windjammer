@@ -107,14 +107,11 @@ statement       = let_stmt
                 | break_stmt
                 | continue_stmt
                 | defer_stmt
-                | thread_stmt
-                | async_stmt
                 | static_decl
                 | const_decl ;
 
 defer_stmt      = "defer" statement ;
-thread_stmt     = "thread" block ;              (* statement only when followed by "{" *)
-async_stmt      = "async" block ;               (* statement only when followed by "{" *)
+(* ADR-0004 removed "thread { }" and the "<-" channel operators (WJ0191; `wj fix` rewrites them). *)
 
 let_stmt        = "let" [ "mut" ] IDENT [ ":" type_expr ] "=" expression ;
 assignment_stmt = lvalue assign_op expression ;
@@ -164,7 +161,7 @@ pattern_list    = pattern { "," pattern } ;
 
 expression      = assignment_expr ;
 
-assignment_expr = pipe_expr [ "<-" expression ] ;   (* "ch <- v" sends on a channel; assignment itself is a statement *)
+assignment_expr = pipe_expr ;                       (* assignment itself is a statement; channels send with ch.send(v) *)
 pipe_expr       = or_expr { "|>" pipe_stage } ;      (* pipe operator: x |> f(a)  ==  f(x, a); binds looser than every other operator *)
 or_expr         = and_expr { "||" and_expr } ;
 pipe_stage      = path | path "(" arg_list ")" | "." IDENT "(" arg_list ")" | closure ;   (* anything else is an error *)
@@ -178,14 +175,14 @@ shift           = additive { ( "<<" | ">>" ) additive } ;
 additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
 multiplicative  = cast { ( "*" | "/" | "%" ) cast } ;
 cast            = unary { "as" type_expr } ;            (* numeric cast: x as u8 *)
-unary           = ( "-" | "!" | "~" | "<-" ) unary | postfix ;     (* "<-ch" receives from a channel *)
+unary           = ( "-" | "!" | "~" ) unary | postfix ;
 postfix         = primary { postfix_op } ;
 
 postfix_op      = "." IDENT                     (* field access *)
                 | "." IDENT "(" arg_list ")"    (* method call *)
                 | "(" arg_list ")"              (* function call *)
                 | "[" expression "]"            (* index *)
-                | "." "await"                   (* await a future *)
+                | "." "await"                   (* sugar for .wait() on a Task *)
                 | "?" ;                         (* try operator *)
 
 primary         = literal
@@ -199,14 +196,13 @@ primary         = literal
                 | if_expr
                 | match_expr
                 | block
-                | unsafe_block ;
+                | unsafe_block
+                | task_expr ;
+
+(* ADR-0004 tasks: a Task<T>, waited on with .wait() (or .await); scope waits for every task started inside. *)
+task_expr       = ( "spawn" | "async" ) ( postfix | block ) | "scope" block ;
 
 unsafe_block    = "unsafe" block ;
-
-(* NOT PARSED: caller-controlled "async expr" / "spawn expr" (RFC WJ-CONC-01).            *)
-(* The AST has AsyncCall/SpawnCall variants but no parser path constructs them (ADR-0004). *)
-(* async_expr  = "async" expression ;                                                      *)
-(* spawn_expr  = "spawn" expression ;                                                      *)
 
 (* NOT PARSED: ternary "c ? a : b" was removed; use if_expr. "?" is only the postfix try operator. *)
 

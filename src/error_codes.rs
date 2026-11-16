@@ -345,6 +345,28 @@ fn label() -> string {
             maturity: GuaranteeMaturity::HighConfidence,
         });
 
+        // WJ0190 / WJ0191: ADR-0004 structured concurrency and removed forms
+        self.register(WjErrorCode {
+            code: "WJ0190".to_string(),
+            title: "Task is never waited on".to_string(),
+            explanation: "Every task (`spawn`, `async`, or a call returning `Task<T>`) is waited on: inside a `scope { }`, which waits for it, or through `.wait()` (ADR-0004).".to_string(),
+            causes: vec!["A `spawn` used as a statement outside a `scope { }`".to_string(), "A task bound to a name nothing uses".to_string()],
+            solutions: vec!["Wrap the work in `scope { ... }`".to_string(), "Keep the task and call `.wait()`".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0191".to_string(),
+            title: "Removed concurrency syntax".to_string(),
+            explanation: "`thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them.".to_string(),
+            causes: vec!["Code written before ADR-0004".to_string()],
+            solutions: vec!["Run `wj fix <path>`".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::Proven,
+        });
+
         // WJ0161: `std::arena` is unstable
         self.register(WjErrorCode {
             code: "WJ0161".to_string(),

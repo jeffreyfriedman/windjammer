@@ -35,6 +35,12 @@ codes:
   - code: WJ0051
     title: Local binding changed but not declared mut
     rust_codes: []
+  - code: WJ0190
+    title: Task is never waited on
+    rust_codes: []
+  - code: WJ0191
+    title: Removed concurrency syntax
+    rust_codes: []
   - code: WJ0160
     title: Arena value escapes its arena
     rust_codes: []

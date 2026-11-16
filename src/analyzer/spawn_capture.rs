@@ -62,7 +62,7 @@ fn stmt_mentions(name: &str, stmt: &Statement<'_>) -> bool {
         Statement::While { condition, body, .. } => {
             mentions(name, condition) || body.iter().any(|s| stmt_mentions(name, s))
         }
-        Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => {
+        Statement::Loop { body, .. } => {
             body.iter().any(|s| stmt_mentions(name, s))
         }
         _ => false,
@@ -98,6 +98,7 @@ fn expr_has_spawn_capture(name: &str, expr: &Expression<'_>) -> bool {
             expr_has_spawn_capture(name, expr)
         }
         Expression::SpawnCall { expr, .. } => mentions(name, expr),
+        Expression::Scope { body, .. } => expr_has_spawn_capture(name, body),
         _ => false,
     }
 }
@@ -123,7 +124,6 @@ fn stmt_has_spawn_capture(name: &str, stmt: &Statement<'_>) -> bool {
             expr_has_spawn_capture(name, condition) || body.iter().any(|s| stmt_has_spawn_capture(name, s))
         }
         Statement::Loop { body, .. } => body.iter().any(|s| stmt_has_spawn_capture(name, s)),
-        Statement::Thread { body, .. } => body.iter().any(|s| stmt_mentions(name, s)),
         _ => false,
     }
 }

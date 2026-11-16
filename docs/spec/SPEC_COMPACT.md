@@ -59,8 +59,8 @@ Functions, not macros: `print println eprint eprintln panic assert(c, msg?) asse
 ## Collections (STD)
 `Vec`: push pop len insert remove contains first last get reverse sort sort_by iter; `v[i]` (out of range panics). `HashMap`: insert get contains_key remove len keys values entry; **iteration order unspecified: sort before printing** (EXEC-005). Iterators: `iter map filter enumerate zip rev take skip chain fold sum count any all min max collect::<Vec<T>>()`. Closures `|x| x + 1`, capture by reference, may mutate captured `mut` locals. Turbofish `f::<T>()`, `.collect::<Vec<int>>()`.
 
-## Concurrency (CONC): mostly **[gap]**
-Decided (ADR-0004): `spawn f()`, `async f()`, blocks, `Task<T>.wait()`, `scope { }`, channel `send`/`recv`. Today only `async fn`/`.await`/`thread { }` parse (Rust backend and interpreter). Do not use `go`, `chan`, `<-`.
+## Concurrency (CONC): interpreter only; compiled backends **[gap]**
+`spawn f()` / `spawn { }` (parallel), `async f()` / `async { }` (current executor) -> `Task<T>`; `t.wait()` (= `t.await`) returns the value, re-raises a panic. `scope { }` waits for every task started inside (also on early `return`). A task dropped outside a scope is WJ0190. Channels: `let (tx, rx) = sync::channel()`, `tx.send(v)`, `rx.recv()`. `thread { }`, `ch <- v`, `<-ch` are removed (WJ0191, `wj fix`). No `go`, `chan`.
 
 ## Effects (EFF): **[gap]**, designed (ADR-0021)
 Effects are inferred, never required: `fs.read fs.write net.connect net.listen env.read env.write process time random console ffi` + `@effect("x")`. Grants in `wj.toml [capabilities]` (`net.connect = ["api.example.com"]`, `fs.read = ["./data/**"]`); a denied sink stops the run (exit 126). Optional `@uses(...)`/`@pure`; `durable fn` journals every effectful call. Today only the interpreter's http client is gated (`--allow-network`, `--mock-http`); `--deterministic-time`/`--sched-seed` give reproducible runs.

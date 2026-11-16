@@ -113,7 +113,6 @@ pub mod stdlib_method_signatures;
 pub mod stdlib_signature_specialization;
 pub mod string_analysis;
 pub mod string_utilities;
-pub mod thread_async_generation;
 pub mod trait_derivation;
 pub mod type_analysis;
 pub mod type_analysis_pure;

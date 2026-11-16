@@ -153,9 +153,6 @@ fn collect_annotated_locals(stmts: &[&Statement<'_>], out: &mut HashMap<String, 
                     collect_annotated_locals_in_expr(arm.body, out);
                 }
             }
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                collect_annotated_locals(body, out);
-            }
             _ => {}
         }
     }
@@ -286,9 +283,6 @@ fn scan_for_aosoa_loops<'ast>(
                     scan_for_aosoa_loops_in_expr(analyzer, func, structs, locals, arm.body, out);
                 }
             }
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                scan_for_aosoa_loops(analyzer, func, structs, locals, body, out);
-            }
             _ => {}
         }
     }
@@ -400,14 +394,6 @@ fn stmt_indexes_ident(iterable: &str, st: &Statement<'_>) -> bool {
             }
             false
         }
-        Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-            for s in body {
-                if stmt_indexes_ident(iterable, s) {
-                    return true;
-                }
-            }
-            false
-        }
         _ => false,
     }
 }
@@ -468,10 +454,7 @@ fn expr_indexes_ident(iterable: &str, expr: &Expression<'_>) -> bool {
         Expression::MapLiteral { pairs, .. } => pairs
             .iter()
             .any(|(k, v)| expr_indexes_ident(iterable, k) || expr_indexes_ident(iterable, v)),
-        Expression::ChannelSend { channel, value, .. } => {
-            expr_indexes_ident(iterable, channel) || expr_indexes_ident(iterable, value)
-        }
-        Expression::ChannelRecv { channel, .. } => expr_indexes_ident(iterable, channel),
+        Expression::Scope { body, .. } => expr_indexes_ident(iterable, body),
         _ => false,
     }
 }
@@ -585,11 +568,6 @@ fn count_field_accesses_stmt(loop_var: &str, st: &Statement<'_>, m: &mut HashMap
                 count_field_accesses_match_body(loop_var, arm.body, m);
             }
         }
-        Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-            for s in body {
-                count_field_accesses_stmt(loop_var, s, m);
-            }
-        }
         _ => {}
     }
 }
@@ -668,12 +646,8 @@ fn count_field_accesses_expr(loop_var: &str, expr: &Expression<'_>, m: &mut Hash
                 count_field_accesses_expr(loop_var, v, m);
             }
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            count_field_accesses_expr(loop_var, channel, m);
-            count_field_accesses_expr(loop_var, value, m);
-        }
-        Expression::ChannelRecv { channel, .. } => {
-            count_field_accesses_expr(loop_var, channel, m);
+        Expression::Scope { body, .. } => {
+            count_field_accesses_expr(loop_var, body, m);
         }
         _ => {}
     }

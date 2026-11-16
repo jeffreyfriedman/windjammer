@@ -267,7 +267,7 @@ impl<'a> Ctx<'a> {
             MacroInvocation { name, .. } => self.starts(f, kind, me, &[name.as_str(), "\"", "format"]),
             AsyncCall { .. } => self.starts(f, kind, me, &["async"]),
             SpawnCall { .. } => self.starts(f, kind, me, &["spawn"]),
-            ChannelRecv { .. } => self.starts(f, kind, me, &["<-"]),
+            Scope { .. } => self.starts(f, kind, me, &["scope"]),
             _ => {}
         }
         let mut prev: Option<ByteRange> = None;
@@ -350,13 +350,7 @@ impl<'a> Ctx<'a> {
                     child(c, f, &mut unordered);
                 }
             }
-            ChannelSend { channel, value, .. } => {
-                child(channel, f, &mut prev);
-                child(value, f, &mut prev);
-                self.starts_with_child(f, kind, me, self.spans.expr(channel));
-                self.ends_with_child(f, kind, me, self.spans.expr(value));
-            }
-            ChannelRecv { channel, .. } => child(channel, f, &mut prev),
+            Scope { body, .. } => child(body, f, &mut prev),
             Block { statements, .. } => {
                 for s in statements {
                     self.stmt(s, f, me, &mut prev);
@@ -445,8 +439,6 @@ impl<'a> Ctx<'a> {
             For { .. } => self.starts(f, kind, self.past_label(me), &["for"]),
             Loop { .. } => self.starts(f, kind, self.past_label(me), &["loop", "while"]),
             While { .. } => self.starts(f, kind, self.past_label(me), &["while"]),
-            Thread { .. } => self.starts(f, kind, me, &["thread"]),
-            Async { .. } => self.starts(f, kind, me, &["async"]),
             Defer { .. } => self.starts(f, kind, me, &["defer"]),
             Break { .. } => self.starts(f, kind, me, &["break"]),
             Continue { .. } => self.starts(f, kind, me, &["continue"]),
@@ -501,7 +493,7 @@ impl<'a> Ctx<'a> {
                 self.expr(condition, f, me);
                 self.stmts(body, f, me);
             }
-            Loop { body, .. } | Thread { body, .. } | Async { body, .. } => self.stmts(body, f, me),
+            Loop { body, .. } => self.stmts(body, f, me),
             Defer { statement, .. } => {
                 let mut p = None;
                 self.stmt(statement, f, me, &mut p)
@@ -548,8 +540,7 @@ fn expr_kind(e: &Expression) -> &'static str {
         Await { .. } => "Await",
         AsyncCall { .. } => "AsyncCall",
         SpawnCall { .. } => "SpawnCall",
-        ChannelSend { .. } => "ChannelSend",
-        ChannelRecv { .. } => "ChannelRecv",
+        Scope { .. } => "Scope",
         Block { .. } => "Block",
     }
 }
@@ -568,8 +559,6 @@ fn stmt_kind(s: &Statement) -> &'static str {
         For { .. } => "For",
         Loop { .. } => "Loop",
         While { .. } => "While",
-        Thread { .. } => "Thread",
-        Async { .. } => "Async",
         Defer { .. } => "Defer",
         Break { .. } => "Break",
         Continue { .. } => "Continue",

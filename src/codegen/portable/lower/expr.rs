@@ -85,7 +85,7 @@ impl<'e> Lowerer<'e> {
                 Ok(PExpr::new(ty, PK::Block(blk)))
             }
             Expression::Await { .. } | Expression::AsyncCall { .. } | Expression::SpawnCall { .. } => self.err("async/await/spawn"),
-            Expression::ChannelSend { .. } | Expression::ChannelRecv { .. } => self.err("channels"),
+            Expression::Scope { .. } => self.err("scope blocks"),
         }
     }
 

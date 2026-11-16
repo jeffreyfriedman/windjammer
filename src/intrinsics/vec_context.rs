@@ -319,7 +319,8 @@ impl<'i> Walker<'i> {
             Expression::TryOp { expr, .. }
             | Expression::Await { expr, .. }
             | Expression::AsyncCall { expr, .. }
-            | Expression::SpawnCall { expr, .. } => self.expr(expr, None, env),
+            | Expression::SpawnCall { expr, .. }
+            | Expression::Scope { body: expr, .. } => self.expr(expr, None, env),
             Expression::MapLiteral { pairs, .. } => {
                 for (k, v) in pairs {
                     self.expr(k, None, env);
@@ -392,7 +393,7 @@ impl<'i> Walker<'i> {
                 self.expr(condition, None, env);
                 self.stmts(body, None, ret, &mut env.clone());
             }
-            Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 self.stmts(body, None, ret, &mut env.clone())
             }
             Statement::Defer { statement, .. } => self.stmt(statement, None, ret, env),

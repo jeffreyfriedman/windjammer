@@ -21,6 +21,8 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0051` | Local binding changed but not declared mut | HighConfidence |  | A local binding (`let`, a `for` loop variable) is immutable unless declared `mut` (ADR-0002) |
 | `WJ0160` | Arena value escapes its arena | HighConfidence | E0597, E0505 | A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function that declares the arena, stored in a variable, field or collection declared outside the arena's scope, used as the value of the block that declares the arena, or used after the arena's `reset()` |
 | `WJ0161` | `std::arena` is unstable | Proven |  | Arenas (ADR-0025) are behind the compiler feature `unstable_arenas` |
+| `WJ0190` | Task is never waited on | HighConfidence |  | Every task (`spawn`, `async`, or a call returning `Task<T>`) is waited on: inside a `scope { }`, which waits for it, or through `.wait()` (ADR-0004) |
+| `WJ0191` | Removed concurrency syntax | Proven |  | `thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

@@ -304,12 +304,6 @@ impl Collector {
                 self.stmts(body);
                 self.exit_loop();
             }
-            // Threads/async bodies may run later or concurrently: treat like closures.
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                self.closure_depth += 1;
-                self.stmts(body);
-                self.closure_depth -= 1;
-            }
             Statement::Defer { statement, .. } => {
                 self.closure_depth += 1;
                 self.stmt(statement);
@@ -375,9 +369,13 @@ impl Collector {
             }
             Expression::Cast { expr, .. }
             | Expression::TryOp { expr, .. }
-            | Expression::Await { expr, .. }
-            | Expression::AsyncCall { expr, .. }
-            | Expression::SpawnCall { expr, .. } => self.expr(expr),
+            | Expression::Await { expr, .. } => self.expr(expr),
+            // a task's block may run later or concurrently: treat it like a closure body
+            Expression::AsyncCall { expr, .. } | Expression::SpawnCall { expr, .. } => {
+                self.closure_depth += 1;
+                self.expr(expr);
+                self.closure_depth -= 1;
+            }
             Expression::Index { object, index, .. } => {
                 self.expr(object);
                 self.expr(index);
@@ -387,11 +385,7 @@ impl Collector {
             }
             // `vec![..]` / `format!(..)` build owned values from their arguments.
             Expression::MacroInvocation { args, .. } => self.without_sources(|c| args.iter().for_each(|x| c.expr(x))),
-            Expression::ChannelSend { channel, value, .. } => {
-                self.expr(channel);
-                self.expr(value);
-            }
-            Expression::ChannelRecv { channel, .. } => self.expr(channel),
+            Expression::Scope { body, .. } => self.expr(body),
         }
     }
 }

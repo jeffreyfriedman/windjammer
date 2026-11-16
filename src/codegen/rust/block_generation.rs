@@ -89,8 +89,6 @@ impl<'ast> CodeGenerator<'ast> {
                     || matches!(
                         stmt,
                         Statement::Expression { .. }
-                            | Statement::Thread { .. }
-                            | Statement::Async { .. }
                     ))
             {
                 // Last statement is an expression, thread/async block, or return - generate as implicit return
@@ -228,30 +226,6 @@ impl<'ast> CodeGenerator<'ast> {
                             output.push(';');
                         }
                         output.push('\n');
-                    }
-                    Statement::Thread { body, .. } => {
-                        // Generate as expression (returns JoinHandle)
-                        output.push_str(&self.indent());
-                        output.push_str("std::thread::spawn(move || {\n");
-                        self.indent_level += 1;
-                        for stmt in body {
-                            output.push_str(&self.generate_statement(stmt));
-                        }
-                        self.indent_level -= 1;
-                        output.push_str(&self.indent());
-                        output.push_str("})\n");
-                    }
-                    Statement::Async { body, .. } => {
-                        // Generate as expression (returns JoinHandle)
-                        output.push_str(&self.indent());
-                        output.push_str("tokio::spawn(async move {\n");
-                        self.indent_level += 1;
-                        for stmt in body {
-                            output.push_str(&self.generate_statement(stmt));
-                        }
-                        self.indent_level -= 1;
-                        output.push_str(&self.indent());
-                        output.push_str("})\n");
                     }
                     Statement::Return { value, .. } => {
                         // TDD FIX: Convert explicit return to implicit return when last statement
@@ -807,8 +781,6 @@ impl<'ast> CodeGenerator<'ast> {
                 && matches!(
                     stmt,
                     Statement::Expression { .. }
-                        | Statement::Thread { .. }
-                        | Statement::Async { .. }
                 )
             {
                 // Last statement is an expression, thread/async block - generate as implicit return
@@ -846,28 +818,6 @@ impl<'ast> CodeGenerator<'ast> {
                         } else {
                             output.push('\n');
                         }
-                    }
-                    Statement::Thread { body, .. } => {
-                        output.push_str(&self.indent());
-                        output.push_str("std::thread::spawn(move || {\n");
-                        self.indent_level += 1;
-                        for stmt in body {
-                            output.push_str(&self.generate_statement(stmt));
-                        }
-                        self.indent_level -= 1;
-                        output.push_str(&self.indent());
-                        output.push_str("})\n");
-                    }
-                    Statement::Async { body, .. } => {
-                        output.push_str(&self.indent());
-                        output.push_str("tokio::spawn(async move {\n");
-                        self.indent_level += 1;
-                        for stmt in body {
-                            output.push_str(&self.generate_statement(stmt));
-                        }
-                        self.indent_level -= 1;
-                        output.push_str(&self.indent());
-                        output.push_str("})\n");
                     }
                     _ => unreachable!(),
                 }

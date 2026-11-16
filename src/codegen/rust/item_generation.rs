@@ -1427,9 +1427,7 @@ impl<'ast> CodeGenerator<'ast> {
                     out,
                 );
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 Self::collect_impl_sibling_method_calls_in_body(
                     body.as_slice(),
                     sibling_methods,

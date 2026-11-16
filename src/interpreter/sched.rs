@@ -100,7 +100,13 @@ pub(crate) struct Task {
     started: bool,
     /// `Ok(value)` or `Err(panic message)`.
     pub result: Option<Result<Value, String>>,
+    /// ADR-0004: the open `scope { }` blocks of this task, innermost last. A new task starts with the innermost scope
+    /// of its spawner, so the tasks it starts outside a scope of its own belong to that scope as well.
+    pub scopes: Vec<TaskList>,
 }
+
+/// The tasks started inside one `scope { }` (shared by the tasks that inherit the scope).
+pub(crate) type TaskList = Rc<std::cell::RefCell<Vec<usize>>>;
 
 struct Baton {
     current: Mutex<usize>,
@@ -138,8 +144,6 @@ pub(crate) struct Sched {
     pub real_sleep: bool,
     /// Real nanoseconds spent in those waits; `mono_ns` takes them out of the real part so a sleep counts once.
     pub slept_ns: u64,
-    /// Tasks started inside each open `scope { }` (innermost last).
-    pub scopes: Vec<Vec<usize>>,
     /// Tasks are nested calls on one thread instead of OS threads (the default where there are no threads).
     pub one_thread: bool,
 }
@@ -147,7 +151,7 @@ pub(crate) struct Sched {
 impl Sched {
     pub fn new() -> Sched {
         Sched {
-            tasks: vec![Task { name: Some("main".into()), done: false, wait: Wait::Ready, ctx: None, start: None, started: true, result: None }],
+            tasks: vec![Task { name: Some("main".into()), done: false, wait: Wait::Ready, ctx: None, start: None, started: true, result: None, scopes: Vec::new() }],
             current: 0,
             seed: 0,
             rng: 0,
@@ -157,7 +161,6 @@ impl Sched {
             deterministic: false,
             real_sleep: false,
             slept_ns: 0,
-            scopes: Vec::new(),
             one_thread: cfg!(target_arch = "wasm32"),
         }
     }
@@ -403,11 +406,12 @@ impl Interpreter {
     pub(crate) fn spawn_task(&mut self, f: Value, name: Option<String>) -> R<usize> {
         self.preempt()?;
         let id = self.sched.tasks.len();
+        let scopes: Vec<TaskList> = self.sched.tasks[self.sched.current].scopes.last().cloned().into_iter().collect();
         if self.sched.one_thread {
-            self.sched.tasks.push(Task { name, done: false, wait: Wait::Ready, ctx: None, start: Some(f), started: false, result: None });
+            self.sched.tasks.push(Task { name, done: false, wait: Wait::Ready, ctx: None, start: Some(f), started: false, result: None, scopes });
             return Ok(id);
         }
-        self.sched.tasks.push(Task { name, done: false, wait: Wait::Ready, ctx: Some(Ctx::fresh()), start: None, started: true, result: None });
+        self.sched.tasks.push(Task { name, done: false, wait: Wait::Ready, ctx: Some(Ctx::fresh()), start: None, started: true, result: None, scopes });
         let baton = self.sched.baton.clone();
         let ptr = SendPtr(self as *mut Interpreter);
         let fv = SendVal(f);

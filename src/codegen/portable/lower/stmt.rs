@@ -234,8 +234,6 @@ impl<'e> Lowerer<'e> {
                 Ok(inner.into_iter().map(|s| PStmt::Defer(Box::new(s))).collect())
             }
             Statement::Use { .. } => Ok(vec![]),
-            Statement::Thread { .. } => self.err("thread blocks"),
-            Statement::Async { .. } => self.err("async blocks"),
         }
     }
 

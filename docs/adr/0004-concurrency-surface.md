@@ -63,3 +63,9 @@ Implement WJ-CONC-01 with these amendments:
    ("`f` cannot run async because it calls extern X"). Blocking calls on JS are explicitly unsupported.
 6. **Order of work:** Rust backend first; Go/JS follow once the conformance harness covers async and spawn.
    Supervisors (Erlang-style) are deferred.
+
+## Implementation
+Staged in [concurrency/PLAN.md](../concurrency/PLAN.md). Stage 1 (2026-11-16): the parser builds `SpawnCall`/`AsyncCall`/`Scope`,
+rejects `thread { }` and `<-` (WJ0191, fixed by `wj fix`), WJ0190 enforces decision 3 statically, and the interpreter runs the
+surface on its deterministic scheduler. The interpreter comes first (instead of Rust, decision 6) because it is the reference
+semantics the backends' conformance runs compare against; the Rust backend is stage 2b.

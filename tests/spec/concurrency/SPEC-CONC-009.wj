@@ -1,0 +1,16 @@
+// spec: SPEC-CONC-009
+// expect: early
+// expect: 2
+use std::sync
+fn first(tx: sync::Sender<int>) -> string {
+    scope {
+        spawn { tx.send(1) }
+        spawn { tx.send(1) }
+        return "early"
+    }
+}
+fn main() {
+    let (tx, rx) = sync::channel()
+    println(first(tx))
+    println("${rx.recv() + rx.recv()}")
+}

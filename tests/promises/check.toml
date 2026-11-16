@@ -221,3 +221,33 @@ files = { "m.wj" = "fn main() {\n    let d = 4\n    println(\"$${d}.50\")\n}\n" 
 args = ["check", "--error-format", "agent", "{w}/m.wj"]
 exit = 0
 output_has = ["warning W0017", "| fix: replace `$${` with `\\$${`"]
+
+[[case]]
+name = "check rejects a task nobody waits on (WJ0190), with the scope fix"
+polarity = "negative"
+files = { "m.wj" = "fn work(n: int) -> int {\n    n * 2\n}\n\nfn main() {\n    spawn work(1)\n    println(\"done\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0190\"", "scope {"]
+
+[[case]]
+name = "check accepts tasks inside a scope or waited on (WJ0190)"
+polarity = "positive"
+files = { "m.wj" = "fn work(n: int) -> int {\n    n * 2\n}\n\nfn main() {\n    let t = spawn work(2)\n    scope {\n        spawn work(1)\n    }\n    println(\"${t.wait()}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
+name = "check rejects the removed channel send operator (WJ0191), with its fix"
+polarity = "negative"
+files = { "m.wj" = "use std::sync\n\nfn main() {\n    let (tx, rx) = sync::channel()\n    tx <- 5\n    println(\"${rx.recv()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0191\"", "\"replacement\": \".send(\""]
+
+[[case]]
+name = "check accepts channel methods (WJ0191)"
+polarity = "positive"
+files = { "m.wj" = "use std::sync\n\nfn main() {\n    let (tx, rx) = sync::channel()\n    tx.send(5)\n    println(\"${rx.recv()}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]

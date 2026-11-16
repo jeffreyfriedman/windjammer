@@ -195,12 +195,8 @@ impl<'ast> CodeGenerator<'ast> {
             | Expression::SpawnCall { expr, .. } => {
                 Self::variable_used_in_expression(expr, var_name)
             }
-            Expression::ChannelSend { channel, value, .. } => {
-                Self::variable_used_in_expression(channel, var_name)
-                    || Self::variable_used_in_expression(value, var_name)
-            }
-            Expression::ChannelRecv { channel, .. } => {
-                Self::variable_used_in_expression(channel, var_name)
+            Expression::Scope { body, .. } => {
+                Self::variable_used_in_expression(body, var_name)
             }
         }
     }

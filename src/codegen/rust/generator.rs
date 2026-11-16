@@ -3883,9 +3883,7 @@ impl<'ast> CodeGenerator<'ast> {
                     })
             }
             crate::parser::Statement::While { body, .. }
-            | crate::parser::Statement::Loop { body, .. }
-            | crate::parser::Statement::Thread { body, .. }
-            | crate::parser::Statement::Async { body, .. } => {
+            | crate::parser::Statement::Loop { body, .. } => {
                 self.param_used_in_any_if_condition(body.as_slice(), param_name)
             }
             crate::parser::Statement::For { body, .. } => {

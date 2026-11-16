@@ -321,9 +321,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                     self.check_statement(s, file);
                 }
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 for s in body {
                     self.check_statement(s, file);
                 }
@@ -510,11 +508,7 @@ impl<'ast> RustLeakageLinter<'ast> {
             Expression::AsyncCall { expr, .. } | Expression::SpawnCall { expr, .. } => {
                 self.check_expression(expr, file)
             }
-            Expression::ChannelSend { channel, value, .. } => {
-                self.check_expression(channel, file);
-                self.check_expression(value, file);
-            }
-            Expression::ChannelRecv { channel, .. } => self.check_expression(channel, file),
+            Expression::Scope { body, .. } => self.check_expression(body, file),
             Expression::MacroInvocation { args, .. } => {
                 for arg in args {
                     self.check_expression(arg, file);

@@ -106,13 +106,44 @@ fn join(it: &mut Interpreter, id: usize) -> R {
     })
 }
 
-/// Start `f()` as an ADR-0004 task; it joins the innermost `scope { }` if there is one.
+/// Start `f()` as an ADR-0004 task; it joins the innermost `scope { }` of the spawning task if there is one.
 pub(crate) fn start_task(it: &mut Interpreter, f: Value) -> R {
+    let me = it.sched.current;
     let id = it.spawn_task(f, None)?;
-    if let Some(top) = it.sched.scopes.last_mut() {
-        top.push(id);
+    if let Some(top) = it.sched.tasks[me].scopes.last() {
+        top.borrow_mut().push(id);
     }
     Ok(Value::Native(Rc::new(TaskObj(id))))
+}
+
+/// `scope { body }` (ADR-0004): evaluate the block in place (so `return`, `?` and `break` leave it as from any block),
+/// then wait for every task started inside it, also by those tasks and also when the block ended early. The first
+/// panic of a task propagates after all of them have finished; an error of the block itself wins.
+pub(crate) fn run_scope(it: &mut Interpreter, body: &'static crate::parser::Expression<'static>, at: Option<&'static crate::source_map::Location>) -> R {
+    let list: crate::interpreter::sched::TaskList = Rc::new(RefCell::new(Vec::new()));
+    let me = it.sched.current;
+    it.sched.tasks[me].scopes.push(list.clone());
+    let out = it.eval(body);
+    it.sched.tasks[me].scopes.pop();
+    let mut first_panic = None;
+    let mut i = 0;
+    loop {
+        let next = list.borrow().get(i).copied();
+        let Some(id) = next else { break };
+        i += 1;
+        it.block_on(Wait::Join(id))?;
+        if let Some(Err(msg)) = &it.sched.tasks[id].result {
+            first_panic.get_or_insert_with(|| msg.clone());
+        }
+    }
+    let v = out?;
+    match first_panic {
+        Some(msg) => {
+            it.mark(at); // the panic leaves the program at the scope
+            Err(panic_ctl(msg))
+        }
+        None => Ok(v),
+    }
 }
 
 fn wait_task(it: &mut Interpreter, id: usize) -> R {
@@ -137,21 +168,6 @@ pub fn register(r: &mut Registry) {
         let id = downcast::<TaskObj>(v).map(|t| t.0).ok_or_else(|| semantic("not a Task"))?;
         Ok(Value::Bool(it.sched.tasks[id].done))
     });
-    // `scope { body }`: run the body, then wait for every task it started; a task's panic propagates
-    r.func(crate::parser::task_prefix::SCOPE_FN, |it, a| {
-        let body = arg(&a, 0, "scope")?;
-        it.sched.scopes.push(Vec::new());
-        let out = it.call_value(&body, vec![]);
-        let ids = it.sched.scopes.pop().unwrap_or_default();
-        for id in ids {
-            it.block_on(Wait::Join(id))?;
-            if let Some(Err(msg)) = it.sched.tasks[id].result.clone() {
-                return Err(panic_ctl(msg));
-            }
-        }
-        out
-    });
-
     for t in ["thread", "JoinHandle"] {
         r.type_name(t);
     }

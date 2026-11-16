@@ -143,9 +143,7 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
                 self.expr(condition);
                 self.block(body);
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => self.block(body),
+            Statement::Loop { body, .. } => self.block(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
             Statement::Use { path, alias, .. } => self.bind_body_use(path, alias.as_deref()),
             Statement::Break { .. } | Statement::Continue { .. } => {}
@@ -267,11 +265,7 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
                 elements.iter().for_each(|x| self.expr(x))
             }
             Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| self.expr(x)),
-            Expression::ChannelSend { channel, value, .. } => {
-                self.expr(channel);
-                self.expr(value);
-            }
-            Expression::ChannelRecv { channel, .. } => self.expr(channel),
+            Expression::Scope { body, .. } => self.expr(body),
             _ => {}
         }
     }

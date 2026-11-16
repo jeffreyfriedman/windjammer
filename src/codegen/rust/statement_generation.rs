@@ -766,8 +766,6 @@ impl<'ast> CodeGenerator<'ast> {
                 compound_op,
                 ..
             } => self.generate_assignment_with_context(target, value, compound_op),
-            Statement::Thread { body, .. } => self.generate_thread_statement(body),
-            Statement::Async { body, .. } => self.generate_async_statement(body),
             Statement::Defer { statement, .. } => self.generate_defer_statement(statement, stmt),
         }
     }

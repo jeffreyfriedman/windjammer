@@ -124,7 +124,7 @@ fn visit_stmt(s: &Statement<'_>, esc: &mut Escapes) {
             visit_expr(condition, esc, false);
             visit_stmts(body, esc);
         }
-        Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => {
+        Statement::Loop { body, .. } => {
             visit_stmts(body, esc)
         }
         Statement::Defer { statement, .. } => visit_stmt(statement, esc),
@@ -206,11 +206,7 @@ fn visit_expr(e: &Expression<'_>, esc: &mut Escapes, allowed: bool) {
                 visit_expr(x, esc, false);
             }
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            visit_expr(channel, esc, false);
-            visit_expr(value, esc, false);
-        }
-        Expression::ChannelRecv { channel, .. } => visit_expr(channel, esc, false),
+        Expression::Scope { body, .. } => visit_expr(body, esc, false),
         Expression::Block { statements, .. } => visit_stmts(statements, esc),
     }
 }

@@ -1,0 +1,8 @@
+// spec: SPEC-CONC-007
+// mode: parse-error
+// expect-error: WJ0191
+fn main() {
+    thread {
+        println("x")
+    }
+}

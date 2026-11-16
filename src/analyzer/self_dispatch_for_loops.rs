@@ -106,9 +106,6 @@ impl<'ast> Analyzer<'ast> {
             Statement::Expression { expr, .. } => {
                 self.statement_tree_has_dispatch_for_loop_in_expr(expr, impl_ty, program, registry)
             }
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => body
-                .iter()
-                .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)),
             Statement::Defer { statement, .. } => {
                 self.statement_tree_has_dispatch_for_loop(statement, impl_ty, program, registry)
             }
@@ -380,9 +377,7 @@ impl<'ast> Analyzer<'ast> {
                         .iter()
                         .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry))
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
+            Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)),
             Statement::Match { value, arms, .. } => {
@@ -488,12 +483,8 @@ impl<'ast> Analyzer<'ast> {
             Expression::MacroInvocation { args, .. } => args
                 .iter()
                 .any(|a| self.expr_calls_mut_dispatch_on_var(a, loop_var, elem, registry)),
-            Expression::ChannelSend { channel, value, .. } => {
-                self.expr_calls_mut_dispatch_on_var(channel, loop_var, elem, registry)
-                    || self.expr_calls_mut_dispatch_on_var(value, loop_var, elem, registry)
-            }
-            Expression::ChannelRecv { channel, .. } => {
-                self.expr_calls_mut_dispatch_on_var(channel, loop_var, elem, registry)
+            Expression::Scope { body, .. } => {
+                self.expr_calls_mut_dispatch_on_var(body, loop_var, elem, registry)
             }
             _ => false,
         }

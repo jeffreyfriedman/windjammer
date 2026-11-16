@@ -83,38 +83,6 @@ impl Parser {
                     )),
                 }
             }
-            Token::Thread => {
-                // Check if this is a thread block or a module path (thread::...)
-                if self.peek(1) == Some(&Token::LBrace) {
-                    self.parse_thread()
-                } else {
-                    // It's an expression like thread::spawn() or thread::sleep()
-                    let expr = self.parse_expression()?;
-                    if self.current_token() == &Token::Semicolon {
-                        self.advance();
-                    }
-                    Ok(self.alloc_stmt(Statement::Expression {
-                        expr,
-                        location: self.current_location(),
-                    }))
-                }
-            }
-            Token::Async => {
-                // Check if this is an async block or a module path (async::...)
-                if self.peek(1) == Some(&Token::LBrace) {
-                    self.parse_async()
-                } else {
-                    // It's an expression like async::something()
-                    let expr = self.parse_expression()?;
-                    if self.current_token() == &Token::Semicolon {
-                        self.advance();
-                    }
-                    Ok(self.alloc_stmt(Statement::Expression {
-                        expr,
-                        location: self.current_location(),
-                    }))
-                }
-            }
             Token::Defer => self.parse_defer(),
             Token::Break => {
                 self.advance();
@@ -356,30 +324,6 @@ impl Parser {
             body,
             label,
             location,
-        }))
-    }
-
-    fn parse_thread(&mut self) -> Result<&'static Statement<'static>, String> {
-        self.expect(Token::Thread)?;
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
-
-        Ok(self.alloc_stmt(Statement::Thread {
-            body,
-            location: self.current_location(),
-        }))
-    }
-
-    fn parse_async(&mut self) -> Result<&'static Statement<'static>, String> {
-        self.expect(Token::Async)?;
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
-
-        Ok(self.alloc_stmt(Statement::Async {
-            body,
-            location: self.current_location(),
         }))
     }
 

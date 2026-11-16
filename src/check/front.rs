@@ -94,6 +94,14 @@ pub fn parse(file: &str, text: &str, out: &mut Vec<Diagnostic>) -> Option<Parsed
             program,
         }),
         Ok(Err(msg)) => {
+            // WJ0191 (removed `thread { }` / `<-`) with their fixes; any other syntax error is still reported below
+            let removed = super::tasks::removed_forms(&parser, &ix, out);
+            let code = format!("{}:", crate::parser::task_prefix::REMOVED_FORM_CODE);
+            let rest: Vec<&str> = msg.lines().filter(|l| !l.starts_with(&code)).collect();
+            if removed && rest.is_empty() {
+                return None;
+            }
+            let msg = rest.join("\n");
             let (msg, at) = split_position(&msg);
             let (l, c) = at.or_else(|| parser.error_position()).unwrap_or((1, 1));
             let (code, text, label) = match msg.strip_prefix("Lexical error: ") {
@@ -149,8 +157,12 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
         );
     }
     if let Err(msg) = crate::analyzer::Analyzer::new().check_forbidden_rust_patterns(&p.program) {
-        out.push(forbidden(&msg, &ix));
+        // un-waited tasks are reported by `check/tasks.rs` with their own code and fix
+        if !msg.starts_with(&format!("error[{}]", crate::analyzer::task_structure::CODE)) {
+            out.push(forbidden(&msg, &ix));
+        }
     }
+    super::tasks::unwaited(p, &ix, out);
     crate::debug_env::phase("check-forbidden");
     let mut leak = crate::linter::rust_leakage::RustLeakageLinter::new(&p.file).with_receiver_spans(p.parser.span_snapshot()).with_source(&p.text);
     leak.lint_program(&p.program);

@@ -2,7 +2,7 @@
 //!
 //! Handles generation of:
 //! - Await expressions (.await)
-//! - Channel operations (send/recv)
+//! - Async tasks, spawn and scope (compile errors until the Rust lowering lands)
 //! - Range expressions (start..end, start..=end)
 
 use crate::parser::{Expression, Type};
@@ -14,43 +14,28 @@ impl<'ast> CodeGenerator<'ast> {
         format!("{}.await", self.generate_expression(expr))
     }
 
-    /// Generate caller-controlled async call: `async fetch_user(1)` → `async move { fetch_user(1) }`
+    /// `async f(x)` is not lowered for the Rust backend yet (ADR-0004 stage 2): emit a compile error.
     pub(in crate::codegen::rust) fn generate_async_call(
         &mut self,
-        expr: &Expression<'ast>,
+        _expr: &Expression<'ast>,
     ) -> String {
-        format!("async move {{ {} }}", self.generate_expression(expr))
+        "compile_error!(\"`async` tasks are not lowered for the Rust backend yet (ADR-0004 stage 2, docs/concurrency/PLAN.md); run the program with `wj run --interpret`\")".to_string()
     }
 
-    /// Generate caller-controlled spawn call: `spawn fetch_user(1)` → `tokio::spawn(async move { ... })`
+    /// `spawn f(x)` is not lowered for the Rust backend yet (ADR-0004 stage 2): emit a compile error.
     pub(in crate::codegen::rust) fn generate_spawn_call(
         &mut self,
-        expr: &Expression<'ast>,
+        _expr: &Expression<'ast>,
     ) -> String {
-        format!(
-            "tokio::spawn(async move {{ {} }})",
-            self.generate_expression(expr)
-        )
+        "compile_error!(\"`spawn` tasks are not lowered for the Rust backend yet (ADR-0004 stage 2, docs/concurrency/PLAN.md); run the program with `wj run --interpret`\")".to_string()
     }
 
-    /// Generate code for channel send expression (channel.send(value))
-    pub(in crate::codegen::rust) fn generate_channel_send(
+    /// `scope { .. }` is not lowered for the Rust backend yet (ADR-0004 stage 2): emit a compile error.
+    pub(in crate::codegen::rust) fn generate_scope(
         &mut self,
-        channel: &Expression<'ast>,
-        value: &Expression<'ast>,
+        _body: &Expression<'ast>,
     ) -> String {
-        let ch_str = self.generate_expression(channel);
-        let val_str = self.generate_expression(value);
-        format!("{}.send({})", ch_str, val_str)
-    }
-
-    /// Generate code for channel receive expression (channel.recv())
-    pub(in crate::codegen::rust) fn generate_channel_recv(
-        &mut self,
-        channel: &Expression<'ast>,
-    ) -> String {
-        let ch_str = self.generate_expression(channel);
-        format!("{}.recv()", ch_str)
+        "compile_error!(\"`scope` blocks are not lowered for the Rust backend yet (ADR-0004 stage 2, docs/concurrency/PLAN.md); run the program with `wj run --interpret`\")".to_string()
     }
 
     /// Generate code for range expression (start..end or start..=end)

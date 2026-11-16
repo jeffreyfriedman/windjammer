@@ -867,9 +867,6 @@ impl<'ast> Analyzer<'ast> {
                 Self::expr_has_field_move_from_param(param_name, left, false)
                     || Self::expr_has_field_move_from_param(param_name, right, false)
             }
-            Expression::ChannelSend { value, .. } => {
-                Self::expr_has_field_move_from_param(param_name, value, true)
-            }
             Expression::Unary { operand, .. } => {
                 Self::expr_has_field_move_from_param(param_name, operand, false)
             }
@@ -877,7 +874,8 @@ impl<'ast> Analyzer<'ast> {
             | Expression::Await { expr: operand, .. }
             | Expression::Cast { expr: operand, .. }
             | Expression::AsyncCall { expr: operand, .. }
-            | Expression::SpawnCall { expr: operand, .. } => {
+            | Expression::SpawnCall { expr: operand, .. }
+            | Expression::Scope { body: operand, .. } => {
                 Self::expr_has_field_move_from_param(param_name, operand, true)
             }
             _ => false,

@@ -31,7 +31,9 @@ fn test_thread_block() {
     let x = 42
     
     // Thread blocks always use move (closure escapes scope)
-    thread {
-        let y = x + 1
+    scope {
+        spawn {
+            let y = x + 1
+        }
     }
 }

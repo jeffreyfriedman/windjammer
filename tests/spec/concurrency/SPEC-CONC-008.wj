@@ -1,0 +1,8 @@
+// spec: SPEC-CONC-008
+// mode: check-error
+// expect-error: WJ0190
+fn work(n: int) -> int { n }
+fn main() {
+    spawn work(1)
+    println("x")
+}
