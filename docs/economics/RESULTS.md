@@ -38,8 +38,8 @@ Every number below is labelled **measured** (a command in this repository produc
 | D3 | cold dependency build, one-off (below) | 30.8 s CPU, 59 crates | | | no dependency build | **largest loss** |
 | D4 | compile peak RSS (`-O3`) | 1.28 | 1.00 | 0.99 | <= 1.00 | loss on dx, parity on kernels |
 | D4 | run-time peak RSS | 1.03 | 1.03 | 1.00 | win <= 0.95, parity <= 1.05 | parity |
-| D5 | run, `-O3` same flags, cycles | 1.00 | 1.20 | 1.12 | win <= 0.95, parity <= 1.02 | parity on dx, loss on kernels |
-| D5 | run, shipped vs twin, instructions | 1.02 | 1.31 | 1.37 | | loss (overflow checks) |
+| D5 | run, `-O3 -C lto` same flags, overflow checks OFF on both sides, cycles | 1.00 | 1.20 | 1.12 | win <= 0.95, parity <= 1.02 | parity on dx, loss on kernels |
+| D5 | run, shipped (overflow checks ON) vs twin (OFF), instructions | 1.02 | 1.31 | 1.37 | | loss (overflow checks) |
 | D6 | stripped binary, same flags | 1.19 | 1.00 | 1.00 | win <= 0.95 | loss on dx (runtime io), parity on kernels |
 | D7 | ceremony (`&`, lifetimes, clone, to_string, unwrap, as, iter) | **0.45** | **0.42** | 0.67 (n=2) | win <= 0.50 | **WIN** |
 | D7 | lexical tokens | 1.08 | 0.99 | 1.00 | win <= 0.85 | loss on the verbose reference set; 0.88 on pilot-6 agent programs |
@@ -160,6 +160,35 @@ Per program, fat LTO costs about 2 s more CPU to compile (0.13-0.27 s without, 2
 (Windjammer and Rust alike: the twin with checks is 1.25x its own default) and up to 1.77x (`interp/loop5m`), 1.35x
 (`collatz`), 1.34x (`structs`), 1.27x (`fib`); about half the kernels are within 5%. (`interp/closures` is excluded:
 its generated Rust does not compile with this wj.)
+
+### Overflow checks on vs off per kernel (instructions)
+
+Instructions retired of the run (macOS hardware counter, best of 3; the PC repeats this with callgrind:
+`economics.wj --profiles --instr callgrind`). Ratio = overflow checks on / off, same flags otherwise:
+
+| kernel | Windjammer, `-C opt-level=3` | Windjammer, fat LTO + 1 codegen unit | Rust twin, `-C opt-level=3` |
+|---|---:|---:|---:|
+| parity/sieve | 1.01 | 1.00 | 0.89 |
+| parity/matmul | 1.00 | 1.00 | 1.00 |
+| parity/collatz | 1.24 | 1.52 | 1.24 |
+| parity/string_build | 1.00 | 1.00 | 1.01 |
+| parity/fib | 1.32 | 1.32 | 1.32 |
+| parity/vec_fill | 1.35 | 1.35 | 1.70 |
+| parity/insertion_sort | 1.00 | 1.00 | 1.00 |
+| parity/nbody | 1.00 | 1.00 | 0.98 |
+| parity/byte_hash | 1.00 | 1.00 | 0.99 |
+| parity/histogram | 1.23 | 1.22 | 1.22 |
+| interp/fib30 | 1.20 | 1.20 | 1.19 |
+| interp/hashmap | 1.02 | 1.01 | 1.00 |
+| interp/loop5m | 2.33 | 2.34 | 1.13 |
+| interp/nbody | 1.00 | 1.00 | 1.00 |
+| interp/sieve | 1.01 | 1.00 | 1.00 |
+| interp/strings | 1.00 | 1.00 | 1.00 |
+| interp/structs | 1.14 | 1.16 | 1.14 |
+
+Owner decision (2026-11-16): overflow checks stay **on** by default in release builds (compiled output must match the
+interpreter, which panics on overflow). Every D5 number in this file states its setting: "same flags" rows are
+without checks on both sides; "shipped" rows are Windjammer with checks against the Rust twin without.
 
 Proposal (owner decision; no default changed yet):
 

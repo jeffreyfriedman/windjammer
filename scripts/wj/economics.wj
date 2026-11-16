@@ -659,6 +659,47 @@ fn profile_row(p: Prog, wj: string, scratch: string, runs: int, flag: string) ->
     row
 }
 
+// ---------------------------------------------------------------- overflow-check clawback (C4, PASSES.md P10)
+
+// For one std-only kernel: the generated Rust before the optimizer (`WJ_OPTIMIZER=off`), then the production optimizer
+// with and without bounded_counter (`optimize_rs --without`), each built `-C opt-level=3` with overflow checks ON (what
+// Windjammer ships), plus the unchecked build as the floor. Records the pass's edit count and run counters.
+fn clawback_row(p: Prog, wj: string, optimize_rs: string, scratch: string, runs: int, flag: string) -> Json {
+    let root = run_sh("pwd").trim().to_string()
+    let work = scratch + "/" + strings.replace(p.id, "/", "_")
+    let _ = run_sh("rm -rf " + quote(work) + " && mkdir -p " + quote(work + "/prog"))
+    let _ = run_sh("cp " + quote(root + "/" + p.wj) + " " + quote(work + "/prog/main.wj"))
+    let _ = run_sh("env WJ_OPTIMIZER=off " + quote(wj) + " build --no-cargo -o " + quote(work + "/gen") + " " + quote(work + "/prog/main.wj") + " >/dev/null 2>&1")
+    let raw = gen_rs(work + "/gen")
+    let mut row = with(with(object(), "id", from_str(p.id)), "suite", from_str(p.suite))
+    if raw == "" || read(raw).contains("windjammer_runtime") {
+        let _ = run_sh("rm -rf " + quote(work))
+        return with(row, "skipped", from_str("uses the runtime crate or does not transpile"))
+    }
+    let on_rs = work + "/on.rs"
+    let off_rs = work + "/off.rs"
+    let report = run_sh(quote(optimize_rs) + " " + quote(raw) + " " + quote(on_rs) + " 2>&1")
+    let _ = run_sh(quote(optimize_rs) + " " + quote(raw) + " " + quote(off_rs) + " --without bounded_counter 2>&1")
+    let mut edits = 0
+    for l in strings.split_lines(report) {
+        if l.starts_with("bounded_counter: ") {
+            edits = l["bounded_counter: ".len()..].trim().parse::<int>() ?? 0
+        }
+    }
+    row = with(row, "pass_edits", from_int(edits as i64))
+    let mut expected = ""
+    for (name, src, flags) in [("checked_without_pass", off_rs, "-C opt-level=3 -C overflow-checks=on"), ("checked_with_pass", on_rs, "-C opt-level=3 -C overflow-checks=on"), ("unchecked", off_rs, "-C opt-level=3")] {
+        let bin = work + "/" + name
+        let c = measure(work, "rustc --edition 2021 -A warnings " + GEN_ALLOW + " " + flags + " -o " + quote(bin) + " " + quote(src), "", 1, flag)
+        let r = measure(work, quote(bin), "", runs, flag)
+        if expected == "" { expected = r.stdout }
+        let ok = c.status == 0 && r.status == 0 && norm(r.stdout) == norm(expected)
+        row = with(row, name, with(with(m_json(r), "ok", from_str(if ok { "yes" } else { "no" })), "compile_status", from_int(c.status as i64)))
+    }
+    let _ = run_sh("rm -rf " + quote(work))
+    row
+}
+
 // ---------------------------------------------------------------- agent dimension (read from the pilots)
 
 fn arm_mean(arms: Json, metric: string, arm: string) -> f64 {
@@ -762,7 +803,7 @@ fn main() {
     let target = match long_flag_value(args, "target") {
         Some(t) => t,
         None => {
-            if !static_only && !has_long_flag(args, "selftest") && !has_long_flag(args, "profiles") {
+            if !static_only && !has_long_flag(args, "selftest") && !has_long_flag(args, "profiles") && !has_long_flag(args, "clawback") {
                 eprintln("usage: economics.wj (--target DIR | --static | --selftest) [--meter auto|time|rusage|wall] [--instr none|callgrind] [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S] [--no-shipped] [--label NAME]")
                 process.exit(2)
             }
@@ -797,7 +838,7 @@ fn main() {
     env_doc = with(env_doc, "counter", from_str(meter_description(meter, callgrind)))
     env_doc = with(env_doc, "meter", from_str(if meter.starts_with("rusage:") { "rusage" } else { meter }))
 
-    let skip_deps = static_only || has_long_flag(args, "profiles")
+    let skip_deps = static_only || has_long_flag(args, "profiles") || has_long_flag(args, "clawback")
     // dependency cache: build it cold once (measured), then reuse it for every generated program
     let first = programs()[0]
     let probe = scratch + "/probe"
@@ -809,6 +850,23 @@ fn main() {
     let ext_dbg = if skip_deps { "" } else { extern_flags(target, "debug") }
     let ext_rel = if skip_deps { "" } else { extern_flags(target, "release") }
 
+    if has_long_flag(args, "clawback") {
+        let ors = long_flag_value_or(args, "optimize-rs", "")
+        if ors == "" { die("--clawback needs --optimize-rs PATH (cargo build --release --example optimize_rs)") }
+        let mut rows = array()
+        for p in programs() {
+            if p.suite == "dx" { continue }
+            if only != "" && !("," + only + ",").contains("," + p.id + ",") { continue }
+            eprintln("[clawback] ${p.id}")
+            rows = push(rows, clawback_row(p, wj, ors, scratch, runs, flag))
+        }
+        let doc = with(with(object(), "env", env_doc), "clawback", rows)
+        let path = out_dir + "/" + label + "-clawback.json"
+        let _ = fs.write(path, dumps(doc, 1, false))
+        let _ = run_sh("rm -rf " + quote(scratch))
+        eprintln("wrote ${path}")
+        return
+    }
     if has_long_flag(args, "profiles") {
         let mut rows = array()
         for p in programs() {

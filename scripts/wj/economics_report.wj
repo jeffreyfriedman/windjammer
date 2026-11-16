@@ -246,6 +246,25 @@ fn profiles_md(rows: Vec<Json>) -> string {
     md + markdown(o) + "\n"
 }
 
+// Overflow-check clawback (economics.wj --clawback): per kernel, what bounded_counter removed and recovered.
+fn clawback_md(rows: Vec<Json>) -> string {
+    let mut md = "## Overflow checks: cost and clawback (C4, PASSES.md P10)\n\nEvery build `-C opt-level=3`. `checked` = overflow checks on (what Windjammer ships), without / with the bounded_counter pass; `unchecked` = overflow checks off (not shipped; the floor). Recovered = share of the checks' cost the pass removes.\n\n"
+    let mut t = right_align(new(["kernel", "pass edits", "instr checked, no pass", "instr checked, pass", "instr unchecked", "cost of checks", "recovered", "cycles checked, no pass / pass"]), [1, 2, 3, 4, 5, 6, 7])
+    for r in rows {
+        if get(r, "skipped").is_some() { continue }
+        let a = num(r, "checked_without_pass.instr")
+        let b = num(r, "checked_with_pass.instr")
+        let u = num(r, "unchecked.instr")
+        let ca = num(r, "checked_without_pass.cycles")
+        let cb = num(r, "checked_with_pass.cycles")
+        let cost = if u > 0.0 { fixed(a / u, 2) + "x" } else { "-" }
+        let rec = if a - u > 0.0 { fixed(100.0 * (a - b) / (a - u), 0) + "%" } else { "-" }
+        let cyc = if cb > 0.0 { fixed(ca / cb, 2) } else { "-" }
+        t = add_row(t, [as_str(get(r, "id") ?? object()) ?? "", "${num(r, "pass_edits") as int}", fixed(a / 1000000.0, 1) + "M", fixed(b / 1000000.0, 1) + "M", fixed(u / 1000000.0, 1) + "M", cost, rec, cyc])
+    }
+    md + markdown(t) + "\n"
+}
+
 fn main() {
     let args = env.args()
     let path = match first_positional(args) {
@@ -263,6 +282,12 @@ fn main() {
             process.exit(1)
             object()
         },
+    }
+    if get(doc, "clawback").is_some() {
+        let md = clawback_md(items(get(doc, "clawback") ?? array()))
+        let out = long_flag_value_or(args, "md", "")
+        if out == "" { println(md) } else { let _ = fs.write(out, md) }
+        return
     }
     if get(doc, "profiles").is_some() {
         let md = profiles_md(items(get(doc, "profiles") ?? array()))
