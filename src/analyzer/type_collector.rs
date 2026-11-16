@@ -165,39 +165,76 @@ pub fn collect_local_type_names<'ast>(program: &Program<'ast>) -> HashSet<String
     local
 }
 
-/// Every type path referenced from type positions in the program (before filtering).
+/// Names of the generic parameters an item declares (its own, and its methods'): they are in scope inside it and
+/// are not types to import (`fn show<F: Named>(fe: F)` must not become `use super::F;`).
+fn declared_generic_names<'ast>(item: &Item<'ast>) -> HashSet<String> {
+    let names = |ps: &[TypeParam]| ps.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+    let mut out: Vec<String> = Vec::new();
+    match item {
+        Item::Struct { decl, .. } => out.extend(names(&decl.type_params)),
+        Item::Enum { decl, .. } => out.extend(names(&decl.type_params)),
+        Item::Trait { decl, .. } => {
+            out.extend(decl.generics.iter().cloned());
+            for m in &decl.methods {
+                out.extend(names(&m.type_params));
+            }
+        }
+        Item::Impl { block, .. } => {
+            out.extend(names(&block.type_params));
+            for f in &block.functions {
+                out.extend(names(&f.type_params));
+            }
+        }
+        Item::Function { decl, .. } => out.extend(names(&decl.type_params)),
+        _ => {}
+    }
+    out.into_iter().collect()
+}
+
+/// Every type path referenced from type positions in the program (before filtering). A generic parameter of the
+/// item that mentions it is not a type path.
 pub fn collect_referenced_type_paths<'ast>(program: &Program<'ast>) -> HashSet<String> {
     let mut out = HashSet::new();
     for item in &program.items {
+        let mut item_out = HashSet::new();
+        collect_item_type_paths(item, &mut item_out);
+        let generics = declared_generic_names(item);
+        out.extend(item_out.into_iter().filter(|p| !generics.contains(p)));
+    }
+    out
+}
+
+fn collect_item_type_paths<'ast>(item: &Item<'ast>, out: &mut HashSet<String>) {
+    {
         match item {
-            Item::Struct { decl, .. } => collect_from_struct_decl(decl, &mut out),
+            Item::Struct { decl, .. } => collect_from_struct_decl(decl, out),
             Item::Enum { decl, .. } => {
-                collect_from_type_params(&decl.type_params, &mut out);
+                collect_from_type_params(&decl.type_params, out);
                 for v in &decl.variants {
                     match &v.data {
                         EnumVariantData::Unit => {}
                         EnumVariantData::Tuple(types) => {
                             for t in types {
-                                collect_type_references(t, &mut out);
+                                collect_type_references(t, out);
                             }
                         }
                         EnumVariantData::Struct(fields) => {
                             for (_, t) in fields {
-                                collect_type_references(t, &mut out);
+                                collect_type_references(t, out);
                             }
                         }
                     }
                 }
             }
-            Item::Trait { decl, .. } => collect_from_trait_decl(decl, &mut out),
-            Item::Impl { block, .. } => collect_from_impl_block(block, &mut out),
-            Item::Function { decl, .. } => collect_from_function_decl(decl, &mut out),
+            Item::Trait { decl, .. } => collect_from_trait_decl(decl, out),
+            Item::Impl { block, .. } => collect_from_impl_block(block, out),
+            Item::Function { decl, .. } => collect_from_function_decl(decl, out),
             Item::Const { type_, .. }
             | Item::Static { type_, .. }
             | Item::ExternLet { type_, .. } => {
-                collect_type_references(type_, &mut out);
+                collect_type_references(type_, out);
             }
-            Item::TypeAlias { target, .. } => collect_type_references(target, &mut out),
+            Item::TypeAlias { target, .. } => collect_type_references(target, out),
             Item::Mod { items, .. } => {
                 let nested = Program::new(items.clone());
                 out.extend(collect_referenced_type_paths(&nested));
@@ -206,7 +243,6 @@ pub fn collect_referenced_type_paths<'ast>(program: &Program<'ast>) -> HashSet<S
             Item::Macro { .. } => {}
         }
     }
-    out
 }
 
 /// Type paths that should become `use super::...` lines (not defined locally).
@@ -541,6 +577,28 @@ pub struct Manager {
             "Vec3 is already imported; got {:?}",
             paths
         );
+    }
+
+    fn auto_super_paths_of(src: &str) -> Vec<String> {
+        let owned = src.to_string();
+        let mut lexer = Lexer::new(&owned);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new_with_source(tokens, "test.wj".to_string(), owned);
+        let program = parser.parse().expect("parse");
+        auto_super_type_import_paths(&program)
+    }
+
+    #[test]
+    pub(crate) fn generic_parameters_are_not_imports() {
+        // `F` is the function's own parameter (a glob import, so no explicit name hides it); `Report` is a sibling's type
+        let paths = auto_super_paths_of("use crate::tr::*\n\npub fn show<F: Named>(fe: F) -> Report {\n    Report { n: 1 }\n}\n");
+        assert_eq!(paths, vec!["Report".to_string()], "{paths:?}");
+        // impl-level and method-level parameters, struct parameters
+        let paths = auto_super_paths_of("pub struct Holder<T> { pub item: T, pub other: Sibling }\n\nimpl<T> Holder<T> {\n    pub fn map<U>(self, f: fn(T) -> U) -> Box<U> {\n        panic(\"x\")\n    }\n}\n");
+        assert_eq!(paths, vec!["Sibling".to_string()], "{paths:?}");
+        // a real sibling type that shares a letter with another item's parameter is still imported
+        let paths = auto_super_paths_of("pub fn id<F>(x: F) -> F {\n    x\n}\n\npub struct Wrap { pub inner: F }\n");
+        assert_eq!(paths, vec!["F".to_string()], "{paths:?}");
     }
 
     #[test]
