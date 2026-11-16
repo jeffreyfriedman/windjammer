@@ -54,6 +54,11 @@ reason = "accepted for design with a staged implementation (E1-E7): the commands
 
 [[exclude]]
 check = "links"
+glob = "docs/adr/0039-stdlib-one-way.md"
+reason = "proposed std redesign with a staged migration (S1-S9): WJ0180, the new gate tests, the new source files and the generator flags it names are the plan, not current behaviour"
+
+[[exclude]]
+check = "links"
 glob = "docs/spec/effects.md"
 reason = "rules marked [PLANNED] name commands, flags and acceptance tests that arrive with stages E1-E7"
 

@@ -48,6 +48,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0036](0036-runtime-errors.md) | Runtime errors that explain themselves | Proposed |
 | [0037](0037-agent-cost-levers.md) | Agent-cost levers, measured offline | Proposed |
 | [0038](0038-interpreter-world-class.md) | A world-class interpreter, as a ladder of measured rungs | Proposed |
+| [0039](0039-stdlib-one-way.md) | One correct way: the standard library surface | Proposed |
 <!-- wj:end -->
 
 ## Template
