@@ -13,7 +13,6 @@
 
 pub trait Vec<T> {
     fn new() -> Vec<T>;
-    fn clone(self) -> Vec<T>;
     fn with_capacity(capacity: usize) -> Vec<T>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
