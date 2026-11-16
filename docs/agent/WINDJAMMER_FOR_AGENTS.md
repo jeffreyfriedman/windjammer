@@ -10,7 +10,7 @@ Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in
 - `len()` is `usize` when compiled: `let n: int = v.len() as int`. Slice strings with `s[a..b]`.
 - JSON: `use std::json`; any struct converts: `json.to_string(v)`, `json.parse_string::<T>(text)` (no derive).
 - Printing `Option`/`Result`/`Vec` needs `${x:?}`. Sort `HashMap` keys before printing.
-- Loop: iterate with `wj check FILE` and `wj run --interpret FILE` (instant; input on stdin). Before you finish, `wj build FILE` must succeed and `wj run --compiled FILE` must print the same output: the interpreter can accept code the compiler rejects.
+- Loop: one command, `wj run --verify FILE` (input on stdin or `--stdin-file in.txt`). It checks (`wj check`) and interprets (`wj run --interpret`, instant), stops there if the program panics, then builds once (`wj build` must succeed) and compares the compiled run (`wj run --compiled`). Done when it prints `wj verify: OK`.
 - Rust crates: add `strsim = "0.11"` under `[dependencies]` in `wj.toml`, call `strsim::levenshtein(a, b)`; `wj rust-surface strsim` lists what is callable.
 - Unsure? `wj docs <terms>` searches the full reference, stdlib and verified examples; `wj explain <CODE>` explains an error code.
 
