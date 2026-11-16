@@ -89,7 +89,7 @@ fn stored_literal_widths(program: &'static crate::parser::Program<'static>, file
 fn encode_widths(widths: Option<&LiteralWidths>) -> String {
     let Some(w) = widths else { return "-".to_string() };
     let mut v: Vec<(&(usize, usize), &IntTy)> = w.iter().collect();
-    v.sort();
+    v.sort_by_key(|(k, _)| **k);
     v.iter().map(|((l, c), t)| format!("{l}:{c}:{}\n", t.name())).collect()
 }
 
