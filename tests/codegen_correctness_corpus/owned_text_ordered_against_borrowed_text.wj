@@ -1,0 +1,42 @@
+// Owned text (a `string` field or local) compared with borrowed text (a read-only `string` parameter emitted as
+// `&str`, or a `&str` slice local): Rust orders `&str` only against `&str`, so the owned side is viewed as `&str`.
+// Every comparison operator, with a field, a parameter and a local on either side.
+// expect: 3
+// expect: true false true true false true
+// expect: false true false true false false
+// expect: true true
+pub struct Item {
+    pub date: string,
+    pub cents: int,
+}
+
+pub fn total_between(items: Vec<Item>, from: string, to: string) -> int {
+    let mut total = 0
+    for it in items {
+        if it.date < from || it.date > to {
+            continue
+        }
+        total = total + it.cents
+    }
+    total
+}
+
+pub fn compare(a: string, b: string) -> string {
+    let owned = a + ""
+    "${owned < b} ${owned > b} ${owned <= b} ${owned != b} ${owned == b} ${b >= owned}"
+}
+
+pub fn first_before(items: Vec<Item>, bound: string) -> string {
+    let head = items[0].date.substring(0, 4)
+    let full = items[1].date + ""
+    "${head < full} ${bound <= items[0].date}"
+}
+
+fn main() {
+    let items = [Item { date: "2026-01-05", cents: 3 }, Item { date: "2026-03-05", cents: 4 }]
+    println(total_between(items, "2026-01-01", "2026-02-01"))
+    println(compare("a", "b"))
+    println(compare("c", "b"))
+    let more = [Item { date: "2026-01-05", cents: 3 }, Item { date: "2026-03-05", cents: 4 }]
+    println(first_before(more, "2025"))
+}

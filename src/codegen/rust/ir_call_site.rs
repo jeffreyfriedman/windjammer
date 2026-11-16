@@ -9114,11 +9114,8 @@ impl<'ast> CodeGenerator<'ast> {
         };
         if let Some(name) = binding {
             if let Some(ir_fn) = self.current_ir_function.as_ref() {
-                if let Some(from_ir) = ir_fn
-                    .param_types
-                    .get(name)
-                    .or_else(|| ir_fn.local_types.get(name))
-                {
+                let by_use = ir_fn.use_local_type(arg_expr);
+                if let Some(from_ir) = by_use.or_else(|| ir_fn.param_types.get(name)).or_else(|| ir_fn.local_types.get(name)) {
                     return crate::ir::signature_bridge::merge_call_arg_actual_with_ir(
                         from_ast,
                         from_ir.clone(),

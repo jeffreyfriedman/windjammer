@@ -15,8 +15,8 @@ fn count_words(text: &str) -> HashMap<String, i64> {
 #[test]
 fn counts_repeats() {
     let m: HashMap<String, i64> = count_words("a b a c a");
-    assert_eq!(m["a"], 3);
-    assert_eq!(m["b"], 1);
+    assert_eq!(m["a"], 3_i64);
+    assert_eq!(m["b"], 1_i64);
     assert_eq!(m.len(), 3_usize);
 }
 

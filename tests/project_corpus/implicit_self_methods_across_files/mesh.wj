@@ -1,0 +1,26 @@
+pub struct Mesh {
+    pub verts: Vec<f32>,
+    pub count: int,
+}
+
+impl Mesh {
+    pub fn new() -> Mesh {
+        Mesh { verts: [], count: 0 }
+    }
+
+    pub fn add_vertex(x: f32, y: f32) {
+        self.verts.push(x)
+        self.verts.push(y)
+        self.count = self.count + 1
+    }
+}
+
+pub fn make_line(n: int) -> Mesh {
+    let mut mesh = Mesh::new()
+    for i in 0..n {
+        let x = i as f32
+        let y = x * 2.0
+        mesh.add_vertex(x, y)
+    }
+    mesh
+}

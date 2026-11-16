@@ -30,6 +30,7 @@ pub mod execution;
 pub mod explain;
 pub mod formal_predicates;
 pub mod liveness;
+pub mod local_types;
 pub mod lower;
 pub mod node;
 pub mod numeric_bridge;

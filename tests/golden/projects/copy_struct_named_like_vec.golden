@@ -1,0 +1,115 @@
+// ==== camera.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::vec3::Vec3;
+use crate::grid::Grid;
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct Camera {
+    pub pos: Vec3,
+    pub scale: i64,
+}
+
+impl Camera {
+#[inline]
+pub fn collides(grid: &Grid, pos: Vec3, scale: i64) -> bool {
+        let ix = (pos.x as f32 * scale as f32) as i64;
+        grid.get(ix) != 0_u8
+}
+#[inline]
+pub fn update(&mut self, dx: f32, grid: &Grid) {
+        let test_x = Vec3::new(self.pos.x + dx, self.pos.y, self.pos.z);
+        if !Camera::collides(grid, test_x, self.scale) {
+            self.pos = test_x;
+        }
+}
+}
+
+// ==== grid.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Grid {
+    pub cells: Vec<u8>,
+    pub size: i64,
+}
+
+impl Grid {
+#[inline]
+pub fn get(&self, x: i64) -> u8 {
+        if x < 0_i64 || x >= self.size {
+            return 0_u8;
+        }
+        self.cells[x as usize]
+}
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod camera;
+pub mod grid;
+pub mod vec3;
+
+// Re-export public items
+pub use camera::*;
+pub use grid::*;
+pub use vec3::*;
+// ==== main.rs ====
+use crate::vec3::Vec3;
+use crate::grid::Grid;
+use crate::camera::Camera;
+mod vec3;
+mod grid;
+mod camera;
+fn main() {
+    let g = Grid { cells: vec![0_u8, 0_u8, 1_u8, 0_u8], size: 4_i64 };
+    let mut c = Camera { pos: Vec3::new(0.0_f32, 0.0_f32, 0.0_f32), scale: 1_i64 };
+    c.update(1.0_f32, &g);
+    c.update(1.0_f32, &g);
+    println!("{} {}", c.pos.x, g.size / 2_i64);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod camera;
+pub mod grid;
+pub mod vec3;
+
+// Re-export public items
+pub use camera::*;
+pub use grid::*;
+pub use vec3::*;
+// ==== vec3.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct Vec3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+impl Vec3 {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(12);
+        __bytes.extend_from_slice(&self.x.to_ne_bytes());
+        __bytes.extend_from_slice(&self.y.to_ne_bytes());
+        __bytes.extend_from_slice(&self.z.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Vec3 {
+#[inline]
+pub fn new(x: f32, y: f32, z: f32) -> Vec3 {
+        Vec3 { x, y, z }
+}
+}
+

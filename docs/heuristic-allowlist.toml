@@ -133,11 +133,8 @@
 "src/ir/shadow.rs" = 1
 "src/ir/signature_bridge.rs" = 3
 "src/ir/taint.rs" = 2
-"src/type_inference/float_inference/expression_constraints.rs" = 2
-"src/type_inference/float_inference/expression_constraints_call.rs" = 2
 "src/type_inference/float_inference/solve_constraints.rs" = 1
 "src/type_inference/float_inference/type_helpers.rs" = 5
-"src/type_inference/int_inference/expression_constraints.rs" = 2
 "src/type_inference/int_inference/literal_inference.rs" = 4
 "src/type_inference/struct_field_registry.rs" = 1
 "src/typing/core_surface.rs" = 1

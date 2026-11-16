@@ -6,6 +6,14 @@
 
 use crate::parser::{BinaryOp, UnaryOp};
 
+/// A comparison or logical operator: its value is a `bool`, whatever its operands are (`x < y` on vectors).
+pub fn yields_bool(op: &BinaryOp) -> bool {
+    matches!(
+        op,
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or
+    )
+}
+
 /// Maps a binary operator to its Rust syntax representation
 ///
 /// # Examples

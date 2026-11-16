@@ -1,0 +1,27 @@
+// `for v in t.out` inside an outer loop that reads `t` again in its next pass: moving the field would leave `t`
+// partly moved (rustc E0382), so the loop iterates the field by reference.
+// expect: 1
+// expect: 3
+struct Log {
+    out: Vec<int>,
+    n: int,
+}
+impl Log {
+    fn add(self, x: int) {
+        self.out.push(x)
+        self.n += 1
+    }
+}
+fn main() {
+    let mut t = Log { out: [], n: 0 }
+    for round in 0..3 {
+        t.add(round)
+        if round > 0 {
+            let mut s = 0
+            for v in t.out {
+                s += v
+            }
+            println("${s}")
+        }
+    }
+}

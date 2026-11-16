@@ -269,30 +269,9 @@ impl IrPipeline {
 
                 ir_fn.record_ownership_stage("pipeline::retain_mutated_mutref");
 
-                // Write local variable types from solver (none for a class two exact widths met: see `solved_local_base`).
-                let conflicted = width_conflict_classes(&result);
-                for (local_name, &var) in &fc.var_map.locals {
-                    let root_idx = var.0 as usize; // results are indexed by variable
-                    let base = solved_local_base(&result, &conflicted, root_idx);
-                    // A local's mode is what it holds (join over its type class), not a requirement.
-                    let own = result.class_ownership.get(root_idx).and_then(|o| o.as_ref());
-                    if base.is_some() || own.is_some() {
-                        let entry = ir_fn
-                            .local_types
-                            .entry(local_name.clone())
-                            .or_insert_with(|| SafetyType::owned(BaseType::Inferred));
-                        if let Some(b) = base {
-                            if *b != BaseType::Inferred {
-                                entry.base = b.clone();
-                            }
-                        }
-                        if let Some(o) = own {
-                            if *o != OwnedType::Inferred {
-                                entry.ownership = o.clone();
-                            }
-                        }
-                    }
-                }
+                // Write local variable types from solver, per binding (`local_types.rs`).
+                crate::ir::local_types::publish(&fc, &result, ir_fn);
+                ir_fn.write_through_loops = fc.loop_writes.clone();
             }
         }
 
@@ -570,22 +549,6 @@ pub fn ir_pipeline_available() -> bool {
     true
 }
 
-
-/// Classes in which two exact integer widths met (the solver could not decide them).
-fn width_conflict_classes(result: &crate::ir::solver::SolverResult) -> std::collections::BTreeSet<u32> {
-    result.width_conflicts.iter().filter_map(|v| result.class_of.get(v.0 as usize).copied()).collect()
-}
-
-/// A local's solved type, except an integer width of a class two exact widths met: which width the union kept
-/// depends on constraint order, so the class stays with the legacy deciders (as its literals and name do).
-fn solved_local_base<'r>(
-    result: &'r crate::ir::solver::SolverResult,
-    conflicted: &std::collections::BTreeSet<u32>,
-    var: usize,
-) -> Option<&'r BaseType> {
-    let undecided = result.class_of.get(var).is_some_and(|c| conflicted.contains(c));
-    result.types.get(var).and_then(|t| t.as_ref()).filter(|b| !(undecided && crate::ir::solver::is_integer_type(b)))
-}
 
 #[cfg(test)]
 mod tests {

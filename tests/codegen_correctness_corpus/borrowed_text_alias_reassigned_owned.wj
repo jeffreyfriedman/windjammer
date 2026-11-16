@@ -1,0 +1,17 @@
+// A mutable local that aliases borrowed text (`let raw = s.trim()`, `&str` by `trim`'s declared result) and is later
+// given owned text owns its text from the start (`raw.to_string()`, not `raw.clone()`, which stays `&str`).
+// expect: abc
+fn strip_hash(hex: string) -> string {
+    let raw = hex.trim()
+    let mut body = raw
+    if raw.len() > 0 {
+        if raw.substring(0, 1) == "#" {
+            body = raw.substring(1, raw.len())
+        }
+    }
+    body
+}
+
+fn main() {
+    println(strip_hash("#abc"))
+}

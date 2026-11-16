@@ -155,6 +155,41 @@ red as ledgered above. The next candidate is call-site gated: `self` owned only 
 compilation owns its receiver at a last use (no call through a borrowed `self`, parameter, field or element). The
 value-formal fixed point already publishes receiver modes, so the gate can be a fixed-point fact.
 
+### Loop writes, scoped local types, implicit receivers (wt/ownership-9, 2026-11-12)
+
+- OWN-LOOP-WRITE: `IrFunction::write_through_loops` lists the `for` statements whose binding is assigned or written
+  through a field or element (the assignment root is resolved to its binding in `constraint_gen/loop_writes.rs`).
+  `for mut q in qs { q.xs[0] = 9 }` and `for mut row in grid { row[0] = 7 }` now iterate `&mut qs` / `&mut grid`
+  (were `&qs`, rustc E0596, and `grid.iter().copied()`, E0277).
+- Local types are scope-aware (`ir/local_types.rs`): a name bound twice with different types has no by-name entry;
+  each read gets the type of the binding it names (`use_local_types`). A later `let t: int` no longer retypes an
+  earlier loop variable `t` (`tokens.push(t)` converts the text slice again).
+- Partial move by a loop: `for v in t.out` is a `field_copy_sites` site when `t` is read after the loop or in the next
+  pass of an enclosing loop (liveness `read_after`); the loop then iterates `&t.out` instead of moving the field
+  (rustc E0382, reported as WJ0007).
+- Implicit `self` (a method that uses `self` without declaring it) keeps its receiver slot aligned in every registry
+  write: `upgrade_self_receiver` inserts the slot into a Self-free declaration stub instead of overwriting the first
+  formal, IR write-back offsets by the slot, and the method registration counts the analyzer's `self` as a receiver.
+  Callers no longer pass `&mut x` into `fn add_vertex(x: f32)`.
+- A read-only `let j = v[i]` of a non-Copy element stays a borrow only while `v` is not changed before the last read
+  of `j` (`codegen/rust/element_borrow_conflict.rs`: an assignment into `v` or a call of a method whose declared
+  receiver is `&mut self`); otherwise the element is copied (`let j = self.jobs[i]; self.jobs.remove(i); .. j ..` was
+  rustc E0502).
+- `self.special(self.forms[h].s, ..)` into a `&mut self` method (IR receiver mode): an argument that borrows a path
+  of the same receiver is copied first (`&(..).clone()`), so the shared borrow ends before the call (was E0502).
+- `for o in out` over a `&mut Vec` parameter reborrows (`&*out`, `&mut *out` when the binding writes through)
+  instead of moving the reference (E0382 at a later `out.push`).
+- `for d in ["n", "s"]` binds `&str`; as an `if`/`else` value beside an owned `String` it is converted.
+- `let mut body = raw` of text the solver types as `string` that the backend does not know as an owned `String`
+  (`raw = s.trim()`) copies with `to_string()` (`raw.clone()` stayed `&str`, E0308 at `body = <String>`).
+- The demoted-text rewrite `{param}.clone()` -> `{param}.to_string()` matched any text ending in the parameter name
+  (`self.rooms.clone()` for a parameter `s` became `self.room` + `s.to_string()`); it now matches the whole binding.
+- Ordering owned text against borrowed text (`it.date < from`, `from` a read-only `string` parameter emitted as
+  `&str`; `owned < b`) views the owned side as `&str` (`codegen/rust/text_comparison_operands.rs`); Rust has
+  `PartialEq<&str> for String` but no `PartialOrd<&str>` (was E0308). Equality keeps its native form.
+- A Copy struct named `Vec3` is not the `Vec` collection: two `starts_with("Vec")` guesses now compare the type's base
+  name, so the bare-pass hint no longer borrows `Vec3` arguments into owned formals.
+
 ## Name-based guesses (decide from declarations instead)
 
 The compiler decides from declarations, never from what a program happens to call things. Each row below guesses a
@@ -193,7 +228,7 @@ mutation check adds one guess of each kind to a real file and requires all three
 fails when the line below does not match the allow-list.
 
 Current totals (2026-11-11, after U11 moved the trait-impl key helpers out of the signature registry; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
-`H-NAME-MATCHES` 526, `H-MATCH-ARM-NAMES` 1125, `H-FALLBACK-LEGACY` 126 (total 1777)
+`H-NAME-MATCHES` 521, `H-MATCH-ARM-NAMES` 1125, `H-FALLBACK-LEGACY` 126 (total 1772)
 
 Breakdown at seeding (2026-11-04):
 
@@ -294,6 +329,8 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C2 structured types (HasPart, surface binding, closures, patterns, aliases, opaque hold, published defaults) | wt/c2 | 233 (C1 surface binder, push element-store name check, old pattern binder) | 1236 (src; codegen+analyzer +80 / -9) | 51 -> 35; rustc rejects -5; narrowing casts 11 -> 6 |
 | C4 width-9: rebound names publish per read (NUM-USE-WIDTH; the lexical-scope class hold is retired), a core type's associated function is typed by the surface even when a `use` brings a std declaration of it (`HashMap::new()` in a nested module), `JoinHandle<T>` / `thread::spawn` on the surface, cross-crate tuple-variant payload types in `metadata.json`, a pushed float literal's solved width types the vector; `[module_features]` replaces the `desktop_*`/`app_*` name gate | wt/width-9 | 8 name-gated prefix checks + 1 helper (module generation), 1 class hold | see branch report | 35 -> 35; rustc rejects unchanged; project corpus unchanged |
 | C5/O4 (wt/ownership-8, merging the wt/ownership-7 snapshot): OWN-STORED covers a mutable local initialised from a by-value formal (`let mut out = state` moves the formal, no copy inside); liveness treats solver-typed scalar locals as holding no borrow and a read in a sibling `if`/`match` arm as no re-read; Copy aggregate formals stay owned (the snapshot backs out spelling them from the IR mode, per the emission contract). SELF-READ: a `match self` on a non-Copy enum whose arms use only Copy payload bindings (by the enum declaration) borrows `self`. Single-file builds run the value-formal fixed point in `attach_ir_module_if_missing`, so a forwarder reads its callee's solved formal (`Merchant::add_item` into `Inventory::add_item`) | wt/ownership-8 | 0 | ~150 | goldens: one changed, reviewed and rustc-clean (a moved formal instead of a clone); gates 0/1/3/4 and the project gate pass; receiver design conflicts ledgered above |
+| C4 width-11: static types from declarations (user operator/method results, loop elements, `Some`/`Ok`/`Err` payload bindings, fields and `Vec` elements of any statically typed value), methods on a user-typed value resolve against its signature, `assert_eq`/`assert_ne` relate their operands, sequences have the declared iterator adapters, `String::find`; a let/assignment value's block tails are not cast to the function's return width | wt/width-11 | 0 | ~230 | 35 -> 30 and 20 -> 19 from the solver (6 sites), 30 -> 20 by a meter correction (`Vec(Custom("T"))` vs `Vec<T>` compared as spellings, reported separately); rustc rejects -1 (`iter_take_skip_rev`); friction events open -2; heuristic surface unchanged |
+| width-11 (3): `Type::member` by the type's identity (the import path or the file's module, the bare key only when it declares the same function, `FunctionSignature::declares_same_function` from wt/sig-keys): a homonym type's method no longer types the call (engine `add_vertex(0.0, ..)` first literal f64); the `assert_eq`/`assert_ne` name matches of the legacy int and float collectors decide by the intrinsic declaration (`Intrinsic::is_equality_assertion`) | wt/width-11 | 0 | ~40 | H-NAME-MATCHES 527 -> 521 (this step); H-MATCH-ARM-NAMES 1127 -> 1125 is an upstream backend.rs deletion the regenerated baseline picked up |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 

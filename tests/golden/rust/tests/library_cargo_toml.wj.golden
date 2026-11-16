@@ -1,6 +1,6 @@
 #[inline]
 pub fn dummy_function() {
-    let x = 42_i32;
-    assert_eq!(x, 42);
+    let x = 42_i64;
+    assert_eq!(x, 42_i64);
 }
 

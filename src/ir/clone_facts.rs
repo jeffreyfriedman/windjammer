@@ -65,6 +65,13 @@ pub fn field_copy_sites(
         read_after.get(&stmt).is_some_and(|names| names.contains(&root)).then_some(root)
     };
     element_stmts(body, true, &pick, &mut out);
+    // `for v in t.out` moves the field; when `t` is read after the loop (or in the next pass of an enclosing loop)
+    // the iterable is listed, and the loop iterates the field by reference.
+    for_field_iterables(body, &mut |iterable, stmt| {
+        if let Some(root) = pick(iterable, stmt) {
+            out.insert(node_id(iterable), root);
+        }
+    });
     // Within one literal the elements evaluate in order: `Hit { id: node.id, d: dist(node) }` moves
     // `node.id` before `node` is read whole by a later element.
     let mut literals = Vec::new();
@@ -79,6 +86,34 @@ pub fn field_copy_sites(
         }
     }
     out
+}
+
+/// Every `for` whose iterable is a field path, with the `for` statement's node, at any depth.
+fn for_field_iterables<'a, 'ast>(body: &'a [&'ast Statement<'ast>], f: &mut dyn FnMut(&'a Expression<'ast>, usize)) {
+    for s in body {
+        let stmt = *s as *const Statement<'_> as *const () as usize;
+        match s {
+            Statement::For { iterable, body, .. } => {
+                if matches!(iterable, Expression::FieldAccess { .. }) {
+                    f(iterable, stmt);
+                }
+                for_field_iterables(body, f);
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } => for_field_iterables(body, f),
+            Statement::If { then_block, else_block, .. } => {
+                for_field_iterables(then_block, f);
+                if let Some(b) = else_block {
+                    for_field_iterables(b, f);
+                }
+            }
+            Statement::Match { arms, .. } => arms.iter().for_each(|a| {
+                if let Expression::Block { statements, .. } = a.body {
+                    for_field_iterables(statements, f);
+                }
+            }),
+            _ => {}
+        }
+    }
 }
 
 /// The element lists of every struct, tuple and array literal in a statement.

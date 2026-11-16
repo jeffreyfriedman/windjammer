@@ -24,13 +24,20 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     }
 
     /// A macro: a bracketed one is a collection literal (`vec![a, b]`, `[x; n]` repeats `x` `n` times, `n` is an
-    /// index use); any other macro's arguments are walked for their own constraints.
+    /// index use); the equality assertions (`assert_eq!(a, b)`, intrinsics) compare two values of one type, like
+    /// `a == b`; any other macro's arguments are walked for their own constraints.
     pub(super) fn walk_macro(
         &mut self,
+        name: &str,
         args: &[&'ast Expression<'ast>],
         delimiter: &MacroDelimiter,
         is_repeat: bool,
     ) -> ConstraintVar {
+        if !matches!(delimiter, MacroDelimiter::Brackets) && args.len() >= 2 && crate::intrinsics::Intrinsic::is_equality_assertion(name) {
+            let vars: Vec<ConstraintVar> = args.iter().map(|a| self.walk_expression(a)).collect();
+            self.relate_equality_assertion(&vars);
+            return self.cs.fresh_var();
+        }
         if is_repeat && args.len() == 2 {
             let result = self.walk_collection_literal(&args[..1]);
             let n = self.walk_expression(args[1]);
@@ -107,11 +114,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// `match value { pattern => body }`: each arm binds its pattern (in its own scope) against the value.
     /// Returns the arm bodies' variables (the match's value positions).
-    pub(super) fn walk_match_arms(&mut self, value: ConstraintVar, arms: &[MatchArm<'ast>]) -> Vec<ConstraintVar> {
+    pub(super) fn walk_match_arms(&mut self, value: ConstraintVar, scrutinee: &Expression<'ast>, arms: &[MatchArm<'ast>]) -> Vec<ConstraintVar> {
         let mut out = Vec::new();
+        let scrutinee_ty = self.static_type(scrutinee);
         for arm in arms {
             self.scopes.push(HashMap::new());
             let pv = self.bind_pattern(&arm.pattern);
+            if let Some(t) = &scrutinee_ty {
+                self.record_pattern_static_types(&arm.pattern, t);
+            }
             self.cs.add_because(Constraint::TypeEquals(pv, value), tagged("TY-UNIFY"));
             if let Some(guard) = arm.guard {
                 let guard_var = self.walk_expression(guard);
@@ -121,6 +132,42 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             self.scopes.pop();
         }
         out
+    }
+
+    /// The static types of the names a pattern binds against a value of declared type `ty` (`Some(r)` against an
+    /// `Option<Rect>` binds a `Rect`), so a field read on a binding has the field's declared type.
+    fn record_pattern_static_types(&mut self, pattern: &Pattern<'ast>, ty: &Type) {
+        let ty = match ty {
+            Type::Reference(t) | Type::MutableReference(t) => &**t,
+            other => other,
+        };
+        match (pattern, ty) {
+            (Pattern::Identifier(n) | Pattern::MutBinding(n), _) => {
+                if let Some(v) = self.scopes.last().and_then(|s| s.get(n)).copied() {
+                    if !super::numeric::contains_unfixed(ty) {
+                        self.var_static_types.insert(v, ty.clone());
+                    }
+                }
+            }
+            (Pattern::EnumVariant(name, binding), Type::Option(_) | Type::Result(_, _)) => {
+                let payload = match (prelude_payload(name), ty) {
+                    (Some(Part::Payload), Type::Option(t) | Type::Result(t, _)) => &**t,
+                    (Some(Part::ErrPayload), Type::Result(_, e)) => &**e,
+                    _ => return,
+                };
+                match binding {
+                    EnumPatternBinding::Single(n) => self.record_pattern_static_types(&Pattern::Identifier(n.clone()), payload),
+                    EnumPatternBinding::Tuple(pats) if pats.len() == 1 => self.record_pattern_static_types(&pats[0], payload),
+                    _ => {}
+                }
+            }
+            (Pattern::Tuple(pats), Type::Tuple(ts)) if pats.len() == ts.len() => {
+                for (p, t) in pats.iter().zip(ts) {
+                    self.record_pattern_static_types(p, t);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The variable a pattern matches, with every name it binds bound and related to it by parts.
@@ -175,7 +222,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     fn bind_variant(&mut self, name: &str, binding: &EnumPatternBinding<'ast>) -> ConstraintVar {
         let var = self.cs.fresh_var();
         let prelude = prelude_payload(name);
-        let declared = self.struct_field_types.and_then(|f| f.get(name)).cloned();
+        let declared = self.variant_payload_fields(name);
         let subs: Vec<(String, ConstraintVar)> = match binding {
             EnumPatternBinding::Single(n) => vec![("0".to_string(), self.bind_name(n))],
             EnumPatternBinding::Tuple(pats) => pats.iter().enumerate().map(|(i, p)| (i.to_string(), self.bind_pattern(p))).collect(),
@@ -186,6 +233,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             if let (Some(part), "0") = (prelude, key.as_str()) {
                 self.part(var, part, sub, "NUM-PAYLOAD");
                 continue;
+            }
+            // A user-type payload (`Box(extents)` of a `Vec3`): the binding has that type, so `extents.x` is a field read.
+            if let Some(t) = declared.as_ref().and_then(|d| d.get(&key)).filter(|t| !super::numeric::contains_unfixed(t)) {
+                self.var_static_types.entry(sub).or_insert_with(|| t.clone());
             }
             let base = declared
                 .as_ref()
@@ -410,6 +461,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         for ((param, &v), (_, a)) in params.iter().zip(arg_vars).zip(arguments) {
             self.bind_surface_argument(param, v, a, &mut g);
         }
+        self.refine_element_from_argument(object, &type_generics, &params, arguments);
         match ret.as_ref() {
             Some(r) if super::numeric::numeric_base_of(r) == Some(BaseType::Usize) => {
                 if let Some(l) = expr.location() {
@@ -440,7 +492,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// A call with no signature is still modelled when it constructs a prelude payload or a declared variant.
     pub(super) fn call_is_modelled(&self, callee: &str) -> bool {
-        prelude_payload(callee).is_some() || self.struct_field_types.is_some_and(|f| f.contains_key(callee))
+        prelude_payload(callee).is_some() || self.variant_payload_fields(callee).is_some()
     }
 
     /// `S { f: v }`: `v` has field `f`'s declared type; a field of a struct the walk cannot see is opaque.
@@ -475,7 +527,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     pub(super) fn emit_operator_impl(&mut self, op: &BinaryOp, left: &Expression<'ast>, r: ConstraintVar, result: ConstraintVar) -> bool {
         let Some(method) = operator_method(op) else { return false };
         let Some(Type::Custom(type_name)) = self.static_type(left) else { return false };
-        let Some(sig) = self.resolve_callee_signature(&format!("{type_name}::{method}"), 1).cloned() else { return false };
+        let Some(sig) = self.resolve_type_member(&type_name, method, 1).cloned() else { return false };
         let Some(rhs) = sig.formal_param_type(sig.arg_param_index(0)).or_else(|| sig.param_types.get(sig.arg_param_index(0))).cloned() else {
             return false;
         };
@@ -488,6 +540,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             self.cs.add_because(Constraint::TypeIs(result, ret), tagged("NUM-OPERATOR-IMPL"));
         }
         true
+    }
+
+    /// The static type of `left op right` when `left` is a user type with an operator impl: the impl method's declared
+    /// result (`(a + b) * 0.5` is a `P` when `impl Add for P` returns `P`).
+    pub(super) fn operator_impl_result(&self, op: &BinaryOp, left: &Expression<'ast>) -> Option<Type> {
+        let method = operator_method(op)?;
+        let receiver = self.static_type(left)?;
+        let Type::Custom(_) = &receiver else { return None };
+        self.user_method_return(&receiver, method, 1)
     }
 }
 
@@ -607,13 +668,22 @@ fn substitute_params(t: &Type, params: &[String], args: &[Type]) -> Type {
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// A built-in function (`println`, `debug`, `panic`, `assert`, ...; the registry is `intrinsics`) displays or checks its
     /// arguments and never stores them at a width, so the call is modelled (not opaque). `assert_eq` / `assert_ne` compare
-    /// two values whose types the walk may not know (a user type's `len()`), so they stay opaque. Returns whether the
-    /// call is modelled here.
-    pub(super) fn intrinsic_call(&mut self, callee: &str, _arg_vars: &[ConstraintVar]) -> bool {
-        use crate::intrinsics::Intrinsic;
-        Intrinsic::from_call_name(callee).is_some_and(|i| !matches!(i, Intrinsic::AssertEq | Intrinsic::AssertNe))
+    /// two values of one type, like `a == b`: the two are one class (a side the walk cannot type, such as a user type's
+    /// `len()`, holds that class for the legacy deciders). Returns whether the call is modelled here.
+    pub(super) fn intrinsic_call(&mut self, callee: &str, arg_vars: &[ConstraintVar]) -> bool {
+        if arg_vars.len() >= 2 && crate::intrinsics::Intrinsic::is_equality_assertion(callee) {
+            self.relate_equality_assertion(arg_vars);
+            return true;
+        }
+        crate::intrinsics::Intrinsic::from_call_name(callee).is_some()
+    }
+
+    /// `assert_eq(a, b)` / `assert_ne(a, b)`: `a` and `b` have one type (rustc's `PartialEq` on two values of a type).
+    pub(super) fn relate_equality_assertion(&mut self, arg_vars: &[ConstraintVar]) {
+        self.cs.add_because(Constraint::TypeEquals(arg_vars[0], arg_vars[1]), tagged("TY-UNIFY"));
     }
 }
+
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// `loop { .. }`: its value is the value of its `break`s (`let r = loop { .. break k * 10 }`). Returns that value.

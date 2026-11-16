@@ -1,0 +1,99 @@
+pub struct Entry {
+    pub key: Vec<u8>,
+}
+
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+pub struct Run {
+    pub entries: Vec<Entry>,
+}
+
+pub fn cmp_bytes(a: Vec<u8>, b: Vec<u8>) -> i32 {
+    let n = if a.len() < b.len() { a.len() } else { b.len() }
+    let mut i: usize = 0
+    while i < n {
+        if a[i] < b[i] {
+            return -1
+        }
+        if a[i] > b[i] {
+            return 1
+        }
+        i = i + 1
+    }
+    if a.len() < b.len() {
+        return -1
+    }
+    if a.len() > b.len() {
+        return 1
+    }
+    0
+}
+
+pub fn first_not_before(entries: Vec<Entry>, key: Vec<u8>) -> usize {
+    let mut lo: usize = 0
+    let mut hi: usize = entries.len()
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2
+        if cmp_bytes(entries[mid].key, key) < 0 {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    lo
+}
+
+pub fn cmp_keys(a: Key, b: Key) -> i32 {
+    let n = if a.bytes.len() < b.bytes.len() { a.bytes.len() } else { b.bytes.len() }
+    let mut i: usize = 0
+    while i < n {
+        if a.bytes[i] < b.bytes[i] {
+            return -1
+        }
+        if a.bytes[i] > b.bytes[i] {
+            return 1
+        }
+        i = i + 1
+    }
+    0
+}
+
+impl Run {
+    pub fn cmp_at(self, idx: usize, key: Vec<u8>) -> i32 {
+        cmp_bytes(self.entries[idx].key, key)
+    }
+
+    pub fn find(self, key: Vec<u8>) -> usize {
+        let mut lo: usize = 0
+        let mut hi: usize = self.entries.len()
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2
+            if self.cmp_at(mid, key) < 0 {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        lo
+    }
+}
+
+pub fn ordered(x: Vec<u8>, y: Vec<u8>) -> bool {
+    let mut before = x < y
+    if x.len() == 0 {
+        before = true
+    }
+    before
+}
+
+pub fn count_root(rows: Vec<Vec<u8>>, root: Vec<u8>) -> int {
+    let mut n = 0
+    for r in rows {
+        if r == root {
+            n = n + 1
+        }
+    }
+    n
+}

@@ -64,6 +64,14 @@ graph and is iterated to a fixed point across functions.
 **Example.** `fn add(b: Bag, s: string) { b.items.push(s) }` emits `b: &mut Bag, s: String`.
 **Status.** Conforms for same-file callees; cross-file needs the converged registry (D-OWNERS-OWN, ratchet residue 4).
 
+### OWN-LOOP-WRITE
+**Rule.** A `for` binding that is assigned, or whose field or element is assigned (`for mut q in qs { q.xs[0] = 9 }`,
+`for mut row in grid { row[0] = 7 }`), writes through to the element: the loop iterates the collection mutably. The
+assignment's root is resolved to the binding it names, so a body `let q = ..` that shadows the loop variable does
+not count. The `mut` on the loop variable is required (ADR-0002, WJ0051).
+**Example.** `for mut row in grid { row[0] = 7 }` emits `for row in &mut grid { row[0] = 7; }`.
+**Status.** Conforms (IR fact `IrFunction::write_through_loops`).
+
 ### OWN-MUT-ANALYZER
 Implementation seed: the analyzer's `mutated_parameters` set is replayed as a `&mut` constraint. Not a language
 rule; it exists because the solver's own body walk is incomplete. Status: Diverges (D-OWNERS-OWN).
@@ -336,7 +344,9 @@ source or use is `usize` (a solved width, published as a fact); with an exact wi
 **Rule.** Each read of a local has the width of the binding it names. A name bound twice with different widths (a
 counter over a `len()`, later a counter passed to a `u32` parameter) is two classes; a fact keyed by the name cannot
 describe both, so the solver publishes the width of every read by its source position (`IrFunction::use_widths`).
-**Status.** Conforms for reads of `let` and pattern bindings; parameters keep their declared types.
+**Status.** Conforms for reads of `let` and pattern bindings; parameters keep their declared types (C4, wt/width-9).
+Gates: `ir::numeric_facts::tests::rebound_counter_reads_carry_their_bindings_width` and the golden
+`tests/inference_corpus/rebound_counter_widths.wj` (convergence gate 1).
 
 ### NUM-USIZE-TO-INT
 **Rule (ADR-0028).** A `usize` value that enters a slot of another integer width is converted at that site: an index

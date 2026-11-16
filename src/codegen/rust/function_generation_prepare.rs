@@ -2559,7 +2559,7 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) {
         let qualified = format!("{impl_type}::{}", func.name);
-        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self") || analyzed.inferred_ownership.contains_key("self"); // implicit `self` too
         let registry_sig = self.signature_registry.get_signature(&qualified);
 
         // Preregister/formal emission already converged emitted Rust contracts — do not downgrade.
@@ -9991,7 +9991,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return "&str".to_string();
         }
-        format!("&{}", self.type_to_rust(&param.type_))
+        if matches!(param.type_, Type::Reference(_)) { self.type_to_rust(&param.type_) } else { format!("&{}", self.type_to_rust(&param.type_)) } // declared `&T` is the borrow
     }
 
     /// True when `param_name` is forwarded to a callee whose resolved signature emits `&String`.

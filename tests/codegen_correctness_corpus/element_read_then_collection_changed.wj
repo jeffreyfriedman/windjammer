@@ -1,0 +1,26 @@
+// A non-Copy element read by value (`let j = self.jobs[i]`) and used after the collection is changed
+// (`self.jobs.remove(i)`): the element is copied, not borrowed across the change (rustc E0502).
+// expect: 1 1 a
+struct Job {
+    id: int,
+    name: string,
+}
+
+struct Pool {
+    jobs: Vec<Job>,
+    done: Vec<Job>,
+}
+
+impl Pool {
+    fn finish(self, i: int) {
+        let j = self.jobs[i]
+        self.jobs.remove(i)
+        self.done.push(Job { id: j.id, name: j.name })
+    }
+}
+
+fn main() {
+    let mut p = Pool { jobs: [Job { id: 1, name: "a" }, Job { id: 2, name: "b" }], done: [] }
+    p.finish(0)
+    println("${p.jobs.len()} ${p.done.len()} ${p.done[0].name}")
+}

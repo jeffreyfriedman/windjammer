@@ -1,0 +1,13 @@
+pub struct Channel {
+    pub volume: f32,
+}
+
+impl Channel {
+    pub fn new() -> Channel {
+        Channel { volume: 1.0 }
+    }
+
+    pub fn set_volume(volume: f32) {
+        self.volume = volume
+    }
+}

@@ -1,0 +1,11 @@
+pub struct Grid {
+    pub cells: Vec<u8>,
+    pub size: int,
+}
+
+impl Grid {
+    pub fn get(self, x: int) -> u8 {
+        if x < 0 || x >= self.size { return 0 }
+        self.cells[x as usize]
+    }
+}

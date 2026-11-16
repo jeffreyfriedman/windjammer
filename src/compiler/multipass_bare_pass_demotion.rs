@@ -1622,7 +1622,7 @@ fn is_copy_formal_name(name: &str, copy_types: &std::collections::HashSet<String
 fn is_vec_container_type(ty: &Type) -> bool {
     matches!(ty, Type::Vec(_))
         || matches!(ty, Type::Parameterized(name, _) if name == "Vec")
-        || matches!(ty, Type::Custom(name) if name.starts_with("Vec"))
+        || matches!(ty, Type::Custom(name) if name.split('<').next() == Some("Vec"))
 }
 
 fn apply_bare_pass_hint(

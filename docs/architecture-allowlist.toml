@@ -169,21 +169,21 @@
 "src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4009
 "src/codegen/rust/function_generation_prepare.rs" = 12771
-"src/codegen/rust/generator.rs" = 4875
+"src/codegen/rust/generator.rs" = 4870
 "src/codegen/rust/int_promotion_type_inference.rs" = 2183
-"src/codegen/rust/ir_call_site.rs" = 10432
+"src/codegen/rust/ir_call_site.rs" = 10429
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2156
 "src/codegen/rust/self_analysis.rs" = 2026
 "src/codegen/rust/signature_promotion.rs" = 4519
 "src/codegen/rust/statement_generation.rs" = 2432
 "src/codegen/rust/stdlib_method_traits.rs" = 2430
-"src/codegen/rust/string_utilities.rs" = 2035
+"src/codegen/rust/string_utilities.rs" = 2032
 "src/compiler/multipass_bare_pass_demotion.rs" = 4051
 "src/stdlib_scanner.rs" = 2083
 
 [long_functions]
 "src/analyzer/function_analysis.rs::analyze_function" = 649
-"src/analyzer/function_analysis.rs::build_signature" = 499
+"src/analyzer/function_analysis.rs::build_signature" = 496
 "src/analyzer/module_analysis.rs::analyze_program_pass" = 322
 "src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 512
 "src/analyzer/string_optimization.rs::expr_uses_param_in_string_ref_context" = 373
@@ -194,7 +194,7 @@
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 406
 "src/cli_project_build.rs::build_project_single_crate" = 456
 "src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 600
-"src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1220
+"src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1210
 "src/codegen/rust/block_generation.rs::generate_block" = 307
 "src/codegen/rust/block_generation.rs::generate_block_expr" = 499
 "src/codegen/rust/call_expression_generation/argument_generation/regular_call_arguments.rs::collect_regular_function_arguments" = 905
@@ -242,7 +242,7 @@
 "src/parser/primary_expression_parser.rs::parse_primary_expression_inner" = 543
 "src/parser/type_parser.rs::parse_type_core" = 418
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 427
-"src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433
+"src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 432
 
 [main_lib_module_mismatch]
 "lib_only:auto_clone" = 1

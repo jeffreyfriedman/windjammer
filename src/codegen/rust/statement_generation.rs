@@ -765,7 +765,7 @@ impl<'ast> CodeGenerator<'ast> {
                 value,
                 compound_op,
                 ..
-            } => self.generate_assignment_statement(target, value, compound_op),
+            } => self.generate_assignment_with_context(target, value, compound_op),
             Statement::Thread { body, .. } => self.generate_thread_statement(body),
             Statement::Async { body, .. } => self.generate_async_statement(body),
             Statement::Defer { statement, .. } => self.generate_defer_statement(statement, stmt),
@@ -800,7 +800,7 @@ impl<'ast> CodeGenerator<'ast> {
         // This is safe because .clone() on a Copy type is a no-op, and for non-Copy
         // types it prevents E0507 "cannot move out of index".
 
-        if self.variable_is_only_field_accessed(name) {
+        if self.variable_is_only_field_accessed(name) && !self.element_borrow_outlived_by_change(name, value) {
             let prev_borrow_ctx = self.in_borrow_context;
             self.in_borrow_context = true;
             *value_str = self.generate_expression(value);

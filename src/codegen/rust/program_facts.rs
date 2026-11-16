@@ -14,6 +14,9 @@ pub(crate) struct IdiomScratch {
     pub(crate) non_escaping_closure_names: HashSet<String>,
     /// Set by `let` generation for the closure it is about to emit (by-reference captures).
     pub(crate) next_closure_borrows_captures: bool,
+    /// Inside the value of a `let` or an assignment: a block tail there is the binding's value, never the function's
+    /// return value, so the return-width tail casts do not apply.
+    pub(crate) binding_value_depth: u32,
     /// Locals bound to `lines()` / `split(..)` / `split_whitespace()` (their `next()` yields `&str`).
     pub(crate) text_iterator_locals: HashSet<String>,
     /// Locals bound to `text.split(..).next()` and the like: `Option<&str>` values.

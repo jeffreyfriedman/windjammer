@@ -1,0 +1,22 @@
+// OWN-LOOP-WRITE: an explicit `mut` loop variable whose field element or own element is assigned writes through
+// to the collection, so the loop iterates it mutably (`&mut qs`, not `&qs` or `.iter().copied()`).
+// expect: 9 2
+// expect: 9 4
+// expect: 9 9
+// expect: 7 2
+// expect: 7 7
+struct Q { xs: Vec<int> }
+fn main() {
+    let mut qs = [Q { xs: [1, 2] }, Q { xs: [3, 4] }]
+    for mut q in qs {
+        q.xs[0] = 9
+        println("${q.xs[0]} ${q.xs[1]}")
+    }
+    println("${qs[0].xs[0]} ${qs[1].xs[0]}")
+    let mut grid = [[1, 2], [3, 4]]
+    for mut row in grid {
+        row[0] = 7
+    }
+    println("${grid[0][0]} ${grid[0][1]}")
+    println("${grid[0][0]} ${grid[1][0]}")
+}

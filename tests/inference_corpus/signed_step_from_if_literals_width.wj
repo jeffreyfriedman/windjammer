@@ -1,0 +1,38 @@
+// A step chosen by an `if` over literals (one negated) added to an `i32` field read through a local `Vec` of
+// structs: the step joins the field's class and is `i32`. Before the fix the step was `i64`
+// (cannot add `i64` to `i32`).
+pub struct Cell {
+    pub x: i32,
+    pub y: i32,
+}
+
+fn walkable(x: i32, y: i32) -> bool {
+    x >= 0 && y >= 0
+}
+
+fn make_cells() -> Vec<Cell> {
+    let mut out = Vec::new()
+    out.push(Cell { x: 2, y: 5 })
+    out
+}
+
+fn main() {
+    let cells = make_cells()
+    let mut best: usize = 0
+    best = best + 0
+    let cx = cells[best].x
+    let cy = cells[best].y
+    let mut d = 0
+    let mut open = 0
+    while d < 4 {
+        let dx = if d == 1 { 1 } else { if d == 3 { -1 } else { 0 } }
+        let dy = if d == 0 { -1 } else { if d == 2 { 1 } else { 0 } }
+        let nx = cx + dx
+        let ny = cy + dy
+        if walkable(nx, ny) && walkable(cx + dx, cy) {
+            open = open + 1
+        }
+        d = d + 1
+    }
+    println("${open}")
+}

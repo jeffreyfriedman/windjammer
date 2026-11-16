@@ -1247,13 +1247,10 @@ pub fn rewrite_demoted_text_param_str_clones_in_rust_expr(
         ) {
             continue;
         }
-        let from = format!("{}.clone()", p.name);
-        let to = format!("{}.to_string()", p.name);
-        if expr_str.contains(&from) {
-            *expr_str = expr_str.replace(&from, &to);
-        }
+        *expr_str = crate::codegen::rust::expression_utilities::replace_whole_binding(expr_str, &format!("{}.clone()", p.name), &format!("{}.to_string()", p.name));
     }
 }
+
 
 /// Rewrite `name` only as a full identifier token.
 ///

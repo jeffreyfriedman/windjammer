@@ -1,0 +1,122 @@
+// ==== channel.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct Channel {
+    pub volume: f32,
+}
+impl Channel {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(4);
+        __bytes.extend_from_slice(&self.volume.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Channel {
+#[inline]
+pub fn new() -> Channel {
+        Channel { volume: 1.0_f32 }
+}
+#[inline]
+pub fn set_volume(&mut self, volume: f32) {
+        self.volume = volume;
+}
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod channel;
+pub mod mesh;
+pub mod mixer;
+
+// Re-export public items
+pub use channel::*;
+pub use mesh::*;
+pub use mixer::*;
+// ==== main.rs ====
+use crate::mixer::Mixer;
+use crate::mesh::make_line;
+mod channel;
+mod mixer;
+mod mesh;
+fn main() {
+    let mut m = Mixer::new();
+    m.set_channel_volume(0_i64, 0.5_f32);
+    println!("{} {}", m.channels[0].volume, m.channels[1].volume);
+    let l = make_line(3_i64);
+    println!("{} {}", l.count, l.verts[5]);
+}
+
+// ==== mesh.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Default)]
+#[repr(C)]
+pub struct Mesh {
+    pub verts: Vec<f32>,
+    pub count: i64,
+}
+
+impl Mesh {
+#[inline]
+pub fn new() -> Mesh {
+        Mesh { verts: vec![], count: 0_i64 }
+}
+#[inline]
+pub fn add_vertex(&mut self, x: f32, y: f32) {
+        self.verts.push(x);
+        self.verts.push(y);
+        self.count += 1;
+}
+}
+
+#[inline]
+pub fn make_line(n: i64) -> Mesh {
+    let mut mesh = Mesh::new();
+    for i in 0_i64..n {
+        let x = i as f32;
+        let y = x * 2.0_f32;
+        mesh.add_vertex(x, y);
+    }
+    mesh
+}
+
+// ==== mixer.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::channel::Channel;
+#[derive(Default)]
+#[repr(C)]
+pub struct Mixer {
+    pub channels: Vec<Channel>,
+}
+
+impl Mixer {
+#[inline]
+pub fn new() -> Mixer {
+        Mixer { channels: vec![Channel::new(), Channel::new()] }
+}
+#[inline]
+pub fn set_channel_volume(&mut self, id: i64, volume: f32) {
+        self.channels[id as usize].set_volume(volume);
+}
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod channel;
+pub mod mesh;
+pub mod mixer;
+
+// Re-export public items
+pub use channel::*;
+pub use mesh::*;
+pub use mixer::*;

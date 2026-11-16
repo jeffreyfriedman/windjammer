@@ -1303,22 +1303,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // `borrowed_iterator_vars` but often lack a typed local — infer may
                 // miss `&i64`. If the *peer* is Copy, still deref the borrowed side
                 // (`id != entity_id` → `*id != entity_id`, P3.600 / retain E0277).
-                let side_is_copy = |expr: &Expression<'_>| {
-                    self.infer_expression_type(expr).is_some_and(|ty| {
-                        let bare = match &ty {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                inner.as_ref()
-                            }
-                            other => other,
-                        };
-                        self.is_type_copy(bare)
-                    }) || self.expression_is_copy(expr)
-                };
+                let by_value = self.compares_by_value(left) || self.compares_by_value(right);
                 if left_is_borrowed {
-                    if side_is_copy(left) || side_is_copy(right) {
+                    if by_value {
                         left_str = format!("*{}", left_str);
                     }
-                } else if side_is_copy(right) || side_is_copy(left) {
+                } else if by_value {
                     right_str = format!("*{}", right_str);
                 }
             }
@@ -1592,7 +1582,7 @@ impl<'ast> CodeGenerator<'ast> {
 
 impl<'ast> CodeGenerator<'ast> {
     /// A local whose type is a borrowed `&str` (a binding of a `text[a..b]` slice).
-    fn is_str_slice_local(&self, e: &Expression<'ast>) -> bool {
+    pub(in crate::codegen::rust) fn is_str_slice_local(&self, e: &Expression<'ast>) -> bool {
         matches!(e, Expression::Identifier { .. })
             && self.infer_expression_type(e).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
     }
@@ -1624,11 +1614,13 @@ impl<'ast> CodeGenerator<'ast> {
         {
             left_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&left_str);
         }
+        // A borrowed `&str` operand compared with an owned `string` one: Rust compares `&str` with `&str`,
+        // so the owned side is viewed as one (`act < best.as_str()`).
         if is_comparison {
-            let (l_slice, r_slice) = (self.is_str_slice_local(left), self.is_str_slice_local(right));
-            if l_slice && !r_slice && self.is_owned_text_local(right) {
+            let (l_slice, r_slice) = (self.borrowed_text_operand(left, op), self.borrowed_text_operand(right, op));
+            if l_slice && !r_slice && self.owned_text_operand(right, op) {
                 right_str = format!("{right_str}.as_str()");
-            } else if r_slice && !l_slice && self.is_owned_text_local(left) {
+            } else if r_slice && !l_slice && self.owned_text_operand(left, op) {
                 left_str = format!("{left_str}.as_str()");
             }
         }

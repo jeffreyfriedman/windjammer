@@ -695,6 +695,44 @@ fn corpus_for_range_loop_var_width() {
     corpus_check("for_range_loop_var_width");
 }
 
+/// The right operand of a user operator impl (`impl Mul<f32>`) when the left operand is an operator expression, a
+/// field of a local or a method result. Expected output: `2 3 200 3`.
+#[test]
+fn corpus_operator_impl_compound_lhs_width() {
+    corpus_check("operator_impl_compound_lhs_width");
+}
+
+/// `assert_eq` / `assert_ne` compare two values of one type: the literal takes the other operand's width.
+#[test]
+fn corpus_assert_eq_operands_one_width() {
+    corpus_check("assert_eq_operands_one_width");
+}
+
+/// A counter rebound to `line.parse::<int>()` in a loop over `text.lines()`. Expected output: `4 17`.
+#[test]
+fn corpus_loop_line_parse_rebound_width() {
+    corpus_check("loop_line_parse_rebound_width");
+}
+
+/// A step chosen by an `if` over literals (one negated) added to an `i32` field read through a local `Vec`.
+#[test]
+fn corpus_signed_step_from_if_literals_width() {
+    corpus_check("signed_step_from_if_literals_width");
+}
+
+/// A `Vec::new()` local filled by `push` of a user type: `(pts[a] + pts[b]) * 0.5` takes the operator impl's `f32`.
+/// Expected output: `2 4`.
+#[test]
+fn corpus_vec_new_push_element_operator_width() {
+    corpus_check("vec_new_push_element_operator_width");
+}
+
+/// A literal in the `None` arm beside a field of the `Some(r)` binding, and a running minimum over field reads.
+#[test]
+fn corpus_match_payload_field_width() {
+    corpus_check("match_payload_field_width");
+}
+
 /// Generated gate: random arithmetic over typed parameters (i32/u32/u8/i64), unsuffixed literals and
 /// casts must be accepted by rustc (the oracle). Compile-only: the values may overflow at runtime.
 #[test]

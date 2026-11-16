@@ -1,0 +1,15 @@
+use crate::channel::Channel
+
+pub struct Mixer {
+    pub channels: Vec<Channel>,
+}
+
+impl Mixer {
+    pub fn new() -> Mixer {
+        Mixer { channels: [Channel::new(), Channel::new()] }
+    }
+
+    pub fn set_channel_volume(self, id: int, volume: f32) {
+        self.channels[id as usize].set_volume(volume)
+    }
+}

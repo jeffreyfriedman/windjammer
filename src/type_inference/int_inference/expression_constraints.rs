@@ -226,8 +226,7 @@ impl IntInference {
                 };
 
                 // TDD FIX: assert_eq/assert_ne - both args must have same int type
-                if (func_name.as_deref() == Some("assert_eq")
-                    || func_name.as_deref() == Some("assert_ne"))
+                if func_name.as_deref().is_some_and(crate::intrinsics::Intrinsic::is_equality_assertion)
                     && arguments.len() >= 2
                 {
                     for (_label, arg) in arguments {
@@ -502,7 +501,7 @@ impl IntInference {
                 ..
             } => {
                 // TDD FIX: assert_eq!/assert_ne! - both args must have same int type
-                if (*name == "assert_eq" || *name == "assert_ne") && args.len() >= 2 {
+                if crate::intrinsics::Intrinsic::is_equality_assertion(name) && args.len() >= 2 {
                     for arg in args {
                         self.collect_expression_constraints(arg, return_type);
                     }

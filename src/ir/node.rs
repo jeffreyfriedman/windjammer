@@ -129,6 +129,14 @@ pub struct IrFunction {
     /// later `let mut i = 0` against a `u32`) has no NUM-LOCAL-WIDTH, but each read still has its binding's width.
     pub use_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
 
+    /// OWN-LOOP-WRITE: `for` statements (by source position) whose binding is assigned or written through a field
+    /// or element; the loop iterates its collection mutably.
+    pub write_through_loops: std::collections::BTreeSet<(usize, usize)>,
+
+    /// Solver types of each read of a local (by the identifier's source position), for the binding the read names.
+    /// A name bound twice with different types (`for t in words` then `let t: int`) has no `local_types` entry.
+    pub use_local_types: std::collections::BTreeMap<(usize, usize), SafetyType>,
+
     /// Semantic fact NUM-USIZE (ADR-0028): the width of each `len()`-like index source (by the call's
     /// source position). `usize` needs nothing; another width is converted at the call (NUM-USIZE-TO-INT).
     pub index_source_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
@@ -158,6 +166,17 @@ pub struct IrFunction {
 }
 
 impl IrFunction {
+    /// OWN-LOOP-WRITE: the `for` statement at `location` writes through its binding.
+    pub fn loop_writes_through(&self, location: &crate::parser::SourceLocation) -> bool {
+        location.as_ref().is_some_and(|l| self.write_through_loops.contains(&(l.line, l.column)))
+    }
+
+    /// The solver type of the binding a read names, when the name is bound more than once with different types.
+    pub fn use_local_type(&self, expr: &crate::parser::Expression<'_>) -> Option<&SafetyType> {
+        let crate::parser::Expression::Identifier { location: Some(l), .. } = expr else { return None };
+        self.use_local_types.get(&(l.line, l.column))
+    }
+
     /// Append `stage` to each parameter's trail when its ownership differs from the last entry.
     pub fn record_ownership_stage(&mut self, stage: &'static str) {
         for (name, st) in &self.param_types {
@@ -395,6 +414,8 @@ impl IrFunction {
             solver_i64_locals: std::collections::BTreeSet::new(),
             solver_local_widths: std::collections::BTreeMap::new(),
             use_widths: std::collections::BTreeMap::new(),
+            write_through_loops: Default::default(),
+            use_local_types: Default::default(),
             index_source_widths: std::collections::BTreeMap::new(),
             usize_conversions: std::collections::BTreeMap::new(),
             last_uses: crate::ir::liveness::last_uses(&params, &analyzed.decl.body),

@@ -1,0 +1,35 @@
+// Two modules declare a type `Mesh` with an `add` method of different formals (`shapes` declares it with an implicit
+// `self`); this file imports `shapes::Mesh`, so
+// `out.add(0.0, 0.0, 0.0)` is `shapes::Mesh::add` and its literals are `f32` (the first was emitted `0.0_f64` when
+// the bare `Mesh::add` key named the other type's method).
+// Expected by hand: source [1, 2, 3, 4] gives one copied vertex and one zero vertex: 2 vertices, sum 6.
+// expect: 2 6
+mod shapes
+mod zblocks
+
+use shapes::Mesh
+
+fn rebuild(src: Vec<f32>) -> Mesh {
+    let mut out = Mesh::new()
+    let mut i: usize = 0
+    while i < src.len() {
+        if i + 2 < src.len() {
+            out.add(src[i], src[i + 1], src[i + 2])
+        } else {
+            out.add(0.0, 0.0, 0.0)
+        }
+        i = i + 3
+    }
+    out
+}
+
+fn main() {
+    let m = rebuild([1.0, 2.0, 3.0, 4.0])
+    let mut sum = 0.0
+    for p in m.pts {
+        sum = sum + p
+    }
+    let mut s = zblocks::Mesh::new()
+    s.add()
+    println("${m.count} ${sum + s.corners.len() as f32 - 1.0}")
+}

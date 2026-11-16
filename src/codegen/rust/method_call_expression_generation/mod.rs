@@ -162,6 +162,7 @@ impl<'ast> CodeGenerator<'ast> {
             &method_signature,
             type_name,
         );
+        let args = self.copy_receiver_borrows_into_mut_call(object, effective_method, arguments, &method_signature, args);
         self.mc_finalize_method_call_expression(
             object,
             effective_method,

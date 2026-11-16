@@ -484,7 +484,7 @@ known_violations = []
 layer = "types"
 owner_stage = "legacy numeric/type inference (stage 3)"
 module_md = "src/type_inference/MODULE.md"
-allowed_imports = ["compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "lexer", "module_system", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_registry", "stdlib_surface"]
+allowed_imports = ["compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "intrinsics", "lexer", "module_system", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_registry", "stdlib_surface"]
 known_violations = ["analyzer", "codegen", "metadata"]
 
 [modules.typing]

@@ -1,0 +1,21 @@
+// Read-only byte-vector and struct parameters are borrowed, so a binary search over keys copies nothing; a
+// method reads its key the same way; `x < y` on byte vectors is a bool; a loop row is compared with a borrowed
+// root by value. Expected by hand: 2 -1 2 true 2 1.
+// expect: 2 -1 2 true 2 1
+mod keys
+
+fn main() {
+    let entries = [keys::Entry { key: [1u8] }, keys::Entry { key: [3u8] }, keys::Entry { key: [5u8] }]
+    let probe: Vec<u8> = [4]
+    let at = keys::first_not_before(entries, probe)
+    let a = keys::Key { bytes: [1u8, 2u8] }
+    let b = keys::Key { bytes: [1u8, 3u8] }
+    let run = keys::Run { entries: [keys::Entry { key: [2u8] }, keys::Entry { key: [4u8] }, keys::Entry { key: [6u8] }] }
+    let found = run.find([5u8])
+    let x: Vec<u8> = [1, 2]
+    let y: Vec<u8> = [1, 3]
+    let rows: Vec<Vec<u8>> = [[1u8], [2u8], [1u8]]
+    let root: Vec<u8> = [1]
+    let mixed: Vec<Vec<u8>> = [[1u8], [7u8]]
+    println("${at} ${keys::cmp_keys(a, b)} ${found} ${keys::ordered(x, y)} ${keys::count_root(rows, root)} ${keys::count_root(mixed, [7u8])}")
+}

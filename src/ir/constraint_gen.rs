@@ -17,6 +17,8 @@
 use crate::analyzer::{AnalyzedFunction, FunctionSignature, OwnershipMode, SignatureRegistry};
 #[path = "constraint_gen/numeric.rs"]
 pub(crate) mod numeric;
+#[path = "constraint_gen/loop_writes.rs"]
+mod loop_writes;
 #[path = "constraint_gen/stored.rs"]
 mod stored;
 #[path = "constraint_gen/structure.rs"]
@@ -109,6 +111,8 @@ pub struct FunctionConstraints {
     /// Each read of a local or parameter (by the identifier's source position) and the variable of the binding it
     /// reads (lexical scoping): a width published per use names the right binding when a name is rebound.
     pub ident_uses: Vec<((usize, usize), ConstraintVar)>,
+    /// OWN-LOOP-WRITE: `for` statements (by source position) whose binding is written through.
+    pub loop_writes: std::collections::BTreeSet<(usize, usize)>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -137,6 +141,7 @@ struct AstConstraintWalker<'a, 'ast> {
     element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
     index_use_keys: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar)>,
     ident_uses: Vec<((usize, usize), ConstraintVar)>,
+    loop_writes: loop_writes::LoopWrites,
     /// Declared types of annotated locals (`let q: VecDeque<int> = ...`), for receiver classification.
     local_decl_types: HashMap<String, BaseType>,
     /// Names bound by `for v in a..b`.
@@ -351,6 +356,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             element_stores: Vec::new(),
             index_use_keys: Vec::new(),
             ident_uses: Vec::new(),
+            loop_writes: Default::default(),
             local_decl_types: HashMap::new(),
             range_loop_vars: std::collections::HashSet::new(),
             bind_counts: std::collections::BTreeMap::new(),
@@ -559,6 +565,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// A bare call names a free function: never a method of the same name (a trait's `list_webhooks(self, ..)`
     /// beside a free `list_webhooks(deps, ..)`), and nothing at all when a parameter or local shadows the name.
     fn resolve_free_callee_signature(&self, name: &str, arg_count: usize) -> Option<&FunctionSignature> {
+        let name = name.strip_prefix("crate::").unwrap_or(name); // `crate::ffi::f(..)` is the function `ffi::f`
         let local = !name.contains("::") && (self.param_vars.contains_key(name) || self.scopes.iter().any(|s| s.contains_key(name)));
         let registry = self.registry.filter(|_| !local)?;
         let scoped = registry.scoped_key(&self.analyzed.module_path, name);
@@ -855,15 +862,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Statement::Match { value, arms, .. } => {
                 let value_var = self.walk_expression(value);
-                let _ = self.walk_match_arms(value_var, arms);
+                let _ = self.walk_match_arms(value_var, value, arms);
             }
 
-            Statement::For {
-                pattern,
-                iterable,
-                body,
-                ..
-            } => {
+            Statement::For { pattern, iterable, body, location, .. } => {
                 self.scopes.push(HashMap::new());
                 if let Expression::Range { start, end, .. } = iterable {
                     // `for i in a..b`: the loop variable has the bounds' integer type (NUM-MIXED), so a
@@ -879,10 +881,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.cs.add_because(Constraint::TypeEquals(loop_var, s), tagged("TY-UNIFY"));
                 } else {
                     let it = self.walk_expression(iterable);
-                    let loop_var = self.bind_pattern(pattern);
+                    let loop_var = self.bind_loop_pattern(pattern, iterable);
                     self.type_loop_element(loop_var, it, iterable);
                 }
+                self.loop_writes_scope(Some(location));
                 self.walk_statements(body);
+                self.loop_writes_scope(None);
                 self.scopes.pop();
             }
 
@@ -1210,7 +1214,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Expression::Array { elements, .. } => self.walk_collection_literal(elements),
 
-            Expression::MacroInvocation { args, delimiter, is_repeat, .. } => self.walk_macro(args, delimiter, *is_repeat),
+            Expression::MacroInvocation { name, args, delimiter, is_repeat, .. } => self.walk_macro(name, args, delimiter, *is_repeat),
 
             Expression::TryOp { expr, .. } => {
                 let inner = self.walk_expression(expr);
@@ -1292,7 +1296,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Statement::Match { value, arms, .. } => {
                 let value_var = self.walk_expression(value);
-                self.walk_match_arms(value_var, arms)
+                self.walk_match_arms(value_var, value, arms)
             }
             Statement::Loop { body, .. } => vec![self.walk_loop(body)],
             other => {
@@ -1341,6 +1345,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// Detect mutation target and emit OwnershipIs(MutRef) on the root object.
     fn detect_mutation_target(&mut self, target: &Expression<'ast>) {
+        self.loop_writes_target(target);
         match target {
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                 let root_name = self.root_identifier(object);
@@ -1502,6 +1507,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             element_stores: self.element_stores,
             index_use_keys: self.index_use_keys,
             ident_uses: self.ident_uses,
+            loop_writes: self.loop_writes.written,
             execution_constraints: self.execution_constraints,
         }
     }

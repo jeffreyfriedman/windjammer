@@ -1,0 +1,52 @@
+use std::ops::Add
+use std::ops::Sub
+use std::ops::Mul
+
+pub struct P3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Add for P3 {
+    type Output = P3
+    fn add(self, o: P3) -> P3 {
+        P3 { x: self.x + o.x, y: self.y + o.y, z: self.z + o.z }
+    }
+}
+
+impl Sub for P3 {
+    type Output = P3
+    fn sub(self, o: P3) -> P3 {
+        P3 { x: self.x - o.x, y: self.y - o.y, z: self.z - o.z }
+    }
+}
+
+impl Mul<f32> for P3 {
+    type Output = P3
+    fn mul(self, s: f32) -> P3 {
+        P3 { x: self.x * s, y: self.y * s, z: self.z * s }
+    }
+}
+
+impl P3 {
+    pub fn length(self) -> f32 {
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+    }
+}
+
+pub struct Bounds {
+    pub lo: P3,
+    pub hi: P3,
+}
+
+pub struct Slot {
+    pub w: f32,
+}
+
+pub fn find_slot(slots: Vec<Slot>, i: usize) -> Option<Slot> {
+    if i < slots.len() {
+        return Some(slots[i])
+    }
+    None
+}

@@ -1,0 +1,24 @@
+// expect: 15 5
+// expect: 5 4 3 2 1
+// Iterator adapters called directly on a typed list (`v.rev()`, `v.skip(n).take(m)`): the counts are `usize` slots of
+// the declared `Iterator` adapters and the elements keep the list's width. The counts were emitted `i32`
+// (expected `usize`).
+fn main() {
+    let v: Vec<int> = [1, 2, 3, 4, 5]
+    let mut total = 0
+    for x in v.rev() {
+        total = total + x
+    }
+    let n = 1
+    let m = 2
+    let mut mid = 0
+    for y in v.skip(n).take(m) {
+        mid = mid + y
+    }
+    println("${total} ${mid}")
+    let mut line = ""
+    for x in v.rev() {
+        line = line + "${x} "
+    }
+    println(line.trim())
+}

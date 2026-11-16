@@ -66,6 +66,8 @@ fn wrap(name: string) -> Holder {
         index_source_widths: Default::default(),
         usize_conversions: Default::default(),
         use_widths: Default::default(),
+        write_through_loops: Default::default(),
+        use_local_types: Default::default(),
         last_uses: Default::default(),
         element_reads: Default::default(),
         field_copy_sites: Default::default(),

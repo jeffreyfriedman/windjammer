@@ -2955,8 +2955,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         formal_type,
                                     ) || crate::codegen::rust::stdlib_method_traits::is_set_type(
                                         formal_type,
-                                    ) {
-                                        // Bare HashMap/Set formals stay owned (IR/signature_bridge
+                                    ) || matches!(formal_type, Type::Reference(_)) {
+                                        // Bare HashMap/Set formals stay owned, and a declared `&T` is already the borrow (IR/signature_bridge
                                         // contract). Readonly `.get()` must not flip to `&HashMap`
                                         // while call sites still pass owned maps.
                                         self.type_to_rust(formal_type)

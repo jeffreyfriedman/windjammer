@@ -110,7 +110,12 @@ fn every_core_surface_entry_typechecks_in_rustc() {
             r => (r.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into()), ""),
         };
         let ret_ty = if method == "parse" { "Result<i64, _>".to_string() } else { ret_ty };
-        let line = format!("fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}){tail}; }}\n", args.join(", "));
+        // `x[a..b]` is parsed as `x.slice(a, b)`: checked as the range index (the result is a slice of the receiver).
+        let line = if method == "slice" {
+            format!("fn e{i}(mut r: {recv}) {{ let _x = &r[{}..{}]; }}\n", args[0], args[1])
+        } else {
+            format!("fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}){tail}; }}\n", args.join(", "))
+        };
         src.push_str(&if ty == "Float" { line.replace("i64", "f64") } else { line.clone() });
         // ADR-0002: the receiver mode. The same call on an immutable binding (`r`, not `mut r`) compiles exactly
         // when the entry is not declared `&mut self`.

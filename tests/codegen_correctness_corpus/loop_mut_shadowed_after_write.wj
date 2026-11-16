@@ -1,0 +1,15 @@
+// OWN-LOOP-WRITE resolves the written root to its binding: `row[1] += 1` writes through the loop variable, while the
+// later `let row = 0` is a new binding of the body and writes nothing back.
+// interp-gap: the interpreter writes the shadowing body binding back into the element (`flat` becomes `[0, 0]`)
+// expect: 0
+// expect: 0
+// expect: 3 5
+fn main() {
+    let mut flat = [[1, 2], [3, 4]]
+    for mut row in flat {
+        row[1] += 1
+        let row = 0
+        println("${row}")
+    }
+    println("${flat[0][1]} ${flat[1][1]}")
+}

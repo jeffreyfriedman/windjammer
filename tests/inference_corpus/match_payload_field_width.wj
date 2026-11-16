@@ -1,0 +1,50 @@
+// A local assigned a field of a `Some(r)` binding in one arm and a literal in the other: the binding is the payload of
+// the declared `Option<Rect>`, so `r.x` is an `f32` and so is the literal. Before the fix the literal in the `None`
+// arm was emitted as `0.0_f64` while the declaration took `0.0_f32`.
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+}
+
+pub struct Packer {
+    pub rects: Vec<Rect>,
+}
+
+impl Packer {
+    pub fn get(self, i: u32) -> Option<Rect> {
+        if (i as usize) < self.rects.len() {
+            return Some(self.rects[i as usize])
+        }
+        None
+    }
+}
+
+fn place(packer: Packer, j: i32, w: f32) -> f32 {
+    let found = packer.get(j as u32)
+    let mut ox = 0.0
+    let mut oy = 0.0
+    match found {
+        Some(r) => {
+            ox = r.x
+            oy = r.y
+        },
+        None => {
+            ox = 0.0
+            oy = 0.0
+        },
+    }
+    let mut lo = 999999.0
+    let mut k = 0
+    while k < packer.rects.len() {
+        let r = packer.rects[k]
+        if r.y < lo { lo = r.y }
+        k = k + 1
+    }
+    lo = lo - 10.0
+    (w + ox + oy) / lo
+}
+
+fn main() {
+    let p = Packer { rects: [Rect { x: 1.0, y: 12.0 }, Rect { x: 3.0, y: 14.0 }] }
+    println("${place(p, 1, 2.0)}")
+}

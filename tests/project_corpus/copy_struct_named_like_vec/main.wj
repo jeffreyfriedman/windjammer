@@ -1,0 +1,17 @@
+// A Copy struct whose name begins with `Vec` (`Vec3`) is not the `Vec` collection: its formal stays owned and
+// callers pass it by value (no `&` into an owned formal).
+// expect: 1 2
+mod vec3
+mod grid
+mod camera
+use crate::vec3::Vec3
+use crate::grid::Grid
+use crate::camera::Camera
+
+fn main() {
+    let g = Grid { cells: [0u8, 0u8, 1u8, 0u8], size: 4 }
+    let mut c = Camera { pos: Vec3::new(0.0, 0.0, 0.0), scale: 1 }
+    c.update(1.0, g)
+    c.update(1.0, g)
+    println("${c.pos.x} ${g.size / 2}")
+}

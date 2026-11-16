@@ -1795,7 +1795,7 @@ pub(crate) fn wj_ast_bare_owned_non_text_type(t: &Type) -> bool {
     }
     if matches!(t, Type::Vec(_))
         || matches!(t, Type::Parameterized(name, _) if name == "Vec" || name == "Map" || name == "HashMap")
-        || matches!(t, Type::Custom(name) if name.starts_with("Vec") || name.starts_with("Map") || name.starts_with("HashMap"))
+        || matches!(t, Type::Custom(name) if { let base = name.split('<').next().unwrap_or(""); base == "Vec" || base == "Map" || base == "HashMap" })
     {
         return true;
     }
