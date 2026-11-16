@@ -26,8 +26,12 @@ impl SignatureRegistry {
     /// The free function an imported path names (`usecases::list_items`, from `use crate::usecases::list_items`):
     /// the key it is registered under (with or without `crate::`) and its signature. C3 identity by
     /// declaration: a method under the key is not a free function, and no other key is searched.
+    /// A dependency's function (`crate_a::bytes::slice_bytes`) is registered from its `metadata.json` under the crate
+    /// key (`crate_a::slice_bytes`).
     pub fn imported_free_function(&self, path: &str) -> Option<(String, &FunctionSignature)> {
-        [path.to_string(), format!("crate::{path}")].into_iter().find_map(|key| {
+        let segments: Vec<&str> = path.split("::").collect();
+        let dependency_key = (segments.len() > 2).then(|| format!("{}::{}", segments[0], segments[segments.len() - 1]));
+        [Some(path.to_string()), Some(format!("crate::{path}")), dependency_key].into_iter().flatten().find_map(|key| {
             let sig = self.layers().find_map(|reg| reg.signatures.get(&key))?;
             (!sig.has_self_receiver).then_some((key, sig))
         })

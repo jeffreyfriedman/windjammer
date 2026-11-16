@@ -59,6 +59,19 @@ impl<'ast> CodeGenerator<'ast> {
                 caller_module.as_deref(),
             )
         }).filter(same_function);
+        // `use dep::module::f`: the dependency function the import declares, by its registered key.
+        let imported = || {
+            let registries = std::iter::once(&self.signature_registry).chain(self.global_signature_registry.as_deref());
+            registries.filter_map(|reg| reg.imported_free_function(&resolved_callee)).next().map(|(key, sig)| {
+                crate::codegen::rust::call_signature_resolution::ResolvedSignature {
+                    sig: sig.clone(),
+                    qualified_key: key,
+                    resolution_method: crate::codegen::rust::call_signature_resolution::ResolutionMethod::ModuleAlias,
+                    has_collision: false,
+                }
+            })
+        };
+        let local = local.or_else(|| (global.is_none() && resolved_callee.contains("::")).then(imported).flatten());
         let codegen_refresh_source = global
             .clone()
             .filter(|r| r.sig.emitted_rust_ref_params.is_some())
