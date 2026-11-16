@@ -5,4 +5,5 @@ error[W0003]: explicit .iter() call
   |                ^^^^
   = help: write `for x in items` instead of `for x in items.iter()`
   = note: Windjammer supports direct iteration
+  = fix (auto-fixable): remove `.iter()`
   = explain: wj explain W0003

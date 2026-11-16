@@ -4,8 +4,8 @@ fn main() {
     let line = "a b c"
     let parts = line.split_whitespace()
     println("${parts[1]} ${parts.len()}")
-//~@20+5 ERROR WJ0035 this value cannot be indexed
-//~@26+3 ERROR WJ0015 no method `len` found for an iterator
+//~@28+5 ERROR WJ0035 this value cannot be indexed
+//~@34+3 ERROR WJ0015 no method `len` found for an iterator
 }
 
 // No report: collected first, a list from the start, an iterator only walked.
