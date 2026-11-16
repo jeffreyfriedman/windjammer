@@ -21,8 +21,30 @@ Vec | sort | v.sort() | sort ascending in place
 Vec | sort_by | v.sort_by(|a, b| a.cmp(b)) | sort with comparator returning Ordering
 Vec | sort_by_key | v.sort_by_key(|x| key) | stable sort by key
 Vec | dedup | v.dedup() | remove consecutive duplicates
-Vec | contains | v.contains(&x) -> bool | membership test
+Vec | contains | v.contains(&x) -> bool | membership test, e.g. [1, 2].contains(2)
+Vec | fill | [x; n] | list of n copies of x, e.g. let zeros = [0; 10] (vec![x; n] is deprecated)
+Vec | slice_from | v[from..] | tail of a list, e.g. [1, 2, 3][1..] is [2, 3]
 Vec | get | v.get(i: int) -> Option<T> | bounds-checked access
+Vec | clear | v.clear() | remove every element
+Vec | truncate | v.truncate(n: int) | keep the first n elements
+Vec | extend_from_slice | v.extend_from_slice(&other) | append a copy of another list
+Vec | append | v.append(&mut other) | move all of other onto the end
+Vec | drain | v.drain(a..b) | remove and iterate a range
+Vec | split_off | v.split_off(at: int) -> Vec<T> | cut the list in two at an index
+Vec | split_at | v.split_at(i: int) -> (Vec<T>, Vec<T>) | two halves at an index
+Vec | swap_remove | v.swap_remove(i: int) -> T | remove i by swapping in the last element
+Vec | resize | v.resize(n: int, x) | grow with copies of x or shrink to n
+Vec | starts_with | v.starts_with(&p) -> bool | prefix test
+Vec | ends_with | v.ends_with(&p) -> bool | suffix test
+Vec | binary_search | v.binary_search(&x) -> Result<int, int> | search a sorted list
+Vec | rotate_left | v.rotate_left(n: int) | rotate elements left
+Vec | rotate_right | v.rotate_right(n: int) | rotate elements right
+Vec | to_vec | v.to_vec() -> Vec<T> | owned copy of a list or slice
+Vec | concat | v.concat() | join a list of lists
+Vec | sort_unstable | v.sort_unstable() | faster sort, equal elements may reorder
+Vec | get_mut | v.get_mut(i: int) -> Option<&mut T> | bounds-checked mutable access
+Vec | first_mut | v.first_mut() -> Option<&mut T> | mutable first element
+Vec | last_mut | v.last_mut() -> Option<&mut T> | mutable last element
 Vec | first | v.first() -> Option<T> | first element
 Vec | last | v.last() -> Option<T> | last element
 Vec | join | v.join(sep: string) -> string | join strings
@@ -69,13 +91,57 @@ string | to_uppercase | s.to_uppercase() -> string | upper-case copy
 string | to_lowercase | s.to_lowercase() -> string | lower-case copy
 string | repeat | s.repeat(n: int) -> string | repeat n times
 string | find | s.find(pat: string) -> Option<int> | byte index of first match
-string | parse | s.parse::<int>() -> Result<int, E> | parse a number; also ::<float>
+string | parse | s.parse::<int>() -> Result<int, E> | parse a number; also ::<float>; write `s.parse::<int>() ?? 0` or `s.parse::<int>()?`, not `.unwrap()`
+string | slice_from | s[from..] | tail of a string from a byte index, e.g. "hello"[1..] is "ello"
 string | push_str | s.push_str(t: string) | append (s must be `let mut`)
 string | is_empty | s.is_empty() -> bool | true if length is 0
+string | split_once | s.split_once(sep: string) -> Option<(string, string)> | split at the first separator
+string | splitn | s.splitn(n: int, sep: string) | split into at most n parts (iterator; .collect() for a list)
+string | rsplit | s.rsplit(sep: string) | split from the right (iterator)
+string | strip_prefix | s.strip_prefix(p: string) -> Option<string> | remove a prefix if present
+string | strip_suffix | s.strip_suffix(p: string) -> Option<string> | remove a suffix if present
+string | trim_start | s.trim_start() -> string | trim leading whitespace
+string | trim_end | s.trim_end() -> string | trim trailing whitespace
+string | trim_matches | s.trim_matches(c: char) -> string | trim a char from both ends
+string | rfind | s.rfind(pat: string) -> Option<int> | byte index of last match
+string | replacen | s.replacen(from: string, to: string, n: int) -> string | replace the first n matches
+string | char_indices | s.char_indices() | iterate (byte index, char) pairs
+string | bytes | s.bytes() | iterate bytes
+string | as_bytes | s.as_bytes() -> Vec<u8> | the UTF-8 bytes
+string | to_string | s.to_string() -> string | owned copy
+string | to_ascii_uppercase | s.to_ascii_uppercase() -> string | ASCII upper-case copy
+string | to_ascii_lowercase | s.to_ascii_lowercase() -> string | ASCII lower-case copy
+string | eq_ignore_ascii_case | s.eq_ignore_ascii_case(t: string) -> bool | case-insensitive ASCII equality
+string | push | s.push(c: char) | append one char (s must be `let mut`)
+string | pop | s.pop() -> Option<char> | remove the last char
+string | insert | s.insert(i: int, c: char) | insert a char at byte index i
+string | truncate | s.truncate(n: int) | keep the first n bytes
+string | clear | s.clear() | empty the string
+string | matches | s.matches(pat: string) | iterate non-overlapping matches
 char | is_alphabetic | c.is_alphabetic() -> bool | letter test
 char | is_numeric | c.is_numeric() -> bool | digit test
 char | to_digit | c.to_digit(radix: int) -> Option<int> | digit value
+char | is_uppercase | c.is_uppercase() -> bool | upper-case letter test
+char | is_lowercase | c.is_lowercase() -> bool | lower-case letter test
+char | is_alphanumeric | c.is_alphanumeric() -> bool | letter or digit test
+char | is_whitespace | c.is_whitespace() -> bool | space, tab, newline test
+char | is_ascii_digit | c.is_ascii_digit() -> bool | '0'..'9' test
+char | is_ascii_alphabetic | c.is_ascii_alphabetic() -> bool | ASCII letter test
+char | is_ascii_uppercase | c.is_ascii_uppercase() -> bool | 'A'..'Z' test
+char | is_ascii_lowercase | c.is_ascii_lowercase() -> bool | 'a'..'z' test
+char | is_ascii_alphanumeric | c.is_ascii_alphanumeric() -> bool | ASCII letter or digit test
+char | is_ascii_punctuation | c.is_ascii_punctuation() -> bool | ASCII punctuation test
 char | to_ascii_uppercase | c.to_ascii_uppercase() -> char | ASCII upper-case
+char | to_ascii_lowercase | c.to_ascii_lowercase() -> char | ASCII lower-case
+char | to_uppercase | c.to_uppercase() -> char | upper-case char
+char | to_lowercase | c.to_lowercase() -> char | lower-case char
+char | is_ascii | c.is_ascii() -> bool | true for code points below 128
+char | is_ascii_hexdigit | c.is_ascii_hexdigit() -> bool | 0-9, a-f, A-F test
+char | is_ascii_whitespace | c.is_ascii_whitespace() -> bool | ASCII space, tab, newline test
+char | is_control | c.is_control() -> bool | control character test
+char | is_digit | c.is_digit(radix: int) -> bool | digit test in a radix, e.g. 'f'.is_digit(16)
+char | len_utf8 | c.len_utf8() -> int | bytes needed to encode the char
+char | to_string | c.to_string() -> string | one-character string
 Option | unwrap_or | o.unwrap_or(default) -> T | value or default (prefer over unwrap)
 Option | map | o.map(|x| expr) -> Option<U> | transform the Some value
 Option | and_then | o.and_then(|x| option) -> Option<U> | chain fallible steps
@@ -83,9 +149,32 @@ Option | is_some | o.is_some() -> bool | true for Some
 Option | is_none | o.is_none() -> bool | true for None
 Option | ok_or | o.ok_or(err) -> Result<T, E> | convert to Result
 Option | take | o.take() -> Option<T> | move the value out, leaving None
+Option | unwrap_or_else | o.unwrap_or_else(|| expr) -> T | value or computed default
+Option | unwrap_or_default | o.unwrap_or_default() -> T | value or the type's default
+Option | map_or | o.map_or(default, |x| expr) -> U | map or default
+Option | filter | o.filter(|x| cond) -> Option<T> | keep Some only when cond holds
+Option | or | a.or(b) -> Option<T> | a if Some, else b
+Option | or_else | o.or_else(|| option) -> Option<T> | a if Some, else compute
+Option | ok_or_else | o.ok_or_else(|| err) -> Result<T, E> | convert to Result with a computed error
+Option | is_some_and | o.is_some_and(|x| cond) -> bool | Some and the condition holds
+Option | zip | a.zip(b) -> Option<(T, U)> | pair two Somes
+Option | flatten | o.flatten() -> Option<T> | collapse Option<Option<T>>
+Option | replace | o.replace(x) -> Option<T> | store x, return the old value
+Option | and | a.and(b) -> Option<U> | b if a is Some
+Option | xor | a.xor(b) -> Option<T> | whichever is Some, if exactly one is
 Result | map_err | r.map_err(|e| expr) -> Result<T, F> | transform the error
 Result | unwrap_or | r.unwrap_or(default) -> T | Ok value or default
 Result | ok | r.ok() -> Option<T> | drop the error
+Result | is_ok | r.is_ok() -> bool | true for Ok
+Result | is_err | r.is_err() -> bool | true for Err
+Result | err | r.err() -> Option<E> | drop the Ok value
+Result | and_then | r.and_then(|x| result) -> Result<U, E> | chain fallible steps
+Result | or_else | r.or_else(|e| result) -> Result<T, F> | recover from an Err
+Result | unwrap_or_else | r.unwrap_or_else(|e| expr) -> T | Ok value or computed default
+Result | unwrap_or_default | r.unwrap_or_default() -> T | Ok value or the type's default
+Result | map | r.map(|x| expr) -> Result<U, E> | transform the Ok value
+Result | map_or | r.map_or(default, |x| expr) -> U | map or default
+Result | is_ok_and | r.is_ok_and(|x| cond) -> bool | Ok and the condition holds
 Result | ? | expr? | return early with the Err (or None) from the enclosing function
 HashMap | insert | m.insert(k, v) | add or replace an entry
 HashMap | get | m.get(k) -> Option<V> | lookup
@@ -94,21 +183,67 @@ HashMap | remove | m.remove(k) | delete an entry
 HashMap | entry | m.entry(k).or_insert(v) | get-or-insert; also .and_modify(|c| *c += 1)
 HashMap | keys | m.keys() | iterate keys (order unspecified; sort before printing)
 HashMap | values | m.values() | iterate values
+HashMap | len | m.len() -> int | number of entries
+HashMap | is_empty | m.is_empty() -> bool | true if no entries
+HashMap | clear | m.clear() | remove every entry
+HashMap | get_mut | m.get_mut(k) -> Option<&mut V> | mutable lookup
+HashMap | retain | m.retain(|k, v| cond) | keep entries where cond holds
+HashMap | extend | m.extend(other) | add every entry of another map
+HashMap | values_mut | m.values_mut() | iterate values mutably
+HashMap | into_keys | m.into_keys() | consume the map into its keys
+HashMap | into_values | m.into_values() | consume the map into its values
+HashMap | remove_entry | m.remove_entry(k) -> Option<(K, V)> | delete and return the pair
 HashSet | insert | s.insert(x) | add an element
 HashSet | contains | s.contains(&x) -> bool | membership
 HashSet | union | a.union(&b) | elements in either set
 HashSet | intersection | a.intersection(&b) | elements in both sets
+HashSet | len | s.len() -> int | number of elements
+HashSet | is_empty | s.is_empty() -> bool | true if no elements
+HashSet | remove | s.remove(&x) -> bool | delete an element
+HashSet | clear | s.clear() | remove every element
+HashSet | difference | a.difference(&b) | elements in a but not b
+HashSet | symmetric_difference | a.symmetric_difference(&b) | elements in exactly one set
+HashSet | is_subset | a.is_subset(&b) -> bool | every element of a is in b
+HashSet | is_superset | a.is_superset(&b) -> bool | every element of b is in a
+HashSet | is_disjoint | a.is_disjoint(&b) -> bool | no shared elements
+HashSet | retain | s.retain(|x| cond) | keep elements where cond holds
+HashSet | extend | s.extend(items) | add many elements
 VecDeque | push_back | q.push_back(x) | enqueue at the back
 VecDeque | pop_front | q.pop_front() -> Option<T> | dequeue from the front
 int | pow | x.pow(n: int) -> int | integer power
-int | abs | x.abs() -> int | absolute value
-int | min | a.min(b) -> int | smaller of two
-int | max | a.max(b) -> int | larger of two
+int | abs | x.abs() -> int | absolute value, e.g. (-3).abs() is 3
+int | min | a.min(b) -> int | smaller of two, e.g. 3.min(5) is 3
+int | max | a.max(b) -> int | larger of two, e.g. 3.max(5) is 5
 int | clamp | x.clamp(lo, hi) -> int | limit to a range
 int | checked_add | x.checked_add(y) -> Option<int> | None on overflow
 int | wrapping_add | x.wrapping_add(y) -> int | wraps on overflow
+int | to_string | x.to_string() -> string | decimal text
+int | to_be_bytes | x.to_be_bytes() -> Vec<u8> | big-endian bytes
+int | to_le_bytes | x.to_le_bytes() -> Vec<u8> | little-endian bytes
+int | is_ascii_digit | b.is_ascii_digit() -> bool | byte is '0'..'9'
+int | is_ascii_alphabetic | b.is_ascii_alphabetic() -> bool | byte is an ASCII letter
+int | is_ascii_whitespace | b.is_ascii_whitespace() -> bool | byte is ASCII whitespace
+int | to_ascii_uppercase | b.to_ascii_uppercase() -> u8 | ASCII upper-case byte
+int | to_ascii_lowercase | b.to_ascii_lowercase() -> u8 | ASCII lower-case byte
 float | sqrt | x.sqrt() -> float | square root
 float | floor | x.floor() -> float | round down
 float | round | x.round() -> float | round to nearest
 float | powi | x.powi(n: int) -> float | integer power
+float | min | a.min(b) -> float | smaller of two
+float | max | a.max(b) -> float | larger of two
+float | clamp | x.clamp(lo, hi) -> float | limit to a range
+float | powf | x.powf(y: float) -> float | float power
+float | hypot | x.hypot(y: float) -> float | sqrt(x*x + y*y)
+float | atan2 | y.atan2(x: float) -> float | angle of the point (x, y)
+float | log | x.log(base: float) -> float | logarithm in a base
+float | is_nan | x.is_nan() -> bool | not-a-number test
+float | is_finite | x.is_finite() -> bool | neither infinite nor NaN
+float | is_infinite | x.is_infinite() -> bool | infinity test
+float | is_sign_negative | x.is_sign_negative() -> bool | sign bit is set
+float | copysign | x.copysign(y: float) -> float | x with the sign of y
+float | mul_add | x.mul_add(a: float, b: float) -> float | x*a + b
+float | rem_euclid | x.rem_euclid(y: float) -> float | non-negative remainder
+float | total_cmp | a.total_cmp(&b) -> Ordering | total order including NaN
+float | to_string | x.to_string() -> string | decimal text
+float | to_bits | x.to_bits() -> u64 | IEEE-754 bit pattern
 float | partial_cmp | a.partial_cmp(&b) -> Option<Ordering> | compare floats (use .unwrap_or(Ordering::Equal))
