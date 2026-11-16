@@ -200,7 +200,9 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
         }
         // No metadata.json: a dependency with Windjammer sources is analyzed from them (never guessed).
         if found.is_none() {
-            match super::path_dep_metadata::derive(&key, &dep_root) {
+            // `path = "../pkg/build"` names a package's generated output: its declarations are the package's sources.
+            let source_root = super::path_dep_metadata::source_package_of(&dep_root);
+            match super::path_dep_metadata::derive(&key, source_root.as_deref().unwrap_or(&dep_root)) {
                 Some(Ok(root)) => found = Some(root),
                 Some(Err(e)) => errors.push(format!("{e}; its call sites would have no signatures")),
                 None => {}

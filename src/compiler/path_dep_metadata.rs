@@ -19,6 +19,16 @@ pub(crate) fn wj_source_dir(dep_root: &Path) -> Option<PathBuf> {
         .find(|dir| super::dependency_resolution::find_wj_files(dir).is_ok_and(|files| !files.is_empty()))
 }
 
+/// The package whose generated output `dep_root` is (`<pkg>/build` beside `<pkg>/wj.toml`), when `dep_root` holds
+/// generated Rust and no Windjammer sources of its own.
+pub(crate) fn source_package_of(dep_root: &Path) -> Option<PathBuf> {
+    if wj_source_dir(dep_root).is_some() || !dep_root.join("lib.rs").is_file() {
+        return None;
+    }
+    let package = dep_root.parent()?;
+    (package.join("wj.toml").is_file() && wj_source_dir(package).is_some()).then(|| package.to_path_buf())
+}
+
 fn fingerprint(source_dir: &Path, canonical: &Path, files: &[PathBuf]) -> String {
     let mut hasher = DefaultHasher::new();
     super::incremental::compiler_build_identity().hash(&mut hasher);
