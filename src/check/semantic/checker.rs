@@ -621,31 +621,55 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         d
     }
 
-    /// Insert `.collect()` at the end of the `let <name> = <iterator>` line when that line is exactly that statement.
+    /// Insert `.collect()` at the end of the `let [mut] <name>[: T] = <iterator>` line when that line is exactly that
+    /// statement (one binding of the name, no trailing comment, the initialiser ends in `)`).
     fn collect_fix_for_binding(&self, name: &str) -> Option<Fix> {
         let text = self.cx.loc.ix.text();
-        let needle = format!("let {name} = ");
-        let mut pos = None;
-        for (i, _) in text.match_indices(&needle) {
-            let line_start = text[..i].rfind('\n').map_or(0, |p| p + 1);
-            if text[line_start..i].trim().is_empty() {
-                if pos.is_some() {
-                    return None; // two bindings of the name
+        let mut found: Option<(usize, usize)> = None;
+        let mut offset = 0;
+        for line in text.split_inclusive('\n') {
+            let t = line.trim_start();
+            let rest = t.strip_prefix("let mut ").or_else(|| t.strip_prefix("let "));
+            if let Some(rest) = rest.and_then(|r| r.strip_prefix(name)) {
+                if rest.starts_with([' ', ':']) {
+                    if found.is_some() {
+                        return None; // two bindings of the name
+                    }
+                    found = Some((offset, offset + line.trim_end().len()));
                 }
-                pos = Some(i);
             }
+            offset += line.len();
         }
-        let i = pos?;
-        let line_end = text[i..].find('\n').map_or(text.len(), |p| i + p);
-        let line = &text[i..line_end];
-        if line.contains("//") || line.trim_end().ends_with(".collect()") || !line.trim_end().ends_with(')') {
+        let (start, end) = found?;
+        let stmt = &text[start..end];
+        if !stmt.contains(" = ") || stmt.contains("//") || stmt.trim_end().ends_with(".collect()") || !stmt.trim_end().ends_with(')') {
             return None;
         }
-        let end = i + line.trim_end().len();
         let sp = self.cx.loc.ix.span(end, end);
         let mut fix = replace_fix(&sp, ".collect()", "call `.collect()` to make the iterator a list".to_string());
         fix.applicability = Applicability::MachineApplicable;
         Some(fix)
+    }
+
+    /// `let parts: Vec<string> = line.split(" ")`: a list is declared, an iterator is given (WJ0003).
+    fn iterator_for_declared_list(&mut self, name: &str, declared: &Type, value: &Expression<'_>, location: &SourceLocation) {
+        if !crate::type_classification::type_is_vec_container(declared) {
+            return;
+        }
+        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
+        // a trailing `.collect()` makes the value a list: `iterator_root` only follows iterator-returning calls
+        if iterators::iterator_root(value, &text, &self.iter_locals).is_none() {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0003", "mismatched types: expected a list, found an iterator");
+        if let Some(sp) = self.cx.loc.word(&self.effective(location), name) {
+            d = d.at(sp.with_label("declared a list, given an iterator"));
+        }
+        d = d.with_help(format!("add `.collect()`: `let {name}: Vec<..> = ...collect()` turns the iterator into the list the type declares"));
+        if let Some(fix) = self.collect_fix_for_binding(name) {
+            d = d.with_fix(fix);
+        }
+        self.cx.out.push(d);
     }
 
     /// `x.m()` where `x` is known to be a user struct/enum: `m` must exist on it (WJ0015).
@@ -1115,6 +1139,9 @@ impl Visitor for Checker<'_, '_, '_> {
     }
 
     fn stmt(&mut self, s: &Statement<'_>) {
+        if let Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_: Some(t), value, location, .. } = s {
+            self.iterator_for_declared_list(n, t, value, location);
+        }
         match s {
             Statement::If { condition, location, .. } | Statement::While { condition, location, .. } => {
                 self.condition(condition, location)
