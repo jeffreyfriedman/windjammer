@@ -1,0 +1,31 @@
+// expect: 1 0
+// A `mut` parameter is the callee's own copy (SPEC-OWN-008), also when it is first passed to a read-only
+// function and then to another `mut` parameter (rustc E0594 / E0596 when it was emitted `&mut` or immutable).
+struct P {
+    pos: int,
+    items: Vec<int>,
+}
+
+fn peek(p: P) -> int {
+    p.pos
+}
+
+fn add(mut p: P, v: int) -> int {
+    p.items.push(v)
+    p.items.len() as int
+}
+
+fn unary(mut p: P) -> int {
+    if peek(p) == 7 {
+        p.pos += 1
+        return add(p, 0)
+    }
+    p.pos += 1
+    p.pos
+}
+
+fn main() {
+    let mut p = P { pos: 0, items: [] }
+    let r = unary(p)
+    println("${r} ${p.pos}")
+}

@@ -1,0 +1,12 @@
+// expect: 3
+// expect: 1
+// expect: 2
+// Pieces of a `lines()` loop variable collected into a declared `Vec<string>` are owned copies (rustc E0277:
+// `&str` items cannot build a `Vec<String>`).
+fn main() {
+    let text = "a b c\nd\ne f"
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().collect()
+        println("${parts.len()}")
+    }
+}

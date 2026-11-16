@@ -1,0 +1,39 @@
+// expect: r=5
+// expect: r=2
+// expect: total=8 items=3
+// A trait method whose impl mutates a by-value parameter: the parameter is a mutable borrow (SPEC-OWN-004),
+// so the caller sees the change, called through a trait object and directly.
+struct Bag {
+    items: Vec<int>,
+    total: int,
+}
+
+trait Op {
+    fn apply(&self, bag: Bag) -> int
+}
+
+struct AddOp {
+    n: int,
+}
+
+impl Op for AddOp {
+    fn apply(&self, bag: Bag) -> int {
+        bag.items.push(self.n)
+        bag.total += self.n
+        self.n
+    }
+}
+
+fn main() {
+    let mut bag = Bag { items: [], total: 0 }
+    let ops: Vec<Box<dyn Op>> = [Box::new(AddOp { n: 5 }), Box::new(AddOp { n: 2 })]
+    let mut i = 0
+    while i < ops.len() {
+        let r = ops[i].apply(bag)
+        println("r=${r}")
+        i += 1
+    }
+    let direct = AddOp { n: 1 }
+    direct.apply(bag)
+    println("total=${bag.total} items=${bag.items.len()}")
+}

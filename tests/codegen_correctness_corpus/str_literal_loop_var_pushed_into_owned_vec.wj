@@ -1,0 +1,20 @@
+// expect: ["n", "s(x)", "e"]
+// expect: ["a", "b"]
+// A loop variable over a list of string literals (and over `split`) is a borrowed `&str`: pushing it into a
+// `Vec<string>` takes an owned copy (rustc E0308 when it was pushed as is).
+fn main() {
+    let mut ex: Vec<string> = Vec::new()
+    for d in ["n", "s", "e"] {
+        if d == "s" {
+            ex.push("${d}(x)")
+        } else {
+            ex.push(d)
+        }
+    }
+    println("${ex:?}")
+    let mut words: Vec<string> = Vec::new()
+    for w in "a b".split(" ") {
+        words.push(w)
+    }
+    println("${words:?}")
+}

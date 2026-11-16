@@ -90,6 +90,13 @@ the local is the parameter's value, changed in place, so a borrow would need a c
 **Status.** Diverges in one shape (D-OWN-STORE-ASSIGN): storing through a field assignment, `h.tag = n`, demotes `n`
 to `&str` and copies inside, while `push(n)` keeps `n` owned and moves.
 
+### OWN-MUT-PARAM-COPY
+**Rule.** A parameter declared `mut` (`fn f(mut s: S)`) is owned: the callee changes its own copy and the caller's
+value is unchanged (SPEC-OWN-008). The caller moves its value at its last use and passes a copy otherwise.
+**Example.** `fn bump(mut s: S) { s.n += 1 }` emits `fn bump(mut s: S)`; `bump(s)` followed by a read of `s` emits
+`bump(s.clone())`.
+**Status.** Conforms.
+
 ### OWN-COPY-SEED
 **Rule.** Parameters of Copy type (numbers, `bool`, `char`, structs and enums all of whose fields are Copy) are passed
 by value unless the body mutates them (then `&mut`).

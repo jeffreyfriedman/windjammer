@@ -8886,7 +8886,7 @@ impl<'ast> CodeGenerator<'ast> {
         // A module `const NAME: string` is emitted `&'static str`: borrowed text whatever its WJ type
         // says. This is the one place that decides it; every owned position (call argument, field,
         // vec! element, let, return) then gets `.to_string()` from the coercion engine.
-        if self.expression_is_static_str_value(arg_expr) {
+        if self.expression_is_static_str_value(arg_expr) || self.is_text_slice_expr(arg_expr) || matches!(arg_expr, Expression::Identifier { name, .. } if self.idiom.str_slice_loop_vars.contains(name)) {
             return SafetyType::borrowed(BaseType::String, Region::fresh(13));
         }
         if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(

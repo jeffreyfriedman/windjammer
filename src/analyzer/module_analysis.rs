@@ -246,6 +246,7 @@ impl<'ast> Analyzer<'ast> {
         let mut pass_number = 1;
 
         if self.ownership_preconverged {
+            self.raise_trait_params_mutated_by_impls(program, &registry);
             let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
             self.infer_trait_signatures_from_impls(program, &new_registry)?;
             return Ok((
@@ -258,8 +259,9 @@ impl<'ast> Analyzer<'ast> {
         loop {
             let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
 
-            // Check for convergence: did any signatures change?
-            let converged = self.signatures_converged(&registry, &new_registry);
+            // Check for convergence: did any signatures change? (a trait formal an impl raised is a change)
+            let raised = self.raise_trait_params_mutated_by_impls(program, &new_registry);
+            let converged = !raised && self.signatures_converged(&registry, &new_registry);
 
             if converged {
                 self.infer_trait_signatures_from_impls(program, &new_registry)?;
@@ -598,6 +600,12 @@ impl<'ast> Analyzer<'ast> {
                         // Merge: if the impl body infers a stronger ownership
                         // than the abstract trait stub, upgrade the trait entry.
                         if let Some(existing) = trait_methods.get(&func.name) {
+                            // A formal an impl raised to `&mut` (raise_trait_params_mutated_by_impls) stays raised.
+                            for (param, mode) in &existing.inferred_ownership {
+                                if param != "self" && *mode == OwnershipMode::MutBorrowed {
+                                    analyzed_func.inferred_ownership.insert(param.clone(), *mode);
+                                }
+                            }
                             let existing_self = existing.inferred_ownership.get("self").copied();
                             let new_self = analyzed_func.inferred_ownership.get("self").copied();
                             let should_upgrade = matches!(

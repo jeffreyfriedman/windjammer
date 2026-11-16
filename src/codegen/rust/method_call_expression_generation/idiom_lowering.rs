@@ -111,6 +111,17 @@ impl<'ast> CodeGenerator<'ast> {
         if method != "unwrap_or" || args.len() != 1 {
             return;
         }
+        // `r.name.unwrap_or(d)` with `r` behind a reference: the value of the field is read, never moved out of
+        // the borrow. A Copy option (`Option<bool>`) is copied; any other is cloned, so the result has the
+        // field's owned type, as the default does (rustc E0308 on `.as_ref().unwrap_or(String)`, E0507 on a move).
+        if let (Expression::FieldAccess { .. }, Some(Type::Option(inner))) = (object, recv_ty) {
+            if !matches!(inner.as_ref(), Type::Reference(_)) && self.field_access_root_is_behind_reference(object) {
+                let base = obj_str.strip_suffix(".as_ref()").unwrap_or(obj_str.as_str()).to_string();
+                let copy = self.is_type_copy(inner);
+                *obj_str = if copy || base.ends_with(".clone()") { base } else { format!("{base}.clone()") };
+                return;
+            }
+        }
         // `it.next()` on a synthetic `Vec<&T>` iterator type is `Option<&T>`.
         let derived = match object {
             Expression::MethodCall { object: it, method: m, .. }
