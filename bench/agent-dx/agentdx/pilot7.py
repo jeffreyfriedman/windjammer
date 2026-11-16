@@ -193,6 +193,13 @@ def run_matrix(cfg, out_dir, agent_for, say=None, grader=PL.default_grader, real
         g.done[m] += 1
         ledger.end(attempt, charged, tr["status"], basis)
         PL.save(tr, mdir)
+        dn = tr.get("denials") or {}
+        if u.get("permission_denials") or dn.get("count"):
+            n_arm = [t for t in PL.load_trials(mdir) if t["arm"] == arm]
+            den = sum(1 for t in n_arm if "harness-denial" in (t.get("flags") or []))
+            print(f"WARNING harness-denial: {m} {task} {arm} {k} denied {dn.get('commands') or u.get('denied_commands')}; shapes {dn.get('shapes')}; "
+                  f"first Bash call denied: {dn.get('first_bash_denied')}; arm {arm}: {den}/{len(n_arm)} trials denied "
+                  f"(report refuses rates above {PL.DENIAL_ARM_MAX_SHARE:.0%})", file=sys.stderr, flush=True)
         say(f"{m} {task} {arm} {k} {tr['status']} pass={tr['pass_final']} turns={u['turns']} cost={charged} ({basis}) spent=${g.spent:.2f}")
     return finish(cfg, out_dir, g, say)
 

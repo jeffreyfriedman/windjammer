@@ -3,6 +3,8 @@ from . import compare
 from . import tasks as T
 from .runners import classify_run_failure, get_runner
 
+KEEP = 4000   # characters of a failing vector's stdin/expected/actual output kept in the record (was 300: too short to classify a failure)
+
 
 def run_vectors(lang, runner, build, wd, vectors, stop_after_fail=False, keep_failures=3):
     passed, failures, diag = 0, [], []
@@ -18,9 +20,9 @@ def run_vectors(lang, runner, build, wd, vectors, stop_after_fail=False, keep_fa
             d = {"code": "", "message": "wrong output", "category": "wrong-output"}
         diag.append(d)
         if len(failures) < keep_failures:
-            failures.append({"index": i, "category": d["category"], "message": d["message"][:300],
-                             "stdin": v.get("stdin", "")[:300], "args": v.get("args", []),
-                             "expected": v["stdout"][:300], "actual": rr.stdout[:300], "exit_code": rr.code})
+            failures.append({"index": i, "category": d["category"], "message": d["message"][:KEEP],
+                             "stdin": v.get("stdin", "")[:KEEP], "args": v.get("args", []),
+                             "expected": v["stdout"][:KEEP], "actual": rr.stdout[:KEEP], "exit_code": rr.code})
         if stop_after_fail:
             break
     return passed, failures, diag

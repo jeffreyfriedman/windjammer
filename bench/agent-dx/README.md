@@ -198,6 +198,23 @@ cost (the partial stream priced at the config's table, else the per-trial cap); 
 **Stopping.** When the hard cap or the projection stops a model, the harness prints `STOPPED model=... spent=... cap=... projection=...` on stderr, writes `<out>/STOPPED` and
 `<out>/final.json` (same content as the final JSON line, with `stopped`, `seed`, `hard_cap_usd`) and exits 4.
 
+**Permission policy (identical shell helpers for every arm).** `claude -p --permission-mode dontAsk`: only what `--allowedTools` lists runs, everything else is denied.
+Claude Code splits a compound command (`a && b | c; d`) and requires EVERY part to be allowed, so one unlisted part denies the whole line and the agent usually stops with the file unverified
+(pilots 8-10: 18 of 33 failed trials never compiled for this reason). Allowed for every arm: `Read, Edit, Write, Glob, Grep` (cwd) and
+`Bash(printf|echo|head|tail|cat|sed|cd|ls|wc|sort|uniq|tr|cut|grep|diff|./main|./build/main:*)` (`arms.SHELL_HELPERS`); plus only the arm's own toolchain
+(`Bash(wj build|run|test|check|fmt|lint|fix|docs|explain:*)` for wj arms, `rustc`/`go`/`python3` for R/G/P) and its MCP tools for MCP arms. The prompt tells the agent that chains with `|`, `&&`, `;` are fine
+when every part is on the list, and that a Bash line must not contain `$`, backticks, `<`, `>` or a space followed by `=` even inside quotes (Claude Code refuses those): such input goes through the Write tool and `cat input.txt | program`.
+Never allowed for any arm: curl/wget/ssh, git, rm/mv/cp/chmod/kill, package managers, cargo (dependency fetch), timeout/xargs/find/awk/env/sh (run arbitrary commands), other interpreters.
+**Detection** (`agentdx/denials.py`): per trial, `denials` = `{count, capability, kinds, shapes, commands, first_bash_denied}` and `never_compiled` (no compile/run/check call ever exited 0). Sources: (1) tool results in `claude.stream.jsonl`
+whose text has "has been denied" and "don't ask" (kind `dont-ask`), any other "Permission to use X has been denied" (`permission`), a WJ004x/capability diagnostic (`capability`, the program's own sandbox, not counted as a harness denial);
+(2) the result event's `permission_denials` (`[{tool_name, tool_use_id, tool_input: {command}}]`); merged by `tool_use_id`. A shape is the sub-commands in order with their operators plus markers (`[redirect] [var] [subst] [heredoc] [space-eq] [quoted-redirect-char]`).
+A denied trial gets `flags: ["harness-denial"]` and a `WARNING harness-denial` line on stderr while running. `pilot7-report` prints a table per (model, arm) with pass@1, **never-compiled trials** (and how many of them had a denial), denied trials,
+first-Bash-call denials, the top denied shapes and a status: an arm with more than 5% of trials whose first Bash call was denied is **HARNESS-LIMITED**, an arm above 10% denied trials is OVER; either withholds all rates (exit 6) unless `--allow-partial`.
+Failing-vector records keep up to 4000 characters (`grade.KEEP`) of stdin/expected/actual output in `final_grade.failures`.
+Preflight (no model call): `python3 -m unittest tests.test_harness_denials` from `bench/agent-dx`; then a dry run `python3 -m agentdx pilot7 --dry-run`.
+
+**Task specs (set 3).** Lines are split on single spaces with no trimming; the specs of t302-t306, t308, t309 now say so (` open a 1` is a bad command; a spaces-only line is not empty).
+
 **Seed.** `seed` in the config (default 0, the value used so far) or `--seed N` fixes the order of tasks and arms inside each round; it is written into every trial record, `final.json` and the report.
 
 **Environment variables.**

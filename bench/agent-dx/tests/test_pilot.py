@@ -335,11 +335,11 @@ class Denials(unittest.TestCase):
             self.assertEqual(t["usage"]["permission_denials"], 1)
             self.assertEqual(t["usage"]["denied_commands"], ["cat x | wj run y"])
 
-    def test_pipeline_helpers_are_allowed_and_cat_ls_are_not(self):
+    def test_pipeline_helpers_are_allowed_and_find_curl_are_not(self):
         allowed = arms.tool_policy()["allowed"]
-        for ok in ("Bash(wj:*)", "Bash(printf:*)", "Bash(echo:*)"):
+        for ok in ("Bash(wj:*)", "Bash(printf:*)", "Bash(echo:*)", "Bash(cat:*)", "Bash(ls:*)", "Bash(grep:*)"):   # the shared helper set, see test_harness_denials
             self.assertIn(ok, allowed)
-        for bad in ("Bash(cat:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(grep:*)", "Bash"):
+        for bad in ("Bash(find:*)", "Bash(curl:*)", "Bash(rm:*)", "Bash(git:*)", "Bash"):
             self.assertNotIn(bad, allowed)
 
     def test_occasional_denials_do_not_stop_the_pilot(self):

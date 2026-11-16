@@ -108,6 +108,7 @@ def main(argv=None):
     p7r.add_argument("--config", default=P7.CONFIG)
     p7r.add_argument("--out", default="results/pilot7")
     p7r.add_argument("--md")
+    p7r.add_argument("--allow-partial", action="store_true", help="print rates even for arms refused for harness denials (marked in the denial table)")
     prg = sub.add_parser("pilot-regrade", help="re-grade non-passing pilot trials from their recorded final source")
     prg.add_argument("--trials-dir", required=True)
     pr = sub.add_parser("pilot-report")
@@ -158,12 +159,15 @@ def main(argv=None):
         print(json.dumps(r))
         return 4 if r["stopped"] else 0
     if a.cmd == "pilot7-report":
-        md = P7R.build(a.out, P7.load_config(a.config))
+        refusals = []
+        md = P7R.build(a.out, P7.load_config(a.config), allow_partial=a.allow_partial, refusals=refusals)
         if a.md:
             open(a.md, "w").write(md)
         else:
             print(md)
-        return 0
+        for r in refusals:
+            print(f"REFUSED {r}", file=sys.stderr)
+        return 6 if refusals else 0
     if a.cmd == "toolchains":
         print(json.dumps(toolchains.detect(), indent=1))
     elif a.cmd == "gen":

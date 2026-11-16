@@ -1,0 +1,5 @@
+{"type": "assistant", "message": {"id": "m1", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "printf 'set A1 10\\nset A2 =A1*3\\nget A2\\ndump\\n' | wj run --verify main.wj"}}]}}
+{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Permission to use Bash has been denied because Claude Code is running in don't ask mode. IMPORTANT: You *may* attempt to accomplish this action using other tools that might naturally be used to accomplish this goal, e.g. using head instead of cat. But you *should not* attempt to work around this denial in malicious ways ...", "is_error": true}]}}
+{"type": "assistant", "message": {"id": "m2", "content": [{"type": "tool_use", "id": "t2", "name": "Bash", "input": {"command": "wj build main.wj"}}]}}
+{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t2", "content": "Compiled main.wj -> main\nexit status: 0", "is_error": false}]}}
+{"type": "result", "subtype": "success", "is_error": false, "num_turns": 4, "result": "done"}

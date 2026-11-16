@@ -42,14 +42,77 @@ def fmt(ci, nd):
     return "n/a" if ci is None else f"{ci[0]:.{nd}f} [{ci[1]:.{nd}f}, {ci[2]:.{nd}f}]"
 
 
-def build(out_dir, cfg, n_boot=2000):
+FIRST_BASH_LIMITED_SHARE = 0.05   # an arm with more trials than this whose FIRST Bash call was denied is HARNESS-LIMITED
+
+
+def is_denied(t):
+    return bool((t.get("usage") or {}).get("permission_denials")) or bool((t.get("denials") or {}).get("count"))
+
+
+def denial_stats(trials_by_model, arms):
+    """{(model, arm): {n, denied, first_denied, never, never_denied, shapes, commands}} over the valid recorded trials.
+    Old records (no `denials`/`never_compiled`) fall back to usage.permission_denials and usage.denied_commands."""
+    out = {}
+    for m, ts in trials_by_model.items():
+        for a in arms:
+            sel = [t for t in ts if t["arm"] == a]
+            shapes, cmds = {}, {}
+            for t in sel:
+                for k, v in ((t.get("denials") or {}).get("shapes") or {}).items():
+                    shapes[k] = shapes.get(k, 0) + v
+                for c in (t.get("denials") or {}).get("commands") or (t.get("usage") or {}).get("denied_commands") or []:
+                    cmds[c] = cmds.get(c, 0) + 1
+            out[(m, a)] = {"n": len(sel), "denied": sum(1 for t in sel if is_denied(t)),
+                           "first_denied": sum(1 for t in sel if (t.get("denials") or {}).get("first_bash_denied")),
+                           "never": sum(1 for t in sel if t.get("never_compiled")),
+                           "never_denied": sum(1 for t in sel if t.get("never_compiled") and is_denied(t)),
+                           "passed": sum(1 for t in sel if t.get("pass_final")), "shapes": shapes, "commands": cmds}
+    return out
+
+
+def harness_limited(d):
+    return bool(d["n"]) and d["first_denied"] / d["n"] > FIRST_BASH_LIMITED_SHARE
+
+
+def denial_section(den):
+    md = ["## Harness permission denials and never-compiled trials", "",
+          "A denial (flag `harness-denial`) is a tool call the sandbox refused: the don't-ask text or the result's `permission_denials`. "
+          "HARNESS-LIMITED: more than 5% of the arm's trials had their FIRST Bash call denied. never-compiled: no compile/run/check call ever succeeded.", "",
+          "| model | arm | trials | pass@1 | never-compiled trials | of them with a denial | with a denial | first Bash denied | status | most frequent denied shapes |",
+          "|---|---|---|---|---|---|---|---|---|---|"]
+    for (m, a), d in den.items():
+        n = d["n"]
+        status = "HARNESS-LIMITED" if harness_limited(d) else ("OVER" if n and d["denied"] / n > PL.DENIAL_ARM_MAX_SHARE else "ok")
+        top = "; ".join(f"`{k[:70]}` x{v}" for k, v in sorted(d["shapes"].items(), key=lambda x: -x[1])[:3]) or \
+            "; ".join(f"`{k[:60]}` x{v}" for k, v in sorted(d["commands"].items(), key=lambda x: -x[1])[:3])
+        md.append(f"| {m} | {a} | {n} | {(d['passed'] / n if n else 0):.2f} | {d['never']} | {d['never_denied']} | {d['denied']} | {d['first_denied']} | {status} | {top} |")
+    return md + [""]
+
+
+def build(out_dir, cfg, n_boot=2000, allow_partial=False, refusals=None):
+    """refusals (list, optional) receives one line per refused (model, arm); the markdown names them too.
+    An arm above DENIAL_ARM_MAX_SHARE denied trials, or HARNESS-LIMITED, measured the sandbox: its rates are withheld unless allow_partial."""
     models, arms = list(cfg["models"]), cfg["arms"]
     data = load(out_dir, models)
+    den = denial_stats(load_all(out_dir, models), arms)
+    over = {k for k, d in den.items() if d["n"] and (d["denied"] / d["n"] > PL.DENIAL_ARM_MAX_SHARE or harness_limited(d))}
+    mine = []
+    for (m, a), d in sorted(den.items()):
+        if (m, a) in over:
+            why = "HARNESS-LIMITED" if harness_limited(d) else "over the denial limit"
+            mine.append(f"{m}/{a}: {d['denied']}/{d['n']} trials hit harness permission denials, {d['first_denied']} on the first Bash call ({why}; limits "
+                        f"{PL.DENIAL_ARM_MAX_SHARE:.0%} denied, {FIRST_BASH_LIMITED_SHARE:.0%} first-call): the arm measured the sandbox, not the language")
+    if refusals is not None and not allow_partial:
+        refusals += mine
     every = load_all(out_dir, models)
     seeds = sorted({t.get("seed") for ts in every.values() for t in ts if "seed" in t}, key=str)
     versions = sorted({t.get("wj_version", "") for ts in every.values() for t in ts})
     md = ["# Pilot 7: models x arms", "", f"Order seed: {', '.join(map(str, seeds)) or 'not recorded'}. wj: {'; '.join(versions) or 'not recorded'}.", "",
           f"Price table: {cfg['prices']['_date']} ({cfg['prices']['_source']})", ""]
+    md += denial_section(den)
+    if mine and not allow_partial:
+        md += ["**Rates are withheld: " + "; ".join(mine) + ". Fix the allow set (see README, Permission policy) and re-run, or pass `--allow-partial`.**", ""]
+        return "\n".join(md) + "\n"
     for m in models:
         tr = data[m]
         if not tr:

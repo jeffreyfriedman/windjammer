@@ -126,16 +126,29 @@ EXTRA_BASH = {"wj": ["Bash(wj:*)"], "python": ["Bash(python3:*)"], "go": ["Bash(
               "rust": ["Bash(rustc:*)", "Bash(./main:*)"]}
 SHIMMED = {"wj": "wj", "python": "python3", "go": "go", "rust": "rustc"}   # command logged by the shim
 
+# One shell-helper allow set for EVERY arm (the toolchain commands differ by language, the helpers do not). Denied for all arms by
+# `dontAsk` (nothing outside this list runs): network tools, git, rm/mv/chmod, package managers, interpreters other than the arm's.
+# Claude Code decomposes a compound command (`a && b | c; d`) and requires EVERY part to be allowed, so the set must cover each part the
+# agents chain in a verification line (measured on 52 denied trials of pilots 7-8: wj/rustc, printf, echo, head, tail, cat, sed, cd, ls, grep, wc,
+# diff, the built binary as ./main or ./build/main). Equal for every arm: the toolchain commands (EXTRA_BASH) are the only per-language entries.
+# Not allowed for any arm: cargo (dependency fetch = network), timeout/xargs/find/awk/env (run arbitrary commands), curl/wget/ssh, git, rm/mv/cp/chmod/kill,
+# package managers, other interpreters.
+COMPILED_BINARIES = ["./main", "./build/main"]
+SHELL_HELPERS = ["printf", "echo", "head", "tail", "cat", "sed", "cd", "ls", "wc", "sort", "uniq", "tr", "cut", "grep", "diff"] + COMPILED_BINARIES
+SAFE_DENY_NOTE = "no network, no git push, no rm/mv outside the trial dir: none of curl/wget/git/rm/mv/chmod/pip/npm is allowed"
+
+
 def head(lang):
     grader = "the compiled `wj build` toolchain" if lang == "wj" else "the native toolchain"
-    cmds = "`wj`, `printf`, `echo`, `head` and `tail`" if lang == "wj" else {
-        "python": "`python3`, `printf`, `echo`, `head` and `tail`", "go": "`go`, `./main`, `printf`, `echo`, `head` and `tail`",
-        "rust": "`rustc`, `./main`, `printf`, `echo`, `head` and `tail`"}[lang]
+    tool = {"wj": "`wj`", "python": "`python3`", "go": "`go`", "rust": "`rustc`"}[lang]
+    cmds = tool + ", the compiled binary (`./main`), `printf`, `echo`, `cat`, `sed`, `cd`, `ls`, `wc`, `sort`, `uniq`, `tr`, `cut`, `grep`, `diff`, `head` and `tail`"
     return (f"You are solving one programming task in {LANG_NAME[lang]}. Write the complete solution in the file `{SRC[lang]}` "
             "in the current directory. The program reads standard input (and command-line arguments / files in the "
             f"current directory when the task says so) and writes to standard output exactly as specified; it is graded "
             f"on hidden tests with {grader}. Create and edit files with the Write/Edit tools; the only shell "
-            f"commands available are {cmds} (pipe input with `printf 'a\\nb\\n' | ...`; shell variables such as `$?` are not available, so a command that fails ends its output with `[exit N]`). "
+            f"commands available are {cmds} (pipe input with `printf 'a\\nb\\n' | ...`; you may chain commands with `|`, `&&` and `;`, but EVERY part of a chain must be one of these commands, otherwise the whole line is refused and nothing runs; "
+            "a Bash line must not contain `$`, backticks, `>` or `<`, or a space followed by `=`, even inside quotes, so there are no shell variables such as `$?` and no redirects: a command that fails ends its output with `[exit N]`; "
+            "to feed a program input that contains `=`, `<`, `>`, `$` or other unusual characters, create the input file with the Write tool and run `cat input.txt | <program>`). "
             "Stop when you believe it is correct for all inputs.\n\n")
 
 
@@ -161,6 +174,10 @@ def _bash(arm):
         subs = WJ_CORE + (["docs", "explain"] if a["bash"] == "core+docs" else [])
         return [f"Bash(wj {c}:*)" for c in subs]
     return EXTRA_BASH[a["lang"]]
+
+
+def _helpers():
+    return [f"Bash({c}:*)" for c in SHELL_HELPERS]
 
 
 def _mcp_allowed(arm):
@@ -189,8 +206,7 @@ def all_mcp_tools():
 def tool_policy(arm="A"):
     """Tools available to the trial agent. dontAsk denies everything not allowed; file tools stay in the cwd."""
     return {"tools": "Read,Edit,Write,Glob,Grep,Bash",
-            "allowed": ["Read", "Edit", "Write", "Glob", "Grep"] + _bash(arm) + _mcp_allowed(arm) +
-                       ["Bash(printf:*)", "Bash(echo:*)", "Bash(head:*)", "Bash(tail:*)"],   # printf/echo/head/tail pipe input into the program
+            "allowed": list(dict.fromkeys(["Read", "Edit", "Write", "Glob", "Grep"] + _bash(arm) + _mcp_allowed(arm) + _helpers())),   # identical helpers for every arm
             "permission_mode": "dontAsk"}
 
 

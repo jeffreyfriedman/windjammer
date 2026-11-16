@@ -11,10 +11,12 @@ import subprocess
 import time
 
 from . import tasks as T, arms as A, budget as B, diagnostics as dg, grade as G, shim as S, spend as SP, workspace as W
+from . import denials as DN
 from .runners import wj_bin
 from .toolchains import wj_identity
 
 SCHEMA = 2
+DENIAL_ARM_MAX_SHARE = 0.10   # per (model, arm): above this the arm's rates are not published (pilot7-report), a warning is printed while running
 DENIAL_MIN_TRIALS, DENIAL_MAX_SHARE = 8, 0.85   # stop when the sandbox policy, not the language, blocks most trials
 PILOT_TASKS = ["t003_prime_counts", "t006_base_convert", "t009_rpn_eval", "t011_lru_cache", "t013_bst",
                "t018_word_freq", "t022_csv_parse", "t030_bank_ledger", "t034_shapes_trait", "t050_cat_number"]
@@ -81,8 +83,8 @@ def _usage(j):
             "subtype": j.get("subtype"), "is_error": j.get("is_error"),
             "permission_denials": len(j.get("permission_denials") or []),
             "denied_commands": [str((d.get("tool_input") or {}).get("command", d.get("tool_name")))[:200]
-                                for d in (j.get("permission_denials") or [])][:5],
-            "result_excerpt": str(j.get("result", ""))[:400]}
+                                for d in (j.get("permission_denials") or [])][:20],
+            "result_excerpt": str(j.get("result", ""))[:2000]}
 
 
 PREDICTION_MARK = "the compiled build would reject this"     # ADR-0033 width/String prediction (wj check error, wj run --interpret warning)
@@ -173,6 +175,8 @@ def _slim(g):
     r = {"status": g["status"], "passed": g["passed"], "total": g["total"], "categories": g["categories"]}
     if g.get("first_compiled"):
         r["first_compiled"] = g["first_compiled"]
+    if g.get("failures"):
+        r["failures"] = g["failures"]   # first failing vectors with up to grade.KEEP characters of stdin/expected/actual each
     return r
 
 
@@ -203,6 +207,9 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     g = default_grader(task, ws, lang) if grader is default_grader else grader(task, ws)
     an = analyse_invocations(S.read_log(log, tool), lang)
     u = _usage(res["json"])
+    sp = getattr(agent, "stream_path", None)
+    den = DN.summarise(open(sp, errors="replace").read() if sp and os.path.exists(sp) else "", res["json"])
+    never = not any(r["exit"] == 0 for r in an["invocations"] if r["verb"] in S.VERIFY_VERBS)   # no compile/run/check ever succeeded
     cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"
     timed_out = bool(res.get("timed_out"))
     if timed_out:   # the harness charges what the partial stream shows, else the per-trial cap; see spend.py
@@ -211,6 +218,8 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     api = u["api_seconds"] if u["api_seconds"] is not None else None
     tr = {"schema": SCHEMA, "task": task, "arm": arm, "arm_name": A.ARMS[arm]["name"], "trial": trial,
           "model": getattr(agent, "model", None),
+          "flags": ["harness-denial"] if (u.get("permission_denials") or den["count"]) else [],
+          "denials": den, "never_compiled": never,
           "status": "timeout" if timed_out else "completed", "excluded_from_grading": timed_out,
           "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
           "final_grade": _slim(g["compiled"]), "pass_final": cpass,

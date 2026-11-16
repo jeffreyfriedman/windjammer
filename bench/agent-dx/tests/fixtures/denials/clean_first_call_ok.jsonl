@@ -1,0 +1,3 @@
+{"type": "assistant", "message": {"id": "m1", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "wj build main.wj 2>&1 | head -40"}}]}}
+{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Compiled", "is_error": false}]}}
+{"type": "result", "subtype": "success", "is_error": false, "num_turns": 4, "result": "done"}
