@@ -19,7 +19,7 @@ counting the ones that run only in the interpreter:
 hand from the stated semantics, never copied from an implementation. The number of example files:
 
 <!-- wj:gen name=metric key=spec.example_files -->
-294
+297
 <!-- wj:end -->
 
 **The conformance corpus.** A set of programs is run on every backend and the outputs compared. The number of programs, with
@@ -34,7 +34,7 @@ windjammer-ecosystem repository, run under the tree-walking interpreter, the res
 backend, with each result compared. The number of cases:
 
 <!-- wj:gen name=metric key=drift.corpus_cases -->
-1934
+1940
 <!-- wj:end -->
 
 ## Differences are ledgers that shrink

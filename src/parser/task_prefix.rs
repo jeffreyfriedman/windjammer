@@ -38,12 +38,26 @@ impl RemovedForm {
 }
 
 impl Parser {
-    /// A primary expression, or a `spawn`/`async`/`scope` task form.
+    /// A primary expression (task forms are primaries: `parse_primary_expression` recognises them, so they also
+    /// work as operands of unary operators and take postfix operators: `spawn { 1 }.wait()`).
     pub(in crate::parser) fn parse_prefixed_or_primary(&mut self) -> Result<&'static Expression<'static>, String> {
-        match self.try_parse_task_prefix()? {
-            Some(e) => Ok(e),
-            None => self.parse_primary_expression(),
-        }
+        self.parse_primary_expression()
+    }
+
+    /// The current token starts a task form: `spawn`/`async` before a name, `self` or `{`, `scope` before `{`, with
+    /// the next token on the same line.
+    pub(in crate::parser) fn task_prefix_follows(&self) -> bool {
+        let kw = match self.current_token() {
+            Token::Ident(n) if n == "spawn" || n == "scope" => n.as_str(),
+            Token::Async => "async",
+            _ => return false,
+        };
+        let starts_operand = match (self.peek(1), kw) {
+            (Some(Token::LBrace), _) => true,
+            (Some(Token::Ident(_) | Token::Self_), "spawn" | "async") => true,
+            _ => false,
+        };
+        starts_operand && self.next_on_same_line()
     }
 
     fn next_on_same_line(&self) -> bool {
@@ -55,36 +69,44 @@ impl Parser {
 
     /// Called with the current token on `spawn`/`scope`/`async`; `None` when it is not a prefix.
     pub(in crate::parser) fn try_parse_task_prefix(&mut self) -> Result<Option<&'static Expression<'static>>, String> {
-        let kw = match self.current_token() {
-            Token::Ident(n) if n == "spawn" || n == "scope" => n.clone(),
-            Token::Async => "async".to_string(),
-            _ => return Ok(None),
-        };
-        let next = self.peek(1).cloned();
-        let starts_operand = match (&next, kw.as_str()) {
-            (Some(Token::LBrace), _) => true,
-            (Some(Token::Ident(_) | Token::Self_), "spawn" | "async") => true,
-            _ => false,
-        };
-        if !starts_operand || !self.next_on_same_line() {
+        if !self.task_prefix_follows() {
             return Ok(None);
         }
+        let kw = match self.current_token() {
+            Token::Ident(n) => n.clone(),
+            _ => "async".to_string(),
+        };
+        // node spans (span log): the task starts at its keyword, a block operand at its `{`
+        self.span_enter();
+        let r = self.parse_task_form(&kw);
+        self.span_exit();
+        r.map(Some)
+    }
+
+    fn parse_task_form(&mut self, kw: &str) -> Result<&'static Expression<'static>, String> {
         let location = self.current_location();
         self.advance(); // the prefix
         let operand = if self.current_token() == &Token::LBrace {
-            let block_location = self.current_location();
-            self.advance();
-            let statements = self.parse_block_statements()?;
-            self.expect(Token::RBrace)?;
-            self.alloc_expr(Expression::Block { statements, is_unsafe: false, location: block_location })
+            self.span_enter();
+            let block = self.parse_task_block();
+            self.span_exit();
+            block?
         } else {
             self.parse_binary_expression(100)?
         };
-        Ok(Some(match kw.as_str() {
+        Ok(match kw {
             "spawn" => self.alloc_expr(Expression::SpawnCall { expr: operand, location }),
             "async" => self.alloc_expr(Expression::AsyncCall { expr: operand, location }),
             _ => self.alloc_expr(Expression::Scope { body: operand, location }),
-        }))
+        })
+    }
+
+    fn parse_task_block(&mut self) -> Result<&'static Expression<'static>, String> {
+        let location = self.current_location();
+        self.advance(); // `{`
+        let statements = self.parse_block_statements()?;
+        self.expect(Token::RBrace)?;
+        Ok(self.alloc_expr(Expression::Block { statements, is_unsafe: false, location }))
     }
 
     fn removed_form(&mut self, form: RemovedForm) -> String {

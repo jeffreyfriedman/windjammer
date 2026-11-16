@@ -50,7 +50,7 @@ the solver) and record the cost; if the JS worker path cannot pass conformance w
 | Interpreter semantics | `src/interpreter/builtins/thread.rs` (`run_scope`, `start_task`), `sched.rs` (per-task scope stacks) | scope evaluated in place (`return`, `?`, `break` behave as in any block), waits for all tasks, first panic re-raised |
 | Rust backend | `src/codegen/rust/async_generation.rs` | refuses with `compile_error!` naming this plan (never different semantics) |
 | JS/Go backends | `src/codegen/portable/lower/expr.rs` | explicit unsupported error, as before |
-| Std surface | `docs/std_surface.toml` rows (types `Task`, `Sender`, `Receiver`; ADR-0039) | rows added; the gate lives on the std-redesign branch |
+| Std surface | `docs/std_surface.toml` rows (types `Task`, `Sender`, `Receiver`; the std surface redesign) | rows added; the gate lives on the std-redesign branch |
 | Conformance corpus | `tests/conformance/concurrency/*.wj` | expected output in each header; run under six schedules |
 | Spec | `docs/spec/concurrency.md` SPEC-CONC-001..008 | examples executable |
 

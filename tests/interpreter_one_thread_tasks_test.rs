@@ -213,3 +213,20 @@ fn a_schedule_that_needs_a_suspended_task_is_refused_not_reordered() {
     assert_ne!(nested.code, 0);
     assert_eq!(exec(SLEEPERS, false, 0).stdout, "woke 100\nwoke 200\nwoke 300\n");
 }
+
+/// The ADR-0004 conformance programs (`spawn`/`async`/`scope`, channel methods) in the playground's mode: the same
+/// output as with threads, or the error that says a task would have to resume, never a different output.
+#[test]
+fn the_concurrency_conformance_programs_agree_or_say_that_a_task_would_have_to_resume() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/conformance/concurrency");
+    let mut n = 0;
+    for e in fs::read_dir(&dir).unwrap().flatten() {
+        let p = e.path();
+        if p.extension().is_some_and(|x| x == "wj") {
+            let src = fs::read_to_string(&p).unwrap();
+            same_or_refused(&p.display().to_string(), &src, 0);
+            n += 1;
+        }
+    }
+    assert!(n >= 4, "conformance programs missing");
+}

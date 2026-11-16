@@ -315,6 +315,12 @@ match value {
         });
 
         self.register_mutability_codes();
+        self.register_arena_codes();
+        self.register_concurrency_codes();
+    }
+
+    /// ADR-0025: `std::arena` (WJ0160, WJ0161).
+    fn register_arena_codes(&mut self) {
         // WJ0160: arena value escapes its arena (ADR-0025, `std::arena`, unstable)
         self.register(WjErrorCode {
             code: "WJ0160".to_string(),
@@ -345,6 +351,21 @@ fn label() -> string {
             maturity: GuaranteeMaturity::HighConfidence,
         });
 
+        // WJ0161: `std::arena` is unstable
+        self.register(WjErrorCode {
+            code: "WJ0161".to_string(),
+            title: "`std::arena` is unstable".to_string(),
+            explanation: "Arenas (ADR-0025) are behind the compiler feature `unstable_arenas`.".to_string(),
+            causes: vec!["`use std::arena` with a compiler built without `unstable_arenas`".to_string()],
+            solutions: vec!["Build the compiler with `cargo build --features unstable_arenas`".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::Proven,
+        });
+    }
+
+    /// ADR-0004: structured concurrency (WJ0190) and the removed `thread { }` / `<-` forms (WJ0191).
+    fn register_concurrency_codes(&mut self) {
         // WJ0190 / WJ0191: ADR-0004 structured concurrency and removed forms
         self.register(WjErrorCode {
             code: "WJ0190".to_string(),
@@ -362,18 +383,6 @@ fn label() -> string {
             explanation: "`thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them.".to_string(),
             causes: vec!["Code written before ADR-0004".to_string()],
             solutions: vec!["Run `wj fix <path>`".to_string()],
-            example: None,
-            rust_codes: vec![],
-            maturity: GuaranteeMaturity::Proven,
-        });
-
-        // WJ0161: `std::arena` is unstable
-        self.register(WjErrorCode {
-            code: "WJ0161".to_string(),
-            title: "`std::arena` is unstable".to_string(),
-            explanation: "Arenas (ADR-0025) are behind the compiler feature `unstable_arenas`.".to_string(),
-            causes: vec!["`use std::arena` with a compiler built without `unstable_arenas`".to_string()],
-            solutions: vec!["Build the compiler with `cargo build --features unstable_arenas`".to_string()],
             example: None,
             rust_codes: vec![],
             maturity: GuaranteeMaturity::Proven,

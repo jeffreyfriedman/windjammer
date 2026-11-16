@@ -21,6 +21,7 @@ fn add_one(n: int) -> int {
 }
 
 fn main() {
+    let sep = " "
     let t = spawn double(4)
     println("[spawn_call] ${t.wait()}")
 
@@ -46,6 +47,6 @@ fn main() {
     for task in tasks {
         out.push("${task.wait()}")
     }
-    println("[many] ${out.join(\" \")}")
+    println("[many] ${out.join(sep)}")
     println("[all] PASSED")
 }

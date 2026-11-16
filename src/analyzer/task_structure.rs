@@ -75,7 +75,10 @@ pub fn check(program: &Program<'_>) -> Vec<UnwaitedTask> {
         scope_depth: 0,
         out: Vec::new(),
     };
-    collect_task_fns(&program.items, &mut cx.task_fns);
+    // a program with its own `Task` type means that type, not `std` tasks
+    if !defines_task_type(&program.items) {
+        collect_task_fns(&program.items, &mut cx.task_fns);
+    }
     cx.items(&program.items);
     cx.out
 }
@@ -90,6 +93,15 @@ pub fn gate(program: &Program<'_>) -> Result<(), String> {
 
 fn is_task_type(t: &Type) -> bool {
     matches!(t, Type::Parameterized(n, _) | Type::Custom(n) if n == "Task")
+}
+
+fn defines_task_type(items: &[Item<'_>]) -> bool {
+    items.iter().any(|item| match item {
+        Item::Struct { decl, .. } => decl.name == "Task",
+        Item::Enum { decl, .. } => decl.name == "Task",
+        Item::Mod { items, .. } => defines_task_type(items),
+        _ => false,
+    })
 }
 
 fn collect_task_fns(items: &[Item<'_>], out: &mut HashSet<String>) {
@@ -181,12 +193,15 @@ impl Cx {
             _ => None,
         };
         if let Some((e, lost)) = found {
-            // a call records the position after its `)`; its callee's is where the call starts
-            let at = match e {
-                Expression::Call { function, .. } => function.location(),
-                _ => e.location(),
+            // a call records the position after its `)` and a name the position after the name: point at the
+            // start of the callee's name
+            let (line, column) = match e {
+                Expression::Call { function: Expression::Identifier { name, location }, .. } => {
+                    let (l, c) = pos(location);
+                    (l, c.saturating_sub(name.chars().count()).max(1))
+                }
+                _ => pos(&e.location()),
             };
-            let (line, column) = pos(&at);
             self.out.push(UnwaitedTask { line, column, lost });
         }
     }

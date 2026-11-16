@@ -29,6 +29,7 @@ fn parse_twice(s: string) -> Result<int, string> {
 }
 
 fn main() {
+    let sep = " "
     let t = start(4)
     println("[returned] ${t.wait()}")
 
@@ -39,7 +40,7 @@ fn main() {
         i -= 1
         out.push("${tasks[i].wait()}")
     }
-    println("[reverse_order] ${out.join(\" \")}")
+    println("[reverse_order] ${out.join(sep)}")
 
     let good = spawn parse_twice("10")
     let bad = spawn parse_twice("x")

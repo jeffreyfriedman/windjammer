@@ -14,16 +14,16 @@
     "conformance.backends": 3,
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 27,
-    "drift.corpus_cases": 1934,
-    "errors.codes_total": 74,
+    "drift.corpus_cases": 1940,
+    "errors.codes_total": 76,
     "interpreter.features_supported": 44,
     "interpreter.features_unsupported": 0,
     "intrinsics.count": 13,
-    "lexer.keywords": 44,
+    "lexer.keywords": 46,
     "lints.w_codes": 7,
-    "spec.example_files": 294,
+    "spec.example_files": 297,
     "stdlib.files": 43,
-    "tests.rust_files": 2046,
-    "tests.wj_programs": 2061
+    "tests.rust_files": 2064,
+    "tests.wj_programs": 2124
   }
 }

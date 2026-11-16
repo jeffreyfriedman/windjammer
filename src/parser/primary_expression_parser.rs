@@ -31,6 +31,11 @@ impl Parser {
         let expr = match self.current_token() {
             // `_`: a shorthand-closure parameter or a `|>` placeholder (parser/shorthand_closure.rs).
             Token::Underscore => self.shorthand_hole()?,
+            // ADR-0004 task forms: `spawn ..`, `async ..`, `scope { }` (parser/task_prefix.rs)
+            Token::Ident(_) | Token::Async if self.task_prefix_follows() => match self.try_parse_task_prefix()? {
+                Some(task) => task,
+                None => unreachable!("task_prefix_follows"),
+            },
             // `thread { }` was removed (WJ0191); `thread` before anything else is the `std::thread` module path
             Token::Thread if self.peek(1) == Some(&Token::LBrace) => return Err(self.removed_thread_block()),
             Token::Thread | Token::Async => {

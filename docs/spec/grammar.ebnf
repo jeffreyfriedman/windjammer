@@ -218,6 +218,11 @@ loop_expr    = [ label ] "loop" block ;
 (* ADR-0004: a task (`Task<T>`) or a scope that waits for the tasks started inside it. `spawn` and `scope` are
    soft keywords: a prefix only before a name, `self` or `{` on the same line. *)
 task_expr    = ( "spawn" | "async" ) ( call_expr | block ) | "scope" block ;
+(* ADR-0004 removed these forms: the parser rejects each with WJ0191 and `wj fix` rewrites them
+   (`spawn { }`, `ch.send(v)`, `ch.recv()`). *)
+(*@status unparsed *)
+(*@ctx fn main() { $$ } *)
+removed_conc = "thread" block | IDENT "<-" INT_LIT | "let" IDENT "=" "<-" IDENT ;
 
 (* An expression in an `if`/`while`/`for`/`match` head: a struct literal there would swallow the body's `{`,
    so the head grammar excludes struct literals and block-like expressions (wrap them in parentheses). *)

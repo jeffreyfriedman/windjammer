@@ -1,8 +1,10 @@
 // spec: SPEC-CONC-007
 // mode: parse-error
 // expect-error: WJ0191
+// oracle: check
 fn main() {
     thread {
+//~ ^^^^^^ ERROR WJ0191 `thread { }` was removed
         println("x")
     }
 }

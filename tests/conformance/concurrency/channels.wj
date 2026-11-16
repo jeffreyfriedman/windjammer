@@ -12,6 +12,7 @@
 use std::sync
 
 fn main() {
+    let sep = " "
     let (tx, rx) = sync::channel()
     scope {
         spawn {
@@ -23,7 +24,7 @@ fn main() {
         for _ in 0..5 {
             got.push("${rx.recv()}")
         }
-        println("[fifo] ${got.join(\" \")}")
+        println("[fifo] ${got.join(sep)}")
     }
 
     let (ptx, prx) = sync::channel()
@@ -63,7 +64,7 @@ fn main() {
         for _ in 0..3 {
             out.push("${b_rx.recv()}")
         }
-        println("[pipeline] ${out.join(\" \")}")
+        println("[pipeline] ${out.join(sep)}")
     }
     println("[all] PASSED")
 }
