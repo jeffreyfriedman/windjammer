@@ -113,32 +113,48 @@ turns, not program size (D7), and turns trace to friction events (ADR-0037).
 
 ## PC commands (quiet box, Linux; PLAN.md step 1)
 
+No root or package installs needed. `economics.wj` picks the best measuring path the machine has and records it in
+`env.counter` / `env.meter` of the results file:
+
+| Path | Used when | Gives |
+|---|---|---|
+| `-l` | macOS | CPU (children included), peak RSS, instructions and cycles of the process |
+| `-v perf ...` | GNU `time` and a working `perf` | CPU, peak RSS, instructions and cycles (children included) |
+| `-v` | GNU `time`, no perf | CPU, peak RSS |
+| `rusage` | no GNU `time` | `bench/economics/rusage_helper.rs` (built with rustc, no crates): CPU and peak RSS of all waited-for children via getrusage |
+| `wall` | nothing else | wall clock only, median of the runs |
+| `+ callgrind` | `--instr callgrind`, or automatically when valgrind is installed and neither perf nor macOS counters are | one extra run per command under `valgrind --tool=callgrind --trace-children=yes` for instructions |
+
+Results from different paths are not compared with each other; ratios inside one run always are.
+
 ```
-# once: toolchain and checkouts (any directory names)
+# once: any directory names
 git clone <windjammer> wj && git clone <windjammer-ecosystem> eco
 cd wj && git checkout <integration head>
 cargo build --release --bin wj
 export WJ_ECOSYSTEM=$PWD/../eco WJ=$PWD/target/release/wj
-sudo apt-get install -y time linux-tools-$(uname -r)     # GNU time -v and perf (instruction counts)
-sudo sysctl kernel.perf_event_paranoid=1                  # perf stat as a normal user
 
-# quiet check: load below 1 before each timed step, nothing else running
+# which paths work on this machine (each must say ok)
+$WJ run scripts/wj/economics.wj --selftest
+
+# quiet check: load below 1 before the timed step, nothing else running
 uptime
 
-# the suite (instructions from perf, CPU and wall from GNU time); an empty --target measures the cold build
+# the suite; an empty --target measures the cold dependency build first
 $WJ run scripts/wj/economics.wj --wj $WJ --target /tmp/econ-target-pc --label pc-$(date +%Y%m%d) --runs 5
+#   add --instr callgrind for instruction counts without perf (valgrind; slow)
 $WJ run scripts/wj/economics_report.wj bench/economics/results/pc-YYYYMMDD.json --md bench/economics/results/pc-YYYYMMDD.md
+$WJ run scripts/wj/economics_report.wj bench/economics/results/pc-YYYYMMDD.json --gate
 
-# wall-clock of the verify loop, alternating runs (D2 in seconds), for the record
+# wall-clock of the verify loop, alternating, median by eye (D2 in seconds)
 for i in 1 2 3 4 5; do
-  /usr/bin/time -f "wj %e s" $WJ run --interpret bench/agent-dx/solutions/wj/t011_lru_cache/main.wj < /dev/null > /dev/null
-  /usr/bin/time -f "rustc+run %e s" sh -c 'rustc --edition 2021 -C opt-level=0 -o /tmp/r bench/agent-dx/solutions/rust/t011_lru_cache/main.rs && /tmp/r < /dev/null > /dev/null'
+  /usr/bin/env time -p $WJ run --interpret bench/agent-dx/solutions/wj/t011_lru_cache/main.wj < /dev/null > /dev/null
+  /usr/bin/env time -p sh -c 'rustc --edition 2021 -C opt-level=0 -o /tmp/r bench/agent-dx/solutions/rust/t011_lru_cache/main.rs && /tmp/r < /dev/null > /dev/null'
 done
 rm -rf /tmp/econ-target-pc
 ```
 
-Commit `bench/economics/results/pc-*.{json,md}` and update the tables above with the PC numbers labelled "PC,
-quiet".
+Commit `bench/economics/results/pc-*.{json,md}` and add the PC rows above, labelled "PC, quiet".
 
 ## Reproduce the Mac numbers
 

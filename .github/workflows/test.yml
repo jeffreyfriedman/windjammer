@@ -85,6 +85,9 @@ jobs:
       - name: Economics D7 counts match the recorded suite (docs/economics/DEFINITION.md)
         run: ./target/release/wj run scripts/wj/economics.wj --static --check bench/economics/results/static.json
 
+      - name: Every economics measuring path on this runner measures a known command (time, rusage helper, wall, callgrind)
+        run: ./target/release/wj run scripts/wj/economics.wj --selftest
+
       - name: The advantages docs/economics claims hold in the committed measured run
         run: ./target/release/wj run scripts/wj/economics_report.wj bench/economics/results/mac-20261116.json --gate
 

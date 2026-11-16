@@ -46,6 +46,7 @@ use wj_json_doc::dumps
 use wj_proc::sh
 use wj_proc::quote
 use wj_table::fixed
+use wj_stats::median
 
 const DX: string = "bench/agent-dx"
 const PARITY: string = "benchmarks/rust_parity"
@@ -103,16 +104,68 @@ fn read(path: string) -> string {
 
 // ---------------------------------------------------------------- measuring one command
 
-// `/usr/bin/time -l` on macOS (it reports instructions retired); on Linux GNU `time -v`, plus `perf stat` for
-// instructions when perf is installed (instructions:u, child processes included)
-fn counter_flag() -> string {
-    if run_sh("uname -s").contains("Darwin") {
-        return "-l"
+// The measuring path ("meter"), chosen once per run and recorded in the results (`env.meter`):
+//   "-l"                      macOS `/usr/bin/time -l`: CPU, peak RSS, instructions and cycles of the process
+//   "-v" / "-v perf stat .."  GNU `time -v` (CPU, peak RSS), plus perf instructions/cycles when perf works
+//   "rusage:<helper>"         no `time` installed: bench/economics/rusage_helper.rs (compiled here with rustc) runs the
+//                             command and prints getrusage(RUSAGE_CHILDREN): CPU and peak RSS, no counters
+//   "wall"                    nothing else works: wall clock only (median of the runs)
+// `--meter time|rusage|wall` forces a path (`auto` by default). `--instr callgrind` adds one extra run per command
+// under `valgrind --tool=callgrind --trace-children=yes` for instruction counts (slow; for machines without perf).
+fn has_gnu_time() -> bool {
+    run_sh("/usr/bin/time -v true 2>&1").contains("Maximum resident set size")
+}
+
+fn rusage_helper(scratch: string) -> string {
+    let bin = scratch + "/rusage_helper"
+    let o = run_sh("rustc -O --edition 2021 -o " + quote(bin) + " " + quote(TWINS + "/../rusage_helper.rs") + " 2>&1 && echo built")
+    if !o.contains("built") {
+        return ""
     }
-    if run_sh("perf stat -x, -e instructions:u,cycles:u true 2>&1").contains("instructions") {
-        return "-v perf stat -x, -e instructions:u,cycles:u"
+    bin
+}
+
+fn choose_meter(want: string, scratch: string) -> string {
+    let darwin = run_sh("uname -s").contains("Darwin")
+    if want == "auto" || want == "time" {
+        if darwin {
+            return "-l"
+        }
+        if has_gnu_time() {
+            if run_sh("perf stat -x, -e instructions:u,cycles:u true 2>&1").contains("instructions") {
+                return "-v perf stat -x, -e instructions:u,cycles:u"
+            }
+            return "-v"
+        }
+        if want == "time" {
+            die("--meter time: neither /usr/bin/time -l nor GNU time -v is available")
+        }
     }
-    "-v"
+    if want == "auto" || want == "rusage" {
+        let h = rusage_helper(scratch)
+        if h != "" {
+            return "rusage:" + h
+        }
+        if want == "rusage" {
+            die("--meter rusage: cannot build bench/economics/rusage_helper.rs with rustc")
+        }
+    }
+    "wall"
+}
+
+fn meter_description(flag: string, callgrind: bool) -> string {
+    let base = if flag == "-l" {
+        "macOS /usr/bin/time -l: cpu (children included), peak rss, instructions and cycles of the process"
+    } else if flag.contains("perf") {
+        "GNU time -v + perf stat instructions:u,cycles:u (children included)"
+    } else if flag == "-v" {
+        "GNU time -v: cpu and peak rss (no counters)"
+    } else if flag.starts_with("rusage:") {
+        "rusage helper (getrusage RUSAGE_CHILDREN): cpu and peak rss (no counters)"
+    } else {
+        "wall clock only (median of the runs): no cpu, rss or counters"
+    }
+    if callgrind { base + "; instructions from valgrind callgrind (one extra run, children traced)" } else { base }
 }
 
 fn num_word(l: string, idx: int) -> f64 {
@@ -128,7 +181,16 @@ fn last_num(l: string) -> f64 {
 // One run of `cmd` (a shell fragment) inside `dir`, stdin from `stdin_file` ("" = /dev/null).
 fn measure_once(dir: string, cmd: string, stdin_file: string, flag: string) -> M {
     let input = if stdin_file == "" { "/dev/null" } else { quote(stdin_file) }
-    let line = "f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; cd " + quote(dir) + " || exit 98; /usr/bin/time " + flag + " " + cmd + " <" + input + " 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
+    let wrapped = if flag.starts_with("rusage:") {
+        quote(flag[7..].to_string()) + " " + quote(cmd)
+    } else if flag == "wall" {
+        cmd
+    } else if flag == "callgrind" {
+        "valgrind --tool=callgrind --callgrind-out-file=/dev/null --trace-children=yes " + cmd
+    } else {
+        "/usr/bin/time " + flag + " " + cmd
+    }
+    let line = "f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; cd " + quote(dir) + " || exit 98; " + wrapped + " <" + input + " 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
     let t0 = Instant::now()
     let out = match sh(line) {
         Ok(o) => o,
@@ -159,6 +221,18 @@ fn measure_once(dir: string, cmd: string, stdin_file: string, flag: string) -> M
             m.rss = num_word(l, 0) as int
         } else if l.contains("Maximum resident set size (kbytes)") {
             m.rss = (last_num(l) * 1024.0) as int
+        } else if l.contains("rusage-helper: ") {
+            for w in strings.split_whitespace(l) {
+                let kv = w.split("=").collect::<Vec<string>>()
+                if kv.len() == 2 {
+                    let v = kv[1].parse::<f64>() ?? 0.0
+                    if kv[0] == "user" || kv[0] == "sys" { m.cpu = m.cpu + v }
+                    if kv[0] == "maxrss_kb" { m.rss = (v * 1024.0) as int }
+                    if kv[0] == "wall" { m.wall = v }
+                }
+            }
+        } else if l.contains("Collected :") {
+            m.instr = m.instr + (last_num(l) as int)
         } else if l.contains("User time (seconds)") {
             m.cpu = m.cpu + last_num(l)
         } else if l.contains("System time (seconds)") {
@@ -168,9 +242,13 @@ fn measure_once(dir: string, cmd: string, stdin_file: string, flag: string) -> M
     m
 }
 
-// Smallest of `runs` runs (each field separately: noise only adds).
-fn measure(dir: string, cmd: string, stdin_file: string, runs: int, flag: string) -> M {
+// Smallest of `runs` runs (each counter separately: noise only adds); wall is the median of the runs. With
+// `CALLGRIND` set (flag suffix "+cg"), one more run under callgrind supplies the instruction count.
+fn measure(dir: string, cmd: string, stdin_file: string, runs: int, flag_cg: string) -> M {
+    let callgrind = flag_cg.ends_with("+cg")
+    let flag = if callgrind { flag_cg[0..flag_cg.len() - 3].to_string() } else { flag_cg }
     let mut best = measure_once(dir, cmd, stdin_file, flag)
+    let mut walls: Vec<f64> = [best.wall]
     let mut i = 1
     while i < runs && best.status == 0 {
         let m = measure_once(dir, cmd, stdin_file, flag)
@@ -178,10 +256,18 @@ fn measure(dir: string, cmd: string, stdin_file: string, runs: int, flag: string
         if m.rss > 0 && m.rss < best.rss { best.rss = m.rss }
         if m.cycles > 0 && (best.cycles == 0 || m.cycles < best.cycles) { best.cycles = m.cycles }
         if m.cpu < best.cpu { best.cpu = m.cpu }
-        if m.wall < best.wall { best.wall = m.wall }
+        walls.push(m.wall)
         i += 1
     }
+    best.wall = median_of(walls)
+    if callgrind && best.status == 0 {
+        best.instr = measure_once(dir, cmd, stdin_file, "callgrind").instr
+    }
     best
+}
+
+fn median_of(xs: Vec<f64>) -> f64 {
+    if xs.len() == 0 { 0.0 } else { median(xs) }
 }
 
 fn m_json(m: M) -> Json {
@@ -585,6 +671,39 @@ fn check_static(results: Json, path: string) -> int {
     bad
 }
 
+// --selftest: every measuring path this machine offers measures a small known command, and each reports what it
+// claims to (output and exit status always; CPU and peak RSS for time/rusage; instructions for callgrind/perf/-l).
+fn selftest(scratch: string) -> int {
+    let cmd = "sh -c 'i=0; while [ $i -lt 300000 ]; do i=$((i+1)); done; echo ok'"
+    let mut meters: Vec<string> = Vec::new()
+    let auto = choose_meter("auto", scratch)
+    meters.push(auto)
+    let h = rusage_helper(scratch)
+    if h != "" && !meters.contains("rusage:" + h) { meters.push("rusage:" + h) }
+    meters.push("wall")
+    if run_sh("command -v valgrind").len() > 0 { meters.push("callgrind") }
+    let mut failed = 0
+    for mtr in meters {
+        let m = measure_once(scratch, cmd, "", mtr)
+        let mut problems: Vec<string> = Vec::new()
+        if m.status != 0 || strings.trim(m.stdout) != "ok" { problems.push("status ${m.status}, stdout `${strings.trim(m.stdout)}`") }
+        if m.wall <= 0.0 { problems.push("no wall time") }
+        let counts_cpu = mtr == "-l" || mtr.starts_with("-v") || mtr.starts_with("rusage:")
+        if counts_cpu && m.cpu <= 0.0 { problems.push("no cpu") }
+        if counts_cpu && m.rss <= 0 { problems.push("no peak rss") }
+        let counts_instr = mtr == "-l" || mtr.contains("perf") || mtr == "callgrind"
+        if counts_instr && m.instr <= 0 { problems.push("no instruction count") }
+        let name = if mtr.starts_with("rusage:") { "rusage" } else { mtr }
+        if problems.len() == 0 {
+            println("ok   ${name}: wall ${fixed(m.wall, 3)} s, cpu ${fixed(m.cpu, 3)} s, rss ${m.rss / 1024} KB, instr ${m.instr}")
+        } else {
+            println("FAIL ${name}: ${problems.join("; ")}")
+            failed += 1
+        }
+    }
+    if failed > 0 { 1 } else { 0 }
+}
+
 // ---------------------------------------------------------------- main
 
 fn main() {
@@ -594,8 +713,8 @@ fn main() {
     let target = match long_flag_value(args, "target") {
         Some(t) => t,
         None => {
-            if !static_only {
-                eprintln("usage: economics.wj (--target DIR | --static) [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S] [--no-shipped] [--label NAME]")
+            if !static_only && !has_long_flag(args, "selftest") {
+                eprintln("usage: economics.wj (--target DIR | --static | --selftest) [--meter auto|time|rusage|wall] [--instr auto|callgrind|none] [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S] [--no-shipped] [--label NAME]")
                 process.exit(2)
             }
             ""
@@ -608,8 +727,16 @@ fn main() {
     let suite = long_flag_value_or(args, "suite", "")
     let shipped = !has_long_flag(args, "no-shipped")
     let label = long_flag_value_or(args, "label", "latest")
-    let flag = counter_flag()
     let scratch = strings.trim(run_sh("mktemp -d /tmp/wj-econ.XXXXXX")).to_string()
+    let meter = choose_meter(long_flag_value_or(args, "meter", "auto"), scratch)
+    let want_cg = long_flag_value_or(args, "instr", "auto")
+    let callgrind = want_cg == "callgrind" || (want_cg == "auto" && !meter.contains("perf") && meter != "-l" && run_sh("command -v valgrind").len() > 0 && !static_only)
+    if has_long_flag(args, "selftest") {
+        let code = selftest(scratch)
+        let _ = run_sh("rm -rf " + quote(scratch))
+        process.exit(code)
+    }
+    let flag = if callgrind { meter + "+cg" } else { meter }
     let _ = run_sh("mkdir -p " + quote(out_dir) + (if target == "" { "" } else { " " + quote(target) }))
 
     let mut env_doc = object()
@@ -618,7 +745,8 @@ fn main() {
     env_doc = with(env_doc, "uname", from_str(strings.trim(run_sh("uname -sm")).to_string()))
     env_doc = with(env_doc, "head", from_str(strings.trim(run_sh("git rev-parse --short=12 HEAD 2>/dev/null")).to_string()))
     env_doc = with(env_doc, "load_start", from_str(strings.trim(run_sh("uptime")).to_string()))
-    env_doc = with(env_doc, "counter", from_str(if flag == "-l" { "macOS /usr/bin/time -l (instructions retired: the process itself)" } else if flag.contains("perf") { "GNU time -v + perf stat instructions:u (children included)" } else { "GNU time -v (no instruction counter: compare cpu)" }))
+    env_doc = with(env_doc, "counter", from_str(meter_description(meter, callgrind)))
+    env_doc = with(env_doc, "meter", from_str(if meter.starts_with("rusage:") { "rusage" } else { meter }))
 
     // dependency cache: build it cold once (measured), then reuse it for every generated program
     let first = programs()[0]
