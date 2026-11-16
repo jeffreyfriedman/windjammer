@@ -164,6 +164,20 @@ pub fn missing_modules(path: &Path) -> Result<Checked> {
     Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 
+/// The `WJ0013` diagnostics (a call with the wrong number of arguments) of the program at `path`, exactly as
+/// `wj check` reports them from the resolved callee's declaration; `wj build` stops on these before generating code.
+pub fn call_arity(path: &Path) -> Result<Checked> {
+    let (sources, _) = inputs(path)?;
+    let mut sink = Vec::new();
+    let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+    let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
+    let by_file: HashMap<String, &front::Parsed> = refs.iter().map(|p| (p.file.clone(), *p)).collect();
+    let mut found = Vec::new();
+    project::resolve_phase(path, &refs, &by_file, &mut found);
+    found.retain(|d| d.code == "WJ0013");
+    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+}
+
 /// `local_mutability` over in-memory sources (one program); files that do not parse are left out.
 pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic> {
     let previous = std::panic::take_hook();
