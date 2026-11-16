@@ -972,3 +972,22 @@ statement = "Diagnostic format: `human` (default) or `agent`, one compact line p
 [[promise]]
 id = "wj run --error-format"
 statement = "Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command"
+
+[[promise]]
+id = "code WJ0173"
+
+[[promise]]
+id = "wj lock"
+statement = "Resolve dependencies and write or verify wj.lock (exact revisions and content hashes)"
+
+[[promise]]
+id = "wj lock update"
+statement = "Re-resolve every path and git dependency, in dependency order, and write wj.lock"
+
+[[promise]]
+id = "wj lock check"
+statement = "Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not"
+
+[[promise]]
+id = "wj build --locked"
+statement = "Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds)"

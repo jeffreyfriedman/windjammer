@@ -1,0 +1,763 @@
+// Conformance on every backend (ADR-0007): one command that runs the conformance programs and the spec's run cases on each
+// backend this machine can run, records the result per (backend, suite, program), and keeps docs/TARGET_TIERS.md true.
+//
+//   wj run scripts/wj/target_tiers.wj check
+//       Cheap and toolchain-free; the gate. Fails when
+//         - docs/TARGET_TIERS.md differs from what tests/conformance/backend_results.tsv + backend_ledger.tsv generate,
+//         - a program has no result row for a backend (or a row names a program that no longer exists),
+//         - a failing (backend, program) is not in the ledger, or a ledger entry no longer fails (the ledger only shrinks),
+//         - the ledger is larger than backend_ratchet.tsv allows, or smaller without the ratchet being lowered.
+//   wj run scripts/wj/target_tiers.wj run <wj-binary> [--backend NAME]... [--suite conformance|spec] [--only SUBSTR]
+//       Runs the programs through the named backends (default: every backend), rewrites backend_results.tsv for the
+//       backends it ran and docs/TARGET_TIERS.md. A backend whose toolchain is missing is reported "not run" with the
+//       missing tool; its earlier rows (from a machine that has the tool) are kept, else they read `not-run`.
+//   wj run scripts/wj/target_tiers.wj table       regenerate docs/TARGET_TIERS.md from the recorded results
+//   wj run scripts/wj/target_tiers.wj --selftest  the judge and the table generator against planted inputs
+//
+// Result per program: `pass`, `fail` (built, wrong output or status), `build` (wj or the toolchain rejected it),
+// `not-run` (no toolchain here). Tier 1 = every program passes on a backend; Tier 2 = experimental, the failing list is exact.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+const RESULTS: string = "tests/conformance/backend_results.tsv"
+const LEDGER: string = "tests/conformance/backend_ledger.tsv"
+const RATCHET: string = "tests/conformance/backend_ratchet.tsv"
+const TABLE: string = "docs/TARGET_TIERS.md"
+
+struct Program {
+    suite: string,
+    name: string,
+    file: string,
+    mode: string,
+    expect: Vec<string>,
+    expect_error: string,
+    expect_exit: int,
+}
+
+struct Row {
+    backend: string,
+    suite: string,
+    program: string,
+    status: string,
+}
+
+struct Entry {
+    backend: string,
+    suite: string,
+    program: string,
+    reason: string,
+}
+
+fn backends() -> Vec<string> {
+    ["rust", "javascript", "typescript", "go", "wasm", "interpreter"]
+}
+
+// (the tool a backend needs, the shell test that finds it)
+fn toolchain(backend: string) -> string {
+    if backend == "rust" { return "rustc" }
+    if backend == "javascript" { return "node" }
+    if backend == "typescript" { return "node" }
+    if backend == "go" { return "go" }
+    ""
+}
+
+fn have_tool(backend: string) -> string {
+    if backend == "wasm" {
+        // the Rust backend's output built for `wasm32-wasip1` and run under wasmtime: it measures the WebAssembly platform
+        // (`wj build -t wasm` itself emits a browser library, a wasm-bindgen cdylib, which has no headless runner)
+        match sh("command -v wasmtime") {
+            Ok(r) => {
+                if r.status != 0 {
+                    return "wasmtime is not installed"
+                }
+            },
+            Err(_) => { return "cannot look for wasmtime" },
+        }
+        match sh("rustc --print target-libdir --target wasm32-wasip1 >/dev/null 2>&1 && test -d \"$(rustc --print target-libdir --target wasm32-wasip1)\"") {
+            Ok(r) => {
+                if r.status != 0 {
+                    return "the rust target wasm32-wasip1 is not installed (rustup target add wasm32-wasip1)"
+                }
+            },
+            Err(_) => { return "cannot look for the wasm32-wasip1 target" },
+        }
+        return ""
+    }
+    let tool = toolchain(backend)
+    if tool == "" {
+        return ""
+    }
+    match sh("command -v ${tool}") {
+        Ok(r) => {
+            if r.status != 0 {
+                return "${tool} is not installed"
+            }
+        },
+        Err(_) => { return "cannot look for ${tool}" },
+    }
+    if backend == "typescript" {
+        // Node strips types from 22.6 on
+        match sh("node -e 'const [a,b]=process.versions.node.split(\".\").map(Number);process.exit(a>22||(a===22&&b>=6)?0:1)'") {
+            Ok(r) => {
+                if r.status != 0 {
+                    return "node older than 22.6 (no type stripping)"
+                }
+            },
+            Err(_) => { return "cannot run node" },
+        }
+    }
+    ""
+}
+
+fn header_value(line: string, key: string) -> Option<string> {
+    let prefix = "// ${key}:"
+    if strings.starts_with(line, prefix) {
+        let rest = line[prefix.len()..].to_string()
+        if strings.starts_with(rest, " ") {
+            return Some(rest[1..].to_string())
+        }
+        return Some(rest)
+    }
+    None
+}
+
+fn collect(dir: string, out: Vec<string>) -> Vec<string> {
+    let mut acc = out
+    match fs.read_dir(dir) {
+        Ok(entries) => {
+            let mut names: Vec<string> = Vec::new()
+            for e in entries {
+                names.push(e.path())
+            }
+            names.sort()
+            for p in names {
+                if fs.is_dir(p) {
+                    acc = collect(p, acc)
+                } else if strings.ends_with(p, ".wj") {
+                    acc.push(p)
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    acc
+}
+
+// tests/conformance: the `// EXPECTED OUTPUT:` comment block (to the first blank comment line); the program ends with PASSED
+fn conformance_program(root: string, file: string) -> Program {
+    let rel = strings.replace(file, "${root}/", "")
+    let mut expect: Vec<string> = Vec::new()
+    let mut inside = false
+    for line in strings.split_lines(fs.read_to_string(file).unwrap_or("")) {
+        if inside {
+            if !strings.starts_with(line, "// ") {
+                break
+            }
+            expect.push(line[3..].to_string())
+        } else if strings.starts_with(line, "// EXPECTED OUTPUT:") {
+            inside = true
+        }
+    }
+    Program { suite: "conformance", name: strings.replace(rel, ".wj", ""), file: file, mode: "run", expect: expect, expect_error: "", expect_exit: 0 }
+}
+
+// tests/spec: the `// expect:` / `// mode:` header; only `run` and `panic` cases have an output to compare
+fn spec_program(root: string, file: string) -> Option<Program> {
+    let rel = strings.replace(file, "${root}/", "")
+    let mut p = Program { suite: "spec", name: strings.replace(rel, ".wj", ""), file: file, mode: "run", expect: Vec::new(), expect_error: "", expect_exit: -1 }
+    let mut comparable = true
+    for line in strings.split_lines(fs.read_to_string(file).unwrap_or("")) {
+        if !strings.starts_with(line, "//") {
+            break
+        }
+        match header_value(line, "mode") {
+            Some(v) => { p.mode = strings.trim(v) },
+            None => {},
+        }
+        match header_value(line, "expect") {
+            Some(v) => { p.expect.push(v) },
+            None => {},
+        }
+        match header_value(line, "expect-error") {
+            Some(v) => { p.expect_error = v },
+            None => {},
+        }
+        match header_value(line, "expect-exit") {
+            Some(v) => { p.expect_exit = strings.trim(v).parse::<int>().unwrap_or(-1) },
+            None => {},
+        }
+        if strings.starts_with(line, "// xfail:") || strings.starts_with(line, "// manifest:") || strings.starts_with(line, "// profile:") || strings.starts_with(line, "// seed:") || strings.starts_with(line, "// faults:") {
+            comparable = false
+        }
+    }
+    if p.mode != "run" && p.mode != "panic" {
+        comparable = false
+    }
+    if p.mode == "panic" && p.expect_exit < 0 {
+        p.expect_exit = 101
+    }
+    if p.mode == "run" && p.expect_exit < 0 {
+        p.expect_exit = 0
+    }
+    if comparable { Some(p) } else { None }
+}
+
+fn corpus() -> Vec<Program> {
+    let mut out: Vec<Program> = Vec::new()
+    for f in collect("tests/conformance", Vec::new()) {
+        out.push(conformance_program("tests/conformance", f))
+    }
+    for f in collect("tests/spec", Vec::new()) {
+        match spec_program("tests/spec", f) {
+            Some(p) => { out.push(p) },
+            None => {},
+        }
+    }
+    out
+}
+
+// the judgement of one finished run against the program's expectation: "pass" or "fail"
+fn judge(p: Program, status: int, stdout: string, stderr: string) -> string {
+    let mut ok = status == p.expect_exit
+    if ok && p.mode == "run" {
+        ok = strings.trim_end(stdout) == strings.trim_end(strings.join(p.expect, "\n"))
+    }
+    if ok && p.mode == "panic" && p.expect_error != "" {
+        ok = strings.contains(stderr, p.expect_error) || strings.contains(stdout, p.expect_error)
+    }
+    if ok { "pass" } else { "fail" }
+}
+
+// the first line of a log that says what went wrong (an `error` line when there is one)
+fn first_line(text: string) -> string {
+    let mut first = ""
+    for line in strings.split_lines(text) {
+        let t = strings.split(strings.trim(line), " [/")[0]
+        if t == "" || strings.starts_with(t, "wj: this wj") {
+            continue
+        }
+        if first == "" {
+            first = t
+        }
+        if strings.contains(t, "error") || strings.contains(t, "Error") || strings.contains(t, "panicked") || strings.contains(t, "unsupported") {
+            return t
+        }
+    }
+    first
+}
+
+// where the output first differs from the expectation
+fn mismatch(p: Program, stdout: string) -> string {
+    let got = strings.split_lines(strings.trim_end(stdout))
+    let mut i = 0
+    while i < p.expect.len() && i < got.len() {
+        if strings.trim_end(got[i]) != strings.trim_end(p.expect[i]) {
+            return "output line ${i + 1}: got `${got[i]}`, wanted `${p.expect[i]}`"
+        }
+        i += 1
+    }
+    if got.len() != p.expect.len() {
+        return "output has ${got.len()} line(s), wanted ${p.expect.len()}"
+    }
+    "output differs"
+}
+
+fn limited(cmd: string) -> string {
+    // a hung program must not hang the gate
+    "perl -e 'alarm 120; exec @ARGV' sh -c ${quote(cmd)}"
+}
+
+// build and run one program on one backend; the status token
+fn run_one(wj: string, backend: string, p: Program, scratch: string) -> string {
+    let n = strings.replace(strings.replace(p.name, "/", "_"), ".", "_")
+    let dir = "${scratch}/${backend}/${n}"
+    let _ = sh("mkdir -p ${quote(dir)}")
+    let src = "${dir}/${n}.wj"
+    let _ = sh("cp ${quote(p.file)} ${quote(src)}")
+    let w = quote(wj)
+    let out = "${dir}/out"
+    let mut build = ""
+    let mut exec = ""
+    if backend == "rust" {
+        build = "${w} build --no-lint ${quote(src)} -o ${quote(out)} --no-cargo && test -f ${quote(out)}/${n}.rs && rustc --edition 2021 -A warnings --crate-name conf -o ${quote(dir)}/prog ${quote(out)}/${n}.rs"
+        exec = "${quote(dir)}/prog"
+    } else if backend == "javascript" {
+        build = "${w} build --no-lint ${quote(src)} -t javascript -o ${quote(out)} && test -f ${quote(out)}/main.mjs"
+        exec = "cd ${quote(out)} && node main.mjs"
+    } else if backend == "typescript" {
+        build = "${w} build --no-lint ${quote(src)} -t typescript -o ${quote(out)} && test -f ${quote(out)}/main.ts"
+        exec = "cd ${quote(out)} && node --experimental-strip-types --no-warnings main.ts"
+    } else if backend == "go" {
+        build = "${w} build --no-lint ${quote(src)} -t go -o ${quote(out)} && cd ${quote(out)} && go vet ./... && go build -o ${quote(dir)}/prog ."
+        exec = "${quote(dir)}/prog"
+    } else if backend == "wasm" {
+        build = "${w} build --no-lint ${quote(src)} -o ${quote(out)} --no-cargo && test -f ${quote(out)}/${n}.rs && rustc --target wasm32-wasip1 --edition 2021 -A warnings --crate-name conf -o ${quote(dir)}/prog.wasm ${quote(out)}/${n}.rs"
+        exec = "wasmtime run ${quote(dir)}/prog.wasm"
+    } else {
+        build = "true"
+        exec = "${w} run --interpret --no-lint ${quote(src)}"
+    }
+    match sh(limited("( " + build + " ) > " + quote(dir) + "/build.log 2>&1")) {
+        Ok(r) => {
+            if r.status != 0 {
+                let log = fs.read_to_string("${dir}/build.log").unwrap_or("")
+                return "build|${first_line(log)}"
+            }
+        },
+        Err(_) => { return "build" },
+    }
+    match sh(limited(exec + " < /dev/null")) {
+        Ok(r) => {
+            let verdict = judge(p, r.status, r.stdout, r.stderr)
+            if verdict != "pass" {
+                if r.status == p.expect_exit && p.mode == "run" {
+                    return "${verdict}|${mismatch(p, r.stdout)}"
+                }
+                return "${verdict}|exit ${r.status} (wanted ${p.expect_exit}): ${first_line(r.stderr)}"
+            }
+            verdict
+        },
+        Err(_) => { "build" },
+    }
+}
+
+fn read_rows() -> Vec<Row> {
+    let mut rows: Vec<Row> = Vec::new()
+    for line in strings.split_lines(fs.read_to_string(RESULTS).unwrap_or("")) {
+        if line == "" || strings.starts_with(line, "#") {
+            continue
+        }
+        let f = strings.split(line, "\t")
+        if f.len() == 4 {
+            rows.push(Row { backend: f[0], suite: f[1], program: f[2], status: f[3] })
+        }
+    }
+    rows
+}
+
+fn read_ledger() -> Vec<Entry> {
+    let mut rows: Vec<Entry> = Vec::new()
+    for line in strings.split_lines(fs.read_to_string(LEDGER).unwrap_or("")) {
+        if line == "" || strings.starts_with(line, "#") {
+            continue
+        }
+        let f = strings.split(line, "\t")
+        if f.len() == 4 {
+            rows.push(Entry { backend: f[0], suite: f[1], program: f[2], reason: f[3] })
+        }
+    }
+    rows
+}
+
+fn read_ratchet() -> Vec<Row> {
+    let mut rows: Vec<Row> = Vec::new()
+    for line in strings.split_lines(fs.read_to_string(RATCHET).unwrap_or("")) {
+        if line == "" || strings.starts_with(line, "#") {
+            continue
+        }
+        let f = strings.split(line, "\t")
+        if f.len() == 3 {
+            rows.push(Row { backend: f[0], suite: f[1], program: "", status: f[2] })
+        }
+    }
+    rows
+}
+
+// `# measured <backend> <identity>` header lines: what built the rows of that backend
+fn read_measured() -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for line in strings.split_lines(fs.read_to_string(RESULTS).unwrap_or("")) {
+        if strings.starts_with(line, "# measured ") {
+            out.push(line)
+        }
+    }
+    out
+}
+
+fn status_of(rows: Vec<Row>, backend: string, suite: string, program: string) -> string {
+    for r in rows {
+        if r.backend == backend && r.suite == suite && r.program == program {
+            return r.status
+        }
+    }
+    "absent"
+}
+
+fn is_failure(status: string) -> bool {
+    status == "fail" || status == "build"
+}
+
+fn ledger_has(ledger: Vec<Entry>, backend: string, suite: string, program: string) -> bool {
+    for e in ledger {
+        if e.backend == backend && e.suite == suite && e.program == program {
+            return true
+        }
+    }
+    false
+}
+
+fn suites() -> Vec<string> {
+    ["conformance", "spec"]
+}
+
+fn count(rows: Vec<Row>, backend: string, suite: string, status: string) -> int {
+    let mut n = 0
+    for r in rows {
+        if r.backend == backend && r.suite == suite && (status == "*" || r.status == status) {
+            n += 1
+        }
+    }
+    n
+}
+
+fn tier_of(rows: Vec<Row>, backend: string) -> string {
+    let mut total = 0
+    let mut pass = 0
+    let mut not_run = 0
+    for r in rows {
+        if r.backend == backend {
+            total += 1
+            if r.status == "pass" {
+                pass += 1
+            }
+            if r.status == "not-run" {
+                not_run += 1
+            }
+        }
+    }
+    if total == 0 || not_run == total {
+        return "not measured"
+    }
+    if pass == total {
+        return "Tier 1"
+    }
+    if not_run > 0 {
+        return "Tier 2 (partly measured)"
+    }
+    "Tier 2"
+}
+
+fn reason_of(ledger: Vec<Entry>, backend: string, suite: string, program: string) -> string {
+    for e in ledger {
+        if e.backend == backend && e.suite == suite && e.program == program {
+            return e.reason
+        }
+    }
+    "(no ledger entry)"
+}
+
+// docs/TARGET_TIERS.md: a pure function of the recorded rows, the ledger and the measurement headers
+fn render(rows: Vec<Row>, ledger: Vec<Entry>, measured: Vec<string>) -> string {
+    let mut s = "# Target tiers\n\n"
+    s = s + "<!-- generated by scripts/wj/target_tiers.wj from tests/conformance/backend_results.tsv and backend_ledger.tsv; do not edit -->\n\n"
+    s = s + "What each backend can run today, measured by the conformance programs (`tests/conformance`) and the spec's run cases (`tests/spec`) ([ADR-0007](adr/0007-target-tiers-conformance.md)).\n"
+    s = s + "**Tier 1**: every program passes, no exception. **Tier 2**: experimental; the programs that fail are listed below, exactly, with the reason. "
+    s = s + "`not run`: the toolchain is not installed on the machine that measured; the commands to fill it in are at the end.\n\n"
+    s = s + "| Backend | Tier | conformance | spec run cases | failing | not run |\n|---|---|---|---|---|---|\n"
+    for b in backends() {
+        let mut cells = ""
+        let mut failing = 0
+        let mut nr = 0
+        for su in suites() {
+            let total = count(rows, b, su, "*")
+            let pass = count(rows, b, su, "pass")
+            let skipped = count(rows, b, su, "not-run")
+            failing = failing + count(rows, b, su, "fail") + count(rows, b, su, "build")
+            nr = nr + skipped
+            cells = cells + "| ${pass}/${total} "
+        }
+        s = s + "| ${b} | ${tier_of(rows, b)} ${cells}| ${failing} | ${nr} |\n"
+    }
+    s = s + "\n## Failing programs (the ledger)\n\n"
+    s = s + "The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_tiers.wj check` fails when a listed program passes, or when a failing program is not listed).\n"
+    let mut any = false
+    for b in backends() {
+        let mut lines = ""
+        for r in rows {
+            if r.backend == b && is_failure(r.status) {
+                lines = lines + "- `${r.suite}/${r.program}` (${r.status}): ${reason_of(ledger, b, r.suite, r.program)}\n"
+            }
+        }
+        if lines != "" {
+            any = true
+            s = s + "\n### ${b}\n\n" + lines
+        }
+    }
+    if !any {
+        s = s + "\nNo backend has a failing program.\n"
+    }
+    s = s + "\n## Not measured\n\n"
+    s = s + "- `wasm`: measured as the Rust backend's output built for `wasm32-wasip1` and run under `wasmtime` (the WebAssembly platform). A machine with `wasmtime` and `rustup target add wasm32-wasip1` runs it; any other machine records `not-run`. `wj build -t wasm` itself emits a browser library (a wasm-bindgen cdylib crate) that has no headless runner, so that target is not covered by this row.\n"
+    s = s + "\n## Measured with\n\n"
+    if measured.len() == 0 {
+        s = s + "nothing yet (run `target_tiers.wj run`)\n"
+    }
+    for m in measured {
+        s = s + "- " + strings.replace(m, "# measured ", "") + "\n"
+    }
+    s = s + "\n## Filling in what this machine could not run\n\n"
+    s = s + "A machine with the toolchains runs `wj run scripts/wj/target_tiers.wj run <wj-binary> --backend <name>` (names: rust, javascript, typescript, go, wasm, interpreter; "
+    s = s + "needs rustc, node >= 22.6, go, wasmtime plus the wasm32-wasip1 target respectively), commits `tests/conformance/backend_results.tsv` and `docs/TARGET_TIERS.md`, and adds a ledger line with a reason for every failure.\n"
+    s
+}
+
+fn check() -> bool {
+    let rows = read_rows()
+    let ledger = read_ledger()
+    let ratchet = read_ratchet()
+    let progs = corpus()
+    let mut problems: Vec<string> = Vec::new()
+    for b in backends() {
+        for p in progs {
+            if status_of(rows, b, p.suite, p.name) == "absent" {
+                problems.push("no result for ${b} ${p.suite}/${p.name}: run `target_tiers.wj run` (a new program)")
+            }
+        }
+    }
+    for r in rows {
+        let mut found = false
+        for p in progs {
+            if p.suite == r.suite && p.name == r.program {
+                found = true
+            }
+        }
+        if !found {
+            problems.push("result row for ${r.backend} ${r.suite}/${r.program}: the program no longer exists")
+        }
+        if r.status != "pass" && r.status != "fail" && r.status != "build" && r.status != "not-run" {
+            problems.push("unknown status ${r.status} for ${r.suite}/${r.program}")
+        }
+        if is_failure(r.status) && !ledger_has(ledger, r.backend, r.suite, r.program) {
+            problems.push("${r.backend} fails ${r.suite}/${r.program} and the ledger does not list it (a failure needs a reason: ${LEDGER})")
+        }
+    }
+    for e in ledger {
+        let st = status_of(rows, e.backend, e.suite, e.program)
+        if !is_failure(st) {
+            problems.push("ledger lists ${e.backend} ${e.suite}/${e.program} but it is ${st}: remove the entry (the ledger only shrinks)")
+        }
+        if e.reason == "" {
+            problems.push("ledger entry ${e.backend} ${e.suite}/${e.program} has no reason")
+        }
+    }
+    for b in backends() {
+        for su in suites() {
+            let mut n = 0
+            for e in ledger {
+                if e.backend == b && e.suite == su {
+                    n += 1
+                }
+            }
+            let mut limit = -1
+            for r in ratchet {
+                if r.backend == b && r.suite == su {
+                    limit = r.status.parse::<int>().unwrap_or(-1)
+                }
+            }
+            if limit < 0 {
+                problems.push("${RATCHET} has no limit for ${b} ${su}")
+            } else if n > limit {
+                problems.push("the ${b} ${su} ledger has ${n} entries, the ratchet allows ${limit}: the ledger may not grow")
+            } else if n < limit {
+                problems.push("the ${b} ${su} ledger shrank to ${n}: lower its ratchet in ${RATCHET} from ${limit} to ${n}")
+            }
+        }
+    }
+    let want = render(rows, ledger, read_measured())
+    let have = fs.read_to_string(TABLE).unwrap_or("")
+    if want != have {
+        problems.push("${TABLE} is stale: regenerate it with `wj run scripts/wj/target_tiers.wj table`")
+    }
+    for p in problems {
+        println("tiers: ${p}")
+    }
+    if problems.len() == 0 {
+        println("tiers: ${progs.len()} programs x ${backends().len()} backends recorded, ledger and ratchet agree, ${TABLE} is current")
+        return true
+    }
+    println("tiers: ${problems.len()} problem(s)")
+    false
+}
+
+fn write_rows(rows: Vec<Row>, measured: Vec<string>) {
+    let mut s = "# generated by scripts/wj/target_tiers.wj run; commit it. backend <TAB> suite <TAB> program <TAB> pass|fail|build|not-run\n"
+    for m in measured {
+        s = s + m + "\n"
+    }
+    for r in rows {
+        s = s + "${r.backend}\t${r.suite}\t${r.program}\t${r.status}\n"
+    }
+    let _ = fs.write(RESULTS, s)
+}
+
+fn run_mode(args: Vec<string>) -> bool {
+    if args.len() < 3 {
+        println("usage: target_tiers.wj run <wj-binary> [--backend NAME]... [--suite conformance|spec] [--only SUBSTR]")
+        return false
+    }
+    let wj = args[2]
+    let mut wanted: Vec<string> = Vec::new()
+    let mut suite = ""
+    let mut only = ""
+    let mut i = 3
+    while i < args.len() {
+        if args[i] == "--backend" && i + 1 < args.len() {
+            wanted.push(args[i + 1])
+            i += 1
+        } else if args[i] == "--suite" && i + 1 < args.len() {
+            suite = args[i + 1]
+            i += 1
+        } else if args[i] == "--only" && i + 1 < args.len() {
+            only = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    if wanted.len() == 0 {
+        wanted = backends()
+    }
+    let progs = corpus()
+    let old = read_rows()
+    let ident = match sh("${quote(wj)} --version") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "unknown",
+    }
+    let host = match sh("uname -sm") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "unknown",
+    }
+    let scratch = match sh("mktemp -d") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-tiers",
+    }
+    let mut measured: Vec<string> = Vec::new()
+    for m in read_measured() {
+        let mut keep = true
+        for b in wanted {
+            if strings.starts_with(m, "# measured ${b} ") {
+                keep = false
+            }
+        }
+        measured.push(m)
+        if !keep {
+            measured.pop()
+        }
+    }
+    let mut rows: Vec<Row> = Vec::new()
+    let mut details: Vec<string> = Vec::new()
+    for b in backends() {
+        let missing = if wanted.contains(b) { have_tool(b) } else { "" }
+        let ran = wanted.contains(b) && missing == ""
+        if wanted.contains(b) && missing != "" {
+            println("tiers: ${b}: not run here (${missing}); earlier rows are kept")
+        }
+        if ran {
+            measured.push("# measured ${b} with ${ident} on ${host}")
+        }
+        for p in progs {
+            let mut status = status_of(old, b, p.suite, p.name)
+            if status == "absent" {
+                status = "not-run"
+            }
+            let selected = (suite == "" || suite == p.suite) && (only == "" || strings.contains(p.name, only))
+            if ran && selected {
+                let got = strings.split(run_one(wj, b, p, scratch), "|")
+                status = got[0]
+                let detail = if got.len() > 1 { strings.replace(strings.join(got[1..].to_vec(), " "), "\t", " ") } else { "" }
+                println("tiers: ${b} ${p.suite}/${p.name}: ${status}")
+                if detail != "" {
+                    details.push("${b}\t${p.suite}\t${p.name}\t${detail}")
+                }
+            }
+            rows.push(Row { backend: b, suite: p.suite, program: p.name, status: status })
+        }
+    }
+    let _ = sh("rm -rf ${quote(scratch)}")
+    write_rows(rows, measured)
+    let ledger = read_ledger()
+    let mut unledgered = 0
+    for r in rows {
+        if is_failure(r.status) && !ledger_has(ledger, r.backend, r.suite, r.program) {
+            println("tiers: add to ${LEDGER}: ${r.backend}\t${r.suite}\t${r.program}\t<reason>")
+            unledgered += 1
+        }
+    }
+    let _ = fs.write(TABLE, render(rows, ledger, read_measured()))
+    // what each failure said, to write the ledger reasons from (never committed: the ledger holds the reviewed text)
+    let _ = fs.write("/tmp/wj-tiers-details.tsv", strings.join(details, "\n") + "\n")
+    println("tiers: wrote ${RESULTS} and ${TABLE}")
+    unledgered == 0
+}
+
+fn selftest() -> bool {
+    let p = Program { suite: "conformance", name: "x", file: "x", mode: "run", expect: ["a", "PASSED"], expect_error: "", expect_exit: 0 }
+    let q = Program { suite: "spec", name: "y", file: "y", mode: "panic", expect: Vec::new(), expect_error: "overflow", expect_exit: 101 }
+    let mut ok = true
+    let judged = [
+        judge(p, 0, "a\nPASSED\n", "") == "pass",
+        judge(p, 0, "a\n", "") == "fail",
+        judge(p, 1, "a\nPASSED\n", "") == "fail",
+        judge(q, 101, "", "attempt to add with overflow") == "pass",
+        judge(q, 101, "", "other") == "fail",
+        judge(q, 0, "", "overflow") == "fail",
+    ]
+    let mut i = 0
+    while i < judged.len() {
+        if !judged[i] {
+            println("tiers selftest: judge check ${i} failed")
+            ok = false
+        }
+        i += 1
+    }
+    // the table: a failing row without a ledger entry is shown with the marker, a clean backend is Tier 1, an unmeasured one says so
+    let rows = [
+        Row { backend: "rust", suite: "conformance", program: "x", status: "pass" },
+        Row { backend: "go", suite: "conformance", program: "x", status: "fail" },
+        Row { backend: "wasm", suite: "conformance", program: "x", status: "not-run" },
+    ]
+    let t = render(rows, Vec::new(), Vec::new())
+    if !strings.contains(t, "| rust | Tier 1 ") || !strings.contains(t, "| go | Tier 2 ") || !strings.contains(t, "| wasm | not measured ") || !strings.contains(t, "(no ledger entry)") {
+        println("tiers selftest: the table does not show tiers or the missing ledger entry")
+        ok = false
+    }
+    ok
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() < 2 {
+        println("usage: target_tiers.wj check | run <wj-binary> [...] | table | --selftest")
+        process.exit(2)
+    }
+    let mode = args[1]
+    if mode == "--selftest" {
+        if selftest() {
+            println("tiers selftest: planted outputs and a planted table judged correctly")
+            return
+        }
+        process.exit(1)
+    }
+    if mode == "check" {
+        if !check() {
+            process.exit(1)
+        }
+        return
+    }
+    if mode == "table" {
+        let _ = fs.write(TABLE, render(read_rows(), read_ledger(), read_measured()))
+        println("tiers: wrote ${TABLE}")
+        return
+    }
+    if mode == "run" {
+        if !run_mode(args) {
+            process.exit(1)
+        }
+        return
+    }
+    println("unknown mode ${mode}")
+    process.exit(2)
+}

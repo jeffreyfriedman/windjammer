@@ -1,6 +1,6 @@
 //! Dispatch handlers for the `wj` binary (`cargo`-friendly shim crate splits parsing vs logic).
 
-use crate::wj_cli_args::{CacheCommand, Cli, Commands, McpCommand};
+use crate::wj_cli_args::{CacheCommand, Cli, Commands, LockCommand, McpCommand};
 use anyhow::Result;
 
 /// Directory whose pin governs a build/run/test/check invocation.
@@ -176,6 +176,7 @@ pub fn run(cli: Cli) -> Result<()> {
             metadata,
             json,
             ir_shadow_validate, mem_report,
+            locked,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             windjammer::cli::build::execute(
@@ -183,7 +184,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 output.as_deref(),
                 release,
                 &target,
-                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic, mem_report },
+                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic, mem_report, locked },
                 check,
                 raw_errors,
                 fix,
@@ -380,13 +381,12 @@ pub fn run(cli: Cli) -> Result<()> {
                 path.as_deref(),
             )?;
         }
-        Commands::Remove { package } => {
-            windjammer::cli::remove::execute(&package)?;
-        }
+        Commands::Lock { command: LockCommand::Update { dir } } => windjammer::cli::lock::update(dir.as_deref())?,
+        Commands::Lock { command: LockCommand::Check { dir } } => windjammer::cli::lock::check(dir.as_deref())?,
 
-        Commands::Update { check, force } => {
-            windjammer::cli::update::execute(check, force)?;
-        }
+        Commands::Remove { package } => windjammer::cli::remove::execute(&package)?,
+
+        Commands::Update { check, force } => windjammer::cli::update::execute(check, force)?,
         Commands::Stats { clear, verbose } => {
             if clear {
                 let mut stats = windjammer::error_statistics::load_or_create_stats();

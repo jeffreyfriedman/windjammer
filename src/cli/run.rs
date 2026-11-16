@@ -51,7 +51,7 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
             Some(output_dir),
             false,
             target_str,
-            crate::cli::build::BuildOptions { tree_shake: false, source_maps: false, unchecked_arithmetic: false, mem_report: false },
+            crate::cli::build::BuildOptions { tree_shake: false, source_maps: false, unchecked_arithmetic: false, mem_report: false, locked: false },
             false, // check
             false, // raw_errors
             false, // fix

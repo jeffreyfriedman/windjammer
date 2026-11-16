@@ -208,3 +208,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj rust-surface --write` | Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one) | tested |
 | `wj check --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |
 | `wj run --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |
+| `wj lock` | Resolve dependencies and write or verify wj.lock (exact revisions and content hashes) | tested |
+| `wj lock update` | Re-resolve every path and git dependency, in dependency order, and write wj.lock | tested |
+| `wj lock check` | Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not | tested |
+| `wj build --locked` | Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds) | tested |

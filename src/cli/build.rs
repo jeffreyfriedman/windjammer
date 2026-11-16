@@ -70,6 +70,37 @@ fn report_missing_modules(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// ADR-0009: untrusted data reaching a command, a file path or SQL text (WJ0173), reported exactly as `wj check`
+/// reports it; an error stops the build before code generation.
+fn stop_on_taint(path: &Path) -> Result<()> {
+    let checked = crate::check::taint_findings(path)?;
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    let errors = checked.report.diagnostics.iter().filter(|d| d.is_error()).count();
+    for d in &checked.report.diagnostics {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    if errors > 0 {
+        anyhow::bail!("{errors} flow(s) of untrusted data into a command, file path or query (WJ0173): the build stops before generating code");
+    }
+    Ok(())
+}
+
+/// ADR-0010: a build follows `wj.lock` when there is one. Git dependencies stay at the recorded commit, a manifest that
+/// disagrees with the lock stops the build with the command that fixes it, and path dependencies whose files changed since
+/// the lock was written are reported (an error with `wj build --locked`).
+fn follow_lock(path: &Path, strict: bool) -> Result<()> {
+    let Some(root) = crate::module_system::project::find_manifest_dir(path) else { return Ok(()) };
+    match crate::package::lock::enforce(&root, strict) {
+        Ok(warnings) => {
+            for w in warnings {
+                eprintln!("warning: {w}");
+            }
+            Ok(())
+        }
+        Err(e) => anyhow::bail!("{e}\nwj.lock does not match the dependencies: the build stops before generating code"),
+    }
+}
+
 /// The compiler configuration of a build of `path`: `config` plus what the project's effects decide (ADR-0021).
 /// Shared with the in-process generator of the predictions (`cli::widths_gate`), which must build as `wj build` does.
 pub(crate) fn with_project_facts(config: crate::compiler_config::CompilerConfig, path: &Path, library: bool) -> Result<crate::compiler_config::CompilerConfig> {
@@ -87,6 +118,8 @@ pub struct BuildOptions {
     pub unchecked_arithmetic: bool,
     /// `--mem-report`: resident memory per build phase on stderr (`crate::mem_report`)
     pub mem_report: bool,
+    /// `wj build --locked`: wj.lock must exist and match, path dependencies included.
+    pub locked: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -138,6 +171,8 @@ pub fn execute(
         stop_on_rust_crate_errors(path)?;
         report_local_mutability(path)?;
         report_missing_modules(path)?;
+        stop_on_taint(path)?;
+        follow_lock(path, options.locked)?;
         let config = with_project_facts(config, path, library)?;
 
         if target_str.eq_ignore_ascii_case("rust") {

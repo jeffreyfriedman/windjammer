@@ -1,0 +1,14 @@
+// Every path to the sink assigns a literal.
+use std::fs
+use std::process
+
+fn main() {
+    let mut command = fs::read_to_string("cmd.txt").unwrap_or("")
+    if command.len() > 3 {
+        command = "ls"
+    } else {
+        command = "pwd"
+    }
+    let out = process::run(command)
+    println("${out}")
+}

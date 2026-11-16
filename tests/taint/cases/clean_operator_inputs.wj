@@ -1,0 +1,14 @@
+// The environment and the command line belong to the operator who starts the program, who already holds all of its
+// authority (ADR-0009, amended): they are not sources, so a tool may build a command or a path from them.
+use std::env
+use std::fs
+use std::process
+
+fn main() {
+    let args = env::args()
+    let home = env::get_or("HOME", "")
+    let out = process::run("ls ${home}")
+    println("${out}")
+    let result = fs::write(args[1], "data")
+    println("${result}")
+}

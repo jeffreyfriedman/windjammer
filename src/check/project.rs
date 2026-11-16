@@ -79,6 +79,9 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     crate::debug_env::phase("check-resolve");
     super::effects::run(root, parsed, &by_file, out);
     crate::debug_env::phase("check-effects");
+    // ADR-0009: untrusted data reaching a command, a file path or SQL text (WJ0173), over the whole program
+    super::taint::run(root, parsed, &by_file, out);
+    crate::debug_env::phase("check-taint");
     let programs: Vec<_> = parsed.iter().map(|p| &p.program).collect();
     let idx = Index::build(&programs);
     crate::debug_env::phase("check-calls-index");
@@ -376,7 +379,7 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
             use crate::ir::pipeline::DiagnosticSeverity as S;
             for d in &module.diagnostics {
                 // Only the solvers' real violations; shadow-mode constraint chatter is not a finding.
-                let real = ["Effect violation", "Taint", "Execution"].iter().any(|p| d.message.starts_with(p));
+                let real = ["Effect violation", "Execution"].iter().any(|p| d.message.starts_with(p));
                 if d.severity != S::Error || !real {
                     continue;
                 }

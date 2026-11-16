@@ -1,0 +1,57 @@
+# Acceptance cases for `wj lock` and `wj build --locked` (ADR-0010; tests/promise_registry_test.rs).
+
+[[case]]
+name = "lock update writes wj.lock, dependencies first, with content hashes"
+polarity = "positive"
+files = { "app/wj.toml" = "[package]\nname = \"app\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n", "app/src/main.wj" = "fn main() {\n    println(\"hi\")\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\n", "lib/src/lib.wj" = "pub fn f() -> int { 1 }\n" }
+args = ["lock", "update", "{w}/app"]
+file_has = { "app/wj.lock" = "name = \"lib\"" }
+output_has = ["wrote wj.lock (1 package(s)"]
+
+[[case]]
+name = "lock update refuses a directory without wj.toml"
+polarity = "negative"
+files = { "app/src/main.wj" = "fn main() {\n}\n" }
+args = ["lock", "update", "{w}/app"]
+exit = 1
+output_has = ["no wj.toml"]
+
+[[case]]
+name = "lock check accepts a fresh lock"
+polarity = "positive"
+files = { "app/wj.toml" = "[package]\nname = \"app\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n", "app/src/main.wj" = "fn main() {\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\n", "lib/src/lib.wj" = "pub fn f() -> int { 1 }\n" }
+setup = [["lock", "update", "{w}/app"]]
+args = ["lock", "check", "{w}/app"]
+output_has = ["matches the dependencies"]
+
+[[case]]
+name = "lock check fails without a wj.lock"
+polarity = "negative"
+files = { "app/wj.toml" = "[package]\nname = \"app\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n", "app/src/main.wj" = "fn main() {\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\n", "lib/src/lib.wj" = "pub fn f() -> int { 1 }\n" }
+args = ["lock", "check", "{w}/app"]
+exit = 1
+output_has = ["needs a wj.lock"]
+
+[[case]]
+name = "lock check fails when a dependency changed since the lock, naming the fix"
+polarity = "negative"
+files = { "app/wj.toml" = "[package]\nname = \"app\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n", "app/src/main.wj" = "fn main() {\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\n", "lib/src/lib.wj" = "pub fn f() -> int { 1 }\n", "app/wj.lock" = "version = 2\n\n[[package]]\nname = \"lib\"\nsource = \"path+../lib\"\nhash = \"sha256:0000000000000000000000000000000000000000000000000000000000000000\"\n" }
+args = ["lock", "check", "{w}/app"]
+exit = 1
+output_has = ["dependency `lib`", "wj lock update"]
+
+[[case]]
+name = "build --locked builds from a fresh lock"
+polarity = "positive"
+files = { "app/wj.toml" = "[package]\nname = \"app\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n", "app/src/main.wj" = "fn main() {\n    println(\"hi\")\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\n", "lib/src/lib.wj" = "pub fn f() -> int { 1 }\n" }
+setup = [["lock", "update", "{w}/app"]]
+args = ["build", "{w}/app/src", "--locked", "--no-cargo", "-o", "{w}/out"]
+exit = 0
+
+[[case]]
+name = "build --locked fails without a wj.lock"
+polarity = "negative"
+files = { "app/wj.toml" = "[package]\nname = \"app\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n", "app/src/main.wj" = "fn main() {\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\n", "lib/src/lib.wj" = "pub fn f() -> int { 1 }\n" }
+args = ["build", "{w}/app/src", "--locked", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["needs a wj.lock"]

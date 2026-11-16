@@ -254,3 +254,18 @@ files = { "m.wj" = "fn main() {\n    let cur = 0\n    cur += 1\n    println(\"${
 args = ["check", "--error-format", "agent", "{w}/m.wj"]
 exit = 1
 output_has = ["m.wj:3:5: error WJ0051", "| fix(auto: wj check --fix): declare `cur` as `mut` => insert `mut ` at 2:9"]
+
+[[case]]
+name = "check rejects untrusted data reaching a command (WJ0173), naming source, sink and remedy"
+polarity = "negative"
+files = { "m.wj" = "use std::fs\nuse std::process\n\nfn main() {\n    let name = fs::read_to_string(\"name.txt\").unwrap_or(\"\")\n    let out = process::run(\"echo ${name}\")\n    println(\"${out}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0173\"", "file contents", "run_with_args"]
+
+[[case]]
+name = "check accepts the same flow once the value is an argument, not a command (WJ0173)"
+polarity = "positive"
+files = { "m.wj" = "use std::fs\nuse std::process\n\nfn main() {\n    let name = fs::read_to_string(\"name.txt\").unwrap_or(\"\")\n    let out = process::run_with_args(\"echo\", [name])\n    println(\"${out}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]

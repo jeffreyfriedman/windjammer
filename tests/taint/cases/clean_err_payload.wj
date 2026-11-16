@@ -1,0 +1,13 @@
+// The Err payload of a read is an error message the program composes, not the file's contents.
+use std::fs
+use std::process
+
+fn main() {
+    match fs::read_to_string("job.txt") {
+        Ok(text) => println("${text.len()} bytes"),
+        Err(e) => {
+            let out = process::run("logger ${e}")
+            println("${out}")
+        },
+    }
+}

@@ -1,0 +1,12 @@
+// A helper returns data from a source; the caller uses it as a command.
+use std::fs
+use std::process
+
+fn job_name() -> string {
+    fs::read_to_string("job.txt").unwrap_or("")
+}
+
+fn main() {
+    let out = process::run(job_name()) //~ WJ0173
+    println("${out}")
+}

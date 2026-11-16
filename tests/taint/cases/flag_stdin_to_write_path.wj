@@ -1,0 +1,9 @@
+// A line read from standard input names the file to write.
+use std::fs
+use std::io
+
+fn main() {
+    let path = io::read_line().unwrap_or("")
+    let result = fs::write(path, "data") //~ WJ0173
+    println("${result}")
+}

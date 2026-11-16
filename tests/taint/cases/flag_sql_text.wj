@@ -1,0 +1,10 @@
+// A request parameter is concatenated into SQL text.
+use std::db
+use std::fs
+
+fn main() {
+    let id = fs::read_to_string("id.txt").unwrap_or("")
+    let conn = db::connect("sqlite::memory:").unwrap()
+    let rows = conn.query("select * from users where id = ${id}", []) //~ WJ0173
+    println("${rows}")
+}

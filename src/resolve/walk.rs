@@ -218,8 +218,10 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
                 location,
                 ..
             } => {
-                self.expr(object);
-                self.method_call(e, method, arguments.len(), location);
+                if !self.module_dot_call(e, object, method, arguments.len()) {
+                    self.expr(object);
+                    self.method_call(e, method, arguments.len(), location);
+                }
                 arguments.iter().for_each(|(_, a)| self.expr(a));
             }
             Expression::Closure {
@@ -344,6 +346,26 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
         let segs: Vec<&str> = name.split("::").collect();
         let res = self.c.resolve_path(&self.ctx, &segs);
         self.push_with_callee(call, callee, CallKind::Path, name.clone(), argc, res);
+    }
+
+    /// `fs.write(..)` with `use std::fs` (or a program module `util.save()`): the same call as `fs::write(..)` / `util::save()`,
+    /// resolved the same way, so every pass that reads calls (effects, taint) sees one spelling. Only when the receiver is a name
+    /// in scope that is not a local, and the path resolves outside the program (std, runtime) or to a function.
+    fn module_dot_call(&mut self, e: &Expression<'_>, object: &Expression<'_>, method: &str, argc: usize) -> bool {
+        let Expression::Identifier { name, .. } = object else { return false };
+        if name.contains("::") || self.is_local(name) || self.c.lookup(self.ctx.module, name, super::Ns::Type).is_empty() {
+            return false;
+        }
+        let res = self.c.resolve_path(&self.ctx, &[name.as_str(), method]);
+        let is_module_fn = match &res {
+            Res::Unresolved(Reason::External(_)) => true,
+            Res::Def(id) => matches!(self.c.defs.get(*id).kind, DefKind::Fn | DefKind::ExternFn),
+            _ => false,
+        };
+        if is_module_fn {
+            self.push(e, CallKind::Path, format!("{name}::{method}"), argc, res);
+        }
+        is_module_fn
     }
 
     fn method_call(
