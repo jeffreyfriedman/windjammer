@@ -198,6 +198,18 @@ impl ModuleMetadata {
                 let inner = &s[17..s.len() - 1];
                 Self::deserialize_type(inner).map(|t| Type::MutableReference(Box::new(t)))
             }
+            // FunctionPointer { params: [Int], return_type: Some(Bool) }: a fn-typed parameter of a library function
+            // (a closure passed to it takes its parameter types from here).
+            s if s.starts_with("FunctionPointer {") && s.ends_with('}') => {
+                let body = s["FunctionPointer {".len()..s.len() - 1].trim();
+                let (params, ret) = body.strip_prefix("params: [")?.rsplit_once("], return_type: ")?;
+                let params = split_debug_type_list(params)?.iter().map(|p| Self::deserialize_type(p)).collect::<Option<Vec<_>>>()?;
+                let return_type = match ret.trim() {
+                    "None" => None,
+                    r => Some(Box::new(Self::deserialize_type(r.strip_prefix("Some(")?.strip_suffix(')')?)?)),
+                };
+                Some(Type::FunctionPointer { params, return_type })
+            }
             s if s.starts_with("Custom(") => {
                 let rest = s
                     .strip_prefix("Custom(\"")
@@ -232,8 +244,8 @@ fn split_debug_type_list(s: &str) -> Option<Vec<String>> {
     let chars: Vec<char> = s.chars().collect();
     for (i, ch) in chars.iter().enumerate() {
         match ch {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth -= 1,
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
             ',' if depth == 0 => {
                 parts.push(
                     chars[start..i]

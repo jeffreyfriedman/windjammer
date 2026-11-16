@@ -717,7 +717,14 @@ impl<'ast> CodeGenerator<'ast> {
                     value,
                     Expression::MethodCall { .. } | Expression::MacroInvocation { .. }
                 );
+                // `local_var_types` is keyed by name: a binding whose value is a scalar or text (`let x = match .. {
+                // V::R(f) => f, .. }` before a later `let x` of bytes) is not that collection.
+                let value_is_scalar = self.infer_expression_type(value).is_some_and(|t| {
+                    matches!(t, Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String)
+                        || matches!(&t, Type::Custom(n) if crate::type_classification::is_numeric_type(n))
+                });
                 let needs_collection_ascription_sv = !type_inferred_from_context
+                    && !value_is_scalar
                     && var_name.is_some_and(|vn| {
                         self.local_var_types.get(vn).is_some_and(|ty| {
                             matches!(ty, Type::Vec(_) | Type::Parameterized(_, _))

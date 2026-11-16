@@ -149,6 +149,7 @@ pub trait Option<T> {
     fn expect(self, message: &str) -> T;
     fn unwrap_or(self, default: T) -> T;
     fn unwrap_or_default(self) -> T;
+    fn ok_or<E>(self, err: E) -> Result<T, E>;
     fn is_some(self) -> bool;
     fn is_none(self) -> bool;
     // On `Option<&T>`: the copy of the referent (references carry no width).

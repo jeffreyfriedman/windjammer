@@ -168,6 +168,9 @@ corpus_tests!(
     match_value_of_int_and_len_used_as_index,
     cloned_vec_keeps_declared_element_width,
     u64_constant_at_two_to_the_63,
+    name_rebound_from_int_to_byte_list,
+    empty_list_assigned_to_typed_local,
+    extend_with_copied_slice,
 );
 
 // ------------------------------------------------------------------ generated programs

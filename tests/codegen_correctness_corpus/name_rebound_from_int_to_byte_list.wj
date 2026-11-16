@@ -1,0 +1,48 @@
+// expect: -1 0 -1
+// One function binds `x`/`y` as `float`, then `int`, then (in a sibling block) as byte lists from a `match` whose
+// other arm is `Vec::new()`: each binding has its own type. The legacy integer inference kept the `int` type of the
+// earlier `x` and rejected the build ("must be U8 ... but was I64").
+enum V {
+    I(int),
+    R(float),
+    T(string),
+}
+
+fn cmp_bytes(a: Vec<u8>, b: Vec<u8>) -> int {
+    if a.len() < b.len() {
+        return -1
+    }
+    0
+}
+
+fn compare(a: V, b: V, kind: int) -> int {
+    if kind == 0 {
+        let x = match a { V::R(f) => f, _ => 0.0 }
+        let y = match b { V::R(f) => f, _ => 0.0 }
+        if x < y {
+            return -1
+        }
+        return 0
+    }
+    if kind == 1 {
+        let x = match a { V::I(n) => n, _ => 0 }
+        let y = match b { V::I(n) => n, _ => 0 }
+        if x < y {
+            return -1
+        }
+        return 0
+    }
+    let x = match a {
+        V::T(s) => s.as_bytes().to_vec(),
+        _ => Vec::new(),
+    }
+    let y = match b {
+        V::T(s) => s.as_bytes().to_vec(),
+        _ => Vec::new(),
+    }
+    cmp_bytes(x, y)
+}
+
+fn main() {
+    println("${compare(V::R(1.0), V::R(2.0), 0)} ${compare(V::I(3), V::I(2), 1)} ${compare(V::T("a"), V::T("ab"), 2)}")
+}

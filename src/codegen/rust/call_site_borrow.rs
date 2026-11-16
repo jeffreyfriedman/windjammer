@@ -440,7 +440,7 @@ pub fn normalize_explicit_deref_copy_operand(arg_expr: &Expression, s: &str) -> 
         Expression::Identifier { name, .. } => {
             // Autoderef of `&i32` → `*r`; drop redundant width casts.
             let mut t = s.trim();
-            if t.starts_with('(') && t.ends_with(')') {
+            if crate::ir::coercion::parens_wrap_whole(t) {
                 t = t[1..t.len() - 1].trim();
             }
             if let Some(inner) = t.strip_prefix('*').map(str::trim) {

@@ -1,0 +1,27 @@
+// expect: ["ab", "c"]
+// `cur = Vec::new()` for a local declared `Vec<u8>` keeps the local's type; it was emitted `Vec::<String>::new()`
+// from the function's `Vec<string>` return type.
+fn split(text: string) -> Vec<string> {
+    let b = text.as_bytes().to_vec()
+    let mut out: Vec<string> = Vec::new()
+    let mut cur: Vec<u8> = Vec::new()
+    let mut i: usize = 0
+    while i < b.len() {
+        let c = b[i]
+        if c == 59 {
+            match String::from_utf8(cur.clone()) {
+                Ok(s) => out.push(s),
+                Err(_) => {}
+            }
+            cur = Vec::new()
+        } else {
+            cur.push(c)
+        }
+        i = i + 1
+    }
+    out
+}
+
+fn main() {
+    println("${split("ab;c;"):?}")
+}
