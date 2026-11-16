@@ -401,7 +401,10 @@ fn cold_deps(gen_dir: string, target: string, flag: string, scratch: string) -> 
 fn prepare_dir(p: Prog, dir: string) -> string {
     let _ = run_sh("rm -rf " + quote(dir) + " && mkdir -p " + quote(dir))
     for f in p.files {
-        let _ = fs.write(dir + "/" + (as_str(get(f, "name") ?? from_str("x")) ?? "x"), as_str(get(f, "text") ?? from_str("")) ?? "")
+        let path = dir + "/" + (as_str(get(f, "name") ?? from_str("x")) ?? "x")
+        // sample files may sit in subdirectories (t054)
+        let _ = run_sh("mkdir -p \"$(dirname " + quote(path) + ")\"")
+        let _ = fs.write(path, as_str(get(f, "text") ?? from_str("")) ?? "")
     }
     if p.stdin.len() > 0 {
         let _ = fs.write(dir + "/../stdin-" + strings.replace(p.id, "/", "_") + ".txt", p.stdin)
