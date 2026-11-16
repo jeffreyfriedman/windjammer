@@ -6,7 +6,7 @@
 
 use crate::ir::stdlib_tables::{surface_type_name, CoreSurface, ITERATOR};
 use crate::parser::{Expression, Literal};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// The std surface, parsed once per process.
@@ -15,14 +15,18 @@ fn surface() -> &'static CoreSurface {
     S.get_or_init(CoreSurface::parse)
 }
 
-/// `ExactSizeIterator::len` exists on sized iterators (`bytes()`, `vec.iter()`); the surface does not model sizes.
-const EXACT_SIZE: [&str; 1] = ["len"];
+/// Iterators that know their length (`ExactSizeIterator`): the surface does not model sizes, so `len` is not judged on
+/// a chain that starts at one of these producers.
+const EXACT_SIZE_PRODUCERS: [&str; 1] = ["bytes"];
 
-/// Does `e` evaluate to an iterator, by declaration? `text` says whether an expression is a string, `locals` are the
-/// bindings known to hold an iterator.
-pub fn yields_iterator(e: &Expression<'_>, text: &dyn Fn(&Expression<'_>) -> bool, locals: &HashSet<String>) -> bool {
+/// Bindings known to hold an iterator, with the producer method the chain started at (`split`, `bytes`, ..).
+pub type IterLocals = HashMap<String, String>;
+
+/// The producer method at the root of `e` when `e` evaluates to an iterator by declaration: `text` says whether an
+/// expression is a string; `locals` are the bindings known to hold an iterator.
+pub fn iterator_root(e: &Expression<'_>, text: &dyn Fn(&Expression<'_>) -> bool, locals: &IterLocals) -> Option<String> {
     match e {
-        Expression::Identifier { name, .. } => locals.contains(name),
+        Expression::Identifier { name, .. } => locals.get(name).cloned(),
         Expression::MethodCall { object, method, .. } => {
             let declared_ret = |ty: &str| {
                 surface()
@@ -31,23 +35,26 @@ pub fn yields_iterator(e: &Expression<'_>, text: &dyn Fn(&Expression<'_>) -> boo
                     .is_some_and(|r| surface_type_name(&r).is_some_and(|h| h == ITERATOR))
             };
             if text(object) {
-                declared_ret("String")
+                declared_ret("String").then(|| method.clone())
+            } else if declared_ret(ITERATOR) {
+                iterator_root(object, text, locals)
             } else {
-                yields_iterator(object, text, locals) && declared_ret(ITERATOR)
+                None
             }
         }
-        _ => false,
+        _ => None,
     }
 }
 
-/// A string literal or a binding the caller knows to be text.
+/// A string literal.
 pub fn is_string_literal(e: &Expression<'_>) -> bool {
     matches!(e, Expression::Literal { value: Literal::String(_), .. })
 }
 
-/// `Some(true)` when the list type declares `method` and `Iterator` does not (collecting first is the fix).
-pub fn lists_only(method: &str) -> bool {
-    !EXACT_SIZE.contains(&method)
+/// The list type declares `method` and `Iterator` does not (collecting first is the fix); `len` is not judged on a
+/// chain that starts at an exact-size producer.
+pub fn lists_only(method: &str, root: &str) -> bool {
+    !(method == "len" && EXACT_SIZE_PRODUCERS.contains(&root))
         && surface().declared("Vec", method).is_some()
         && surface().declared(ITERATOR, method).is_none()
 }

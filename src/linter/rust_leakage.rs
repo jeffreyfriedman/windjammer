@@ -131,8 +131,8 @@ impl<'ast> RustLeakageLinter<'ast> {
                 level: LintLevel::Warning,
                 message: format!("trait method `{}` has no body and does not declare its receiver", u.method),
                 location: self.receiver_location(u.params),
-                help: Some("write `&self` when no implementation changes `self`, `&mut self` when one does".to_string()),
-                note: Some("`self` alone is inferred from a body; implementations follow the trait's declared receiver".to_string()),
+                help: Some("in a trait method without a body, write `&self` when no implementation changes `self` and `&mut self` when one does: this is the one place a receiver takes `&`. Implementations and every other method keep plain `self` (ownership is inferred from the body), and parameters never take `&`".to_string()),
+                note: Some("`self` alone is inferred from a body; a trait method has none, so the trait declares the receiver and every implementation follows it".to_string()),
                 suggestion: None,
             });
         }

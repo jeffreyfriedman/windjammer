@@ -239,7 +239,7 @@ pub static LINTS: &[CodeInfo] = &[
         rust_codes: &[],
         explanation: "A method's `self` is inferred from its body. A trait method without a body has nothing to infer from, and every implementation must use the trait's receiver, so the declaration has to say it.",
         cause: "`fn name(self, ..)` with no body inside a `trait`, and a return type that does not mention `Self`.",
-        fix: "Write `&self` when no implementation changes `self`, or `&mut self` when one does.",
+        fix: "Write `&self` when no implementation changes `self`, or `&mut self` when one does. This is the only place a receiver is spelled with `&`: implementations and methods with bodies keep plain `self`, and parameters never take `&`.",
         example_bad: "pub trait Store {\n    fn put(self, k: int)\n}",
         example_good: "pub trait Store {\n    fn put(&mut self, k: int)\n}",
         front_end_checked: false,
