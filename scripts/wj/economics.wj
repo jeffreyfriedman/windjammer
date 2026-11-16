@@ -1,0 +1,639 @@
+// Economic-efficiency runner (docs/economics/DEFINITION.md): Windjammer programs against hand-written Rust twins.
+//
+//   wj run scripts/wj/economics.wj -- --target DIR [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S]
+//                                     [--no-shipped] [--label NAME]
+//
+// Run it from the repository root and through the build slot (it compiles with rustc and cargo):
+//   ~/src/wj-wt/bin/slot.sh.bak env WJ_ECOSYSTEM=../windjammer-ecosystem wj run scripts/wj/economics.wj -- --target /tmp/econ-target
+//
+// Programs (pairs of a Windjammer source and an idiomatic Rust twin, see bench/economics/README.md):
+//   dx      bench/agent-dx/solutions/{wj,rust}/<task>/main.*    60 tasks, input = first visible sample case
+//   parity  benchmarks/rust_parity/{wj,rust}/<kernel>.*          10 compute kernels, no input
+//   interp  bench/interp/<kernel>.wj + bench/economics/twins/     8 interpreter kernels, no input
+//
+// Every measured command runs under `/usr/bin/time -l` (macOS) or `/usr/bin/time -v` (Linux): instructions retired
+// (macOS hardware counter, the process itself only), peak RSS, user+sys CPU (descendants included) and wall time.
+// A count is the smallest of --runs runs (default 3) because counter noise only adds. Every program's output must
+// equal the sample's expected stdout (dx) or the Rust twin's output (kernels); a mismatch is reported, not measured.
+//
+// Writes <out>/<label>.json (raw) and <out>/<label>.md (one table per dimension). The agent dimension is read from
+// bench/agent-dx/results/pilot*/report.json (measured by the agent-dx harness, not by this script).
+use std::env
+use std::fs
+use std::process
+use std::strings
+use std::time::Instant
+use wj_cli_args::long_flag_value
+use wj_cli_args::long_flag_value_or
+use wj_cli_args::has_long_flag
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::at
+use wj_json_doc::items
+use wj_json_doc::members
+use wj_json_doc::keys
+use wj_json_doc::as_str
+use wj_json_doc::as_f64
+use wj_json_doc::object
+use wj_json_doc::array
+use wj_json_doc::push
+use wj_json_doc::with
+use wj_json_doc::from_int
+use wj_json_doc::from_float
+use wj_json_doc::from_str
+use wj_json_doc::dumps
+use wj_proc::sh
+use wj_proc::quote
+use wj_table::fixed
+
+const DX: string = "bench/agent-dx"
+const PARITY: string = "benchmarks/rust_parity"
+const INTERP: string = "bench/interp"
+const TWINS: string = "bench/economics/twins"
+const MARK: string = "\n@@wj-economics counter@@\n"
+// rustc flags shared by twin and generated builds, so a compile/size/run difference is the source, not the flags
+const DEBUG_FLAGS: string = "--edition 2021 -A warnings -C opt-level=0 -C debuginfo=0"
+const RELEASE_FLAGS: string = "--edition 2021 -A warnings -C opt-level=3"
+// the lint allowances the generated Cargo.toml adds ([lints.rust])
+const GEN_ALLOW: string = "--allow=unconditional_panic --allow=arithmetic_overflow"
+
+struct Prog {
+    id: string,
+    suite: string,
+    wj: string,
+    rs: string,
+    stdin: string,
+    args: Vec<string>,
+    files: Vec<Json>,
+    expected: string,
+}
+
+struct M {
+    instr: int,
+    rss: int,
+    cpu: f64,
+    wall: f64,
+    status: int,
+    stdout: string,
+}
+
+fn die(msg: string) {
+    eprintln("economics: " + msg)
+    process.exit(1)
+}
+
+fn run_sh(line: string) -> string {
+    match sh(line) {
+        Ok(o) => o.stdout,
+        Err(e) => {
+            die("cannot run sh: ${e}")
+            ""
+        },
+    }
+}
+
+fn read(path: string) -> string {
+    fs.read_to_string(path) ?? ""
+}
+
+// ---------------------------------------------------------------- measuring one command
+
+// `/usr/bin/time -l` on macOS (it reports instructions retired); on Linux GNU `time -v`, plus `perf stat` for
+// instructions when perf is installed (instructions:u, child processes included)
+fn counter_flag() -> string {
+    if run_sh("uname -s").contains("Darwin") {
+        return "-l"
+    }
+    if run_sh("perf stat -x, -e instructions:u true 2>&1").contains("instructions") {
+        return "-v perf stat -x, -e instructions:u"
+    }
+    "-v"
+}
+
+fn num_word(l: string, idx: int) -> f64 {
+    let w = strings.split_whitespace(l)
+    if idx < w.len() { w[idx].parse::<f64>() ?? 0.0 } else { 0.0 }
+}
+
+fn last_num(l: string) -> f64 {
+    let w = strings.split_whitespace(l)
+    if w.len() > 0 { w[w.len() - 1].parse::<f64>() ?? 0.0 } else { 0.0 }
+}
+
+// One run of `cmd` (a shell fragment) inside `dir`, stdin from `stdin_file` ("" = /dev/null).
+fn measure_once(dir: string, cmd: string, stdin_file: string, flag: string) -> M {
+    let input = if stdin_file == "" { "/dev/null" } else { quote(stdin_file) }
+    let line = "f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; cd " + quote(dir) + " || exit 98; /usr/bin/time " + flag + " " + cmd + " <" + input + " 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
+    let t0 = Instant::now()
+    let out = match sh(line) {
+        Ok(o) => o,
+        Err(e) => {
+            die("cannot run ${cmd}: ${e}")
+            panic("unreachable")
+        },
+    }
+    let wall_outer = t0.elapsed().as_secs_f64()
+    let (stdout, err) = match out.stdout.find(MARK) {
+        Some(i) => (out.stdout[0..i].to_string(), out.stdout[i + MARK.len()..].to_string()),
+        None => (out.stdout, ""),
+    }
+    let mut m = M { instr: 0, rss: 0, cpu: 0.0, wall: wall_outer, status: out.status, stdout: stdout }
+    for l in strings.split_lines(err) {
+        if l.contains(" real ") && l.contains(" user ") && l.contains(" sys") {
+            m.wall = num_word(l, 0)
+            m.cpu = num_word(l, 2) + num_word(l, 4)
+        } else if l.contains("instructions retired") {
+            m.instr = num_word(l, 0) as int
+        } else if l.contains(",instructions") {
+            m.instr = (l.split(",").collect::<Vec<string>>()[0].parse::<f64>() ?? 0.0) as int
+        } else if l.contains("maximum resident set size") {
+            m.rss = num_word(l, 0) as int
+        } else if l.contains("Maximum resident set size (kbytes)") {
+            m.rss = (last_num(l) * 1024.0) as int
+        } else if l.contains("User time (seconds)") {
+            m.cpu = m.cpu + last_num(l)
+        } else if l.contains("System time (seconds)") {
+            m.cpu = m.cpu + last_num(l)
+        }
+    }
+    m
+}
+
+// Smallest of `runs` runs (each field separately: noise only adds).
+fn measure(dir: string, cmd: string, stdin_file: string, runs: int, flag: string) -> M {
+    let mut best = measure_once(dir, cmd, stdin_file, flag)
+    let mut i = 1
+    while i < runs && best.status == 0 {
+        let m = measure_once(dir, cmd, stdin_file, flag)
+        if m.instr > 0 && (best.instr == 0 || m.instr < best.instr) { best.instr = m.instr }
+        if m.rss > 0 && m.rss < best.rss { best.rss = m.rss }
+        if m.cpu < best.cpu { best.cpu = m.cpu }
+        if m.wall < best.wall { best.wall = m.wall }
+        i += 1
+    }
+    best
+}
+
+fn m_json(m: M) -> Json {
+    with(with(with(with(with(object(), "instr", from_int(m.instr as i64)), "rss", from_int(m.rss as i64)), "cpu", from_float(m.cpu)), "wall", from_float(m.wall)), "status", from_int(m.status as i64))
+}
+
+fn file_size(path: string) -> int {
+    match fs.metadata(path) {
+        Ok(m) => m.size() as int,
+        Err(_) => 0,
+    }
+}
+
+fn stripped_size(path: string, scratch: string) -> int {
+    let s = scratch + "/stripped.bin"
+    let _ = run_sh("strip -o " + quote(s) + " " + quote(path) + " 2>/dev/null || (cp " + quote(path) + " " + quote(s) + " && strip " + quote(s) + ")")
+    file_size(s)
+}
+
+// stdout compared like the agent-dx grader: trailing whitespace per line and trailing blank lines ignored
+fn norm(s: string) -> string {
+    let mut lines: Vec<string> = Vec::new()
+    for l in strings.split_lines(s) {
+        lines.push(strings.trim_end(l).to_string())
+    }
+    while lines.len() > 0 && lines[lines.len() - 1].len() == 0 {
+        lines.pop()
+    }
+    lines.join("\n")
+}
+
+// ---------------------------------------------------------------- static (maintenance) metrics
+
+fn is_word(c: string) -> bool {
+    (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || (c >= "0" && c <= "9") || c == "_"
+}
+
+// Lexical tokens: identifier/number runs, string literals (one each) and single punctuation characters.
+// A proxy for what an agent reads and writes; it is not a BPE count.
+fn token_count(code: string) -> int {
+    let cs = strings.chars(code)
+    let mut n = 0
+    let mut i = 0
+    let len = cs.len()
+    while i < len {
+        let c = cs[i].to_string()
+        if c == " " || c == "\n" || c == "\t" || c == "\r" {
+            i += 1
+        } else if c == "\"" {
+            n += 1
+            i += 1
+            while i < len && cs[i].to_string() != "\"" {
+                if cs[i].to_string() == "\\" { i += 1 }
+                i += 1
+            }
+            i += 1
+        } else if is_word(c) {
+            n += 1
+            while i < len && is_word(cs[i].to_string()) { i += 1 }
+        } else {
+            n += 1
+            i += 1
+        }
+    }
+    n
+}
+
+fn occurrences(hay: string, needle: string) -> int {
+    let mut n = 0
+    let mut rest = hay
+    loop {
+        match rest.find(needle) {
+            Some(i) => {
+                n += 1
+                rest = rest[i + needle.len()..rest.len()].to_string()
+            },
+            None => break,
+        }
+    }
+    n
+}
+
+// source without full-line comments and blank lines
+fn code_of(path: string) -> string {
+    let mut keep: Vec<string> = Vec::new()
+    for l in strings.split_lines(read(path)) {
+        let t = strings.trim(l)
+        if t.len() > 0 && !t.starts_with("//") {
+            keep.push(l)
+        }
+    }
+    keep.join("\n")
+}
+
+fn nonspace_chars(code: string) -> int {
+    let mut n = 0
+    for c in code.chars() {
+        let s = c.to_string()
+        if s != " " && s != "\t" && s != "\n" && s != "\r" { n += 1 }
+    }
+    n
+}
+
+// Ownership/type ceremony a writer must get right: borrows, lifetimes, explicit clones and conversions.
+fn ceremony(code: string) -> int {
+    let amp = occurrences(code, "&") - 2 * occurrences(code, "&&")
+    amp + occurrences(code, "'a") + occurrences(code, "'_") + occurrences(code, ".clone()") + occurrences(code, ".to_string()") + occurrences(code, ".to_owned()") + occurrences(code, ".unwrap()") + occurrences(code, ".as_str()") + occurrences(code, ".iter()") + occurrences(code, " as ")
+}
+
+fn static_json(path: string) -> Json {
+    let code = code_of(path)
+    with(with(with(with(object(), "lines", from_int(strings.split_lines(code).len() as i64)), "chars", from_int(nonspace_chars(code) as i64)), "tokens", from_int(token_count(code) as i64)), "ceremony", from_int(ceremony(code) as i64))
+}
+
+// what the code generator emitted, counted like ASSESSMENT.md section 2
+fn gen_json(path: string) -> Json {
+    let code = code_of(path)
+    with(with(with(with(with(with(object(), "lines", from_int(strings.split_lines(code).len() as i64)), "clone", from_int(occurrences(code, ".clone()") as i64)), "to_string", from_int(occurrences(code, ".to_string()") as i64)), "as_cast", from_int(occurrences(code, " as ") as i64)), "runtime_refs", from_int(occurrences(code, "windjammer_runtime::") as i64)), "inline", from_int(occurrences(code, "#[inline]") as i64))
+}
+
+// ---------------------------------------------------------------- program list
+
+fn dx_prog(task: string) -> Prog {
+    let samples = parse(read(DX + "/tasks/" + task + "/samples.json")) ?? array()
+    let first = at(samples, 0) ?? object()
+    let mut args: Vec<string> = Vec::new()
+    for a in items(get(first, "args") ?? array()) {
+        args.push(as_str(a) ?? "")
+    }
+    let files = match get(first, "files") {
+        Some(f) => {
+            let mut v: Vec<Json> = Vec::new()
+            for m in members(f) {
+                v.push(with(with(object(), "name", from_str(m.key)), "text", m.value))
+            }
+            v
+        },
+        None => Vec::new(),
+    }
+    Prog {
+        id: "dx/" + task,
+        suite: "dx",
+        wj: DX + "/solutions/wj/" + task + "/main.wj",
+        rs: DX + "/solutions/rust/" + task + "/main.rs",
+        stdin: as_str(get(first, "stdin") ?? from_str("")) ?? "",
+        args: args,
+        files: files,
+        expected: as_str(get(first, "stdout") ?? from_str("")) ?? "",
+    }
+}
+
+fn kernel(suite: string, wj: string, rs: string, name: string) -> Prog {
+    Prog { id: suite + "/" + name, suite: suite, wj: wj, rs: rs, stdin: "", args: Vec::new(), files: Vec::new(), expected: "" }
+}
+
+fn programs() -> Vec<Prog> {
+    let mut ps: Vec<Prog> = Vec::new()
+    for t in strings.split_lines(run_sh("ls " + DX + "/solutions/wj")) {
+        let t2 = strings.trim(t)
+        if t2.len() > 0 && fs.exists(DX + "/solutions/rust/" + t2 + "/main.rs") {
+            ps.push(dx_prog(t2))
+        }
+    }
+    for k in ["sieve", "matmul", "collatz", "string_build", "fib", "vec_fill", "insertion_sort", "nbody", "byte_hash", "histogram"] {
+        ps.push(kernel("parity", PARITY + "/wj/" + k + ".wj", PARITY + "/rust/" + k + ".rs", k))
+    }
+    for k in ["closures", "fib30", "hashmap", "loop5m", "nbody", "sieve", "strings", "structs"] {
+        ps.push(kernel("interp", INTERP + "/" + k + ".wj", TWINS + "/" + k + ".rs", k))
+    }
+    ps
+}
+
+// ---------------------------------------------------------------- the generated crate and its dependencies
+
+fn gen_rs(dir: string) -> string {
+    strings.trim(run_sh("ls " + quote(dir) + "/*.rs 2>/dev/null | head -1")).to_string()
+}
+
+fn gen_bin_name(dir: string) -> string {
+    for l in strings.split_lines(read(dir + "/Cargo.toml")) {
+        let t = strings.trim(l)
+        if t.starts_with("name = \"") {
+            return strings.replace(strings.replace(t, "name = \"", ""), "\"", "")
+        }
+    }
+    ""
+}
+
+// rustc flags that link a generated file against the runtime rlibs cargo built in `target/<profile>`
+fn extern_flags(target: string, profile: string) -> string {
+    let t = quote(target + "/" + profile)
+    let line = "for c in windjammer_runtime serde smallvec; do r=$(find " + t + " -name \"lib\${c}-*.rlib\" 2>/dev/null | head -1); [ -n \"$r\" ] && printf ' --extern %s=%s' \"$c\" \"$r\"; done; find " + t + " -name '*.rlib' -exec dirname {} \\; 2>/dev/null | sort -u | while read d; do printf ' -L dependency=%s' \"$d\"; done"
+    run_sh(line)
+}
+
+// Cold build of the runtime dependencies (once per target dir): the one-off cost every new machine/CI cache pays.
+fn cold_deps(gen_dir: string, target: string, flag: string, scratch: string) -> Json {
+    let mut doc = object()
+    for profile in ["debug", "release"] {
+        let pflag = if profile == "release" { " --release" } else { "" }
+        let m = measure(gen_dir, "env CARGO_TARGET_DIR=" + quote(target) + " CARGO_BUILD_JOBS=2 cargo build -q" + pflag, "", 1, flag)
+        let crates = strings.trim(run_sh("find " + quote(target + "/" + profile) + " -name '*.rlib' | sed 's|.*/lib||; s|-[0-9a-f]*\\.rlib$||' | sort -u | wc -l")).parse::<int>() ?? 0
+        doc = with(doc, profile, with(m_json(m), "rlib_crates", from_int(crates as i64)))
+        eprintln("cold deps ${profile}: cpu ${fixed(m.cpu, 1)} s, peak rss ${m.rss / 1048576} MB, ${crates} crates")
+    }
+    let kb = strings.split_whitespace(run_sh("du -sk " + quote(target)))
+    with(doc, "target_kb", from_int((if kb.len() > 0 { kb[0].parse::<i64>() ?? 0 } else { 0 })))
+}
+
+// ---------------------------------------------------------------- one program
+
+fn prepare_dir(p: Prog, dir: string) -> string {
+    let _ = run_sh("rm -rf " + quote(dir) + " && mkdir -p " + quote(dir))
+    for f in p.files {
+        let _ = fs.write(dir + "/" + (as_str(get(f, "name") ?? from_str("x")) ?? "x"), as_str(get(f, "text") ?? from_str("")) ?? "")
+    }
+    if p.stdin.len() > 0 {
+        let _ = fs.write(dir + "/../stdin-" + strings.replace(p.id, "/", "_") + ".txt", p.stdin)
+        return dir + "/../stdin-" + strings.replace(p.id, "/", "_") + ".txt"
+    }
+    ""
+}
+
+fn argv(p: Prog) -> string {
+    let mut s = ""
+    for a in p.args {
+        s = s + " " + quote(a)
+    }
+    s
+}
+
+fn check(p: Prog, what: string, m: M, expected: string, problems: Vec<string>) -> Vec<string> {
+    let mut out = problems
+    if m.status != 0 {
+        out.push("${p.id} ${what}: exit ${m.status}")
+    } else if expected != "" && norm(m.stdout) != norm(expected) {
+        out.push("${p.id} ${what}: output differs from the expected output")
+    }
+    out
+}
+
+fn measure_prog(p: Prog, wj: string, target: string, ext_dbg: string, ext_rel: string, scratch: string, runs: int, shipped: bool, flag: string) -> Json {
+    let root = run_sh("pwd").trim().to_string()
+    let key = strings.replace(p.id, "/", "_")
+    let work = scratch + "/" + key
+    let run_dir = work + "/run"
+    let _ = run_sh("rm -rf " + quote(work) + " && mkdir -p " + quote(run_dir))
+    let wj_src = root + "/" + p.wj
+    let rs_src = root + "/" + p.rs
+    let gen_dir = work + "/gen"
+    let kernel_runs = if p.suite == "dx" { runs } else { 1 }
+    let mut problems: Vec<string> = Vec::new()
+    let mut doc = with(with(with(object(), "id", from_str(p.id)), "suite", from_str(p.suite)), "wj_src", static_json(p.wj))
+    doc = with(doc, "rust_src", static_json(p.rs))
+
+    // Rust twin: debug compile (the agent's verify loop), release compile, runs
+    let rs_dbg = work + "/rs_dbg"
+    let rs_rel = work + "/rs_rel"
+    let c_rs_dbg = measure(work, "rustc " + DEBUG_FLAGS + " -o " + quote(rs_dbg) + " " + quote(rs_src), "", 1, flag)
+    let c_rs_rel = measure(work, "rustc " + RELEASE_FLAGS + " -o " + quote(rs_rel) + " " + quote(rs_src), "", 1, flag)
+    let input = prepare_dir(p, run_dir)
+    let r_rs_dbg = measure(run_dir, quote(rs_dbg) + argv(p), input, kernel_runs, flag)
+    let _ = prepare_dir(p, run_dir)
+    let r_rs_rel = measure(run_dir, quote(rs_rel) + argv(p), input, runs, flag)
+    let expected = if p.expected != "" { p.expected } else { r_rs_rel.stdout }
+    problems = check(p, "rust release run", r_rs_rel, expected, problems)
+    problems = check(p, "rust debug run", r_rs_dbg, expected, problems)
+
+    // Windjammer: interpreter (the interpreted-first verify loop)
+    let _ = prepare_dir(p, run_dir)
+    let r_interp = measure(run_dir, quote(wj) + " run --interpret " + quote(wj_src) + argv(p), input, kernel_runs, flag)
+    problems = check(p, "wj interpreter run", r_interp, expected, problems)
+
+    // Windjammer: transpile, then the same rustc flags as the twin
+    let c_trans = measure(work, quote(wj) + " build --no-cargo -o " + quote(gen_dir) + " " + quote(wj_src) + " >/dev/null", "", 1, flag)
+    let grs = gen_rs(gen_dir)
+    let mut gdoc = object()
+    if c_trans.status != 0 || grs == "" {
+        problems.push("${p.id}: wj build --no-cargo failed")
+    } else {
+        gdoc = gen_json(grs)
+        let wj_dbg = work + "/wj_dbg"
+        let wj_rel = work + "/wj_rel"
+        let c_wj_dbg = measure(work, "rustc " + DEBUG_FLAGS + " " + GEN_ALLOW + ext_dbg + " -o " + quote(wj_dbg) + " " + quote(grs), "", 1, flag)
+        let c_wj_rel = measure(work, "rustc " + RELEASE_FLAGS + " " + GEN_ALLOW + ext_rel + " -o " + quote(wj_rel) + " " + quote(grs), "", 1, flag)
+        let _ = prepare_dir(p, run_dir)
+        let r_wj_dbg = measure(run_dir, quote(wj_dbg) + argv(p), input, kernel_runs, flag)
+        let _ = prepare_dir(p, run_dir)
+        let r_wj_rel = measure(run_dir, quote(wj_rel) + argv(p), input, runs, flag)
+        problems = check(p, "wj debug run", r_wj_dbg, expected, problems)
+        problems = check(p, "wj release run", r_wj_rel, expected, problems)
+        doc = with(doc, "wj_rustc_debug", m_json(c_wj_dbg))
+        doc = with(doc, "wj_rustc_release", with(with(m_json(c_wj_rel), "bytes", from_int(file_size(wj_rel) as i64)), "stripped", from_int(stripped_size(wj_rel, work) as i64)))
+        doc = with(doc, "wj_run_debug", m_json(r_wj_dbg))
+        doc = with(doc, "wj_run_release", m_json(r_wj_rel))
+        if shipped {
+            // as shipped: the generated Cargo.toml's release profile (lto, overflow checks), warm dependency cache
+            let c_ship = measure(gen_dir, "env CARGO_TARGET_DIR=" + quote(target) + " CARGO_BUILD_JOBS=2 cargo build -q --release", "", 1, flag)
+            let ship_bin = target + "/release/" + gen_bin_name(gen_dir)
+            let _ = prepare_dir(p, run_dir)
+            let r_ship = measure(run_dir, quote(ship_bin) + argv(p), input, runs, flag)
+            problems = check(p, "wj shipped run", r_ship, expected, problems)
+            doc = with(doc, "wj_cargo_release", with(with(m_json(c_ship), "bytes", from_int(file_size(ship_bin) as i64)), "stripped", from_int(stripped_size(ship_bin, work) as i64)))
+            doc = with(doc, "wj_run_shipped", m_json(r_ship))
+        }
+    }
+    doc = with(doc, "generated", gdoc)
+    doc = with(doc, "wj_transpile", m_json(c_trans))
+    doc = with(doc, "wj_interp_run", m_json(r_interp))
+    doc = with(doc, "rust_rustc_debug", m_json(c_rs_dbg))
+    doc = with(doc, "rust_rustc_release", with(with(m_json(c_rs_rel), "bytes", from_int(file_size(rs_rel) as i64)), "stripped", from_int(stripped_size(rs_rel, work) as i64)))
+    doc = with(doc, "rust_run_debug", m_json(r_rs_dbg))
+    doc = with(doc, "rust_run_release", m_json(r_rs_rel))
+    let mut pj = array()
+    for pr in problems {
+        eprintln("  PROBLEM " + pr)
+        pj = push(pj, from_str(pr))
+    }
+    doc = with(doc, "problems", pj)
+    let _ = run_sh("rm -rf " + quote(work))
+    doc
+}
+
+// ---------------------------------------------------------------- agent dimension (read from the pilots)
+
+fn arm_mean(arms: Json, metric: string, arm: string) -> f64 {
+    match get(arms, metric) {
+        Some(m) => match get(m, arm) {
+            Some(v) => as_f64(at(v, 0) ?? from_float(0.0)) ?? 0.0,
+            None => 0.0,
+        },
+        None => 0.0,
+    }
+}
+
+fn agent_dimension() -> Json {
+    let mut rows = array()
+    for f in strings.split_lines(run_sh("ls " + DX + "/results/*/report.json 2>/dev/null")) {
+        let path = strings.trim(f)
+        if path.len() == 0 { continue }
+        let doc = parse(read(path)) ?? object()
+        let arms = get(doc, "arms") ?? object()
+        let costs = get(arms, "cost") ?? object()
+        for arm in keys(costs) {
+            let mut row = with(with(object(), "report", from_str(path)), "arm", from_str(arm))
+            for metric in ["pass", "cost", "turns", "tok_in", "tok_out", "wall", "tool_wait", "verify"] {
+                row = with(row, metric, from_float(arm_mean(arms, metric, arm)))
+            }
+            rows = push(rows, row)
+        }
+    }
+    rows
+}
+
+// The D7 gate: every program's static counts equal the recorded ones (same program set, same numbers).
+fn check_static(results: Json, path: string) -> int {
+    let recorded = match parse(read(path)) {
+        Ok(d) => d,
+        Err(e) => {
+            die("cannot read ${path}: ${e}")
+            object()
+        },
+    }
+    let mut want: Vec<string> = Vec::new()
+    for p in items(get(recorded, "programs") ?? array()) {
+        want.push(dumps(with(with(with(object(), "id", get(p, "id") ?? object()), "wj_src", get(p, "wj_src") ?? object()), "rust_src", get(p, "rust_src") ?? object()), 0, true))
+    }
+    let mut bad = 0
+    let mut seen = 0
+    for p in items(results) {
+        let got = dumps(with(with(with(object(), "id", get(p, "id") ?? object()), "wj_src", get(p, "wj_src") ?? object()), "rust_src", get(p, "rust_src") ?? object()), 0, true)
+        seen += 1
+        if !want.contains(got) {
+            eprintln("  differs: " + got)
+            bad += 1
+        }
+    }
+    if seen != want.len() {
+        eprintln("  program count ${seen} differs from the recorded ${want.len()}")
+        bad += 1
+    }
+    bad
+}
+
+// ---------------------------------------------------------------- main
+
+fn main() {
+    let args = env.args()
+    let static_only = has_long_flag(args, "static")
+    // --static: D7 only (source text); no target, no build, no run
+    let target = match long_flag_value(args, "target") {
+        Some(t) => t,
+        None => {
+            if !static_only {
+                eprintln("usage: economics.wj (--target DIR | --static) [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S] [--no-shipped] [--label NAME]")
+                process.exit(2)
+            }
+            ""
+        },
+    }
+    let wj = long_flag_value_or(args, "wj", "wj")
+    let out_dir = long_flag_value_or(args, "out", "bench/economics/results")
+    let runs = long_flag_value_or(args, "runs", "3").parse::<int>() ?? 3
+    let only = long_flag_value_or(args, "only", "")
+    let suite = long_flag_value_or(args, "suite", "")
+    let shipped = !has_long_flag(args, "no-shipped")
+    let label = long_flag_value_or(args, "label", "latest")
+    let flag = counter_flag()
+    let scratch = strings.trim(run_sh("mktemp -d -t wj-econ.XXXXXX")).to_string()
+    let _ = run_sh("mkdir -p " + quote(out_dir) + (if target == "" { "" } else { " " + quote(target) }))
+
+    let mut env_doc = object()
+    env_doc = with(env_doc, "wj_version", from_str(strings.trim(run_sh(quote(wj) + " --version 2>&1")).to_string()))
+    env_doc = with(env_doc, "rustc", from_str(strings.trim(run_sh("rustc -V")).to_string()))
+    env_doc = with(env_doc, "uname", from_str(strings.trim(run_sh("uname -sm")).to_string()))
+    env_doc = with(env_doc, "head", from_str(strings.trim(run_sh("git rev-parse --short=12 HEAD 2>/dev/null")).to_string()))
+    env_doc = with(env_doc, "load_start", from_str(strings.trim(run_sh("uptime")).to_string()))
+    env_doc = with(env_doc, "counter", from_str(if flag == "-l" { "macOS /usr/bin/time -l (instructions retired: the process itself)" } else if flag.contains("perf") { "GNU time -v + perf stat instructions:u (children included)" } else { "GNU time -v (no instruction counter: compare cpu)" }))
+
+    // dependency cache: build it cold once (measured), then reuse it for every generated program
+    let first = programs()[0]
+    let probe = scratch + "/probe"
+    if !static_only {
+        let _ = run_sh(quote(wj) + " build --no-cargo -o " + quote(probe) + " " + quote(first.wj) + " >/dev/null 2>&1")
+    }
+    let have_runtime = static_only || strings.trim(run_sh("find " + quote(target) + " -name 'libwindjammer_runtime-*.rlib' 2>/dev/null | head -1")).len() > 0
+    let cold = if static_only { from_str("not measured (--static)") } else if have_runtime { from_str("reused " + target + " (warm; pass an empty --target to measure the cold build)") } else { cold_deps(probe, target, flag, scratch) }
+    let ext_dbg = if static_only { "" } else { extern_flags(target, "debug") }
+    let ext_rel = if static_only { "" } else { extern_flags(target, "release") }
+
+    let mut results = array()
+    let mut n = 0
+    for p in programs() {
+        if suite != "" && p.suite != suite { continue }
+        if only != "" && !("," + only + ",").contains("," + p.id + ",") { continue }
+        eprintln("[${n + 1}] ${p.id}")
+        if static_only {
+            // D7 only: source text, no build and no run (deterministic; needs no build slot)
+            let doc = with(with(with(with(with(object(), "id", from_str(p.id)), "suite", from_str(p.suite)), "wj_src", static_json(p.wj)), "rust_src", static_json(p.rs)), "problems", array())
+            results = push(results, doc)
+            n += 1
+            continue
+        }
+        results = push(results, measure_prog(p, wj, target, ext_dbg, ext_rel, scratch, runs, shipped, flag))
+        n += 1
+    }
+    let check_path = long_flag_value_or(args, "check", "")
+    if static_only && check_path != "" {
+        let bad = check_static(results, check_path)
+        if bad > 0 {
+            eprintln("economics --static --check: ${bad} program(s) differ from ${check_path}; if the change is intended, regenerate it with --static --label static")
+            process.exit(1)
+        }
+        eprintln("economics --static --check: ${n} programs match ${check_path}")
+        let _ = run_sh("rm -rf " + quote(scratch))
+        return
+    }
+    env_doc = with(env_doc, "load_end", from_str(strings.trim(run_sh("uptime")).to_string()))
+    let doc = with(with(with(with(object(), "env", env_doc), "cold_deps", cold), "programs", results), "agent", agent_dimension())
+    let json_path = out_dir + "/" + label + ".json"
+    let _ = fs.write(json_path, dumps(doc, 1, false))
+    let _ = run_sh("rm -rf " + quote(scratch))
+    eprintln("wrote ${json_path} (${n} programs); render with scripts/wj/economics_report.wj ${json_path}")
+}
