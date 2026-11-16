@@ -74,6 +74,21 @@ loses on compute kernels (6x CPU on `parity`: those are the programs to compile,
 - `interp/closures`: the generated Rust does not compile (E0308 in the iterator chain): compiler bug at 37d50458ec6a.
   The interpreter runs both correctly.
 
+## D2 ratchet and C1 (measured)
+
+`economics.wj --d2` measures the verify loop on a fixed set of 12 agent-sized programs: `wj run --interpret` against
+`rustc` debug + run of the Rust twin, cycles of the process (CPU seconds where the meter has no cycles), best of 3,
+geometric mean. With the integration-head interpreter (wt-int-b + C1): **0.368** (every one of the 12 cheaper; from
+0.17x for word_freq to 0.65x for bank_ledger). Recorded in `bench/economics/d2_baseline.json` per meter and machine;
+`--d2 --check bench/economics/d2_baseline.json` fails when the ratio rises more than 3% above the record (`--write`
+lowers it; raising needs `--allow-raise`). Mutation check: a doctored baseline (0.05) fails the check. The check runs on
+a machine with the same meter (Mac, or the PC once it records its own entry); another meter's entry is never
+compared.
+
+C1 (branch `wt-econ-c1`, on wt-int-b): `wj run --verify` stops before the build when the interpreted run panics (exit
+101, measured 0.51 s instead of a build of about 2 s warm), still builds and compares any other exit status, and the
+default agent sheet names `wj run --verify FILE` as the one loop command.
+
 ## C12: single-file builds and the surrounding tree (measured before/after)
 
 `wj build --no-cargo` of `bench/agent-dx/solutions/wj/t001_gcd_lcm/main.wj` inside this repository against the same file

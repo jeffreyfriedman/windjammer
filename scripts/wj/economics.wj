@@ -700,6 +700,141 @@ fn clawback_row(p: Prog, wj: string, optimize_rs: string, scratch: string, runs:
     row
 }
 
+// ---------------------------------------------------------------- D2 ratchet (verify loop, PLAN.md step 2)
+
+// The fixed D2 set: agent-sized programs across the dx tiers (input = first visible sample).
+const D2_SET: string = "dx/t001_gcd_lcm,dx/t005_roman,dx/t009_rpn_eval,dx/t011_lru_cache,dx/t013_bst,dx/t018_word_freq,dx/t020_rle,dx/t023_expr_eval,dx/t030_bank_ledger,dx/t034_shapes_trait,dx/t048_wc_clone,dx/t057_inventory"
+const D2_SLACK_PCT: int = 3
+
+// The counter the ratchet compares: cycles where the meter has them, else CPU seconds (in microseconds).
+fn d2_value(m: M) -> int {
+    if m.cycles > 0 { m.cycles } else { (m.cpu * 1000000.0) as int }
+}
+
+// Verify-loop cost of one program: (`wj run --interpret`, `rustc -O0` + run), each the smallest of `runs`.
+fn d2_pair(p: Prog, wj: string, scratch: string, runs: int, flag: string) -> (int, int, string) {
+    let root = run_sh("pwd").trim().to_string()
+    let work = scratch + "/" + strings.replace(p.id, "/", "_")
+    let run_dir = work + "/run"
+    let _ = run_sh("rm -rf " + quote(work) + " && mkdir -p " + quote(run_dir))
+    let input = prepare_dir(p, run_dir)
+    let _ = run_sh("cp " + quote(root + "/" + p.wj) + " " + quote(run_dir + "/main.wj"))
+    let wi = measure(run_dir, quote(wj) + " run --interpret main.wj" + argv(p), input, runs, flag)
+    let rbin = work + "/rs_dbg"
+    let rc = measure(work, "rustc " + DEBUG_FLAGS + " -o " + quote(rbin) + " " + quote(root + "/" + p.rs), "", runs, flag)
+    let _ = prepare_dir(p, run_dir)
+    let rr = measure(run_dir, quote(rbin) + argv(p), input, runs, flag)
+    let mut problem = ""
+    if wi.status != 0 || norm(wi.stdout) != norm(p.expected) { problem = "${p.id}: interpreted run differs or failed" }
+    if rc.status != 0 || rr.status != 0 { problem = "${p.id}: rust twin failed" }
+    let _ = run_sh("rm -rf " + quote(work))
+    (d2_value(wi), d2_value(rc) + d2_value(rr), problem)
+}
+
+fn ln_of(x: f64) -> f64 {
+    x.ln()
+}
+
+// --d2 [--check FILE | --write FILE]: the geometric-mean ratio interpreted / rustc+run over D2_SET, per meter.
+// --check fails when the ratio exceeds the recorded one by more than D2_SLACK_PCT; --write records it (lower only,
+// unless --allow-raise). The baseline keeps one entry per meter and machine; another meter's entry is never compared.
+fn run_d2(args: Vec<string>, wj: string, scratch: string, runs: int, flag: string, meter_key: string) -> int {
+    let mut logs = 0.0
+    let mut n = 0
+    let mut rows = array()
+    for p in programs() {
+        if !("," + D2_SET + ",").contains("," + p.id + ",") { continue }
+        let (w, r, problem) = d2_pair(p, wj, scratch, runs, flag)
+        if problem != "" {
+            eprintln("economics --d2: " + problem)
+            return 1
+        }
+        if w <= 0 || r <= 0 {
+            eprintln("economics --d2: ${p.id}: no counter value (meter ${meter_key})")
+            return 1
+        }
+        logs += ln_of((w as f64) / (r as f64))
+        n += 1
+        rows = push(rows, with(with(with(object(), "id", from_str(p.id)), "wj", from_int(w as i64)), "rust", from_int(r as i64)))
+        eprintln("  ${p.id}: interpreted ${w} / rustc+run ${r}")
+    }
+    let ratio = (logs / (n as f64)).exp()
+    println("D2 verify-loop ratio (interpreted / rustc debug + run), ${n} programs, meter ${meter_key}: ${fixed(ratio, 3)}")
+    let check = long_flag_value_or(args, "check", "")
+    let write = long_flag_value_or(args, "write", "")
+    let path = if check != "" { check } else { write }
+    if path == "" { return 0 }
+    let doc = match parse(read(path)) {
+        Ok(d) => d,
+        Err(_) => object(),
+    }
+    let recorded = match get(doc, meter_key) {
+        Some(v) => as_f64(get(v, "ratio") ?? from_float(0.0)) ?? 0.0,
+        None => 0.0,
+    }
+    if check != "" {
+        if recorded <= 0.0 {
+            println("no D2 baseline for meter ${meter_key} in ${path}: nothing to compare (record one with --write)")
+            return 0
+        }
+        let limit = recorded * (1.0 + (D2_SLACK_PCT as f64) / 100.0)
+        if ratio > limit {
+            println("FAIL: D2 ratio ${fixed(ratio, 3)} is above the recorded ${fixed(recorded, 3)} + ${D2_SLACK_PCT}%")
+            return 1
+        }
+        println("ok: D2 ratio ${fixed(ratio, 3)} within ${fixed(recorded, 3)} + ${D2_SLACK_PCT}%")
+        return 0
+    }
+    if recorded > 0.0 && ratio > recorded && !has_long_flag(args, "allow-raise") {
+        println("not raising the recorded ${fixed(recorded, 3)} to ${fixed(ratio, 3)} (pass --allow-raise with a reason in the commit)")
+        return 1
+    }
+    let entry = with(with(with(object(), "ratio", from_float(ratio)), "programs", from_int(n as i64)), "per_program", rows)
+    let mut out = object()
+    for k in keys(doc) {
+        if k != meter_key { out = with(out, k, get(doc, k) ?? object()) }
+    }
+    out = with(out, meter_key, entry)
+    let _ = fs.write(path, dumps(out, 1, true))
+    println("recorded D2 ratio ${fixed(ratio, 3)} for ${meter_key} in ${path}")
+    0
+}
+
+// ---------------------------------------------------------------- LTO default study (C4)
+
+// For runtime-using programs: the generated crate built `cargo build --release` with the generated profile and with
+// LTO off (`CARGO_PROFILE_RELEASE_LTO=false`), each into its own target dir: cold build CPU (dependencies included),
+// incremental rebuild CPU (main.rs touched), stripped size and run counters. Overflow checks stay on in both.
+fn lto_row(p: Prog, wj: string, scratch: string, runs: int, flag: string) -> Json {
+    let root = run_sh("pwd").trim().to_string()
+    let work = scratch + "/" + strings.replace(p.id, "/", "_")
+    let run_dir = work + "/run"
+    let _ = run_sh("rm -rf " + quote(work) + " && mkdir -p " + quote(work + "/prog") + " " + quote(run_dir))
+    let _ = run_sh("cp " + quote(root + "/" + p.wj) + " " + quote(work + "/prog/main.wj"))
+    let _ = run_sh(quote(wj) + " build --no-cargo -o " + quote(work + "/gen") + " " + quote(work + "/prog/main.wj") + " >/dev/null 2>&1")
+    let gen = work + "/gen"
+    let mut row = with(with(object(), "id", from_str(p.id)), "suite", from_str(p.suite))
+    row = with(row, "uses_runtime", from_str(if read(gen_rs(gen)).contains("windjammer_runtime") { "yes" } else { "no" }))
+    let input = prepare_dir(p, run_dir)
+    let mut expected = ""
+    for (name, env) in [("lto_on", "CARGO_PROFILE_RELEASE_LTO=true"), ("lto_off", "CARGO_PROFILE_RELEASE_LTO=false")] {
+        let t = work + "/t_" + name
+        let base = "env " + env + " CARGO_TARGET_DIR=" + quote(t) + " CARGO_BUILD_JOBS=2 cargo build -q --release"
+        let cold = measure(gen, base, "", 1, flag)
+        let _ = run_sh("touch " + quote(gen_rs(gen)))
+        let incr = measure(gen, base, "", 1, flag)
+        let bin = t + "/release/" + gen_bin_name(gen)
+        let _ = prepare_dir(p, run_dir)
+        let r = measure(run_dir, quote(bin) + argv(p), input, runs, flag)
+        if expected == "" { expected = if p.expected != "" { p.expected } else { r.stdout } }
+        let ok = cold.status == 0 && r.status == 0 && norm(r.stdout) == norm(expected)
+        row = with(row, name, with(with(with(with(with(object(), "cold", m_json(cold)), "incremental", m_json(incr)), "run", m_json(r)), "stripped", from_int(stripped_size(bin, work) as i64)), "ok", from_str(if ok { "yes" } else { "no" })))
+        let _ = run_sh("rm -rf " + quote(t))
+    }
+    let _ = run_sh("rm -rf " + quote(work))
+    row
+}
+
 // ---------------------------------------------------------------- agent dimension (read from the pilots)
 
 fn arm_mean(arms: Json, metric: string, arm: string) -> f64 {
@@ -803,7 +938,7 @@ fn main() {
     let target = match long_flag_value(args, "target") {
         Some(t) => t,
         None => {
-            if !static_only && !has_long_flag(args, "selftest") && !has_long_flag(args, "profiles") && !has_long_flag(args, "clawback") {
+            if !static_only && !has_long_flag(args, "selftest") && !has_long_flag(args, "profiles") && !has_long_flag(args, "clawback") && !has_long_flag(args, "d2") && !has_long_flag(args, "lto-study") {
                 eprintln("usage: economics.wj (--target DIR | --static | --selftest) [--meter auto|time|rusage|wall] [--instr none|callgrind] [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S] [--no-shipped] [--label NAME]")
                 process.exit(2)
             }
@@ -838,7 +973,7 @@ fn main() {
     env_doc = with(env_doc, "counter", from_str(meter_description(meter, callgrind)))
     env_doc = with(env_doc, "meter", from_str(if meter.starts_with("rusage:") { "rusage" } else { meter }))
 
-    let skip_deps = static_only || has_long_flag(args, "profiles") || has_long_flag(args, "clawback")
+    let skip_deps = static_only || has_long_flag(args, "profiles") || has_long_flag(args, "clawback") || has_long_flag(args, "d2") || has_long_flag(args, "lto-study")
     // dependency cache: build it cold once (measured), then reuse it for every generated program
     let first = programs()[0]
     let probe = scratch + "/probe"
@@ -850,6 +985,27 @@ fn main() {
     let ext_dbg = if skip_deps { "" } else { extern_flags(target, "debug") }
     let ext_rel = if skip_deps { "" } else { extern_flags(target, "release") }
 
+    if has_long_flag(args, "lto-study") {
+        let mut rows = array()
+        for p in programs() {
+            if only != "" && !("," + only + ",").contains("," + p.id + ",") { continue }
+            if only == "" && p.suite != "dx" { continue }
+            eprintln("[lto] ${p.id}")
+            rows = push(rows, lto_row(p, wj, scratch, runs, flag))
+        }
+        let doc = with(with(object(), "env", env_doc), "lto", rows)
+        let path = out_dir + "/" + label + "-lto.json"
+        let _ = fs.write(path, dumps(doc, 1, false))
+        let _ = run_sh("rm -rf " + quote(scratch))
+        eprintln("wrote ${path}")
+        return
+    }
+    if has_long_flag(args, "d2") {
+        let mkey = (if meter.starts_with("rusage:") { "rusage" } else { meter }) + ":" + strings.replace(strings.trim(run_sh("uname -sm")), " ", "-")
+        let code = run_d2(args, wj, scratch, runs, flag, mkey)
+        let _ = run_sh("rm -rf " + quote(scratch))
+        process.exit(code)
+    }
     if has_long_flag(args, "clawback") {
         let ors = long_flag_value_or(args, "optimize-rs", "")
         if ors == "" { die("--clawback needs --optimize-rs PATH (cargo build --release --example optimize_rs)") }
