@@ -25,12 +25,14 @@ struct Case {
 const CASES: &[Case] = &[
     // Shapes rustc still rejects. The solver now lowers `len()` into an int slot (plain or in a tuple), `let mut k = 0` widened by a later
     // `parse::<int>()`, and `collect()` of `split(..)`/`split_whitespace()` into `Vec<string>`; those compile and run correctly.
+    // `nth(r)` with an int `r` now compiles (the usize slot converts it), so R1 uses a closure body: `len()` there is
+    // still `usize` beside an `int` operand (tests/inference_corpus/closure_len_width.wj, in the rustc_rejects ratchet).
     Case {
-        name: "r1_int_into_nth",
-        src: "fn main() {\n    let digits = \"12345\"\n    let r: int = 2\n    let c = digits.chars().nth(r)\n    println(\"${digits.len()}\")\n}\n",
+        name: "r1_len_in_closure_body",
+        src: "fn main() {\n    let v = [1, 2, 3]\n    let f = |x: int| x + v.len()\n    println(\"${f(1)}\")\n}\n",
         code: "WJ0003",
-        line: 4,
-        hint: &["expected `uint`, found `int`", "as uint"],
+        line: 3,
+        hint: &["expected `int`, found `uint`", "as int"],
     },
     Case {
         name: "r2_char_for_string",

@@ -184,23 +184,38 @@ pub fn make_builder() -> Builder {
     let generated = fs::read_to_string(&builder_rs)
         .unwrap_or_else(|_| panic!("Failed to read generated builder.rs"));
 
-    // The function `create` takes `name: String` but only reads it,
-    // so the analyzer infers it as `&str`. The call site should pass
-    // the string literal directly, not with .to_string().
-    assert!(
-        !generated.contains(r#""hello".to_string()"#),
-        "String literal should NOT get .to_string() for borrowed string param in static call.\n\
-         Expected: Builder::create(\"hello\")\n\
-         Generated:\n{}",
-        generated
-    );
-
-    // Verify the function signature uses &str
-    assert!(
-        generated.contains("name: &str"),
-        "Parameter should be inferred as &str since it's only read.\nGenerated:\n{}",
-        generated
-    );
+    // The call must agree with the formal `create` is emitted with (rustc E0308 otherwise). `name` reaches an extern
+    // through `string_to_ffi(String)`, so the formal is owned and the literal is passed owned; a borrowed formal
+    // (`name: &str`) takes the literal as is. (The extern's own `name: &str` is not `create`'s formal.)
+    let borrowed_formal = generated.contains("fn create(name: &str)");
+    let owned_formal = generated.contains("fn create(name: String)");
+    assert!(borrowed_formal || owned_formal, "create's formal not found.\nGenerated:\n{}", generated);
+    // Proven by rustc: the call and `create`'s emitted formal type-check together. The FFI conversion inside `create`
+    // is not what this test checks, so `windjammer_runtime::ffi::string_to_ffi` is a one-function shim returning the
+    // `&str` the extern declares (the real runtime's FfiString is a separate FFI question).
+    let shim = "#[allow(dead_code)]\nmod windjammer_runtime { pub mod ffi { pub fn string_to_ffi(s: String) -> &'static str { Box::leak(s.into_boxed_str()) } } }\n";
+    let crate_rs = temp_dir.path().join("checked.rs");
+    fs::write(&crate_rs, format!("{shim}{generated}")).unwrap();
+    let rustc = Command::new("rustc")
+        .args(["--crate-type", "lib", "--edition", "2021", "--emit", "metadata", "-A", "warnings", "-o"])
+        .arg(temp_dir.path().join("checked.rmeta"))
+        .arg(&crate_rs)
+        .output()
+        .expect("rustc");
+    assert!(rustc.status.success(), "the call does not agree with create's formal:\n{}\n{}", String::from_utf8_lossy(&rustc.stderr), generated);
+    if borrowed_formal {
+        assert!(
+            generated.contains(r#"Builder::create("hello")"#),
+            "a borrowed formal takes the literal as is.\nGenerated:\n{}",
+            generated
+        );
+    } else {
+        assert!(
+            generated.contains(r#"Builder::create("hello".to_string())"#) || generated.contains(r#"Builder::create(String::from("hello"))"#),
+            "an owned String formal takes an owned literal (Builder::create(\"hello\") is E0308).\nGenerated:\n{}",
+            generated
+        );
+    }
 }
 
 #[test]
