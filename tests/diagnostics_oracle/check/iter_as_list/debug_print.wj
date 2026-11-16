@@ -1,0 +1,25 @@
+// expect: WJ0035
+// WJ0035 (iterator used as a list), use kind: debug_print. One code, one span, one fix from every entry point (ADR-0039, G8).
+fn main() {
+    let line = "a b"
+    let parts = line.split(" ")
+    println("${parts:?}")
+//~            ^^^^^ ERROR WJ0035 printed with `:?`
+}
+
+// No report: collected first, consumed once, a list from the start, an iterator only walked.
+fn controls(words: Vec<string>) -> int {
+    let items: Vec<string> = "a,b".split(",").collect()
+    let n = "a,b".split(",").count()
+    let first = "a,b".split(",").next()
+    let mut total = 0
+    for w in "a b".split(" ") {
+        total += 1
+    }
+    let once = "a b".split(" ")
+    let _again = once.count()
+    let mut walk = "a b".split(" ")
+    let _x = walk.next()
+    let _y = walk.next()
+    total + items.len() as int + words.len() as int + n as int + items[0].len() as int
+}

@@ -154,6 +154,13 @@ fn watch_loop(root: &Path, json: bool, fix: bool, format: render::Format) -> Res
 }
 
 /// Gate for `wj run --interpret`: the interpreter must not be more permissive than the compiler.
+/// Apply the machine-applicable fixes of the front-end check to the sources on disk (`wj run --fix`); returns the
+/// number of edits applied.
+pub fn fix_in_place(path: &Path) -> Result<usize> {
+    let checked = check_quietly(path)?;
+    Ok(check::apply_fixes(&checked.report.diagnostics, &checked.sources, true)?.edits_applied)
+}
+
 /// Runs the same front-end checks as `wj check`; on any error-level diagnostic prints them and
 /// returns `Err` so the caller refuses to execute the program. Warnings do not block.
 pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> Result<()> {

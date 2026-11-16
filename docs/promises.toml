@@ -500,6 +500,10 @@ id = "wj run --speculate"
 statement = "Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033)"
 
 [[promise]]
+id = "wj run --fix"
+statement = "Apply every machine-applicable fix `wj check` reports (such as `.collect()` on an iterator used as a list, WJ0035) to the sources, then run the result"
+
+[[promise]]
 id = "wj run --verify"
 statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints"
 

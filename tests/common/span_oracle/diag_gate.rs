@@ -54,6 +54,14 @@ fn annotated_check_programs_match_their_markers() {
     check_files_against_markers(&files, collect_check);
 }
 
+/// Gate G8 (ADR-0039): one case per use kind of an iterator used as a list, each with exact span markers.
+#[test]
+fn iterator_used_as_list_cases_match_their_markers() {
+    let files = marker_files(&oracle_dir().join("check/iter_as_list"));
+    assert!(files.len() >= 14, "one case per use kind of decision H: {}", files.len());
+    check_files_against_markers(&files, collect_check);
+}
+
 /// Every repo `.wj` is run through `wj check`. Files with markers must match them. Files without
 /// markers may emit no diagnostic, unless listed in the ratchet (which can only shrink). Whatever
 /// the checker reports, its spans must be well-formed for the source (`validate_report_spans`).
