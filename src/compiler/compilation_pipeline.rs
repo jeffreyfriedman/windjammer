@@ -500,12 +500,9 @@ mod tests {
             },
         );
         let meta = CrateMetadata {
-            structs: HashMap::new(),
             functions,
-            copy_structs: Vec::new(),
-            string_consts: Vec::new(),
-            variant_payloads: Default::default(),
             version: "0.1.0".to_string(),
+            ..CrateMetadata::new()
         };
         std::fs::write(
             dep.join("metadata.json"),

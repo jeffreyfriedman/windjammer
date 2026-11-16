@@ -215,7 +215,6 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
 
     // Correct project-root metadata.json with RIGHT ownership
     let correct_meta = CrateMetadata {
-        structs: HashMap::new(),
         functions: {
             let mut fns = HashMap::new();
             fns.insert(
@@ -241,9 +240,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
             fns
         },
         version: "0.1.0".to_string(),
-        copy_structs: Vec::new(),
-        string_consts: Vec::new(),
-        variant_payloads: Default::default(),
+        ..CrateMetadata::new()
     };
     std::fs::write(
         proj.join("metadata.json"),
