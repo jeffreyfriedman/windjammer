@@ -221,12 +221,17 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ) {
                     None
                 } else {
-                    // A receiver of known type calls its own `Type::method` (not registered here) or a trait's method;
-                    // an inherent method of another type under the same bare name is not it.
+                    // A method call names a method, or a free function declaring the receiver as its first formal
+                    // (`fn flatten<T>(xs: Vec<Vec<T>>)`): never `fn len(c: List)` for an `int` receiver.
                     self.resolve_callee_signature(method, arguments.len()).filter(|s| {
-                        receiver_type.as_deref().is_none_or(|rt| {
-                            self.registry.is_none_or(|reg| !reg.is_inherent_method_of_another_type(method, s, rt))
-                        })
+                        s.has_self_receiver
+                            || receiver_type.as_deref().is_none_or(|ty| {
+                                s.param_types.len() == arguments.len() + 1
+                                    && crate::type_classification::first_formal_accepts_receiver(
+                                        &s.param_types[0],
+                                        &crate::parser::Type::Custom(ty.to_string()),
+                                    )
+                            })
                     })
                 }
             })
@@ -264,6 +269,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let surface = module_function
             || self.emit_numeric_method_constraints(object, obj_var, method, arguments, &arg_vars, result)
             || self.emit_core_surface_constraints(expr, object, obj_var, method, arguments, &arg_vars, result);
+        if sig.is_none() && !surface {
+            self.emit_owned_receiver_of_unknown_method(object, method);
+        }
         if let Some(sig) = sig.as_ref().filter(|_| !surface) {
             self.emit_call_site_constraints(sig, &arg_vars, arguments);
         } else if !surface {

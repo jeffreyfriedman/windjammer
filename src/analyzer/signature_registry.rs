@@ -146,6 +146,8 @@ pub struct SignatureRegistry {
     /// Write-back restores trait AST `string` onto these without touching
     /// inherent homonyms (`DbReportReader::report_lines`).
     trait_impl_method_keys: HashSet<String>,
+    /// Types declared by dependencies, with whether their crate derives `Serialize` for them.
+    dependency_type_serde: HashMap<String, bool>,
     /// `Type::method` keys of inherent impls (`impl Type`) the program declares.
     pub(super) inherent_method_keys: HashSet<String>,
     /// WJ `std::module` names populated by the runtime scanner (`http`, `csv` from
@@ -233,6 +235,7 @@ impl SignatureRegistry {
             method_index: HashMap::new(),
             trait_method_keys: HashSet::new(),
             trait_impl_method_keys: HashSet::new(),
+            dependency_type_serde: HashMap::new(),
             inherent_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
             runtime_std_rust_stems: HashMap::new(),
@@ -1022,17 +1025,6 @@ impl SignatureRegistry {
         out.sort();
         out
     }
-
-    /// Record that `key` is a `Trait::method` definition (not an inherent impl).
-    pub fn record_trait_method_key(&mut self, key: String) {
-        self.trait_method_keys.insert(key);
-    }
-
-    /// Record that `key` is a `Type::method` from `impl Trait for Type`.
-    pub fn record_trait_impl_method_key(&mut self, key: String) {
-        self.trait_impl_method_keys.insert(key);
-    }
-
 
     /// Every local signature in key order (never hash order).
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
@@ -1894,6 +1886,8 @@ impl SignatureRegistry {
             .extend(other.trait_method_keys.iter().cloned());
         self.trait_impl_method_keys
             .extend(other.trait_impl_method_keys.iter().cloned());
+        self.dependency_type_serde
+            .extend(other.dependency_type_serde.iter().map(|(k, v)| (k.clone(), *v)));
         self.inherent_method_keys.extend(other.inherent_method_keys.iter().cloned());
         self.runtime_std_modules
             .extend(other.runtime_std_modules.iter().cloned());

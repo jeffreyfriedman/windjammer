@@ -13,6 +13,9 @@ pub(in crate::metadata) fn merge_generated_rust_dir_with_alias(
     registry: &mut SignatureRegistry,
     crate_alias: Option<&str>,
 ) {
+    for (name, derives) in super::type_derives::type_serde_derives_in_dir(dir) {
+        registry.record_dependency_type_serde(name, derives);
+    }
     for (name, sig) in recover_signatures_from_generated_rust_dir(dir) {
         if let Some(alias) = crate_alias {
             if !alias.is_empty() && !name.contains("::") {

@@ -1,0 +1,13 @@
+// Two modules each declare a private `fn cell`: `parse` takes `idx: int`, `ledger` takes `index: usize`. Each
+// module's calls name its own function, so `parse`'s int arguments are never cast to `usize`.
+// Expected by hand: column 0 of the row, then the ledger's first cell.
+// expect: 2026-01-02 12 2026-01-02
+mod parse
+mod ledger
+use parse::Mapping
+
+fn main() {
+    let row = ["2026-01-02", "12"]
+    let m = Mapping { date_col: 0, amount_col: 1 }
+    println("${parse::date_of(row, m)} ${parse::amount_of(row, Mapping { date_col: 0, amount_col: 1 })} ${ledger::first(row)}")
+}

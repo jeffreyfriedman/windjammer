@@ -63,7 +63,7 @@ tests/static_method_inference_test.wj | error[E0433]: cannot find module or crat
 tests/stdlib_all_tests.wj | wj build failed
 tests/stdlib_http_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/string_borrow_inference_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-tests/string_call_arg_test.wj | error: missing boundary signature for `draw::draw_text`
+tests/string_call_arg_test.wj | error[E0432]: unresolved import `crate::ui`
 tests/string_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/struct_with_missing_imports.wj | error[E0425]: cannot find type `Animation` in this scope
 tests/svo_convert_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope

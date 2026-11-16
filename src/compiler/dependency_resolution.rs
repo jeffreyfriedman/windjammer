@@ -143,21 +143,24 @@ pub(crate) fn build_type_defining_modules_for_library_with_programs(
 /// Keys use Rust crate naming (`substrate-crate` → `substrate_crate`) so they match
 /// `--metadata` / `external_paths` conventions. Explicit CLI `--metadata` entries
 /// should override these when merged.
+/// `Err` names each path dependency with Windjammer sources whose signatures could not be derived: its call sites
+/// would otherwise be guessed, so the build stops.
 pub(crate) fn discover_wj_toml_path_dependency_metadata(
     build_path: &Path,
-) -> HashMap<String, PathBuf> {
+) -> Result<HashMap<String, PathBuf>, String> {
     let mut out = HashMap::new();
+    let mut errors = Vec::new();
     let search_from = if build_path.is_file() {
         build_path.parent().unwrap_or(build_path)
     } else {
         build_path
     };
     let Some(project_root) = crate::metadata::find_project_root(search_from) else {
-        return out;
+        return Ok(out);
     };
     let wj_toml = project_root.join("wj.toml");
     let Ok(config) = crate::config::WjConfig::load_from_file(&wj_toml) else {
-        return out;
+        return Ok(out);
     };
 
     for (name, spec) in config
@@ -195,6 +198,16 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
                 break;
             }
         }
+        // No metadata.json: a dependency with Windjammer sources is analyzed from them (never guessed).
+        if found.is_none() {
+            // `path = "../pkg/build"` names a package's generated output: its declarations are the package's sources.
+            let source_root = super::path_dep_metadata::source_package_of(&dep_root);
+            match super::path_dep_metadata::derive(&key, source_root.as_deref().unwrap_or(&dep_root)) {
+                Some(Ok(root)) => found = Some(root),
+                Some(Err(e)) => errors.push(format!("{e}; its call sites would have no signatures")),
+                None => {}
+            }
+        }
         // Ecosystem `path = "…/build"` often has generated `lib.rs` and no metadata.json.
         if found.is_none() {
             for candidate in &candidates {
@@ -208,7 +221,11 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
             out.insert(key, root);
         }
     }
-    out
+    if errors.is_empty() {
+        Ok(out)
+    } else {
+        Err(errors.join("\n"))
+    }
 }
 
 /// Discover `metadata.json` roots for crates imported via `use crate_name::...` in `.wj`
@@ -443,7 +460,7 @@ dep-crate = { path = "../dep_crate" }
         )
         .unwrap();
 
-        let found = discover_wj_toml_path_dependency_metadata(&root.join("src"));
+        let found = discover_wj_toml_path_dependency_metadata(&root.join("src")).unwrap();
         assert_eq!(
             found.get("dep_crate").map(|p| p.file_name().unwrap()),
             Some(std::ffi::OsStr::new("gen")),

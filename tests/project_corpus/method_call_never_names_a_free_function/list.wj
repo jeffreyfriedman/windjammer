@@ -1,0 +1,12 @@
+// A free function named like a method `main` calls on a primitive value.
+pub enum List {
+    Cons(int, Box<List>),
+    Nil,
+}
+
+pub fn count_ones(c: List) -> int {
+    match c {
+        List::Cons(_, rest) => 1 + count_ones(*rest),
+        List::Nil => 0,
+    }
+}

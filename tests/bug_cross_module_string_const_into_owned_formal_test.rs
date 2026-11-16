@@ -85,12 +85,10 @@ fn external_metadata_string_const_into_owned_formal_must_own() {
         },
     );
     let meta = CrateMetadata {
-        structs: HashMap::new(),
         functions,
-        copy_structs: Vec::new(),
         string_consts: vec!["NIL".to_string()],
-        variant_payloads: Default::default(),
         version: "0.50.0".to_string(),
+        ..CrateMetadata::new()
     };
     std::fs::write(
         dep.join("metadata.json"),

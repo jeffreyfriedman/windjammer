@@ -1367,7 +1367,7 @@ pub(crate) fn build_library_multipass(
                     codegen.set_stdlib_type_rust_paths(std_paths);
                 }
             }
-            codegen.set_output_file(&analysis.output_file);
+            codegen.set_output_position(&analysis.output_file, output, src_base.as_path());
             codegen.set_source_file(file);
             codegen.set_library_source_root(src_base.clone());
             codegen.set_type_defining_modules((*type_defining_modules_arc).clone());
@@ -1699,6 +1699,7 @@ fn run_parallel_numeric_inference(
                 crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
                     .unwrap_or_default();
             local.set_current_file_module_path(file_module);
+            local.register_own_functions(&parsed_programs[i]);
             local.collect_program_constraints(&parsed_programs[i]);
             local
         })

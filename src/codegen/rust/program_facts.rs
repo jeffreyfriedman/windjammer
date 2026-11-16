@@ -32,6 +32,12 @@ pub(crate) struct IdiomScratch {
     pub(crate) file_scope_is_open: bool,
     /// Type names imported from another crate (`use dep::Type`); whether they implement `Serialize` is unknown.
     pub(crate) foreign_imported_types: HashSet<String>,
+    /// `use crate::m` / `use crate::m as n` / `use self::..` / `use super::..` of this file, by the name it binds: a path
+    /// call through it (`m::f(..)`) names a same-crate definition, as the imported-name form `use crate::m::f` does.
+    pub(crate) same_crate_use_paths: std::collections::HashMap<String, String>,
+    /// Crates the project's `wj.toml` declares as dependencies: `use dep::m::T` names that crate, never a module
+    /// of this one, whatever directories sit next to the build output.
+    pub(crate) dependency_crates: HashSet<String>,
     /// Free functions this file declares at top level: a bare call names one of them before a same-named
     /// function of any other module (lexical scope beats imports and other files).
     pub(crate) file_scope_fn_names: HashSet<String>,
@@ -71,6 +77,14 @@ impl<'ast> CodeGenerator<'ast> {
         let idiom = &mut self.idiom;
         idiom.file_scope_type_names.clear();
         idiom.foreign_imported_types.clear();
+        idiom.same_crate_use_paths.clear();
+        idiom.dependency_crates = if self.current_wj_file.as_os_str().is_empty() {
+            HashSet::new()
+        } else {
+            crate::module_system::project::find_manifest_dir(&self.current_wj_file)
+                .map(|root| crate::module_system::project::dependency_crate_names(&root))
+                .unwrap_or_default()
+        };
         idiom.file_scope_fn_names.clear();
         idiom.file_scope_is_open = false;
         idiom.imported_std_fn_names.clear();
@@ -94,6 +108,10 @@ impl<'ast> CodeGenerator<'ast> {
                     idiom.file_scope_type_names.insert(name.clone());
                 }
                 Item::Use { path, alias, .. } => {
+                    let same_crate = path.len() >= 2 && matches!(path[0].as_str(), "crate" | "self" | "super");
+                    if let Some(n) = alias.as_ref().or(path.last()).filter(|n| same_crate && n.as_str() != "*") {
+                        idiom.same_crate_use_paths.insert(n.clone(), path.join("::"));
+                    }
                     if path.last().is_some_and(|l| l == "*") {
                         idiom.file_scope_is_open = true;
                     } else if let Some(n) = alias.as_ref().or(path.last()) {

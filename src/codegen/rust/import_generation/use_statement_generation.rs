@@ -32,12 +32,7 @@ impl CodeGenerator<'_> {
             let norm = full_path.replace('.', "::");
             if norm.starts_with("crate::") && !norm.starts_with("crate::super::") {
                 if let Some(rest) = norm.strip_prefix("crate::") {
-                    if let Some(mod_dir) = self
-                        .current_output_file
-                        .parent()
-                        .and_then(|p| p.file_name())
-                        .and_then(|n| n.to_str())
-                    {
+                    if let Some(mod_dir) = self.output_module_dirs().and_then(|dirs| dirs.last().cloned()) {
                         let first_seg = rest.split("::").next().unwrap_or("");
                         if first_seg == mod_dir {
                             if let Some(alias_name) = alias {
@@ -193,6 +188,17 @@ impl CodeGenerator<'_> {
             }
         }
 
+        // A crate the project's wj.toml declares (`use dep::m::T`) is that crate: the directory checks below look at the
+        // filesystem around the build output, where a dependency's own directory can sit under the same name.
+        if let Some(first_seg) = rust_path.split("::").next() {
+            if rust_path.contains("::") && self.idiom.dependency_crates.contains(first_seg) {
+                return match alias {
+                    Some(a) => format!("{}use {} as {};\n", pub_prefix, rust_path, a),
+                    None => format!("{}use {};\n", pub_prefix, rust_path),
+                };
+            }
+        }
+
         // TDD FIX: Handle imports from sibling modules (Part 2 - Nested Import Bug)
         // When in a subdirectory (e.g., rendering/sprite.wj) and importing a sibling (texture::Texture),
         // we need to detect this and rewrite to super::texture::Texture
@@ -206,22 +212,13 @@ impl CodeGenerator<'_> {
         // THE WINDJAMMER WAY: Smart defaults that work 99% of the time
         // TDD COMPILER FIX: Check INPUT file structure, not OUTPUT structure!
         // Output might be flat (build/*.rs) while input is nested (src/achievement/mod.wj)
-        let is_in_subdirectory = self
-            .current_wj_file
-            .parent()
-            .and_then(|p| p.file_name())
-            .is_some(); // If parent has a name, we're in a subdirectory
+        let is_in_subdirectory = self.current_wj_file.parent().is_some();
 
         // TDD FIX: Detect imports from parent module's re-exports
         // When in rendering/sprite.wj and seeing "use rendering::Texture",
         // this means the parent module's re-export, so convert to "use super::Texture"
         if is_in_subdirectory {
-            if let Some(parent_dir) = self
-                .current_output_file
-                .parent()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-            {
+            if let Some(parent_dir) = self.output_module_dirs().and_then(|dirs| dirs.last().cloned()) {
                 // Check if the import starts with our parent directory name
                 if rust_path.starts_with(&format!("{}::", parent_dir)) {
                     if self.is_output_mod_rs() {
@@ -257,14 +254,11 @@ impl CodeGenerator<'_> {
 
         // TDD FIX: Dynamically detect if first_segment is a directory by checking the generated output directory
         let is_child_of_mod_rs = self.is_child_module_of_mod_rs_dir(first_segment);
+        // A directory module declared beside this file's directory module (`use rendering::Texture` from `ui/hud.wj`).
         let is_directory_prefix = !is_child_of_mod_rs
-            && if let Some(output_dir) = self.current_output_file.parent().and_then(|p| p.parent())
-            {
-                let potential_dir = output_dir.join(first_segment);
-                potential_dir.is_dir()
-            } else {
-                false
-            };
+            && self.output_module_dirs().is_some_and(|dirs| {
+                !dirs.is_empty() && self.source_module_has_dir_child(&dirs[..dirs.len() - 1], first_segment)
+            });
 
         // Handle super::super::math::vec3::Vec3 -> super::Vec3
         if rust_path.starts_with("super::super::") {
@@ -366,7 +360,7 @@ impl CodeGenerator<'_> {
                     }
                 } else if rust_path.contains("::") {
                     let is_likely_internal =
-                        external_imports::is_likely_internal_module(first_segment);
+                        self.source_module_declares_child(&[], first_segment);
 
                     let rp = self.expand_bare_module_path_for_type(&rust_path);
                     if is_likely_internal {
@@ -378,7 +372,7 @@ impl CodeGenerator<'_> {
                     format!("{}use {};\n", pub_prefix, rust_path)
                 }
             } else if rust_path.contains("::") {
-                let is_likely_internal = external_imports::is_likely_internal_module(first_segment);
+                let is_likely_internal = self.source_module_declares_child(&[], first_segment);
                 let is_external = external_imports::is_external_crate(first_segment);
 
                 if is_likely_internal {

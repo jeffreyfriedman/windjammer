@@ -32,6 +32,7 @@ mod int_formal_scan_extra;
 mod let_statement_context;
 mod program_facts;
 mod same_crate_callee;
+mod callee_identity;
 mod binding_identity;
 mod type_balancing_fixups;
 pub mod closure_generation;

@@ -1,0 +1,24 @@
+// `main` declares its own `is_row_key(prefix_len: usize, key)` and imports a constant from `rows`, which declares
+// `is_row_key(k: u8)`. The bare call names `main`'s own function: its first argument is a usize, never a u8.
+// Expected by hand: only the 10-byte key has length 2 + 8; KIND_ROW is 1; 5 >= 4.
+// expect: 1 1 true
+mod rows
+use rows::KIND_ROW
+
+fn is_row_key(prefix_len: usize, key: Vec<u8>) -> bool {
+    key.len() == prefix_len + 8
+}
+
+fn main() {
+    let keys: Vec<Vec<u8>> = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3]]
+    let prefix_len: usize = 2
+    let mut n: usize = 0
+    let mut i: usize = 0
+    while i < keys.len() {
+        if is_row_key(prefix_len, keys[i]) {
+            n = n + 1
+        }
+        i = i + 1
+    }
+    println("${n} ${KIND_ROW} ${rows::is_row_key(5)}")
+}

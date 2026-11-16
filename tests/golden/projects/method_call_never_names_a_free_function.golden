@@ -1,0 +1,50 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod list;
+
+// Re-export public items
+pub use list::*;
+// ==== list.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Clone, Debug)]
+pub enum List {
+    Cons(i64, Box<List>),
+    Nil,
+}
+
+#[inline]
+pub fn count_ones(c: List) -> i64 {
+    match c {
+        List::Cons(_, rest) => 1_i64 + count_ones(*rest),
+        List::Nil => 0_i64,
+    }
+}
+
+// ==== main.rs ====
+use self::list::List;
+mod list;
+#[inline]
+fn bits(mut flags: u32) -> u32 {
+    if flags.count_ones() > 0_u32 {
+        flags.count_ones()
+    } else {
+        0_u32
+    }
+}
+
+fn main() {
+    println!("{} bits", bits(11_u32));
+    println!("{}", list::count_ones(List::Cons(1_i64, Box::new(List::Cons(2_i64, Box::new(List::Nil))))));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod list;
+
+// Re-export public items
+pub use list::*;

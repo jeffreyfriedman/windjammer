@@ -91,10 +91,19 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
 /// Windjammer dependency first). Other paths are returned unchanged.
 pub(crate) fn windjammer_package_build_dir(resolved: String) -> String {
     let dir = Path::new(&resolved);
-    if dir.join("wj.toml").is_file() && !dir.join("Cargo.toml").is_file() && dir.join("gen").join("Cargo.toml").is_file() {
+    if !dir.join("wj.toml").is_file() || dir.join("Cargo.toml").is_file() {
+        return resolved;
+    }
+    if dir.join("gen").join("Cargo.toml").is_file() {
         return sanitize_path_for_toml(&dir.join("gen"));
     }
-    resolved
+    // No generated crate of its own: the crate derived from its sources for this build (its signatures).
+    let source_dir = if dir.join("src").is_dir() { dir.join("src") } else { dir.to_path_buf() };
+    let derived = std::fs::read_to_string(crate::cargo_cache::path_dep_crate_index(&source_dir)).ok().map(std::path::PathBuf::from);
+    match derived.filter(|d| d.join("Cargo.toml").is_file()) {
+        Some(d) => sanitize_path_for_toml(&d),
+        None => resolved,
+    }
 }
 
 /// Rewrite a path-dep string so it is valid from a generated `gen/Cargo.toml`.

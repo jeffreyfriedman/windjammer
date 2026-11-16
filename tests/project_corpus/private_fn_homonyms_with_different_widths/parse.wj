@@ -1,0 +1,20 @@
+pub struct Mapping {
+    pub date_col: int,
+    pub amount_col: int,
+}
+
+fn cell(cells: Vec<string>, idx: int) -> string {
+    if idx < cells.len() as int {
+        cells[idx as usize]
+    } else {
+        ""
+    }
+}
+
+pub fn date_of(cells: Vec<string>, mapping: Mapping) -> string {
+    cell(cells, mapping.date_col)
+}
+
+pub fn amount_of(cells: Vec<string>, mapping: Mapping) -> string {
+    cell(cells, mapping.amount_col)
+}

@@ -58,6 +58,19 @@ pub fn crate_version(crate_dir: &Path) -> String {
     format!("0.1.0+wj{h:016x}")
 }
 
+/// Where the crate generated for a source-only Windjammer path dependency is recorded, by the dependency's source
+/// directory: the build that derived it (its signatures) writes the crate's directory here, and the dependent's
+/// `Cargo.toml` links that crate.
+pub fn path_dep_crate_index(source_dir: &std::path::Path) -> PathBuf {
+    let canon = std::fs::canonicalize(source_dir).unwrap_or_else(|_| source_dir.to_path_buf());
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in canon.to_string_lossy().bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    cache_root().join("path-deps").join("by-source").join(format!("{h:016x}"))
+}
+
 /// The shared cache root: one definition, in `compiler_config` (`WJ_CARGO_TARGET_ROOT`, else the platform default).
 pub fn cache_root() -> PathBuf {
     crate::compiler_config::shared_cache_root()

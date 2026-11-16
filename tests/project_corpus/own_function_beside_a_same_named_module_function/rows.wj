@@ -1,0 +1,6 @@
+// A module function with the same name as a private function of `main`, and a constant `main` imports.
+pub fn is_row_key(k: u8) -> bool {
+    k >= 4
+}
+
+pub const KIND_ROW: u8 = 1

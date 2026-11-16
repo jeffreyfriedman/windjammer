@@ -1,0 +1,51 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod queue;
+
+// Re-export public items
+pub use queue::*;
+// ==== main.rs ====
+use self::queue::append_all;
+mod queue;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Outbox {
+    pub pending: Vec<String>,
+}
+
+impl Outbox {
+#[inline]
+fn flush(&mut self, items: Vec<String>) {
+        self.pending = append_all(std::mem::take(&mut self.pending), items);
+}
+}
+
+fn main() {
+    let mut o = Outbox { pending: vec![] };
+    o.flush(vec!["a".to_string()]);
+    o.flush(vec!["b".to_string(), "c".to_string()]);
+    println!("{} {}", o.pending.len(), &o.pending[0]);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod queue;
+
+// Re-export public items
+pub use queue::*;
+// ==== queue.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn append_all(queue: Vec<String>, items: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = queue;
+    for item in items {
+        out.push(item);
+    }
+    out
+}
+

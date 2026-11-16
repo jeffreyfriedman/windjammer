@@ -1,0 +1,16 @@
+// `list` declares a free `fn count_ones(c: List) -> int`. `flags.count_ones()` is a method call on a `u32`: a
+// method call never names a free function, so the literal it is compared with is not typed `int` (i64).
+// Expected by hand: 0b1011 has three bits set; the list has two cells.
+// expect: 3 bits
+// expect: 2
+mod list
+use list::List
+
+fn bits(flags: u32) -> u32 {
+    if flags.count_ones() > 0 { flags.count_ones() } else { 0 }
+}
+
+fn main() {
+    println("${bits(11)} bits")
+    println("${list::count_ones(List::Cons(1, Box::new(List::Cons(2, Box::new(List::Nil)))))}")
+}

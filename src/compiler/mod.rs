@@ -9,6 +9,7 @@ mod compilation_pipeline;
 mod converged_module_signatures;
 mod declaration_stub_registry;
 mod dependency_resolution;
+mod path_dep_metadata;
 pub mod incremental;
 mod library_copy_registry;
 mod value_formal_fixed_point;
@@ -206,7 +207,11 @@ pub(crate) fn write_crate_metadata_json(
     metadata: &crate::metadata::CrateMetadata,
 ) -> anyhow::Result<()> {
     let metadata_path = output.join("metadata.json");
-    let metadata_json = serde_json::to_string_pretty(metadata)?;
+    // Which of its types the generated crate derives `Serialize` for: dependents' derive inference reads it.
+    let mut metadata = metadata.clone();
+    let derives = crate::metadata::type_derives::type_serde_derives_in_dir(output);
+    metadata.serde_types = Some(crate::metadata::type_derives::serde_type_names(&derives));
+    let metadata_json = serde_json::to_string_pretty(&metadata)?;
     cache_management::write_if_changed(&metadata_path, &metadata_json)?;
     Ok(())
 }

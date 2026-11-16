@@ -272,7 +272,18 @@ impl FloatInference {
         }
 
         self.load_imported_metadata(program);
+        self.register_own_functions(program);
         self.register_use_imports_from_items(&program.items);
+    }
+
+    /// A function this file declares is the contract for its bare calls: a same-named function of another module or
+    /// of a dependency (`is_row_key(k: u8)` beside this file's `is_row_key(prefix_len: usize, key)`) never replaces it.
+    pub fn register_own_functions<'ast>(&mut self, program: &Program<'ast>) {
+        for item in &program.items {
+            if matches!(item, crate::parser::ast::core::Item::Function { .. }) {
+                self.register_function_signature(item);
+            }
+        }
     }
 
     /// Collect float constraints from a program (call [`Self::finish_solve`] after merging).

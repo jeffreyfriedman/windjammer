@@ -191,13 +191,16 @@ fn apply_owned_string_literal_coercion<'ast>(
         // AsRef-runtime bodies preregister `path: String`. A stale analyzer
         // `Reference(str)` must not peel the literal.
         let prereg_owned_string = gen.preregistered_free_call_arg_emits_owned_string(func_name, i);
+        // `Type::f` of an impl this file declares: its emitted formals (the resolved `signature`) are the contract;
+        // a global or dependency entry under the same key is another snapshot, not this declaration.
+        let own_impl_fn = func_name.rsplit_once("::").is_some_and(|(ty, f)| gen.type_defines_own_method(Some(ty), f));
         let path_dep_shared = !prereg_owned_string
             && (signature.as_ref().is_some_and(slot_shared)
-                || gen
+                || !own_impl_fn && gen
                     .resolve_cross_crate_dep_signature(func_name)
                     .as_ref()
                     .is_some_and(slot_shared)
-                || gen
+                || !own_impl_fn && gen
                     .global_signature_registry
                     .as_ref()
                     .and_then(|g| {
@@ -210,7 +213,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                     .get_signature(lookup.as_ref())
                     .or_else(|| gen.signature_registry.get_signature(func_name))
                     .is_some_and(slot_shared)
-                || gen.cross_crate_dep_arg_confirms_shared(func_name, i));
+                || !own_impl_fn && gen.cross_crate_dep_arg_confirms_shared(func_name, i));
         if path_dep_shared {
             if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
                 crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(

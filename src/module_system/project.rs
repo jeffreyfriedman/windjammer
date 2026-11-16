@@ -41,6 +41,18 @@ pub fn find_manifest_dir(start: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Crate names (`-` spelled `_`) of the `[dependencies]` and `[dev-dependencies]` the project at `root` declares.
+pub fn dependency_crate_names(root: &Path) -> std::collections::HashSet<String> {
+    let Some(v) = std::fs::read_to_string(root.join(MANIFEST)).ok().and_then(|t| t.parse::<toml::Value>().ok()) else {
+        return Default::default();
+    };
+    ["dependencies", "dev-dependencies"]
+        .iter()
+        .filter_map(|table| v.get(*table).and_then(|t| t.as_table()))
+        .flat_map(|t| t.keys().map(|k| k.replace('-', "_")))
+        .collect()
+}
+
 fn package_name(root: &Path) -> Option<String> {
     let v: toml::Value = std::fs::read_to_string(root.join(MANIFEST)).ok()?.parse().ok()?;
     let name = v.get("package")?.get("name")?.as_str()?.to_string();

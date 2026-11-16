@@ -268,6 +268,11 @@ path = "tests/convergence_gates_test.rs"
 name = "identity_corpus"
 path = "tests/identity_corpus_test.rs"
 
+# Filesystem probes / file-name reads in src/codegen may only shrink (decide from declarations): cargo test --release --test location_dependence_ratchet
+[[test]]
+name = "location_dependence_ratchet"
+path = "tests/location_dependence_ratchet_test.rs"
+
 # Bare-name signature lookups per file may only shrink (callee identity by declaration): cargo test --release --test bare_name_lookup_ratchet
 [[test]]
 name = "bare_name_lookup_ratchet"

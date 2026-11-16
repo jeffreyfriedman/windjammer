@@ -1,0 +1,11 @@
+fn cell(row: Vec<string>, index: usize) -> string {
+    if index < row.len() {
+        row[index]
+    } else {
+        "-"
+    }
+}
+
+pub fn first(row: Vec<string>) -> string {
+    cell(row, 0)
+}

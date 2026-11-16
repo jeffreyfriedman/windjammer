@@ -186,7 +186,7 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
-    fn refreshed_call_site_sig_for_arg<'a>(
+    pub(in crate::codegen::rust) fn refreshed_call_site_sig_for_arg<'a>(
         &self,
         _registry: &'a SignatureRegistry,
         callee_name: &str,
@@ -763,6 +763,7 @@ impl<'ast> CodeGenerator<'ast> {
         if receiver_type_name.is_none()
             && Self::is_module_boundary_callee(callee_name)
             && self.same_crate_callee_key(callee_name).is_none()
+            && !self.path_call_through_same_crate_use(callee_name)
             && !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                 crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                     callee_name,
@@ -801,53 +802,7 @@ impl<'ast> CodeGenerator<'ast> {
         let own = if receiver_type_name.is_none() { self.own_file_definition(callee_name) } else { None };
         let same_function = |s: &crate::analyzer::FunctionSignature| own.as_ref().is_none_or(|o| o.declares_same_function(s));
         let mut sig = if receiver_type_name.is_none() && !callee_name.contains("::") {
-            let from_global = self
-                .global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(lookup).filter(|s| same_function(s)).cloned());
-            let from_global_simple = if import_alias_resolved {
-                None
-            } else {
-                self.global_signature_registry
-                    .as_ref()
-                    .and_then(|g| g.get_signature(simple).filter(|s| same_function(s)).cloned())
-            };
-            let from_reg = registry.get_signature(lookup).cloned();
-            let from_local = local_sig.cloned();
-            // Bare `contains` after `use std::strings` must still see the runtime
-            // `&str` needle — not only the qualified `strings::contains` path.
-            let runtime_mod =
-                crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
-                    lookup,
-                );
-            let from_stdlib_top;
-            let from_stdlib_fb;
-            if crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(lookup)
-                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(runtime_mod)
-            {
-                let stdlib = SignatureRegistry::stdlib();
-                from_stdlib_top = stdlib
-                    .get_signature(lookup)
-                    .or_else(|| stdlib.get_signature(&format!("{runtime_mod}::{simple}")))
-                    .cloned();
-                from_stdlib_fb = stdlib
-                    .get_fallback_signature(lookup)
-                    .or_else(|| stdlib.get_fallback_signature(&format!("{runtime_mod}::{simple}")))
-                    .cloned();
-            } else {
-                from_stdlib_top = None;
-                from_stdlib_fb = None;
-            }
-            // Prefer defining-module / global refresh first so cross-module free calls
-            // see `&str` (regression-049 `replay_to_lsn`) over stale local owned stubs.
-            crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-                from_stdlib_top,
-                from_stdlib_fb,
-                from_global,
-                from_global_simple,
-                from_reg,
-                from_local,
-            ])
+            self.bare_free_callee_ir_signature(registry, lookup, simple, import_alias_resolved, local_sig, &same_function)
         } else if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
             callee_name,
         ) {
@@ -6651,6 +6606,11 @@ impl<'ast> CodeGenerator<'ast> {
                 .or_else(|| sig.param_types.get(pidx))
                 .is_some_and(crate::codegen::rust::type_casting::type_is_usize)
         };
+        // A function this file declares is its own contract: the bare key may hold another module's private
+        // homonym (`cell(row, index: usize)` beside this file's `cell(cells, idx: int)`), which is not this callee.
+        if self.own_file_definition(callee_name).is_some() {
+            return false;
+        }
         for reg in [
             self.global_signature_registry.as_deref(),
             Some(&self.signature_registry),
@@ -6670,6 +6630,66 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    /// The signature for IR coercion of a bare free call (`f(..)`, no receiver): stdlib/runtime, global, file
+    /// registry and the plain-call resolution; `same_function` keeps out a global homonym of another module.
+    fn bare_free_callee_ir_signature(
+        &self,
+        registry: &SignatureRegistry,
+        lookup: &str,
+        simple: &str,
+        import_alias_resolved: bool,
+        local_sig: Option<&crate::analyzer::FunctionSignature>,
+        same_function: &dyn Fn(&crate::analyzer::FunctionSignature) -> bool,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        let from_global = self
+            .global_signature_registry
+            .as_ref()
+            .and_then(|g| g.get_signature(lookup).filter(|s| same_function(s)).cloned());
+        let from_global_simple = if import_alias_resolved {
+            None
+        } else {
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(simple).filter(|s| same_function(s)).cloned())
+        };
+        let from_reg = registry.get_signature(lookup).cloned();
+        let from_local = local_sig.cloned();
+        // Bare `contains` after `use std::strings` must still see the runtime
+        // `&str` needle — not only the qualified `strings::contains` path.
+        let runtime_mod =
+            crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+                lookup,
+            );
+        let from_stdlib_top;
+        let from_stdlib_fb;
+        if crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(lookup)
+            || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(runtime_mod)
+        {
+            let stdlib = SignatureRegistry::stdlib();
+            from_stdlib_top = stdlib
+                .get_signature(lookup)
+                .or_else(|| stdlib.get_signature(&format!("{runtime_mod}::{simple}")))
+                .cloned();
+            from_stdlib_fb = stdlib
+                .get_fallback_signature(lookup)
+                .or_else(|| stdlib.get_fallback_signature(&format!("{runtime_mod}::{simple}")))
+                .cloned();
+        } else {
+            from_stdlib_top = None;
+            from_stdlib_fb = None;
+        }
+        // Prefer defining-module / global refresh first so cross-module free calls
+        // see `&str` (regression-049 `replay_to_lsn`) over stale local owned stubs.
+        crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+            from_stdlib_top,
+            from_stdlib_fb,
+            from_global,
+            from_global_simple,
+            from_reg,
+            from_local,
+        ])
     }
 
     /// `usize` index/capacity and int→float casts from the resolved formal type.
@@ -7271,39 +7291,6 @@ impl<'ast> CodeGenerator<'ast> {
         if !coerced.starts_with('&') {
             *coerced = format!("&{coerced}");
         }
-    }
-
-    pub(crate) fn call_site_slot_wants_ref_and_owned_for(
-        &self,
-        sig: &crate::analyzer::FunctionSignature,
-        arg_index: usize,
-        callee_name: &str,
-    ) -> (bool, bool) {
-        let slot_sig = self.refreshed_call_site_sig_for_arg(
-            &self.signature_registry,
-            callee_name,
-            arg_index,
-            sig,
-        );
-        let pidx = slot_sig.arg_param_index(arg_index);
-        if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
-            &self.signature_registry,
-            callee_name,
-            Some(&slot_sig),
-            arg_index,
-        ) {
-            return (true, false);
-        }
-        let wants_owned =
-            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&slot_sig, pidx)
-                || crate::codegen::rust::call_site_borrow::sig_formal_is_copy_aggregate_owned(
-                    &slot_sig,
-                    pidx,
-                    |t| self.is_type_copy(t),
-                );
-        let wants_ref = !wants_owned
-            && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&slot_sig, pidx);
-        (wants_ref, wants_owned)
     }
 
     /// Mixed-forwarder / owned-outer / reuse-clone / pure-forwarding strip.
@@ -9626,7 +9613,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return arg_str.to_string();
         }
-        if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
+        if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str).or_else(|| self.writeback_take_arg(arg_expr)) {
             return rewritten;
         }
         let needs =

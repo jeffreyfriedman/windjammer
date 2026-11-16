@@ -340,6 +340,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) global_signature_registry: Option<std::sync::Arc<SignatureRegistry>>,
     /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
     pub(crate) library_source_root: Option<std::path::PathBuf>,
+    /// Root directory of the generated module tree (the build's output directory), named by the driver.
+    pub(crate) output_root: Option<std::path::PathBuf>,
+    /// Root of the source module tree the generated tree mirrors, named by the driver.
+    pub(crate) module_source_root: Option<std::path::PathBuf>,
     /// Maps locally defined type names to Rust module paths (multiple entries when names collide).
     pub(crate) type_defining_modules: std::collections::HashMap<String, Vec<Vec<String>>>,
     /// `(parent_module, symbol)` → child module segment defining that symbol (multipass FFI layout).
@@ -742,6 +746,8 @@ impl<'ast> CodeGenerator<'ast> {
             stdlib_type_rust_paths: std::collections::HashMap::new(),
             enum_variant_struct_fields: std::collections::HashMap::new(),
             library_source_root: None,
+            output_root: None,
+            module_source_root: None,
             global_signature_registry: None,
             type_defining_modules: std::collections::HashMap::new(),
             extern_submodule_qualifiers: std::collections::HashMap::new(),
@@ -1893,115 +1899,6 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// A bare call `f(..)` names a free function, never a same-named method (C3 identity), and a parameter or
-    /// local of that name (`accept: fn(int) -> bool`) shadows every function: no registry signature then.
-    pub(crate) fn resolve_bare_free_call_signature(&self, name: &str, n: usize) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
-        let shadowed = !name.contains("::") && (self.current_function_params.iter().any(|p| p.name == name) || self.local_variable_scopes.iter().any(|s| s.contains(name)));
-        let own = if shadowed { None } else { self.own_file_definition(name) };
-        self.resolve_call_signature_of(name, None, n, own.as_ref()).filter(|r| !shadowed && (name.contains("::") || !r.sig.has_self_receiver))
-    }
-
-    pub(crate) fn resolve_call_signature_with_global(
-        &self,
-        func_name: &str,
-        receiver_type: Option<&str>,
-        arg_count: usize,
-    ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
-        self.resolve_call_signature_of(func_name, receiver_type, arg_count, None)
-    }
-
-    /// `own`: the declaration a bare call names lexically (this file's function). A global entry that declares a
-    /// different function is a same-named function of another module: it is never read, not even for metadata.
-    fn resolve_call_signature_of(
-        &self,
-        func_name: &str,
-        receiver_type: Option<&str>,
-        arg_count: usize,
-        own: Option<&crate::analyzer::FunctionSignature>,
-    ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
-        let same_function = |r: &crate::codegen::rust::call_signature_resolution::ResolvedSignature| {
-            own.is_none_or(|o| o.declares_same_function(&r.sig))
-        };
-        let owned_name = self.imported_runtime_qualified_callee(func_name);
-        let import_qualified = self.import_fn_alias_map.get(func_name).cloned();
-        let resolved_callee = import_qualified
-            .or(owned_name)
-            .unwrap_or_else(|| func_name.to_string());
-        let caller_module = self.current_caller_module_path();
-        let local = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
-            &self.signature_registry,
-            resolved_callee.as_str(),
-            receiver_type,
-            arg_count,
-            &self.module_alias_map,
-            &self.import_fn_alias_map,
-            caller_module.as_deref(),
-        );
-        let global = self.global_signature_registry.as_ref().and_then(|global| {
-            crate::codegen::rust::call_signature_resolution::resolve_call_signature(
-                global,
-                resolved_callee.as_str(),
-                receiver_type,
-                arg_count,
-                &self.module_alias_map,
-                &self.import_fn_alias_map,
-                caller_module.as_deref(),
-            )
-        }).filter(same_function);
-        let codegen_refresh_source = global
-            .clone()
-            .filter(|r| r.sig.emitted_rust_ref_params.is_some())
-            .or_else(|| {
-                local
-                    .clone()
-                    .filter(|r| r.sig.emitted_rust_ref_params.is_some())
-            });
-        let picked = crate::codegen::rust::call_signature_resolution::pick_best_resolved_signature(
-            local, global,
-        );
-        if let Some(ref resolved) = picked {
-            if crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
-                &resolved.sig,
-            ) {
-                if let Some(global_reg) = self.global_signature_registry.as_ref() {
-                    if let Some(global_only) =
-                        crate::codegen::rust::call_signature_resolution::resolve_call_signature(
-                            global_reg,
-                            resolved_callee.as_str(),
-                            receiver_type,
-                            arg_count,
-                            &self.module_alias_map,
-                            &self.import_fn_alias_map,
-                            caller_module.as_deref(),
-                        )
-                        .filter(same_function)
-                    {
-                        if !crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
-                            &global_only.sig,
-                        ) {
-                            return Some(global_only);
-                        }
-                    }
-                }
-            }
-        }
-        picked.map(|mut resolved| {
-            if resolved.sig.emitted_rust_ref_params.is_none() {
-                if let Some(alt) = &codegen_refresh_source {
-                    crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
-                        &mut resolved.sig,
-                        &alt.sig,
-                    );
-                }
-            }
-            resolved.sig =
-                crate::codegen::rust::call_signature_resolution::finalize_call_site_signature(
-                    resolved.sig,
-                );
-            resolved
-        })
-    }
-
     /// Resolve `Type::method` for call-site borrow lowering (Self:: and instance calls).
     pub(in crate::codegen::rust) fn lookup_method_signature_on_receiver_type(
         &self,
@@ -2384,6 +2281,19 @@ impl<'ast> CodeGenerator<'ast> {
     /// Set the output file path for source mapping
     pub fn set_output_file(&mut self, path: impl Into<std::path::PathBuf>) {
         self.current_output_file = path.into();
+    }
+
+    /// The Rust file being generated, the generated tree's root (output directory) and the source tree it mirrors:
+    /// module positions are read from these, never from directory names.
+    pub fn set_output_position(
+        &mut self,
+        output_file: impl Into<std::path::PathBuf>,
+        output_root: impl Into<std::path::PathBuf>,
+        source_root: impl Into<std::path::PathBuf>,
+    ) {
+        self.current_output_file = output_file.into();
+        self.output_root = Some(output_root.into());
+        self.module_source_root = Some(source_root.into());
     }
 
     /// Set whether this generator is producing module code (vs entry point)
@@ -4641,13 +4551,13 @@ impl<'ast> CodeGenerator<'ast> {
                     // Owned callee formals cannot reborrow `&self.field` / `&param.field`
                     // (E0507). Always clone non-Copy fields out of a borrowed root.
                     // Mut-passthrough (`&mut self.field` → `&mut T`) is handled by the
-                    // mut-borrow call-site path and never reaches this helper.
+                    // mut-borrow call-site path. A field written back after the call moves out (`writeback_take_arg`).
                     let is_copy = self
                         .infer_expression_type(arg)
                         .as_ref()
                         .is_some_and(|t| self.is_copy_move_out_type(t));
                     if !is_copy {
-                        *arg_str = format!("{}.clone()", arg_str);
+                        *arg_str = self.writeback_take_arg(arg).unwrap_or_else(|| format!("{}.clone()", arg_str));
                         return true;
                     }
                 }

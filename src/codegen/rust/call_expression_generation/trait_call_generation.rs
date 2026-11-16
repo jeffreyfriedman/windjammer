@@ -124,44 +124,8 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         .map(call_signature_resolution::finalize_call_site_signature)
     });
 
-    // Match bindings (`Ok(mut app)` after `Mutex::lock`) often have no inferred
-    // receiver type, so `Type::method` resolution above is skipped. Still pick a
-    // codegen-refreshed `*::method` (hexagonal `app.handle` → `App::handle` `&str`).
-    // Skip bare `::get` scramble when the receiver is a map Deref wrapper — that
-    // path often picks an Owned homonym (`key.to_string()`); HashMap bridge below.
-    let method_signature = method_signature.or_else(|| {
-        let base = type_name
-            .as_deref()
-            .map(|tn| tn.split('<').next().unwrap_or(tn));
-        if base
-            .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name)
-        {
-            return None;
-        }
-        let suffix = format!("::{call_method}");
-        // A receiver of known type has no inherent method under another type's key (`Tabs::active` is not
-        // `RailItem::active`): only a trait's method can be the one it calls (a bound, a trait object).
-        let receiver_known = type_name.clone().or_else(|| gen.receiver_static_call_type(call_obj));
-        let mut candidates: Vec<Option<crate::analyzer::FunctionSignature>> = Vec::new();
-        let push_matching =
-            |reg: &crate::analyzer::SignatureRegistry,
-             out: &mut Vec<Option<crate::analyzer::FunctionSignature>>| {
-                for (key, sig) in &reg.signatures {
-                    if key.ends_with(&suffix)
-                        && call_signature_resolution::validate_arg_count(sig, arguments.len())
-                        && reg.key_may_name_method_of(key, receiver_known.as_deref(), call_method)
-                    {
-                        out.push(Some(sig.clone()));
-                    }
-                }
-            };
-        if let Some(g) = gen.global_signature_registry() {
-            push_matching(g, &mut candidates);
-        }
-        push_matching(&gen.signature_registry, &mut candidates);
-        crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(candidates)
-            .map(call_signature_resolution::finalize_call_site_signature)
-    });
+    let method_signature = method_signature
+        .or_else(|| suffix_scan_signature(gen, call_obj, call_method, type_name.as_deref(), arguments.len()));
 
     // Always overlay defining-module `emitted_rust_ref_params` before IR arg coercion.
     let method_signature = method_signature.map(|mut sig| {
@@ -711,4 +675,47 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         return format!("(unsafe {{ {} }})", call_str);
     }
     call_str
+}
+
+/// Match bindings (`Ok(mut app)` after `Mutex::lock`) often have no inferred receiver type, so `Type::method`
+/// resolution is skipped. Still pick a codegen-refreshed `*::method` (hexagonal `app.handle` -> `App::handle` `&str`).
+/// Skip the bare `::get` scramble when the receiver is a map Deref wrapper: that path often picks an Owned homonym
+/// (`key.to_string()`); the HashMap bridge handles it.
+fn suffix_scan_signature<'ast>(
+    gen: &CodeGenerator<'ast>,
+    call_obj: &'ast Expression<'ast>,
+    call_method: &str,
+    type_name: Option<&str>,
+    arg_count: usize,
+) -> Option<crate::analyzer::FunctionSignature> {
+    let base = type_name
+        .map(|tn| tn.split('<').next().unwrap_or(tn));
+    if base
+        .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name)
+    {
+        return None;
+    }
+    let suffix = format!("::{call_method}");
+    // A receiver of known type has no inherent method under another type's key (`Tabs::active` is not
+    // `RailItem::active`): only a trait's method can be the one it calls (a bound, a trait object).
+    let receiver_known = type_name.map(str::to_string).or_else(|| gen.receiver_static_call_type(call_obj));
+    let mut candidates: Vec<Option<crate::analyzer::FunctionSignature>> = Vec::new();
+    let push_matching =
+        |reg: &crate::analyzer::SignatureRegistry,
+         out: &mut Vec<Option<crate::analyzer::FunctionSignature>>| {
+            for (key, sig) in &reg.signatures {
+                if key.ends_with(&suffix)
+                    && call_signature_resolution::validate_arg_count(sig, arg_count)
+                    && reg.key_may_name_method_of(key, receiver_known.as_deref(), call_method)
+                {
+                    out.push(Some(sig.clone()));
+                }
+            }
+        };
+    if let Some(g) = gen.global_signature_registry() {
+        push_matching(g, &mut candidates);
+    }
+    push_matching(&gen.signature_registry, &mut candidates);
+    crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(candidates)
+        .map(call_signature_resolution::finalize_call_site_signature)
 }

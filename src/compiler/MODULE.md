@@ -11,6 +11,10 @@ In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` met
 - `compilation_pipeline.rs` and `library_multipass.rs` are large; function-length ratchets apply.
 - `std_stubs.rs`: the `std/<module>.wj` stubs of a build (always re-analysed, never overriding declared runtime formals).
 - `rust_surface_metadata.rs`: Rust crate signature surfaces (`rust/<crate>.wji`, ADR-0026) become `metadata.json` under `.wj-cache/rust-surfaces/<crate>/` and join the external-metadata paths, so every build mode borrows what the crate borrows.
+- `path_dep_metadata.rs`: a `wj.toml` path dependency with Windjammer sources and no `metadata.json` is analyzed as a
+  library into `<cache root>/path-deps/<crate>-<fingerprint>/` (compiler identity, location, sources), and that
+  metadata is used; a dependency that cannot be analyzed is named in an error, never given guessed formals. A
+  `.wj-deriving` marker in the output directory guards against dependency cycles (no thread-local state).
 - `value_formal_fixed_point.rs` makes callers and callees agree on value-formal modes (convergence O4): after each IR
   lowering round the solved modes are published to the registry and lowering repeats until none changes. Single-file
   builds run the same rounds over their one program (`attach_ir_module_if_missing`).
@@ -23,7 +27,7 @@ Pipeline sequencing, file/dependency discovery, incremental cache, metadata writ
 Per-expression semantics; text emission.
 
 ## Allowed imports
-Layer `driver`. May import: every module in a lower layer (support < syntax < resolve < types < ownership < ir < backend < tooling) and peers `build_utils`, `cargo_toml`, `compiler_database`. No known violations.
+Layer `driver`. May import: every module in a lower layer (support < syntax < resolve < types < ownership < ir < backend < tooling) and peers `build_utils`, `cargo_cache`, `cargo_toml`, `compiler_database`. No known violations.
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points

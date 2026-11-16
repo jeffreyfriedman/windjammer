@@ -10,6 +10,7 @@ In: analyzed items. Out/In: JSON metadata files and loaders (`load_struct_field_
 - Format changes must stay backward readable by `compiler`.
 - Loaders tolerate missing files.
 - A `.wj.meta` outside a cache location is a legacy sidecar: never read (only the embedded `stdlib_meta/` is trusted); `legacy_sidecars.rs` finds and removes them.
+- `type_derives.rs`: which generated types derive `Serialize`; written as `serde_types` in a crate's `metadata.json` and read back so derive inference decides a dependency type's serde support from its declaration.
 - Nothing writes next to a source file (`tests/sidecar_hygiene_test.rs`).
 
 ## Owns

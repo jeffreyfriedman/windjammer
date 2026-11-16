@@ -1,0 +1,8 @@
+// A function that consumes the queue it is given and returns the longer queue.
+pub fn append_all(queue: Vec<string>, items: Vec<string>) -> Vec<string> {
+    let mut out = queue
+    for item in items {
+        out.push(item)
+    }
+    out
+}
