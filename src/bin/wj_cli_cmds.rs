@@ -177,7 +177,7 @@ pub fn run(cli: Cli) -> Result<()> {
             interpret,
             compiled,
             release,
-            watch,
+            watch, stdin_file: _,
             verify, speculate, error_format, hot,
             sched_seed,
             hash_seed,

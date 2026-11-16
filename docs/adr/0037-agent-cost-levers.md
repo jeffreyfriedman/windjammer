@@ -167,3 +167,8 @@ From `private-docs/pilot7-analysis.md`; each is gated.
   in one pipe, bounded to 160 lines (`WJ_MAX_OUTPUT`) with an omitted-lines marker, ending in `exit status: N`
   (`src/cli/agent_wrap.rs`; the child is marked `WJ_AGENT_CHILD`). Human output is untouched. Gates: unit tests of the plan
   and the budget, promise cases for `wj run`, the pilot-8 sheet gate, and the arm prompt (`AGENT_MODE_TEXT`).
+- **Harness shapes (pilot 8 failure analysis).** Denied: `$?`, redirects, a guessed `./build/main`, `$()`, a `printf`
+  argument starting with `=` (the shell's `=cmd` expansion), heredocs. `wj run --stdin-file FILE` gives input from a file the
+  agent wrote with its Write tool (no `printf`, no quoting); in agent mode `wj build` ends with `run: wj run --compiled FILE`;
+  the pilot-8 sheets and prompt say both, and `agent_sheets_teach_no_denied_shell_shape` keeps denied shapes out of every
+  sheet example. Which quoting of a leading `=` the harness accepts is untested here; `--stdin-file` makes the question moot.

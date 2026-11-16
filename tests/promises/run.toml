@@ -542,3 +542,18 @@ args = ["run", "--interpret", "{w}/m.wj"]
 exit = 0
 stdout_has = ["row 200"]
 output_lacks = ["exit status:", "omitted"]
+
+[[case]]
+name = "run --stdin-file gives a file as standard input"
+polarity = "positive"
+files = { "m.wj" = "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    println(\"got ${text.trim()}\")\n}\n", "in.txt" = "=A1*3\n" }
+args = ["run", "--interpret", "--stdin-file", "{w}/in.txt", "{w}/m.wj"]
+stdout_has = ["got =A1*3"]
+
+[[case]]
+name = "run --stdin-file with a missing file fails with its name"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--interpret", "--stdin-file", "{w}/nope.txt", "{w}/m.wj"]
+exit = 1
+output_has = ["--stdin-file", "nope.txt"]

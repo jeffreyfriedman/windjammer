@@ -101,6 +101,45 @@ impl<W: Write> Write for Budget<W> {
     }
 }
 
+/// `--stdin-file FILE` (before the program's own arguments): the file and the command line without the option.
+pub fn stdin_file(args: &[String]) -> Option<(String, Vec<String>)> {
+    let i = args.iter().position(|a| a == "--stdin-file")?;
+    let end = args.iter().position(|a| a == "--").unwrap_or(args.len());
+    if i >= end {
+        return None;
+    }
+    let file = args.get(i + 1)?.clone();
+    let mut rest = args.to_vec();
+    rest.drain(i..=i + 1);
+    Some((file, rest))
+}
+
+/// Run this command line again with the file as stdin (exit status passed through).
+pub fn run_with_stdin_file(file: &str, rest: &[String]) -> i32 {
+    let Ok(exe) = std::env::current_exe() else { return 1 };
+    let input = match std::fs::File::open(file) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("error: --stdin-file {file}: {e}");
+            return 1;
+        }
+    };
+    match std::process::Command::new(exe).args(rest).stdin(input).status() {
+        Ok(s) => s.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("error: cannot run wj: {e}");
+            1
+        }
+    }
+}
+
+/// After a successful `wj build FILE` in agent mode: how to run what was built (agents guess `./build/main`, which is not there).
+fn run_hint(args: &[String], code: i32) -> Option<String> {
+    let verb = args.iter().find(|a| !a.starts_with('-'))?;
+    let file = args.iter().find(|a| a.ends_with(".wj"))?;
+    (verb == "build" && code == 0).then(|| format!("run: wj run --compiled {file}"))
+}
+
 /// Default line budget of agent mode (half from the start, half from the end); `WJ_MAX_OUTPUT=N` changes it, `0` lifts it.
 pub const DEFAULT_LINES: usize = 160;
 
@@ -168,6 +207,9 @@ pub fn run_wrapped(lines: Option<usize>) -> i32 {
         }
     }
     let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+    if let Some(h) = run_hint(&args, code) {
+        let _ = writeln!(out, "{h}");
+    }
     let _ = writeln!(out, "exit status: {code}");
     let _ = out.flush();
     code
@@ -204,6 +246,20 @@ mod tests {
         assert_eq!(lines[..3], ["line 1", "line 2", "line 3"]);
         assert_eq!(lines[4..], ["line 98", "line 99", "line 100"]);
         assert!(lines[3].starts_with("[wj: 94 line(s),") && lines[3].ends_with("(WJ_MAX_OUTPUT=6)]"), "{}", lines[3]);
+    }
+
+    #[test]
+    fn stdin_file_is_taken_out_of_the_command_line() {
+        assert_eq!(stdin_file(&v("run --verify --stdin-file in.txt m.wj")), Some(("in.txt".into(), v("run --verify m.wj"))));
+        assert_eq!(stdin_file(&v("run m.wj -- --stdin-file x")), None, "after `--` it belongs to the program");
+        assert_eq!(stdin_file(&v("run m.wj")), None);
+    }
+
+    #[test]
+    fn a_successful_agent_build_says_how_to_run_it() {
+        assert_eq!(run_hint(&v("build m.wj"), 0).as_deref(), Some("run: wj run --compiled m.wj"));
+        assert_eq!(run_hint(&v("build m.wj"), 1), None);
+        assert_eq!(run_hint(&v("check m.wj"), 0), None);
     }
 
     #[test]
