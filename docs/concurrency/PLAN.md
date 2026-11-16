@@ -54,11 +54,38 @@ the solver) and record the cost; if the JS worker path cannot pass conformance w
 | Conformance corpus | `tests/conformance/concurrency/*.wj` | expected output in each header; run under six schedules |
 | Spec | `docs/spec/concurrency.md` SPEC-CONC-001..008 | examples executable |
 
+Mutation check (2026-11-16, one mutant build with three planted bugs, then restored): (1) WJ0190 never reported
+(`scope_depth == usize::MAX`): `an_unwaited_task_is_refused_by_check_run_and_build` fails (check exits 0);
+(2) `scope { }` joins nothing: `a_task_panic_propagates_out_of_its_scope_after_the_other_tasks_finish` (prints the
+line after the scope) and `conformance_programs_print_their_expected_output_under_every_schedule` (`scope_waits.wj`:
+`[nested_tasks] received 1`) fail; (3) the `thread { }` fix carries no edit: `removed_forms_are_refused_with_their_fix`
+and `wj_fix_migrates_thread_blocks_and_channel_operators` fail. `scopes_are_per_task_under_interleaving` survives
+mutant 2 (its `recv()` calls synchronise on their own); it guards the per-task scope stacks, which no mutant touched.
+
 What is approximated in stage 1: the interpreter runs `async` and `spawn` on the same cooperative scheduler (only one
 task runs at a time; a schedule seed explores interleavings at synchronisation points). The observable contract is the
 same: output that depends only on `wait()`, `recv()` and scope exit is identical. WJ0190 counts any later mention of a
 task's name as "waited on" (it may be passed to a function that waits); the runtime does not yet report a task that
 is dropped through such a call (stage 2a adds a run-time check at program exit in the interpreter).
+
+## `select { }` (stage 2a design)
+
+```windjammer
+select {
+    msg = inbox.recv() => handle(msg),
+    n = worker.wait() => println("worker gave ${n}"),
+    _ = timeout(Duration::from_millis(50)) => println("nothing yet"),
+    else => println("nothing ready"),
+}
+```
+
+Arms are `pattern = source => body`; a source is `rx.recv()`, `t.wait()` or `timeout(d)` (any other expression is a
+compile error naming the three forms). Sources are evaluated once, in order, before waiting. The first ready arm wins
+(source order; with a schedule seed the interpreter picks among ready arms, so tests can sweep the choice); `else`
+runs when nothing is ready (never waits). A closed, empty channel is never ready; when no arm can ever become ready
+the `select` panics ("every channel of this select is closed") instead of hanging. Interpreter: one `Wait::Any` over
+the arms' waits, so the virtual clock and deadlock detection cover `select`. A `select` is an expression (the chosen
+arm's value). Losing arms are not cancelled in 2a (a `wait()` arm keeps its task; a `recv()` arm takes nothing).
 
 ## Rust backend (stage 2b)
 
