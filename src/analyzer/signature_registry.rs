@@ -152,7 +152,7 @@ pub struct SignatureRegistry {
     /// inherent homonyms (`DbReportReader::report_lines`).
     trait_impl_method_keys: HashSet<String>,
     /// Types declared by dependencies, with whether their crate derives `Serialize` for them.
-    dependency_type_serde: HashMap<String, bool>,
+    dependency_type_serde: std::collections::BTreeMap<String, bool>,
     /// `Type::method` keys of inherent impls (`impl Type`) the program declares.
     pub(super) inherent_method_keys: HashSet<String>,
     /// WJ `std::module` names populated by the runtime scanner (`http`, `csv` from
@@ -237,7 +237,7 @@ impl SignatureRegistry {
             method_index: HashMap::new(),
             trait_method_keys: TraitKeySet::default(),
             trait_impl_method_keys: HashSet::new(),
-            dependency_type_serde: HashMap::new(),
+            dependency_type_serde: std::collections::BTreeMap::new(),
             inherent_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
             runtime_std_rust_stems: HashMap::new(),
