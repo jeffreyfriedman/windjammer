@@ -1,0 +1,19 @@
+// expect: WJ0035
+// `split_whitespace` gives an iterator by the std declaration: indexing it and measuring it need a list first.
+fn main() {
+    let line = "a b c"
+    let parts = line.split_whitespace()
+    println("${parts[1]} ${parts.len()}")
+//~@20+5 ERROR WJ0035 this value cannot be indexed
+//~@26+3 ERROR WJ0015 no method `len` found for an iterator
+}
+
+// No report: collected first, a list from the start, an iterator only walked.
+fn controls(words: Vec<string>) -> int {
+    let parts: Vec<string> = "a b".split(" ").collect()
+    let mut n = 0
+    for w in "a b".split(" ") {
+        n += 1
+    }
+    n + parts.len() as int + words.len() as int + parts[0].len() as int
+}

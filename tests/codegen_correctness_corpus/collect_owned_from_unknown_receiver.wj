@@ -1,0 +1,14 @@
+// `Vec<string>` from `split_whitespace().collect()` owns its pieces even when the text's type is not known to the
+// compiler (`unwrap_or("")` of a file read): the producer's declaration says it yields borrowed text.
+// expect: done
+fn main() {
+    let text = std::fs::read_to_string("/dev/null").unwrap_or("")
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().collect()
+        let kind = parts[0]
+        if kind == "plain" {
+            println("p")
+        }
+    }
+    println("done")
+}
