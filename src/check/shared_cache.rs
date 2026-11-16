@@ -24,12 +24,12 @@ pub trait SharedStore: Send + Sync {
 }
 
 #[derive(Clone)]
-struct Config {
+pub(super) struct Config {
     store: Arc<dyn SharedStore>,
     compiler: String,
 }
 
-static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
+pub(super) static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 
 /// The compiler's identity for every cache ([`crate::compiler_config::compiler_key`]).
 pub fn compiler_key() -> Option<String> {
@@ -50,10 +50,6 @@ pub fn install(store: Arc<dyn SharedStore>) -> bool {
 /// [`install`] with an explicit compiler key (tests exercise invalidation by changing it).
 pub fn install_for(store: Arc<dyn SharedStore>, compiler: String) {
     *CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = Some(Config { store, compiler });
-}
-
-pub fn uninstall() {
-    *CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
 /// A name part unique to this process, thread and moment, for temporary files two writers must not share.

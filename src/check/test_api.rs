@@ -16,3 +16,8 @@ pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
     let Ok(program) = crate::parser::Parser::new_with_source(tokens, file.clone(), source.clone()).parse() else { return Vec::new() };
     super::moves::predict(&program, &source, &file)
 }
+
+/// Drop the installed shared analysis store (tests install their own and must leave none behind).
+pub fn uninstall_shared_cache() {
+    *super::shared_cache::CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}

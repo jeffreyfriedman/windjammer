@@ -10,4 +10,9 @@ impl Interpreter {
         let here = 0u8;
         self.stack_guard = Some((&here as *const u8 as usize, budget));
     }
+
+    /// Run tasks as nested calls on this thread instead of OS threads (always so on wasm32; see `sched.rs`).
+    pub fn set_one_thread_tasks(&mut self, on: bool) {
+        self.sched.one_thread = on;
+    }
 }

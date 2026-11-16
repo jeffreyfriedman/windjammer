@@ -75,6 +75,7 @@ pub const RULES: &[Rule] = rules![
     ("NUM-DEFAULT-FLOAT", Number, "An unconstrained float is `float` (f64)"),
     ("NUM-INDEX", Number, "Indexing and `len()` accept and produce `int` through a checked conversion"),
     ("NUM-USIZE", Number, "An integer class with no exact width that meets an index source or use is `usize`"),
+    ("NUM-USE-WIDTH", Number, "Each read of a local has the width of the binding it names, also when the name is bound twice"),
     ("NUM-USIZE-TO-INT", Number, "A `usize` value entering a slot of another integer width is converted at that site"),
     ("NUM-STD-SIG", Number, "A core-type method's argument and result have the types its typed surface declares"),
     ("NUM-ELEMENT", Number, "An element of a collection, range or iterator has the collection's element type"),
