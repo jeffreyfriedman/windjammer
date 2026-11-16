@@ -71,6 +71,11 @@ fn every_core_surface_entry_typechecks_in_rustc() {
     let mut src = String::from(
         "#![allow(unused, clippy::all)]\nuse std::collections::*;\nuse std::thread::{self, JoinHandle};\ntype ThreadPanic = Box<dyn std::any::Any + Send + 'static>;\nfn arg<A>() -> A { unimplemented!() }\n",
     );
+    // `Task<T>` is the runtime's (ADR-0004): its module depends on `std` only, so rustc checks the entries against it.
+    src.push_str(&format!(
+        "#[path = {:?}]\nmod task;\nuse task::Task;\n",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/crates/windjammer-runtime/src/task.rs")
+    ));
     let surface = CoreSurface::parse();
     let entries = surface.entries();
     assert!(!entries.is_empty());

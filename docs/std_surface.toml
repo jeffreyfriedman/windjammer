@@ -337,6 +337,7 @@ methods = [
   { type = "Task", name = "is_finished", sig = "t.is_finished() -> bool", summary = "true once the task has returned or panicked (never waits)" },
   { type = "Sender", name = "send", sig = "tx.send(x)", summary = "send a value (a bounded channel waits for room); `let (tx, rx) = sync::channel()`" },
   { type = "Sender", name = "clone", sig = "tx.clone() -> Sender<T>", summary = "another sender of the same channel; the channel closes when every sender is gone" },
+  { type = "Receiver", name = "clone", sig = "rx.clone() -> Receiver<T>", summary = "another handle on the same queue: competing consumers, each value is received once" },
   { type = "Receiver", name = "recv", sig = "rx.recv() -> T", summary = "wait for the next value; panics when the channel is closed and empty" },
   { type = "Receiver", name = "try_recv", sig = "rx.try_recv() -> Result<T, TryRecvError>", summary = "the next value if one is queued, never waits" },
   { type = "Receiver", name = "recv_timeout", sig = "rx.recv_timeout(d: Duration) -> Result<T, RecvTimeoutError>", summary = "wait at most d for the next value" },

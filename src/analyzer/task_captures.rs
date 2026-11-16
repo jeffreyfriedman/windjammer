@@ -103,6 +103,18 @@ struct Uses {
     read: HashSet<String>,
     declared: HashSet<String>,
     assigned: Vec<String>,
+    /// Names called as functions (`f(x)`): functions and intrinsics, unless a local closure has the name.
+    called: HashSet<String>,
+}
+
+/// The names a task operand reads from the code around it (minus what it declares itself), and the names it calls as
+/// functions. The Rust backend clones the first set into the task (a name that is only called is a function).
+pub fn task_free_names(e: &Expression<'_>) -> (Vec<String>, HashSet<String>) {
+    let mut u = Uses::default();
+    uses_expr(e, &mut u);
+    let mut read: Vec<String> = u.read.into_iter().filter(|n| !u.declared.contains(n)).collect();
+    read.sort();
+    (read, u.called)
 }
 
 fn root_name(e: &Expression<'_>) -> Option<String> {
@@ -115,6 +127,9 @@ fn root_name(e: &Expression<'_>) -> Option<String> {
 }
 
 fn uses_expr(e: &Expression<'_>, u: &mut Uses) {
+    if let Expression::Call { function: Expression::Identifier { name, .. }, .. } = e {
+        u.called.insert(name.clone());
+    }
     match e {
         Expression::Identifier { name, .. } => {
             u.read.insert(name.clone());

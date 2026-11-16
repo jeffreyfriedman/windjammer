@@ -108,8 +108,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_function_params: Vec<crate::parser::Parameter<'ast>>,
     pub(crate) current_field_moved_params: std::collections::HashSet<String>,
     pub(crate) current_function_name: Option<String>,
-    /// The function being generated is an `async fn` (Rust `.await`; elsewhere `t.await` is `t.wait()`, ADR-0004).
-    pub(crate) current_function_is_async: bool,
+    pub(crate) current_function_is_async: bool, // `async fn`: Rust `.await`; elsewhere `t.await` is `t.wait()` (ADR-0004)
     pub(crate) current_function_type_bounds: Vec<(String, Vec<String>)>,
     pub(crate) current_function_return_type: Option<Type>,
     // WINDJAMMER TRAIT INFERENCE: Analyzed trait methods with inferred signatures from ALL impls
@@ -559,13 +558,6 @@ impl<'ast> CodeGenerator<'ast> {
                     crate::analyzer::SignatureRegistry::stdlib(),
                 )
             })
-    }
-
-    /// True when `name` is a parameter, `let` binding, or match-arm binding in the current fn.
-    pub(in crate::codegen::rust) fn identifier_is_local_binding(&self, name: &str) -> bool {
-        self.local_var_types.contains_key(name)
-            || self.match_arm_bindings.contains(name)
-            || self.current_function_params.iter().any(|p| p.name == name)
     }
 
     /// Identifier should use `::` for associated/static calls (`tokio::spawn`, `Vec::new`).

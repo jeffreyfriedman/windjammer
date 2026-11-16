@@ -68,7 +68,7 @@ pub fn try_write<T>(rwlock: &RwLock<T>) -> Option<RwLockWriteGuard<'_, T>> {
 /// queued), the same contract as the interpreter's `std::sync::channel()`.
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let (tx, rx) = mpsc::channel();
-    (Sender(tx), Receiver { rx, stash: std::cell::RefCell::new(None) })
+    (Sender(tx), Receiver::new(rx))
 }
 
 /// Sending end of a [`channel`]; clone it for every producer. The channel closes when every sender is gone.
@@ -89,25 +89,44 @@ impl<T> Sender<T> {
     }
 }
 
-/// Receiving end of a [`channel`].
+/// Receiving end of a [`channel`]. Cloning gives another handle on the same queue (competing consumers: each value
+/// is received once), so a receiver can move into a task like any other value (ADR-0004).
 pub struct Receiver<T> {
-    rx: mpsc::Receiver<T>,
+    inner: Arc<RecvInner<T>>,
+}
+
+struct RecvInner<T> {
+    rx: Mutex<mpsc::Receiver<T>>,
     /// A value taken by `select` to see whether one is ready, handed out by the next receive.
-    stash: std::cell::RefCell<Option<T>>,
+    stash: Mutex<Option<T>>,
+}
+
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        Receiver { inner: self.inner.clone() }
+    }
+}
+
+fn guard<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 impl<T> Receiver<T> {
+    fn new(rx: mpsc::Receiver<T>) -> Self {
+        Receiver { inner: Arc::new(RecvInner { rx: Mutex::new(rx), stash: Mutex::new(None) }) }
+    }
+
     /// Wait for the next value (running this thread's pending `async` tasks first); panics when the channel is
     /// closed and empty.
     pub fn recv(&self) -> T {
-        if let Some(v) = self.stash.borrow_mut().take() {
+        if let Some(v) = guard(&self.inner.stash).take() {
             return v;
         }
-        if let Ok(v) = self.rx.try_recv() {
+        if let Ok(v) = guard(&self.inner.rx).try_recv() {
             return v;
         }
         crate::task::run_pending_local();
-        match self.rx.recv() {
+        match guard(&self.inner.rx).recv() {
             Ok(v) => v,
             Err(_) => panic!("receiving on a closed channel"),
         }
@@ -115,48 +134,46 @@ impl<T> Receiver<T> {
 
     /// The next value if one is queued; never waits.
     pub fn try_recv(&self) -> Result<T, mpsc::TryRecvError> {
-        match self.stash.borrow_mut().take() {
+        match guard(&self.inner.stash).take() {
             Some(v) => Ok(v),
-            None => self.rx.try_recv(),
+            None => guard(&self.inner.rx).try_recv(),
         }
     }
 
     /// Wait at most `d` for the next value.
     pub fn recv_timeout(&self, d: std::time::Duration) -> Result<T, mpsc::RecvTimeoutError> {
-        if let Some(v) = self.stash.borrow_mut().take() {
+        if let Some(v) = guard(&self.inner.stash).take() {
             return Ok(v);
         }
         crate::task::run_pending_local();
-        self.rx.recv_timeout(d)
+        guard(&self.inner.rx).recv_timeout(d)
+    }
+
+    /// A value was queued, or the channel is closed: `Some(true)` / `Some(false)`; `None` while another handle is
+    /// receiving.
+    fn poll(&self) -> Option<Result<(), mpsc::TryRecvError>> {
+        let mut stash = guard(&self.inner.stash);
+        if stash.is_some() {
+            return Some(Ok(()));
+        }
+        let rx = self.inner.rx.try_lock().ok()?;
+        Some(match rx.try_recv() {
+            Ok(v) => {
+                *stash = Some(v);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        })
     }
 }
 
 impl<T> crate::task::Selectable for Receiver<T> {
     fn ready(&self) -> bool {
-        if self.stash.borrow().is_some() {
-            return true;
-        }
-        match self.rx.try_recv() {
-            Ok(v) => {
-                *self.stash.borrow_mut() = Some(v);
-                true
-            }
-            Err(_) => false,
-        }
+        matches!(self.poll(), Some(Ok(())))
     }
 
     fn closed(&self) -> bool {
-        if self.stash.borrow().is_some() {
-            return false;
-        }
-        match self.rx.try_recv() {
-            // a value that arrived since `ready()`: keep it for the next receive
-            Ok(v) => {
-                *self.stash.borrow_mut() = Some(v);
-                false
-            }
-            Err(e) => e == mpsc::TryRecvError::Disconnected,
-        }
+        matches!(self.poll(), Some(Err(mpsc::TryRecvError::Disconnected)))
     }
 }
 

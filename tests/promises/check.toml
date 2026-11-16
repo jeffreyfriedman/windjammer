@@ -267,3 +267,17 @@ files = { "m.wj" = "use std::rc::Rc\n\nfn main() {\n    let r = Rc::new(5)\n    
 args = ["check", "--json", "{w}/m.wj"]
 exit = 1
 stdout_has = ["\"code\": \"WJ0193\""]
+
+[[case]]
+name = "check accepts a task that returns its result instead of changing a captured variable (WJ0192)"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let t = spawn { 1 }\n    let total = t.wait()\n    println(\"${total}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
+name = "check accepts an Rc captured by an async task (WJ0193)"
+polarity = "positive"
+files = { "m.wj" = "use std::rc::Rc\n\nfn main() {\n    let r = Rc::new(5)\n    let t = async { *r + 1 }\n    println(\"${t.wait()}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]

@@ -195,7 +195,7 @@ pub fn is_element_container(name: &str) -> bool {
 
 /// The surface types whose one type parameter is the value they hand back (`JoinHandle<T>`: `join` returns it); the
 /// solver relates it as an element, but they have no sequence methods.
-const HANDLE_TYPES: [&str; 1] = ["JoinHandle"];
+const HANDLE_TYPES: [&str; 2] = ["JoinHandle", "Task"];
 
 /// Whether a surface type name holds one value of its type parameter (the solver's `Part::Elem`).
 pub fn has_element_part(name: &str) -> bool {
@@ -223,8 +223,8 @@ pub fn self_type(type_name: &str, generics: &[String]) -> Type {
 
 /// The surface type a receiver type names, with its type arguments (`&Vec<int>` -> `Vec`, `[int]`).
 fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
-    const NAMES: [&str; 13] =
-        ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List", "JoinHandle", "thread"];
+    const NAMES: [&str; 14] =
+        ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List", "JoinHandle", "Task", "thread"];
     // Windjammer's `List<T>` (the enumerable methods' result) is the surface's `Vec<T>`; the `thread` module's
     // functions are declared on the surface trait `Thread` (`thread` is a keyword, so it cannot name a trait).
     const SYNONYMS: [(&str, &str); 2] = [("List", "Vec"), ("thread", "Thread")];

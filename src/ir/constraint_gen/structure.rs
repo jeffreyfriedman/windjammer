@@ -266,6 +266,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// ADR-0004: the value a task hands back (`t.wait()`) is its operand's value.
+    pub(super) fn task_value(&mut self, task: ConstraintVar, value: ConstraintVar) {
+        self.part(task, Part::Elem, value, "NUM-TASK");
+    }
+
     /// `Vec::new()`, `Vec::with_capacity(n)`: an associated function of a core type, typed by `std/rust_core.wji`
     /// (its result is a fresh container whose parts are related to the arguments). Returns whether it was typed.
     pub(super) fn emit_surface_static_call(
@@ -385,6 +390,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
         match expr {
             Expression::Array { .. } => Some(Type::Vec(Box::new(Type::Infer))),
+            // ADR-0004: `spawn ..` / `async ..` is a `Task<T>` (std/rust_core.wji): `t.wait()` is the operand's value
+            Expression::SpawnCall { .. } | Expression::AsyncCall { .. } => Some(Type::Parameterized("Task".to_string(), vec![Type::Infer])),
             Expression::Range { .. } => Some(Type::Parameterized("Iterator".to_string(), vec![Type::Infer])),
             Expression::MapLiteral { .. } => Some(Type::Parameterized("HashMap".to_string(), vec![Type::Infer, Type::Infer])),
             Expression::MacroInvocation { delimiter: MacroDelimiter::Brackets, .. } => Some(Type::Vec(Box::new(Type::Infer))),

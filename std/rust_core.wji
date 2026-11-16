@@ -205,6 +205,12 @@ pub trait JoinHandle<T> {
     fn is_finished(self) -> bool;
 }
 
+// An ADR-0004 task (`spawn f()`, `async { }`; `windjammer_runtime::task::Task<T>`): `wait` returns the task's value.
+pub trait Task<T> {
+    fn wait(self) -> T;
+    fn is_finished(self) -> bool;
+}
+
 // The `std::thread` functions (`thread::spawn(move || work())` is a handle to the closure's result type), declared on
 // `Thread` because `thread` is a keyword.
 pub trait Thread {

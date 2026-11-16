@@ -1227,7 +1227,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let inner = self.walk_expression(expr);
                 self.emit_execution_call_mode(expr, ExecutionMode::Async, location);
                 let result = self.cs.fresh_var();
-                let _ = inner;
+                self.task_value(result, inner);
                 result
             }
 
@@ -1235,7 +1235,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let inner = self.walk_expression(expr);
                 self.emit_execution_call_mode(expr, ExecutionMode::Spawn, location);
                 let result = self.cs.fresh_var();
-                let _ = inner;
+                self.task_value(result, inner);
                 result
             }
 

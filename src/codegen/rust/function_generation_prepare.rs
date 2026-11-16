@@ -102,20 +102,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_is_async = func.is_async || func.decorators.iter().any(|d| d.name == "async");
         self.current_field_moved_params = analyzed.field_moved_parameters.clone();
         self.current_function_name = Some(func.name.to_string());
-        let mut all_bounds: Vec<(String, Vec<String>)> = func
-            .type_params
-            .iter()
-            .filter(|tp| !tp.bounds.is_empty())
-            .map(|tp| (tp.name.clone(), tp.bounds.clone()))
-            .collect();
-        for (name, bounds) in &func.where_clause {
-            if let Some(existing) = all_bounds.iter_mut().find(|(n, _)| n == name) {
-                existing.1.extend(bounds.iter().cloned());
-            } else {
-                all_bounds.push((name.clone(), bounds.clone()));
-            }
-        }
-        self.current_function_type_bounds = all_bounds;
+        self.current_function_type_bounds = super::function_generation_signature::type_bounds(func);
 
         // Clear local variable types for new function scope
         self.local_var_types.clear();

@@ -25,15 +25,16 @@ impl<'ast> CodeGenerator<'ast> {
     /// The names a task operand reads from the enclosing function: each is cloned into the task's `move` closure, so
     /// the task owns what it uses (`Send + 'static`); functions, intrinsics, paths and types are not values to copy.
     fn task_captures(&self, expr: &Expression<'ast>) -> Vec<String> {
-        crate::ir::liveness::captures(&[], expr)
-            .into_iter()
+        let (read, called) = crate::analyzer::task_captures::task_free_names(expr);
+        read.into_iter()
             .filter(|n| {
                 !n.contains("::")
                     && !n.contains('.')
                     && n != "self"
                     && n.chars().next().is_some_and(|c| c.is_lowercase() || c == '_')
-                    && crate::intrinsics::Intrinsic::from_call_name(n).is_none()
-                    && (self.identifier_is_local_binding(n) || self.signature_registry.get_signature(n).is_none())
+                    && (!called.contains(n) || self.identifier_is_local_binding(n))
+                    // a std module used as `http.get(url)` is a path, not a value
+                    && !self.signature_registry.has_runtime_std_module(n)
             })
             .collect()
     }
