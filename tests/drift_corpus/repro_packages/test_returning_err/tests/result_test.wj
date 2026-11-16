@@ -1,0 +1,21 @@
+fn parse(s: string) -> Result<int, string> {
+    if s == "1" {
+        Ok(1)
+    } else {
+        Err("not one: ${s}")
+    }
+}
+
+@test
+fn test_ok() -> Result<(), string> {
+    let n = parse("1")?
+    assert_eq(n, 1)
+    Ok(())
+}
+
+@test
+fn test_err() -> Result<(), string> {
+    let n = parse("2")?
+    assert_eq(n, 2)
+    Ok(())
+}
