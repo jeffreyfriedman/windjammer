@@ -860,6 +860,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        // CLONE-USE-AFTER-MOVE from the IR's liveness (`read_after`): the auto-clone statement index can drift
+        // (a `return` arm inside a `let` value), the liveness fact does not.
+        if value_str == name {
+            return self.copy_if_read_again_at(value, value_str, super::move_at_last_use::MoveSite::Element);
+        }
         value_str
     }
 }

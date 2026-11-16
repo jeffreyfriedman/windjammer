@@ -350,7 +350,8 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
         }
-        None
+        // Declared in another module of the library: the module-aware lookup.
+        self.lookup_struct_fields_for_type(struct_name).and_then(|fields| fields.get(field_name).cloned())
     }
 
     /// Collect variable names bound by a pattern (e.g. `Some(search)` → `["search"]`).

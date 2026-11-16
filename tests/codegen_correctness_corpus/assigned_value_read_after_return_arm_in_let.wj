@@ -1,0 +1,37 @@
+// expect: 1
+// expect: b
+// A `let` whose match has a `return` arm, then a value assigned into a field and read again: the assignment
+// copies it (the move-at-last-use fact, not a statement counter that the nested `return` shifts).
+use std::collections::HashMap
+
+pub struct Node {
+    pub tag: string,
+}
+
+pub struct Graph {
+    nodes: HashMap<u64, Node>,
+    index: HashMap<string, Vec<u64>>,
+}
+
+impl Graph {
+    pub fn set_tag(self, id: u64, tag: string) {
+        let old = match self.nodes.get(id) {
+            Some(node) => node.tag,
+            None => return,
+        }
+        if let Some(node) = self.nodes.get_mut(id) {
+            node.tag = tag
+        }
+        if !self.index.contains_key(tag) {
+            self.index.insert(tag, [id])
+        }
+    }
+}
+
+fn main() {
+    let mut g = Graph { nodes: HashMap::new(), index: HashMap::new() }
+    g.nodes.insert(7, Node { tag: "a" })
+    g.set_tag(7, "b")
+    println("${g.index.len()}")
+    println("${g.nodes[7].tag}")
+}

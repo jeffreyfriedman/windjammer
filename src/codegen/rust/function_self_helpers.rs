@@ -427,6 +427,11 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) -> Option<OwnershipMode> {
         if self.in_trait_impl {
+            // A receiver the impl method declares is its contract with the trait (W0016); a homonym trait in
+            // another module (two `InputPort`s) must not replace it.
+            if let Some(receiver) = analyzed.decl.parameters.first().filter(|p| declared_receiver(p).is_some()) {
+                return Some(if matches!(receiver.ownership, OwnershipHint::Mut) { OwnershipMode::MutBorrowed } else { OwnershipMode::Borrowed });
+            }
             if let Some(trait_name) = &self.current_trait_impl_name {
                 let methods = self.analyzed_trait_methods.get(trait_name).or_else(|| {
                     trait_name
@@ -674,5 +679,38 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Default: don't inline large functions
         false
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// A trait impl's non-`self` formal is the trait's (E0053): the trait method's mode for the parameter at the
+    /// same position, raised to `&mut` when an impl body mutates it (SPEC-OWN-004). `None` when the trait has no
+    /// analysis for the method.
+    pub(super) fn trait_formal_mode(&self, method: &str, param_idx: usize) -> Option<OwnershipMode> {
+        let trait_name = self.current_trait_impl_name.as_deref()?;
+        let key = trait_name.rsplit("::").next().unwrap_or(trait_name);
+        let trait_fn = self.analyzed_trait_methods.get(trait_name).or_else(|| self.analyzed_trait_methods.get(key))?.get(method)?;
+        let trait_param = trait_fn.decl.parameters.get(param_idx)?;
+        trait_fn.inferred_ownership.get(&trait_param.name).copied()
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `mut p: P` declares the callee's own copy (SPEC-OWN-008, OWN-MUT-PARAM-COPY): an owned, mutable binding,
+    /// whatever the body writes through it. Trait impls keep the trait's formal (E0053).
+    pub(super) fn declared_mut_copy_formal(&mut self, param: &Parameter<'ast>, func: &FunctionDecl<'ast>) -> Option<String> {
+        if !param.is_mutable || param.name == "self" || param.pattern.is_some() || self.in_trait_impl
+            || matches!(param.type_, Type::Reference(_) | Type::MutableReference(_))
+        {
+            return None;
+        }
+        self.inferred_borrowed_params.remove(&param.name);
+        self.inferred_mut_borrowed_params.remove(&param.name);
+        self.emitted_rust_ref_formals.remove(&param.name);
+        self.str_ref_optimized_params.remove(&param.name);
+        if let Some(i) = func.parameters.iter().filter(|p| p.name != "self").position(|p| p.name == param.name) {
+            self.current_fn_emitted_mut_arg_indices.remove(&i);
+        }
+        Some(format!("mut {}: {}", param.name, self.type_to_rust(&param.type_)))
     }
 }

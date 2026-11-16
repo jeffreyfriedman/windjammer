@@ -414,9 +414,10 @@ impl CodeGenerator<'_> {
 
                 // Text splitters yield borrowed `&str` pieces.
                 if matches!(method.as_str(), "split" | "rsplit" | "split_whitespace" | "split_terminator" | "lines")
-                    && self.infer_expression_type(object).is_some_and(|t| {
-                        crate::codegen::rust::types::is_windjammer_text_type(peel_type_reference(&t))
-                    })
+                    && (matches!(&**object, Expression::Identifier { name, .. } if self.idiom.str_slice_loop_vars.contains(name))
+                        || self.infer_expression_type(object).is_some_and(|t| {
+                            crate::codegen::rust::types::is_windjammer_text_type(peel_type_reference(&t))
+                        }))
                 {
                     return Some(Type::Reference(Box::new(Type::Custom("str".to_string()))));
                 }

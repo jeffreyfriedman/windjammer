@@ -98,6 +98,13 @@ no signature describes, keeps its declared owned mode: the method may consume it
 `base: &RailItem` (which `RailItem::active(self, ..)` rejects).
 **Status.** Conforms.
 
+### OWN-MUT-PARAM-COPY
+**Rule.** A parameter declared `mut` (`fn f(mut s: S)`) is owned: the callee changes its own copy and the caller's
+value is unchanged (SPEC-OWN-008). The caller moves its value at its last use and passes a copy otherwise.
+**Example.** `fn bump(mut s: S) { s.n += 1 }` emits `fn bump(mut s: S)`; `bump(s)` followed by a read of `s` emits
+`bump(s.clone())`.
+**Status.** Conforms.
+
 ### OWN-COPY-SEED
 **Rule.** Parameters of Copy type (numbers, `bool`, `char`, structs and enums all of whose fields are Copy) are passed
 by value unless the body mutates them (then `&mut`).

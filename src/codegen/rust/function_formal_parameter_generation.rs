@@ -70,7 +70,7 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(param_idx, param)| {
-                if let Some(formal) = self.ir_decided_formal(param, analyzed, unused_params) {
+                if let Some(formal) = self.ir_decided_formal(param, analyzed, unused_params).or_else(|| self.declared_mut_copy_formal(param, func)) {
                     return formal;
                 }
                 if param.name != "self"
@@ -119,6 +119,11 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_borrowed_params.remove(&param.name);
                     self.inferred_mut_borrowed_params.remove(&param.name);
                     self.emitted_rust_ref_formals.remove(&param.name);
+                    if self.trait_formal_mode(&func.name, param_idx) == Some(OwnershipMode::MutBorrowed) && !param.is_mutable {
+                        self.inferred_mut_borrowed_params.insert(param.name.clone());
+                        self.emitted_rust_ref_formals.insert(param.name.clone());
+                        return format!("{}: &mut {}", param.name, self.type_to_rust(&param.type_));
+                    }
                     return self.format_trait_impl_owned_formal(param, analyzed);
                 }
                 if let Some(formal) = self.formal_from_ir_owned(param, param_idx, func, unused_params) {
@@ -1341,10 +1346,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                             if !analyzed.returned_parameters.contains(&param.name)
-                                && (!param.is_mutable
-                                    || analyzed
-                                        .field_mutated_parameters
-                                        .contains(&param.name))
+                                && !param.is_mutable // `mut p: P` is the callee's own copy (SPEC-OWN-008)
                                 && analyzed.mutated_parameters.contains(&param.name)
                                 && !self.is_type_copy(formal_type)
                                 && !vec_push_keeps_owned
@@ -1927,10 +1929,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     && !analyzed.returned_parameters.contains(&param.name)
                                     && analyzed.mutated_parameters.contains(&param.name)
                                     && self.variable_needs_mut(&param.name)
-                                    && (!param.is_mutable
-                                        || analyzed
-                                            .field_mutated_parameters
-                                            .contains(&param.name))
+                                    && !param.is_mutable // `mut p: P` is the callee's own copy (SPEC-OWN-008)
                                 {
                                     ownership_mode = OwnershipMode::MutBorrowed;
                                 }
@@ -2059,7 +2058,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     &param.name,
                                     func,
                                 )
-                                && self.inferred_mut_borrowed_params.contains(&param.name)
+                                && self.inferred_mut_borrowed_params.contains(&param.name) && !param.is_mutable // `mut s: S` is the callee's own copy (SPEC-OWN-008)
                             {
                                 // Mutated+returned formals stay Owned (IR/solver lattice);
                                 // do not re-demote from `inferred_mut_borrowed_params`.
