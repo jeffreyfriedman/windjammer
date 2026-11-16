@@ -1,0 +1,21 @@
+// `m2` is a clone of a `Vec<u32>` parameter: its elements are u32, so the literals compared with them are u32
+// (never the int default). Expected by hand: 1, 2 and the pushed 1 are counted; 3 is not.
+// expect: 3
+fn count_set(modes: Vec<u32>) -> u32 {
+    let mut m2 = modes.clone()
+    m2.push(1)
+    let mut d: u32 = 0
+    let mut k: usize = 0
+    while k < m2.len() {
+        if m2[k] == 1 || m2[k] == 2 {
+            d = d + 1
+        }
+        k = k + 1
+    }
+    d
+}
+
+fn main() {
+    let modes: Vec<u32> = [1, 2, 3]
+    println("${count_set(modes)}")
+}

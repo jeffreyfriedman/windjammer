@@ -628,7 +628,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
         for (param, (_, arg)) in params.iter().zip(arguments) {
             let (Type::Generic(n) | Type::Custom(n)) = param else { continue };
-            if n != elem {
+            // A numeric literal has no declared type: it takes the container's width, never sets it (`m2.push(1)`).
+            if n != elem || is_int_literal_tree(arg) || is_float_literal_tree(arg) {
                 continue;
             }
             if let Some(t) = self.static_type(arg).filter(|t| !contains_unfixed(t)) {

@@ -29,6 +29,7 @@ pub trait Vec<T> {
     fn swap(&mut self, a: usize, b: usize);
     fn truncate(&mut self, len: usize);
     fn split_off(&mut self, at: usize) -> Vec<T>;
+    fn clone(self) -> Vec<T>;
     fn slice(self, start: usize, end: usize) -> Vec<T>;
     fn contains(self, value: &T) -> bool;
     fn clear(&mut self);
