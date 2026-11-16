@@ -158,7 +158,7 @@ pub fn prune_trees(dir: &Path, max: usize, force: bool, report: &mut super::Prun
     let mut trees: Vec<(Option<SystemTime>, PathBuf)> =
         rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).map(|p| (active::newest_mtime(&p), p)).collect();
     trees.sort();
-    let now = SystemTime::now();
+    let now = wall_now();
     let over = trees.len().saturating_sub(max);
     let mut freed = 0;
     for (i, (t, p)) in trees.iter().enumerate() {
