@@ -473,6 +473,8 @@ fn render(rows: Vec<Row>, ledger: Vec<Entry>, measured: Vec<string>) -> string {
     if !any {
         s = s + "\nNo backend has a failing program.\n"
     }
+    s = s + "\n## Not measured\n\n"
+    s = s + "- `wasm`: `wj build -t wasm` emits a browser library (a wasm-bindgen cdylib crate), not a program with a `main`, so the conformance programs have nothing to run on until a headless runner exists. The Rust backend's output built for `wasm32-wasip1` and run under wasmtime would measure the platform, not this backend; it is the first step on the PC.\n"
     s = s + "\n## Measured with\n\n"
     if measured.len() == 0 {
         s = s + "nothing yet (run `target_tiers.wj run`)\n"
