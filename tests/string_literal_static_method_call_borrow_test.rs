@@ -190,6 +190,19 @@ pub fn make_builder() -> Builder {
     let borrowed_formal = generated.contains("fn create(name: &str)");
     let owned_formal = generated.contains("fn create(name: String)");
     assert!(borrowed_formal || owned_formal, "create's formal not found.\nGenerated:\n{}", generated);
+    // Proven by rustc: the call and `create`'s emitted formal type-check together. The FFI conversion inside `create`
+    // is not what this test checks, so `windjammer_runtime::ffi::string_to_ffi` is a one-function shim returning the
+    // `&str` the extern declares (the real runtime's FfiString is a separate FFI question).
+    let shim = "#[allow(dead_code)]\nmod windjammer_runtime { pub mod ffi { pub fn string_to_ffi(s: String) -> &'static str { Box::leak(s.into_boxed_str()) } } }\n";
+    let crate_rs = temp_dir.path().join("checked.rs");
+    fs::write(&crate_rs, format!("{shim}{generated}")).unwrap();
+    let rustc = Command::new("rustc")
+        .args(["--crate-type", "lib", "--edition", "2021", "--emit", "metadata", "-A", "warnings", "-o"])
+        .arg(temp_dir.path().join("checked.rmeta"))
+        .arg(&crate_rs)
+        .output()
+        .expect("rustc");
+    assert!(rustc.status.success(), "the call does not agree with create's formal:\n{}\n{}", String::from_utf8_lossy(&rustc.stderr), generated);
     if borrowed_formal {
         assert!(
             generated.contains(r#"Builder::create("hello")"#),
