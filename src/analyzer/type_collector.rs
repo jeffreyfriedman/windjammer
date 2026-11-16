@@ -177,26 +177,26 @@ pub fn collect_local_type_names<'ast>(program: &Program<'ast>) -> HashSet<String
 /// are not types to import (`fn show<F: Named>(fe: F)` must not become `use super::F;`).
 fn declared_generic_names<'ast>(item: &Item<'ast>) -> HashSet<String> {
     let names = |ps: &[TypeParam]| ps.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
-    let mut out: Vec<String> = Vec::new();
+    let mut declared: Vec<String> = Vec::new();
     match item {
-        Item::Struct { decl, .. } => out.extend(names(&decl.type_params)),
-        Item::Enum { decl, .. } => out.extend(names(&decl.type_params)),
+        Item::Struct { decl, .. } => declared.extend(names(&decl.type_params)),
+        Item::Enum { decl, .. } => declared.extend(names(&decl.type_params)),
         Item::Trait { decl, .. } => {
-            out.extend(decl.generics.iter().cloned());
+            declared.extend(decl.generics.iter().cloned());
             for m in &decl.methods {
-                out.extend(names(&m.type_params));
+                declared.extend(names(&m.type_params));
             }
         }
         Item::Impl { block, .. } => {
-            out.extend(names(&block.type_params));
+            declared.extend(names(&block.type_params));
             for f in &block.functions {
-                out.extend(names(&f.type_params));
+                declared.extend(names(&f.type_params));
             }
         }
-        Item::Function { decl, .. } => out.extend(names(&decl.type_params)),
+        Item::Function { decl, .. } => declared.extend(names(&decl.type_params)),
         _ => {}
     }
-    out.into_iter().collect()
+    declared.into_iter().collect()
 }
 
 /// Every type path referenced from type positions in the program (before filtering). A generic parameter of the
@@ -207,7 +207,8 @@ pub fn collect_referenced_type_paths<'ast>(program: &Program<'ast>) -> HashSet<S
         let mut item_out = HashSet::new();
         collect_item_type_paths(item, &mut item_out);
         let generics = declared_generic_names(item);
-        out.extend(item_out.into_iter().filter(|p| !generics.contains(p)));
+        item_out.retain(|p| !generics.contains(p));
+        out.extend(item_out);
     }
     out
 }

@@ -69,11 +69,11 @@ fn tagged(rule: &'static str) -> ConstraintOrigin {
 #[derive(Debug, Clone)]
 pub struct ConstraintVarMap {
     /// Parameter name → constraint var
-    pub params: HashMap<String, ConstraintVar>,
+    pub params: std::collections::BTreeMap<String, ConstraintVar>,
     /// Return value constraint var
     pub return_var: ConstraintVar,
     /// Local variable name → constraint var (populated during body walk)
-    pub locals: HashMap<String, ConstraintVar>,
+    pub locals: std::collections::BTreeMap<String, ConstraintVar>,
 }
 
 /// Result of constraint generation for a single function.
@@ -115,8 +115,8 @@ pub struct FunctionConstraints {
 /// Walks the AST body and emits constraints for the unified solver.
 struct AstConstraintWalker<'a, 'ast> {
     cs: ConstraintSet,
-    param_vars: HashMap<String, ConstraintVar>,
-    local_vars: HashMap<String, ConstraintVar>,
+    param_vars: std::collections::BTreeMap<String, ConstraintVar>,
+    local_vars: std::collections::BTreeMap<String, ConstraintVar>,
     /// Locals bound straight from another binding (`let kept = headers`): a store of one moves the other.
     let_aliases: std::collections::HashSet<String>,
     return_var: ConstraintVar,
@@ -171,7 +171,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         struct_field_types: Option<&'a HashMap<String, HashMap<String, Type>>>,
     ) -> Self {
         let mut cs = ConstraintSet::new();
-        let mut param_vars = HashMap::new();
+        let mut param_vars = std::collections::BTreeMap::new();
         let mut region_counter: u32 = 1;
 
         // Create constraint vars for each parameter from declared types
@@ -337,7 +337,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         Self {
             cs,
             param_vars,
-            local_vars: HashMap::new(),
+            local_vars: std::collections::BTreeMap::new(),
             let_aliases: Default::default(),
             return_var,
             region_counter,

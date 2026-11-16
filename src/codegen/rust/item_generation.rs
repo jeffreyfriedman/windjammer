@@ -1295,7 +1295,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut edges: Vec<Vec<usize>> = vec![Vec::new(); n];
 
         for (caller_idx, func) in functions.iter().enumerate() {
-            let mut callees = HashSet::new();
+            let mut callees = std::collections::BTreeSet::new();
             Self::collect_impl_sibling_method_calls_in_body(&func.body, &name_set, &mut callees);
             for callee in callees {
                 if !name_set.contains(callee.as_str()) {
@@ -1342,7 +1342,7 @@ impl<'ast> CodeGenerator<'ast> {
     fn collect_impl_sibling_method_calls_in_body(
         body: &[&'ast Statement<'ast>],
         sibling_methods: &HashSet<&str>,
-        out: &mut HashSet<String>,
+        out: &mut std::collections::BTreeSet<String>,
     ) {
         for stmt in body {
             Self::collect_impl_sibling_method_calls_in_statement(stmt, sibling_methods, out);
@@ -1352,7 +1352,7 @@ impl<'ast> CodeGenerator<'ast> {
     fn collect_impl_sibling_method_calls_in_statement(
         stmt: &Statement<'ast>,
         sibling_methods: &HashSet<&str>,
-        out: &mut HashSet<String>,
+        out: &mut std::collections::BTreeSet<String>,
     ) {
         match stmt {
             Statement::Expression { expr, .. }
@@ -1460,7 +1460,7 @@ impl<'ast> CodeGenerator<'ast> {
     fn collect_impl_sibling_method_calls_in_expression(
         expr: &Expression<'ast>,
         sibling_methods: &HashSet<&str>,
-        out: &mut HashSet<String>,
+        out: &mut std::collections::BTreeSet<String>,
     ) {
         match expr {
             Expression::MethodCall { object, method, .. } => {

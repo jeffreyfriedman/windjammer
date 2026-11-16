@@ -20,7 +20,6 @@
 "src/codegen/rust/expression_generation.rs" = 2
 "src/codegen/rust/for_statement_generation.rs" = 2
 "src/codegen/rust/generator.rs" = 1
-"src/codegen/rust/item_generation.rs" = 1
 "src/codegen/rust/let_statement_generation.rs" = 1
 "src/codegen/rust/match_statement_generation.rs" = 5
 "src/codegen/rust/program_generation.rs" = 4
@@ -33,6 +32,6 @@
 "src/ir/explain/render.rs" = 1
 "src/ir/explain/report.rs" = 1
 "src/ir/node.rs" = 1
-"src/ir/pipeline.rs" = 4
+"src/ir/pipeline.rs" = 2
 "src/ir/shadow.rs" = 1
 "src/ir/solver.rs" = 1
