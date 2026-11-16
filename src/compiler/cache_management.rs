@@ -44,16 +44,21 @@ pub fn is_output_fresh(source: &Path, output: &Path) -> bool {
 ///
 /// This prevents silent stale-output bugs where `.rs` mtime is newer than `.wj`
 /// but content is outdated (e.g. manual touch, wrong copy, partial build).
+///
+/// `cache_root` is the shared cache root (`CompilerConfig::cache_root`): manifest-less trees keep their `.wj.meta`
+/// entries under it. Every function below that reads or clears `.wj.meta` entries takes it the same way.
 pub fn is_codegen_cache_valid(
     source: &str,
     source_path: &Path,
     output_path: &Path,
+    cache_root: &Path,
     dep_roots: &[PathBuf],
 ) -> bool {
     crate::compiler::incremental::is_codegen_cache_valid(
         source,
         source_path,
         output_path,
+        cache_root,
         dep_roots,
     )
 }
@@ -114,6 +119,7 @@ fn library_merged_output_valid(
     output_path: &Path,
     src_base: &Path,
     output_dir: &Path,
+    cache_root: &Path,
     dep_roots: &[PathBuf],
     dep_epoch: Option<u64>,
 ) -> bool {
@@ -121,10 +127,11 @@ fn library_merged_output_valid(
         crate::compiler::incremental::fingerprint_matches_cached_with_dep_epoch(
             source,
             source_path,
+            cache_root,
             epoch,
         )
     } else {
-        crate::compiler::incremental::fingerprint_matches_cached(source, source_path, dep_roots)
+        crate::compiler::incremental::fingerprint_matches_cached(source, source_path, cache_root, dep_roots)
     };
     if !fingerprint_ok {
         return false;
@@ -152,6 +159,7 @@ pub fn is_library_codegen_cache_valid(
     output_path: &Path,
     src_base: &Path,
     output_dir: &Path,
+    cache_root: &Path,
     dep_roots: &[PathBuf],
 ) -> bool {
     if (is_mod_wj_source(source_path) && is_mod_items_output(output_path)
@@ -164,11 +172,12 @@ pub fn is_library_codegen_cache_valid(
             output_path,
             src_base,
             output_dir,
+            cache_root,
             dep_roots,
             None,
         );
     }
-    is_codegen_cache_valid(source, source_path, output_path, dep_roots)
+    is_codegen_cache_valid(source, source_path, output_path, cache_root, dep_roots)
 }
 
 pub fn is_library_codegen_cache_valid_with_dep_epoch(
@@ -177,6 +186,7 @@ pub fn is_library_codegen_cache_valid_with_dep_epoch(
     output_path: &Path,
     src_base: &Path,
     output_dir: &Path,
+    cache_root: &Path,
     dep_epoch: u64,
 ) -> bool {
     if (is_mod_wj_source(source_path) && is_mod_items_output(output_path)
@@ -189,6 +199,7 @@ pub fn is_library_codegen_cache_valid_with_dep_epoch(
             output_path,
             src_base,
             output_dir,
+            cache_root,
             &[],
             Some(dep_epoch),
         );
@@ -197,6 +208,7 @@ pub fn is_library_codegen_cache_valid_with_dep_epoch(
         source,
         source_path,
         output_path,
+        cache_root,
         dep_epoch,
     )
 }
@@ -209,10 +221,11 @@ pub fn compute_dirty_files(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
+    cache_root: &Path,
     dep_roots: &[PathBuf],
 ) -> (Vec<usize>, usize) {
     let dep_epoch = crate::compiler::incremental::dep_metadata_epoch(dep_roots);
-    compute_dirty_files_with_dep_epoch(wj_files, src_base, output, dep_roots, dep_epoch)
+    compute_dirty_files_with_dep_epoch(wj_files, src_base, output, cache_root, dep_roots, dep_epoch)
 }
 
 /// Like [`compute_dirty_files`] but pins dep-metadata epoch for the whole build.
@@ -220,6 +233,7 @@ pub fn compute_dirty_files_with_dep_epoch(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
+    cache_root: &Path,
     _dep_roots: &[PathBuf],
     dep_epoch: u64,
 ) -> (Vec<usize>, usize) {
@@ -249,6 +263,7 @@ pub fn compute_dirty_files_with_dep_epoch(
             &output_file,
             src_base,
             output,
+            cache_root,
             dep_epoch,
         ) {
             skipped += 1;
@@ -268,11 +283,12 @@ pub fn compute_codegen_files(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
+    cache_root: &Path,
     dep_epoch: u64,
     reanalysis_set: &std::collections::HashSet<usize>,
 ) -> (Vec<usize>, usize) {
     let (mut dirty, _) =
-        compute_dirty_files_with_dep_epoch(wj_files, src_base, output, &[], dep_epoch);
+        compute_dirty_files_with_dep_epoch(wj_files, src_base, output, cache_root, &[], dep_epoch);
     dirty.extend(reanalysis_set.iter().copied());
     dirty.sort_unstable();
     dirty.dedup();
@@ -291,16 +307,16 @@ pub fn write_compiler_stamp(output: &Path) -> std::io::Result<()> {
 
 /// When the compiler binary changed since the last build, drop stale analysis meta so
 /// fingerprint checks cannot falsely treat old generated Rust as fresh.
-pub fn invalidate_meta_cache_on_compiler_change(src_base: &Path, output: &Path) -> bool {
+pub fn invalidate_meta_cache_on_compiler_change(src_base: &Path, cache_root: &Path, output: &Path) -> bool {
     if crate::compiler::incremental::is_compiler_stamp_fresh(output) {
         return false;
     }
-    let cache_root = crate::metadata::meta_cache_root(src_base);
-    if cache_root.exists() {
-        let _ = std::fs::remove_dir_all(&cache_root);
+    let meta_root = crate::metadata::meta_cache_root(src_base, cache_root);
+    if meta_root.exists() {
+        let _ = std::fs::remove_dir_all(&meta_root);
         eprintln!(
             "⟳ Compiler changed — cleared analysis cache at {}",
-            cache_root.display()
+            meta_root.display()
         );
     }
     true
@@ -313,6 +329,7 @@ pub fn all_sources_fresh(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
+    cache_root: &Path,
     dep_metadata_paths: &[PathBuf],
 ) -> bool {
     if !is_compiler_stamp_fresh(output) {
@@ -343,6 +360,7 @@ pub fn all_sources_fresh(
             &output_file,
             src_base,
             output,
+            cache_root,
             dep_metadata_paths,
         ) {
             return false;
@@ -379,9 +397,10 @@ pub fn find_stale_codegen_outputs(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
+    cache_root: &Path,
     dep_roots: &[PathBuf],
 ) -> Vec<PathBuf> {
-    find_stale_codegen_outputs_with_dep_epoch(wj_files, src_base, output, dep_roots, None)
+    find_stale_codegen_outputs_with_dep_epoch(wj_files, src_base, output, cache_root, dep_roots, None)
 }
 
 /// Like [`find_stale_codegen_outputs`] but optionally pins dep-metadata epoch from build start.
@@ -389,6 +408,7 @@ pub fn find_stale_codegen_outputs_with_dep_epoch(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
+    cache_root: &Path,
     dep_roots: &[PathBuf],
     dep_epoch: Option<u64>,
 ) -> Vec<PathBuf> {
@@ -414,10 +434,11 @@ pub fn find_stale_codegen_outputs_with_dep_epoch(
                 &output_file,
                 src_base,
                 output,
+                cache_root,
                 epoch,
             )
         } else {
-            is_library_codegen_cache_valid(&source, file, &output_file, src_base, output, dep_roots)
+            is_library_codegen_cache_valid(&source, file, &output_file, src_base, output, cache_root, dep_roots)
         };
         if !cache_valid {
             stale.push(file.clone());

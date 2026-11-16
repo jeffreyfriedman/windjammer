@@ -21,7 +21,6 @@ pub const DEFAULT_MIN_FREE_GIB: u64 = 15;
 /// Drop incremental units older than this many days.
 pub const DEFAULT_INCREMENTAL_MAX_AGE_DAYS: u64 = 7;
 
-const ENV_ROOT: &str = "WJ_CARGO_TARGET_ROOT";
 const ENV_USE_LOCAL: &str = "WJ_USE_LOCAL_TARGET";
 const ENV_MIN_FREE: &str = "WJ_DISK_FREE_MIN_GIB";
 
@@ -59,47 +58,9 @@ pub fn crate_version(crate_dir: &Path) -> String {
     format!("0.1.0+wj{h:016x}")
 }
 
+/// The shared cache root: one definition, in `compiler_config` (`WJ_CARGO_TARGET_ROOT`, else the platform default).
 pub fn cache_root() -> PathBuf {
-    if let Ok(root) = std::env::var(ENV_ROOT) {
-        let trimmed = root.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
-        }
-    }
-    default_cache_root()
-}
-
-fn default_cache_root() -> PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("Library")
-            .join("Caches")
-            .join("windjammer")
-    }
-    #[cfg(target_os = "windows")]
-    {
-        std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .or_else(home_dir)
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("windjammer")
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        std::env::var_os("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .or_else(|| home_dir().map(|h| h.join(".cache")))
-            .unwrap_or_else(|| PathBuf::from(".cache"))
-            .join("windjammer")
-    }
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
+    crate::compiler_config::shared_cache_root()
 }
 
 /// Resolve the Cargo target directory for `kind`, creating it when possible.
@@ -359,6 +320,7 @@ pub fn prune(opts: PruneOptions) -> PruneReport {
     report.freed_bytes += entries::prune(&entries::analysis_dir(), entries::ANALYSIS_MAX_ENTRIES, opts.force, &mut report);
     report.freed_bytes += entries::prune(&entries::verdicts_dir(), 512, opts.force, &mut report);
     report.freed_bytes += entries::prune(&entries::registry_dir(), entries::REGISTRY_MAX_ENTRIES, opts.force, &mut report);
+    report.freed_bytes += entries::prune_trees(&entries::meta_dir(), entries::META_MAX_TREES, opts.force, &mut report);
 
     // The verify tree is ephemeral scratch: always drop it when large or when reclaiming.
     if verify.exists() && deletable(&verify, &verify) && (do_aggressive || dir_size(&verify) > VERIFY_MAX_BYTES) {
@@ -726,7 +688,7 @@ mod tests {
     fn target_dir_respects_root_override() {
         let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = tempfile::tempdir().unwrap();
-        std::env::set_var(ENV_ROOT, tmp.path());
+        std::env::set_var(crate::compiler_config::CACHE_ROOT_ENV, tmp.path());
         std::env::remove_var(ENV_USE_LOCAL);
 
         let shared = target_dir(TargetKind::Shared);
@@ -744,7 +706,7 @@ mod tests {
         );
         assert!(shared.exists());
 
-        std::env::remove_var(ENV_ROOT);
+        std::env::remove_var(crate::compiler_config::CACHE_ROOT_ENV);
     }
 
     #[test]
@@ -760,7 +722,7 @@ mod tests {
     fn configure_cargo_sets_env() {
         let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = tempfile::tempdir().unwrap();
-        std::env::set_var(ENV_ROOT, tmp.path());
+        std::env::set_var(crate::compiler_config::CACHE_ROOT_ENV, tmp.path());
         std::env::remove_var(ENV_USE_LOCAL);
 
         let mut cmd = Command::new("cargo");
@@ -768,6 +730,6 @@ mod tests {
         // Can't easily read Command env; ensure dir was created.
         assert!(tmp.path().join("cargo-target").join("verify").exists());
 
-        std::env::remove_var(ENV_ROOT);
+        std::env::remove_var(crate::compiler_config::CACHE_ROOT_ENV);
     }
 }

@@ -190,6 +190,7 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
         });
         crate::metadata::emit_module_meta_for_file_with_fingerprint(
             source_file,
+            &codegen.config.cache_root(),
             program,
             &codegen.signature_registry,
             copy_structs,

@@ -1,5 +1,6 @@
 //! Directories of small content-addressed entries (`<key>.json`, key = 64 hex digits) that several checkouts and
-//! processes share: the analysis cache (`<cache root>/analysis`) and the compiled verdicts (`verdicts`).
+//! processes share: the analysis cache (`<cache root>/analysis`) and the compiled verdicts (`verdicts`). The analysis
+//! metadata of manifest-less trees (`<cache root>/meta`, one directory per tree content key) is pruned per tree.
 //!
 //! Writers hold the directory's shared build lock ([`active::hold_path`]) while they write and evict, so
 //! `wj cache prune` (which takes the exclusive probe, [`active::held`]) never deletes under a writer and skips a
@@ -26,6 +27,14 @@ pub fn analysis_dir() -> PathBuf {
 pub fn registry_dir() -> PathBuf {
     super::cache_root().join("registry")
 }
+
+/// The analysis metadata of manifest-less trees (`<cache root>/meta/<tree key>/...`), as the compiler names it.
+pub fn meta_dir() -> PathBuf {
+    crate::metadata::global_meta_cache_dir(&super::cache_root())
+}
+
+/// Trees kept in [`meta_dir`] (the most recently written win).
+pub const META_MAX_TREES: usize = 2048;
 
 pub fn verdicts_dir() -> PathBuf {
     super::cache_root().join("verdicts")
@@ -122,6 +131,37 @@ pub fn prune(dir: &Path, max: usize, force: bool, report: &mut super::PruneRepor
             if tmp && stale {
                 freed += e.metadata().map_or(0, |m| m.len());
                 let _ = fs::remove_file(&p);
+            }
+        }
+    }
+    freed
+}
+
+/// `wj cache prune` for a directory of entry trees ([`meta_dir`]): drop the trees whose newest file is past [`MAX_AGE`]
+/// and the oldest beyond `max`. A directory somebody holds is left alone (and said so), and so is a tree written within
+/// the hour ([`active::RECENT`]: its writer may still be running), unless `force`.
+pub fn prune_trees(dir: &Path, max: usize, force: bool, report: &mut super::PruneReport) -> u64 {
+    if !dir.is_dir() {
+        return 0;
+    }
+    if !force && active::held(dir) {
+        report.messages.push(format!("{} is being written: not pruned", dir.display()));
+        return 0;
+    }
+    let Ok(rd) = fs::read_dir(dir) else { return 0 };
+    let mut trees: Vec<(Option<SystemTime>, PathBuf)> =
+        rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).map(|p| (active::newest_mtime(&p), p)).collect();
+    trees.sort();
+    let now = SystemTime::now();
+    let over = trees.len().saturating_sub(max);
+    let mut freed = 0;
+    for (i, (t, p)) in trees.iter().enumerate() {
+        let old = t.is_none_or(|t| now.duration_since(t).is_ok_and(|a| a > MAX_AGE));
+        if (old || i < over) && (force || !active::is_recent(*t)) {
+            let size = super::dir_size(p);
+            if fs::remove_dir_all(p).is_ok() {
+                freed += size;
+                report.removed_paths.push(p.clone());
             }
         }
     }

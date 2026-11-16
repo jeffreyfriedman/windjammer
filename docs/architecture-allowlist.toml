@@ -37,7 +37,7 @@
 "src/lib.rs" = 1
 
 [env_var_reads]
-"src/cargo_cache/mod.rs" = 9
+"src/cargo_cache/mod.rs" = 4
 "src/cli/code_mode.rs" = 3
 "src/cli/self_install.rs" = 3
 "src/compiler_config.rs" = 1
@@ -231,7 +231,7 @@
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
 "src/compiler/compilation_pipeline.rs::build_project_with_config" = 342
 "src/compiler/library_copy_registry.rs::collect_global_enum_variant_types_for_library" = 359
-"src/compiler/library_multipass.rs::build_library_multipass" = 1398
+"src/compiler/library_multipass.rs::build_library_multipass" = 1393
 "src/file_compilation_pipeline.rs::compile_file_impl" = 398
 "src/interpreter/builtins/option.rs::register" = 306
 "src/interpreter/builtins/seq.rs::register_vec" = 354

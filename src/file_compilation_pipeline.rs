@@ -231,7 +231,7 @@ fn compile_file_impl(
 
     // Cross-file ownership: load peer `*.wj.meta` (from prior `wj build` runs) into the registry
     // before analysis so call sites get `&` / `&mut` for callees defined in other files.
-    metadata::merge_wj_meta_signatures_from_dir_reaching(source_root, Some(metadata::use_segments(&program)), &mut module_compiler.global_signatures);
+    metadata::merge_wj_meta_signatures_from_dir_reaching(source_root, &module_compiler.config.cache_root(), Some(metadata::use_segments(&program)), &mut module_compiler.global_signatures);
 
     // App `--module-file` (no `--library` / `--metadata`): load wj.toml path-dep
     // signatures so mixed formals are visible at call sites. Compiler multipass

@@ -18,6 +18,52 @@ pub fn compiler_key() -> Option<String> {
     (!key.is_empty()).then(|| format!("{}+{key}", env!("CARGO_PKG_VERSION")))
 }
 
+/// Variable naming the shared cache root (cargo targets, analysis entries, manifest-less metadata).
+pub const CACHE_ROOT_ENV: &str = "WJ_CARGO_TARGET_ROOT";
+
+/// The process environment as a lookup: the one place this module reads it.
+fn env_lookup(key: &str) -> Option<String> {
+    std::env::var(key).ok()
+}
+
+/// The shared cache root from environment-style variables (pure): `WJ_CARGO_TARGET_ROOT`, else the platform cache
+/// directory (`LOCALAPPDATA` on Windows, `~/Library/Caches` on macOS, `XDG_CACHE_HOME` or `~/.cache` elsewhere) plus
+/// `windjammer`.
+pub fn cache_root_from_lookup(get: impl Fn(&str) -> Option<String>) -> PathBuf {
+    if let Some(root) = get(CACHE_ROOT_ENV) {
+        let trimmed = root.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    let home = || get("HOME").or_else(|| get("USERPROFILE")).map(PathBuf::from);
+    #[cfg(target_os = "macos")]
+    {
+        home().unwrap_or_else(|| PathBuf::from(".")).join("Library").join("Caches").join("windjammer")
+    }
+    #[cfg(target_os = "windows")]
+    {
+        get("LOCALAPPDATA").map(PathBuf::from).or_else(home).unwrap_or_else(|| PathBuf::from(".")).join("windjammer")
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        get("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| home().map(|h| h.join(".cache")))
+            .unwrap_or_else(|| PathBuf::from(".cache"))
+            .join("windjammer")
+    }
+}
+
+/// The variables [`cache_root_from_lookup`] reads.
+const CACHE_ROOT_INPUTS: [&str; 5] = [CACHE_ROOT_ENV, "HOME", "USERPROFILE", "LOCALAPPDATA", "XDG_CACHE_HOME"];
+
+/// The shared cache root of this process (`wj cache path` and the manifest-less metadata cache live under it). For
+/// drivers that hold no [`CompilerConfig`]; every other caller reads [`CompilerConfig::cache_root`].
+pub fn shared_cache_root() -> PathBuf {
+    cache_root_from_lookup(env_lookup)
+}
+
 /// Behavior-affecting compiler settings. Build once at the driver edge and pass down.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerConfig {
@@ -63,6 +109,9 @@ pub struct CompilerConfig {
     pub liveness_mutation_always_move: bool,
     /// Release builds let integer arithmetic wrap (`wj build --unchecked-arithmetic`); off by default (SPEC-NUM-002).
     pub unchecked_arithmetic: bool,
+    /// The shared cache root, as the driver resolved it ([`cache_root_from_lookup`]). The analysis metadata of
+    /// manifest-less trees lives in `<root>/meta`. `None`: the process default ([`shared_cache_root`]).
+    pub cache_root: Option<PathBuf>,
 }
 
 impl Default for CompilerConfig {
@@ -86,6 +135,7 @@ impl Default for CompilerConfig {
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: false,
             unchecked_arithmetic: false,
+            cache_root: None,
         }
     }
 }
@@ -108,7 +158,7 @@ fn parse_crate_paths(value: Option<&str>) -> std::collections::BTreeMap<String, 
 impl CompilerConfig {
     /// Read the process environment. Call only from the CLI driver.
     pub fn from_env() -> Self {
-        Self::from_lookup(|k| std::env::var(k).ok())
+        Self::from_lookup(env_lookup)
     }
 
     /// Interpret environment-style variables via an injected lookup (pure; testable).
@@ -142,7 +192,13 @@ impl CompilerConfig {
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: get("WJ_LIVENESS_MUTATION").is_some_and(|v| v == "always-move"),
             unchecked_arithmetic: false,
+            cache_root: CACHE_ROOT_INPUTS.iter().any(|k| get(k).is_some()).then(|| cache_root_from_lookup(&get)),
         }
+    }
+
+    /// The shared cache root this configuration builds with (see the `cache_root` field).
+    pub fn cache_root(&self) -> PathBuf {
+        self.cache_root.clone().unwrap_or_else(shared_cache_root)
     }
 
     pub fn with_ir_cutover(mut self, ir_cutover: IrCutoverConfig) -> Self {

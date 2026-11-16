@@ -87,7 +87,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         }
 
         let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
-        numeric_inference.set_source_root(source_root);
+        numeric_inference.set_source_root(source_root, &module_compiler.config.cache_root());
         numeric_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
         numeric_inference.set_debug_source(source);
         numeric_inference.infer_program(program);
@@ -151,7 +151,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
     // Rust target (and any non-Wasm non-Go path)
     let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
-    numeric_inference.set_source_root(source_root);
+    numeric_inference.set_source_root(source_root, &module_compiler.config.cache_root());
     numeric_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
     numeric_inference.set_debug_source(source);
     numeric_inference.infer_program(program);
@@ -436,7 +436,7 @@ pub(crate) fn write_single_file_outputs<'ast>(
             }
         }
 
-        let meta_path = crate::metadata::meta_cache_path(input_path);
+        let meta_path = crate::metadata::meta_cache_path(input_path, &module_compiler.config.cache_root());
         if let Some(parent) = meta_path.parent() {
             std::fs::create_dir_all(parent)?;
         }

@@ -36,7 +36,9 @@ pub fn fingerprint(depth: usize) -> Option<String> {
     let mut budget = WALK_BUDGET;
     // Only cache locations are read (colocated `.wj.meta` sidecars are ignored by the inference).
     walk(&cwd.join(".wj-cache"), depth + 1, &mut budget, &mut files)?;
-    walk(&crate::metadata::meta_cache_root(&cwd), depth + 1, &mut budget, &mut files)?;
+    // `wj check` holds no `CompilerConfig`: the process's shared cache root holds manifest-less entries
+    let cache_root = crate::compiler_config::shared_cache_root();
+    walk(&crate::metadata::meta_cache_root(&cwd, &cache_root), depth + 1, &mut budget, &mut files)?;
     files.sort();
     files.dedup();
     let mut h = Sha256::new();
