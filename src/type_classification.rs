@@ -372,6 +372,12 @@ pub fn is_collection_storage_receiver(name: &str) -> bool {
 }
 
 /// Stdlib bases safe for `std::mem::take` (implement `Default`).
+/// A std type that is `Default` (empty) whatever its type arguments (`Vec<T>`, `HashMap<K, V>`, `Option<T>`);
+/// `Box<T>` is `Default` only when `T` is.
+pub fn is_default_for_any_elements(name: &str) -> bool {
+    is_mem_take_stdlib_base(name) && type_name_leaf(name) != "Box"
+}
+
 pub fn is_mem_take_stdlib_base(name: &str) -> bool {
     let leaf = type_name_leaf(name);
     is_stdlib_default_empty_type(name)

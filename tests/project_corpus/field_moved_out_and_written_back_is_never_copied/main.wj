@@ -1,0 +1,23 @@
+// `Outbox::flush` passes its own field to a function that consumes it and stores the result back in the same
+// field. The field moves out and back (one owner): it is never copied, and it is never emptied by the call.
+// Expected by hand: two flushes of one and two items give three queued items; the first is "a".
+// expect: 3 a
+mod queue
+use queue::append_all
+
+pub struct Outbox {
+    pending: Vec<string>,
+}
+
+impl Outbox {
+    fn flush(self, items: Vec<string>) {
+        self.pending = append_all(self.pending, items)
+    }
+}
+
+fn main() {
+    let mut o = Outbox { pending: [] }
+    o.flush(["a"])
+    o.flush(["b", "c"])
+    println("${o.pending.len()} ${o.pending[0]}")
+}

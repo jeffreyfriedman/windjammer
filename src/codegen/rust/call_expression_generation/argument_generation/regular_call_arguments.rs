@@ -211,7 +211,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 .as_ref()
                                 .is_some_and(|t| gen.is_copy_move_out_type(t));
                             if !is_copy && !arg_str.ends_with(".clone()") {
-                                arg_str = format!("{}.clone()", arg_str);
+                                arg_str = gen.writeback_take_arg(arg).unwrap_or_else(|| format!("{}.clone()", arg_str));
                             }
                         }
                         // P3.368: i32-coord locals into u32/i64 extern formals (texture FFI, ECS).
@@ -237,7 +237,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             .as_ref()
                             .is_some_and(|t| gen.is_copy_move_out_type(t));
                         if !is_copy && !arg_str.ends_with(".clone()") {
-                            arg_str = format!("{}.clone()", arg_str);
+                            arg_str = gen.writeback_take_arg(arg).unwrap_or_else(|| format!("{}.clone()", arg_str));
                         }
                     }
                 }
@@ -568,7 +568,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             } else {
                                 coerced.clone()
                             };
-                            coerced = format!("{base}.clone()");
+                            coerced = gen.writeback_take_arg(arg).unwrap_or_else(|| format!("{base}.clone()"));
                         }
                     }
                     if let Expression::Identifier { name, .. } = arg {

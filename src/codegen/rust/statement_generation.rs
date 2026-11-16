@@ -1111,50 +1111,42 @@ impl<'ast> CodeGenerator<'ast> {
         arg_expr: &Expression<'ast>,
         arg_str: &str,
     ) -> Option<String> {
-        if !matches!(arg_expr, Expression::FieldAccess { .. }) {
-            return None;
-        }
         if arg_str.contains("std::mem::take(") || arg_str.ends_with(".take()") {
             return None;
         }
+        let (field_path, takes) = self.self_field_writeback(arg_expr)?;
+        Some(if takes { format!("std::mem::take(&mut {field_path})") } else { format!("{field_path}.clone()") })
+    }
+
+    /// The owned argument `std::mem::take(&mut self.f)` when `self.f` is written back right after the call behind
+    /// `&mut self` (the field moves out and back: one owner, never a copy). Decided from the body and the field's
+    /// type, so every pass that emits this argument agrees, whatever an earlier pass printed.
+    pub(in crate::codegen::rust) fn writeback_take_arg(&self, arg_expr: &Expression<'ast>) -> Option<String> {
+        let (field_path, takes) = self.self_field_writeback(arg_expr)?;
+        takes.then(|| format!("std::mem::take(&mut {field_path})"))
+    }
+
+    /// `(path, takes)` for an owned argument `self.path` written back after the call behind a borrowed `self`;
+    /// `takes` when the field can move out (`&mut self` and a `Default` type), else it is cloned.
+    fn self_field_writeback(&self, arg_expr: &Expression<'ast>) -> Option<(String, bool)> {
+        if !matches!(arg_expr, Expression::FieldAccess { .. }) {
+            return None;
+        }
         let root = self.root_identifier_of_field_or_index_chain(arg_expr)?;
-        if root != "self" {
-            return None;
-        }
         let field_path = self.extract_field_access_path_string(arg_expr);
-        if field_path.is_empty() {
-            return None;
-        }
         let body: Vec<&Statement<'_>> = self.current_function_body.iter().copied().collect();
-        if !crate::auto_clone::AutoCloneAnalysis::self_field_has_writeback(
-            &body,
-            &field_path,
-            self.current_statement_idx,
-        ) {
-            return None;
-        }
-        // Owned `self`: bare move is valid — leave the arg as-is.
-        if !self.inferred_mut_borrowed_params.contains("self")
-            && !self.inferred_borrowed_params.contains("self")
+        if root != "self"
+            || field_path.is_empty()
+            || !crate::auto_clone::AutoCloneAnalysis::self_field_has_writeback(&body, &field_path, self.current_statement_idx)
         {
             return None;
         }
-        let Some(ty) = self.infer_expression_type(arg_expr) else {
-            return None;
-        };
-        if self.is_type_copy(&ty) {
+        // Owned `self`: bare move is valid — leave the arg as-is.
+        if !self.inferred_mut_borrowed_params.contains("self") && !self.inferred_borrowed_params.contains("self") {
             return None;
         }
-        let mut base = arg_str.to_string();
-        if base.ends_with(".clone()") {
-            base.truncate(base.len() - ".clone()".len());
-        }
-        let base = base.trim_start_matches('&').trim().to_string();
-        if self.inferred_mut_borrowed_params.contains("self") && self.type_supports_mem_take(&ty) {
-            Some(format!("std::mem::take(&mut {base})"))
-        } else {
-            Some(format!("{base}.clone()"))
-        }
+        let ty = self.infer_expression_type(arg_expr).filter(|ty| !self.is_type_copy(ty))?;
+        Some((field_path, self.inferred_mut_borrowed_params.contains("self") && self.type_supports_mem_take(&ty)))
     }
 
     /// True when `ty` is safe for `std::mem::take` (Default in std or auto-derived).
@@ -1163,10 +1155,12 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
             Type::Vec(_) | Type::Option(_) => true,
             Type::Tuple(elems) => elems.iter().all(|t| self.type_supports_mem_take(t)),
+            // A collection is `Default` (empty) whatever its elements, so unknown element fields never decide.
             Type::Parameterized(base, args)
                 if crate::type_classification::is_mem_take_stdlib_base(base) =>
             {
-                args.iter().all(|a| self.type_supports_mem_take(a))
+                crate::type_classification::is_default_for_any_elements(base)
+                    || args.iter().all(|a| self.type_supports_mem_take(a))
             }
             Type::Custom(name)
                 if crate::type_classification::is_copy_primitive(name) || name == "String" =>

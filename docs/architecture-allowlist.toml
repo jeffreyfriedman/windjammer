@@ -175,7 +175,7 @@
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2156
 "src/codegen/rust/self_analysis.rs" = 2026
 "src/codegen/rust/signature_promotion.rs" = 4519
-"src/codegen/rust/statement_generation.rs" = 2432
+"src/codegen/rust/statement_generation.rs" = 2426
 "src/codegen/rust/stdlib_method_traits.rs" = 2430
 "src/codegen/rust/string_utilities.rs" = 2035
 "src/compiler/multipass_bare_pass_demotion.rs" = 4051

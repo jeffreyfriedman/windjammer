@@ -9616,7 +9616,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return arg_str.to_string();
         }
-        if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
+        if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str).or_else(|| self.writeback_take_arg(arg_expr)) {
             return rewritten;
         }
         let needs =

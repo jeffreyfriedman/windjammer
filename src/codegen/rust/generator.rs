@@ -4556,13 +4556,13 @@ impl<'ast> CodeGenerator<'ast> {
                     // Owned callee formals cannot reborrow `&self.field` / `&param.field`
                     // (E0507). Always clone non-Copy fields out of a borrowed root.
                     // Mut-passthrough (`&mut self.field` → `&mut T`) is handled by the
-                    // mut-borrow call-site path and never reaches this helper.
+                    // mut-borrow call-site path. A field written back after the call moves out (`writeback_take_arg`).
                     let is_copy = self
                         .infer_expression_type(arg)
                         .as_ref()
                         .is_some_and(|t| self.is_copy_move_out_type(t));
                     if !is_copy {
-                        *arg_str = format!("{}.clone()", arg_str);
+                        *arg_str = self.writeback_take_arg(arg).unwrap_or_else(|| format!("{}.clone()", arg_str));
                         return true;
                     }
                 }
