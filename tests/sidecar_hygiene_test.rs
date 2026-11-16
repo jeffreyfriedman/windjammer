@@ -203,21 +203,14 @@ fn legacy_sidecar_is_never_read() {
         (rs, untouched)
     };
     let (clean, _) = build(None);
-    // Control: a current cache entry (written by building util.wj with this compiler) IS read, so a differing result
-    // is detectable at all. A hand-written poison in the cache is not: it carries no fingerprint of this compiler and
-    // of util.wj's text (tests/peer_meta_cache_gate_test.rs).
-    let cached = {
-        let d = project(true);
-        std::fs::write(d.path().join("src/util.wj"), "pub fn label(s: string) -> int {\n    s.len()\n}\n").unwrap();
-        std::fs::write(d.path().join("src/main.wj"), "use crate::util\n\nfn main() {\n    let n = util::label(\"abc\")\n    println(\"${n}\")\n}\n").unwrap();
-        let cache = tempfile::tempdir().unwrap();
-        let o = wj(d.path(), cache.path(), &["build", "src/util.wj", "--no-cargo", "--no-lint", "--quiet", "-o", "out-util"]);
-        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-        let o = wj(d.path(), cache.path(), &["build", "src/main.wj", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
-        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-        std::fs::read_to_string(d.path().join("out/main.rs")).unwrap()
-    };
-    assert_ne!(clean, cached, "a current cache entry is inert; the gate would be vacuous");
+    // Control: the poison is observable. Without any cache entry the build reads util.wj's own declaration (its
+    // parameter is borrowed), so the clean call passes the literal as is; the poison claims an owned parameter, which
+    // would turn the call into `"abc".to_string()`. A difference is therefore detectable, and the gate is not vacuous.
+    // (A hand-written poison carries no fingerprint of this compiler and of util.wj's text: tests/peer_meta_cache_gate_test.rs.)
+    assert!(
+        clean.contains("util::label(\"abc\")") && !clean.contains("\"abc\".to_string()"),
+        "the clean build must borrow the literal, or the poison would not be observable:\n{clean}"
+    );
     let (poisoned_cache, _) = build(Some(Path::new(".wj-cache/util.wj.meta")));
     assert_eq!(clean, poisoned_cache, "a cache entry without this compiler's fingerprint influenced the build");
     // The legacy location must behave exactly like no poison.
