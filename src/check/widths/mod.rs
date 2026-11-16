@@ -182,13 +182,21 @@ fn signatures(f: &syn::File, items: &Items) -> (HashMap<String, Sig>, Methods) {
 }
 
 /// Which drift family a clash belongs to (docs/drift/findings.md): A widths, B a reference expected (lookups,
-/// adapters), C `String` against `&str`.
+/// adapters), C `String` against `&str`. The family is the one of the parts that differ: `Vec<String>` against
+/// `Vec<&str>` is C, not a width.
 fn family(c: &Clash) -> char {
+    fn differing<'t>(a: &'t Ty, b: &'t Ty) -> (&'t Ty, &'t Ty) {
+        match (a, b) {
+            (Ty::Seq(x), Ty::Seq(y)) | (Ty::Opt(x), Ty::Opt(y)) | (Ty::Ref(x), Ty::Ref(y)) => differing(x, y),
+            _ => (a, b),
+        }
+    }
+    let (left, right) = differing(&c.left, &c.right);
     let stringy = |t: &Ty| matches!(t.bare(), Ty::Str | Ty::StrSlice);
     let reference = |t: &Ty| matches!(t, Ty::Ref(_));
-    if stringy(&c.left) || stringy(&c.right) {
+    if stringy(left) || stringy(right) {
         'C'
-    } else if reference(&c.left) != reference(&c.right) {
+    } else if reference(left) != reference(right) {
         'B'
     } else {
         'A'

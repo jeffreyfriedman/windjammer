@@ -1,0 +1,13 @@
+// expect: x 1 y
+// A list literal whose element is an `if` of string literals, bound to a declared `Vec<string>` or passed to a
+// `Vec<string>` parameter, has owned `string` elements (it was emitted `Vec<&str>` against `Vec<String>`).
+fn count(v: Vec<string>) -> int {
+    v.len()
+}
+
+fn main() {
+    let c = true
+    let v: Vec<string> = [if c { "x" } else { "y" }]
+    let w: Vec<string> = [match c { true => "y", false => "z" }]
+    println("${v[0]} ${count([if c { "x" } else { "y" }])} ${w[0]}")
+}

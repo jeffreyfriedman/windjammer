@@ -875,6 +875,9 @@ impl IntInference {
                         // `let mut v = vec![1, 2, 3]` is `Vec<int>` so `v.push(4)` shares i64.
                         self.var_types
                             .insert(var_name.to_string(), Type::Vec(Box::new(elem_ty)));
+                    } else {
+                        // A new binding of the name shadows the earlier one: its type is not the earlier binding's.
+                        self.var_types.remove(var_name);
                     }
                     if let Some(int_ty) = explicit_type {
                         self.constraints.push(IntConstraint::MustBe(

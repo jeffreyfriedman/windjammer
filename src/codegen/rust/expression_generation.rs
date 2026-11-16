@@ -962,7 +962,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(suffix) =
                     self.solver_literal_width(expr).and_then(crate::codegen::rust::solver_widths::rust_int_name)
                 {
-                    return format!("{}_{}", i, suffix);
+                    return crate::codegen::rust::literals::int_suffixed_literal(*i, suffix);
                 }
                 use crate::type_inference::IntType;
                 // Priority 0: explicit int/usize target from let/assign/call-arg / binary peer
@@ -975,7 +975,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     if let Some(it) = Self::int_type_from_assignment_target(ctx_ty) {
                         if it != IntType::Unknown {
-                            return format!("{}_{}", i, it.rust_suffix());
+                            return crate::codegen::rust::literals::int_suffixed_literal(*i, it.rust_suffix());
                         }
                     }
                 }
@@ -990,7 +990,7 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             if let Some(it) = Self::int_type_from_assignment_target(field_type) {
                                 if it != IntType::Unknown {
-                                    return format!("{}_{}", i, it.rust_suffix());
+                                    return crate::codegen::rust::literals::int_suffixed_literal(*i, it.rust_suffix());
                                 }
                             }
                         }
@@ -1030,7 +1030,7 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 if inferred != IntType::Unknown {
                     let suffix = inferred.rust_suffix();
-                    return format!("{}_{}", i, suffix);
+                    return crate::codegen::rust::literals::int_suffixed_literal(*i, suffix);
                 }
                 crate::codegen::rust::literals::generate_literal(lit)
             }

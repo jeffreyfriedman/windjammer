@@ -460,7 +460,6 @@ tests/fixtures/library_multipass/env_trait_forward_hex/postgres.wj W0007
 tests/fixtures/library_multipass/env_trait_forward_hex/seed.wj W0007
 tests/fixtures/library_multipass/migrate_cli_use_positional.wj W0005
 tests/fixtures/library_multipass/postgres_query_vec_params.wj W0007
-tests/fixtures/library_multipass/proxy_http_adapter.wj WJ0015
 tests/fixtures/library_multipass/proxy_stats_reply.wj W0005
 tests/fixtures/library_multipass/vec_string_int_element.wj W0007
 tests/fixtures/mut_ref_test.wj W0004
@@ -612,7 +611,6 @@ tests/generic_owned_param_test.wj W0004,W0016
 tests/interpreter_corpus/generic_static_dispatch.wj W0008,W0016
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/port.wj W0016
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/reader.wj W0007
-tests/project_corpus/alias_of_borrowed_text_into_owned_formal/writer.wj WJ0015
 tests/project_corpus/free_fn_homonym_of_trait_method/ports.wj W0016
 tests/project_corpus/imported_string_const_owned_in_struct_and_list/grants.wj W0007
 tests/project_corpus/param_rebound_then_compared/main.wj W0007

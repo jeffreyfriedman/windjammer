@@ -27,6 +27,15 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Infer a let-binding type from its value (signature-driven), refining bare
     /// `Vec` / `HashSet` element types from return type or forward `.push`/`.insert` usage.
+    /// `local_var_types` is keyed by name: a binding whose value is a scalar or text (`let x = match .. { V::R(f) => f,
+    /// .. }` before a later `let x` of bytes) does not take that name's collection ascription.
+    fn let_value_is_scalar(&self, value: &Expression<'ast>) -> bool {
+        self.infer_expression_type(value).is_some_and(|t| {
+            matches!(t, Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String)
+                || matches!(&t, Type::Custom(n) if crate::type_classification::is_numeric_type(n))
+        })
+    }
+
     fn infer_let_value_type(
         &self,
         value: &Expression<'ast>,
@@ -717,7 +726,7 @@ impl<'ast> CodeGenerator<'ast> {
                     value,
                     Expression::MethodCall { .. } | Expression::MacroInvocation { .. }
                 );
-                let needs_collection_ascription_sv = !type_inferred_from_context
+                let needs_collection_ascription_sv = !type_inferred_from_context && !self.let_value_is_scalar(value)
                     && var_name.is_some_and(|vn| {
                         self.local_var_types.get(vn).is_some_and(|ty| {
                             matches!(ty, Type::Vec(_) | Type::Parameterized(_, _))

@@ -1,0 +1,12 @@
+// expect: [9, 1, 2]
+// `out.extend(data[0..n].to_vec())` extends with the copied bytes; it was emitted
+// `(data[0..n]).to_vec().clone().to_string()` (an unbalanced `(...)` was taken for a wrapped borrow of text).
+fn append_prefix(dst: Vec<u8>, data: Vec<u8>, n: usize) -> Vec<u8> {
+    let mut out = dst
+    out.extend(data[0..n].to_vec())
+    out
+}
+
+fn main() {
+    println("${append_prefix([9], [1, 2, 3], 2):?}")
+}

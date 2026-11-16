@@ -67,6 +67,9 @@ pub struct FileNames {
     /// The file imports a non-std crate or declares `extern` items: method names may come from
     /// types the checker cannot see.
     pub external: bool,
+    /// Types imported from this crate (`use crate::channel::Channel`): checked alone, the file cannot see their
+    /// declarations, so their methods are not known to be missing.
+    pub crate_types: HashSet<String>,
 }
 
 /// Std modules usable without an explicit `use` (auto-imported by the compiler).
@@ -279,6 +282,10 @@ impl FileNames {
                     let first = path.first().map(String::as_str).unwrap_or("");
                     if !(first.starts_with("std") || first.starts_with('.') || matches!(first, "crate" | "self" | "super")) {
                         self.external = true;
+                    }
+                    let leaf = alias.as_deref().or(path.last().map(String::as_str)).unwrap_or("");
+                    if matches!(first, "crate" | "self" | "super") && leaf.starts_with(|c: char| c.is_uppercase()) {
+                        self.crate_types.insert(leaf.to_string());
                     }
                     for seg in path {
                         words(seg, &mut self.imported);

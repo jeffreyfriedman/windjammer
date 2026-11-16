@@ -45,7 +45,7 @@ pub const RULES: &[Rule] = rules![
     ("OWN-MUT-ANALYZER", ParamMode, "Mutation detected by the analyzer (implementation seed)"),
     ("OWN-RETURNED", ParamMode, "A parameter (or a non-Copy field of it) that is returned is owned"),
     ("OWN-STORED", ParamMode, "A parameter moved into a struct, enum, tuple or collection is owned"),
-    ("OWN-OPAQUE-RECEIVER", ParamMode, "A by-value parameter of a type no declaration describes that receives an undescribed method stays owned"),
+    ("OWN-OPAQUE-RECEIVER", ParamMode, "A by-value parameter of an undeclared type receiving a method with no signature stays owned"),
     ("OWN-MUT-PARAM-COPY", ParamMode, "A parameter declared `mut` is the callee's own copy: owned"),
     ("OWN-COPY-SEED", ParamMode, "Copy scalars are passed by value"),
     ("OWN-READ-FIELD", ParamMode, "Reading a field of a parameter borrows it"),

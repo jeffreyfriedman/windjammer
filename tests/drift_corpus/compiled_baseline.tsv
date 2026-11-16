@@ -1937,3 +1937,5 @@ tests/drift_corpus/repros/http_server_response_headers_map.wj#mainerr	none
 tests/drift_corpus/repros/http_server_response_headers_map.wj	exit0:8:655597287	
 tests/drift_corpus/repros/dyn_fn_box_return.wj#mainerr	none	
 tests/drift_corpus/repros/dyn_fn_box_return.wj	exit0:2:18021	
+tests/drift_corpus/repros/text_slice_range_bounds_from_int.wj#mainerr	none	
+tests/drift_corpus/repros/text_slice_range_bounds_from_int.wj	exit0:9:391298496	

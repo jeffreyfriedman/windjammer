@@ -173,7 +173,11 @@ impl<'ast> CodeGenerator<'ast> {
         let mut_receiver = sig.is_some_and(|s| {
             s.has_self_receiver && matches!(s.param_ownership.first(), Some(crate::analyzer::OwnershipMode::MutBorrowed))
         }) || self.ir_receiver_is_mut(object, method);
-        mut_receiver && path_root(object).is_some_and(|root| path_root(arg).as_deref() == Some(root.as_str()))
+        // Disjoint fields of one root borrow separately (`self.renderer.upload(&self.palette)`): only an argument whose
+        // place overlaps the receiver's place conflicts with the `&mut` receiver.
+        let same_root = path_root(object).is_some_and(|root| path_root(arg).as_deref() == Some(root.as_str()));
+        let disjoint = matches!((path_of(object), written_path(arg)), (Some(r), Some(a)) if !overlaps(&r, &a));
+        mut_receiver && same_root && !disjoint
     }
 
     /// The IR solved the callee `Type::method` (of the receiver's type) to take `&mut self`.

@@ -217,7 +217,7 @@ fn rust_closure_identity(expr: &str) -> Option<String> {
     while t.starts_with('&') && !t.starts_with("&mut ") {
         t = t[1..].trim();
     }
-    let inner = if t.starts_with('(') && t.ends_with(')') {
+    let inner = if crate::ir::coercion::parens_wrap_whole(t) {
         t[1..t.len() - 1].trim()
     } else {
         t
@@ -404,7 +404,7 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
                 rest.to_string()
             } else if let Some(rest) = trimmed.strip_prefix('&') {
                 rest.to_string()
-            } else if trimmed.starts_with('(') && trimmed.ends_with(')') {
+            } else if crate::ir::coercion::parens_wrap_whole(trimmed) {
                 let inner = trimmed[1..trimmed.len() - 1].trim();
                 if let Some(rest) = inner.strip_prefix("&mut ") {
                     rest.to_string()

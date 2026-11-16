@@ -108,7 +108,11 @@ impl<'ast> CodeGenerator<'ast> {
         compound_op: &Option<crate::parser::ast::CompoundOp>,
     ) -> String {
         self.idiom.binding_value_depth += 1;
+        // The target already has a type, so an empty collection assigned to it needs no turbofish (`cur = Vec::new()`
+        // for a `Vec<u8>` local must not take the function's `Vec<string>` return element).
+        let prev_turbofish = std::mem::replace(&mut self.suppress_collection_turbofish, true);
         let out = self.generate_assignment_statement(target, value, compound_op);
+        self.suppress_collection_turbofish = prev_turbofish;
         self.idiom.binding_value_depth -= 1;
         out
     }

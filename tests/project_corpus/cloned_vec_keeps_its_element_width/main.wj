@@ -1,8 +1,10 @@
 // `m2` is a clone of a `Vec<u32>` parameter: its elements are u32, so the literals compared with them are u32
-// (never the int default). Expected by hand: 1, 2 and the pushed 1 are counted; 3 is not.
+// (never the int default). The explicit clone is the subject of this case (W0005 is expected). Expected by hand: 1, 2 and the pushed 1 are counted; 3 is not.
 // expect: 3
+// oracle: check
 fn count_set(modes: Vec<u32>) -> u32 {
     let mut m2 = modes.clone()
+//~@24+5 WARN W0005 explicit .clone() call
     m2.push(1)
     let mut d: u32 = 0
     let mut k: usize = 0

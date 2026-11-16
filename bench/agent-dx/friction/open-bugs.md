@@ -7,6 +7,8 @@ program, the compiled build rejects it) has a line here with the stream that own
 String inference), `adapters` (iterator adapters and collect), `widths` (integer width solver), `traits`, `std-surface`.
 Programs: `events/<id>/main.wj`; minimal repros of the pilot-6 classes are in `docs/drift/pilot6-repros/`.
 
+Status 2026-11-13 (wt-width-13 replay, events_open = 3): the three events below are open and none is a width event: `p3-t006-B-0-c00` (std-surface), `p3-t034-T-0-c00` (traits), `p3-t050-F-0-c00` (std-surface; the WJ0015 diagnostic of std-surface5 closes it once merged).
+
 | Event | Owner stream | Class | First error on the current compiler |
 |---|---|---|---|
 | `p3-t006-B-0-c00` | std-surface | char predicate argument | WJ0017: trait bound not satisfied: expected an `Fn(char)` closure, found `char` |

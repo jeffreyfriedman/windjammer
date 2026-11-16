@@ -1,0 +1,21 @@
+// expect: 3 3
+// A copy of a `Vec<u32>` parameter (the compiler copies it, `modes` is read again) is a `Vec<u32>`: the literals
+// compared with its elements are `u32` (the core surface declares `clone(self) -> Vec<T>`; a same-named
+// `clone(&self) -> Self` of another type typed an explicit copy `Self`, and the literals defaulted to `int`).
+fn count_set(modes: Vec<u32>) -> u32 {
+    let mut m2 = modes
+    m2.push(1)
+    let mut d: u32 = 0
+    let mut k: usize = 0
+    while k < m2.len() {
+        if m2[k] == 1 || m2[k] == 2 {
+            d = d + 1
+        }
+        k = k + 1
+    }
+    d + (modes.len() as u32) - (modes.len() as u32)
+}
+
+fn main() {
+    println("${count_set([1, 2, 5])} ${count_set([2, 1, 9])}")
+}

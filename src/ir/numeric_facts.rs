@@ -235,6 +235,15 @@ mod tests {
         assert_eq!(f.index_source_widths.values().collect::<Vec<_>>(), vec![&BaseType::I64]);
     }
 
+    /// The bounds of a text slice (`s[i..i + 1]` is `s.slice(i, i + 1)`, declared `usize` slots) keep the class of
+    /// `i: int` and are converted at the argument: the literal is published `i64`, not left to the `i32` default.
+    #[test]
+    fn text_slice_bounds_keep_the_int_class() {
+        let f = facts("pub fn f(s: string, i: int) -> string {\n    let c = s[i..i + 1]\n    c.to_string()\n}\n", "f");
+        assert_eq!(f.literal_widths.values().collect::<Vec<_>>(), vec![&BaseType::I64], "{:?}", f.literal_widths);
+        assert_eq!(f.usize_conversions.len(), 2, "{:?}", f.usize_conversions);
+    }
+
     /// NUM-USIZE-TO-INT at the index: an index in a class of another width keeps that width and is converted where it
     /// indexes a sequence (`v[k]` prints `v[k as usize]`).
     #[test]

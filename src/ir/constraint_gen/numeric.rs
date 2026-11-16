@@ -533,6 +533,20 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 // A method of a user type: its declared return type (`self.dir.normalize()` is a `Vec3`).
                 self.user_method_return(&receiver, method, arguments.len())
             }
+            // `o.ok_or(e)?` / `r?`: the success payload of the operand (an unfixed error type does not matter).
+            Expression::TryOp { expr: inner, .. } => {
+                let operand = self.static_type(inner).or_else(|| match inner {
+                    Expression::MethodCall { object, method, type_args, .. } => {
+                        let receiver = self.static_type(object)?;
+                        self.core_surface?.method_signature(&receiver, method, type_args.as_deref().unwrap_or(&[]))?.ret
+                    }
+                    _ => None,
+                })?;
+                match strip_refs(&operand) {
+                    Type::Result(ok, _) | Type::Option(ok) => Some(ok.as_ref().clone()).filter(|t| !contains_generic(t)),
+                    _ => None,
+                }
+            }
             // `(a + b) * 0.5` on a user type: the operator impl's declared result.
             Expression::Binary { left, op, .. } => self.operator_impl_result(op, left),
             Expression::FieldAccess { object, field, .. } => {
