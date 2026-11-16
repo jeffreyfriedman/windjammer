@@ -5,6 +5,25 @@ use super::source::SourceIndex;
 use crate::intrinsics::surface_fix::Finding;
 use crate::linter::{LintDiagnostic, LintLevel};
 
+/// `mut self`: the span covers `mut` and the space after it; the fix deletes exactly that.
+pub fn mut_self_diagnostic(ix: &SourceIndex, msg: &str, l: usize, c: usize) -> Diagnostic {
+    let line = ix.text().lines().nth(l.saturating_sub(1)).unwrap_or("");
+    let tail: String = line.chars().skip(c.saturating_sub(1)).collect();
+    let word = if tail.starts_with("mut") { "mut" } else { "" };
+    let gap = tail[word.len()..].chars().take_while(|ch| ch.is_whitespace()).count();
+    let sp = ix.span_at(l, c, word.len() + gap);
+    let mut d = Diagnostic::error("WJ0011", msg.to_string()).at(sp.clone().with_label("remove `mut`"));
+    d = d.with_help("write `self`: Windjammer infers `&self`, `&mut self` or owned from how the body uses it; `let mut x` is for locals");
+    if !word.is_empty() {
+        d = d.with_fix(Fix {
+            description: "remove `mut`".into(),
+            applicability: Applicability::MachineApplicable,
+            edits: vec![Edit { span: super::model::Span { label: None, ..sp }, replacement: String::new() }],
+        });
+    }
+    d
+}
+
 /// Lint names that predate the `Wxxxx` scheme.
 fn lint_code(name: &str) -> &str {
     match name {

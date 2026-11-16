@@ -95,13 +95,12 @@ mod tests {
     /// Lookups, inserts and iteration behave as one map with the base inserted first.
     #[test]
     fn a_layered_table_is_the_map_it_stands_for() {
-        let mut base = BTreeMap::new();
-        for (k, n) in [("a", 1), ("c", 3), ("e", 5)] {
-            base.insert(k.to_string(), sig(n));
+        // `over` takes a plain function: this one leaks a small map per call (a test, a handful of lookups)
+        fn base_table() -> &'static BTreeMap<String, Sig> {
+            Box::leak(Box::new([("a", 1), ("c", 3), ("e", 5)].into_iter().map(|(k, n)| (k.to_string(), sig(n))).collect()))
         }
-        static BASE: std::sync::OnceLock<BTreeMap<String, Sig>> = std::sync::OnceLock::new();
-        let _ = BASE.set(base.clone());
-        let mut t = SigTable::over(|| BASE.get().expect("set"));
+        let base = base_table().clone();
+        let mut t = SigTable::over(base_table);
         let mut flat = base;
         for (k, n) in [("b", 2), ("c", 30), ("f", 6)] {
             t.insert(k.to_string(), sig(n));

@@ -7,6 +7,7 @@ use crate::parser::Type;
 
 use super::OwnershipMode;
 
+mod derived;
 mod identity;
 mod snapshot;
 pub use snapshot::{install_layer_store, shared_entry, LayerStore};
@@ -176,6 +177,7 @@ pub struct SignatureRegistry {
     taint_sanitizer_callees: HashSet<String>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
     global_fallback: Option<std::sync::Arc<SignatureRegistry>>,
+    derived: derived::DerivedTables,
 }
 
 impl Default for SignatureRegistry {
@@ -246,6 +248,7 @@ impl SignatureRegistry {
             runtime_non_clone_types: HashSet::new(),
             taint_sanitizer_callees: HashSet::new(),
             global_fallback: None,
+            derived: Default::default(),
         }
     }
 
