@@ -252,6 +252,11 @@ pub fn parser_type_to_base_type(ty: &Type) -> BaseType {
         Type::FunctionPointer {
             params: fn_params,
             return_type,
+        }
+        | Type::ClosureTrait {
+            params: fn_params,
+            return_type,
+            ..
         } => BaseType::FunctionPointer {
             params: fn_params.iter().map(parser_type_to_base_type).collect(),
             return_type: Box::new(

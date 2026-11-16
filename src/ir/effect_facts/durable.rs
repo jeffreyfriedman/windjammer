@@ -113,6 +113,10 @@ fn show(t: &Type) -> String {
             let ret = return_type.as_ref().map(|r| format!(" -> {}", show(r))).unwrap_or_default();
             format!("fn({}){ret}", params.iter().map(show).collect::<Vec<_>>().join(", "))
         }
+        Type::ClosureTrait { kind, params, return_type, dynamic } => {
+            let ret = return_type.as_ref().map(|r| format!(" -> {}", show(r))).unwrap_or_default();
+            format!("{} {kind}({}){ret}", if *dynamic { "dyn" } else { "impl" }, params.iter().map(show).collect::<Vec<_>>().join(", "))
+        }
         Type::RawPointer { mutable, pointee } => format!("*{} {}", if *mutable { "mut" } else { "const" }, show(pointee)),
         Type::Associated(a, b) => format!("{a}::{b}"),
         Type::Infer => "_".into(),
@@ -126,7 +130,7 @@ fn last_seg(n: &str) -> &str {
 /// The first part of `t` that cannot be journaled, displayed.
 fn unjournalable(t: &Type) -> Option<String> {
     match t {
-        Type::FunctionPointer { .. } | Type::RawPointer { .. } | Type::TraitObject(_) | Type::ImplTrait(_) => Some(show(t)),
+        Type::FunctionPointer { .. } | Type::ClosureTrait { .. } | Type::RawPointer { .. } | Type::TraitObject(_) | Type::ImplTrait(_) => Some(show(t)),
         Type::Reference(i) | Type::MutableReference(i) | Type::Option(i) | Type::Vec(i) | Type::Array(i, _) => unjournalable(i),
         Type::Result(a, b) => unjournalable(a).or_else(|| unjournalable(b)),
         Type::Tuple(ts) => ts.iter().find_map(unjournalable),

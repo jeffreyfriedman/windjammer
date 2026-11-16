@@ -17,6 +17,14 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let s = self.generate_expression(value);
         self.coerce_string_literals_to_owned = prev;
+        // `let f = h.run` of a field that holds a boxed callable (stored_callables): borrow it, a box is not Copy
+        if let Expression::FieldAccess { object, field, .. } = value {
+            if self.declared_field_type(object, field).is_some_and(|t| crate::codegen::rust::stored_callables::holds_boxed_callable(&t))
+                && self.place_is_borrowed(object)
+            {
+                return format!("&{s}");
+            }
+        }
         // CLONE-USE-AFTER-MOVE: `let t = s` with `s` read again copies `s`.
         self.copy_if_read_again(value, s)
     }

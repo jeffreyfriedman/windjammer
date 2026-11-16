@@ -111,7 +111,7 @@ pipe_method_stage.wj	4b8f0c39c73fe5b3
 pipe_result_question.wj	6874afaa8d0ac113
 prog_bit_counting.wj	0f989f7900226b59
 prog_csv_parse.wj	e6fa8999a0fbc585
-prog_event_handlers.wj	b47be22f3b051d6e
+prog_event_handlers.wj	05de9c2b964036c3
 prog_game_of_life.wj	02dabb74c87235d2
 prog_lru_cache.wj	8a4cb217a4c05046
 prog_matrix_transpose.wj	6f9ce57ea40e347b

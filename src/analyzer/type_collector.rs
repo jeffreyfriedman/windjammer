@@ -77,6 +77,14 @@ pub fn collect_type_references(ty: &Type, out: &mut HashSet<String>) {
             }
         }
         Type::TraitObject(_) => {}
+        Type::ClosureTrait { params, return_type, .. } => {
+            for p in params {
+                collect_type_references(p, out);
+            }
+            if let Some(rt) = return_type {
+                collect_type_references(rt, out);
+            }
+        }
         Type::ImplTrait(_) => {}
         Type::Associated(_, _) => {}
         Type::Generic(_) | Type::Infer => {}

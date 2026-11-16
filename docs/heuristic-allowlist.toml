@@ -109,7 +109,7 @@
 "src/codegen/rust/type_balancing.rs" = 13
 "src/codegen/rust/type_casting.rs" = 13
 "src/codegen/rust/type_classification_utilities.rs" = 2
-"src/codegen/rust/types.rs" = 9
+"src/codegen/rust/types.rs" = 8
 "src/codegen/rust/usize_expression_type_inference.rs" = 12
 "src/codegen/rust/variable_analysis/collection_element_inference.rs" = 1
 "src/codegen/rust/variable_analysis/iteration_borrow_dispatch.rs" = 2

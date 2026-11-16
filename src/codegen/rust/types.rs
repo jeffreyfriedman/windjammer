@@ -143,12 +143,13 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
             let dotted = format!("{}::{}", base, assoc_name).replace("::", ".");
             map_custom(&dotted).replace('.', "::")
         }
-        Type::TraitObject(trait_name) => {
-            if trait_name == "Fn" {
-                "dyn Fn()".to_string()
-            } else {
-                format!("dyn {}", trait_name)
-            }
+        Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
+        // `dyn Fn(int) -> int` / `impl FnMut(string)`: the parameters follow the function-pointer conventions
+        Type::ClosureTrait { kind, params, return_type, dynamic } => {
+            let as_pointer = Type::FunctionPointer { params: params.clone(), return_type: return_type.clone() };
+            let rendered = type_to_rust_mapped(&as_pointer, map_custom);
+            let signature = rendered.strip_prefix("fn").unwrap_or(&rendered);
+            format!("{} {}{}", if *dynamic { "dyn" } else { "impl" }, kind, signature)
         }
         Type::ImplTrait(trait_name) => {
             // THE WINDJAMMER WAY: `trait TraitName` in type position.

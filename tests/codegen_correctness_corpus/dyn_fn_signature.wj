@@ -1,0 +1,24 @@
+// `Box<dyn Fn(int) -> int>` keeps its signature in the emitted type (it was `Box<dyn Fn()>`), in a field and a
+// parameter.
+// expect: inc 6
+pub struct Hook {
+    pub name: string,
+    pub run: Box<dyn Fn(int) -> int>,
+}
+
+pub fn make(name: string, f: Box<dyn Fn(int) -> int>) -> Hook {
+    Hook { name: name, run: f }
+}
+
+pub fn call(h: Hook, x: int) -> int {
+    let f = h.run
+    f(x)
+}
+
+fn main() {
+    let step: int = 1
+    let h = make("inc", Box::new(move |x| x + step))
+    let name = h.name
+    let out = call(h, 5)
+    println("${name} ${out}")
+}

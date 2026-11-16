@@ -42,7 +42,7 @@ expected for a lookup) and C (`String` against `&str`) are predicted the same wa
 
 | Repro | Finding |
 |---|---|
-| `dyn_fn_box_return` | `fn adder(n: int) -> Box<dyn Fn(int) -> int>` with `Box::new(move \|x\| x + n)`: the generated callable type takes zero arguments (E0593) |
+| `dyn_fn_box_return` | `fn adder(n: int) -> Box<dyn Fn(int) -> int>` with `Box::new(move \|x\| x + n)`: the generated callable type takes zero arguments (E0593); **fixed**: `dyn Fn(A) -> R` keeps its signature (`Type::ClosureTrait`) |
 | `nested_vec_index_by_value` | `let row = grid[r]` on a `Vec<Vec<int>>` parameter: generated `let row: Vec<i64> = &grid[r]` (E0308); needs a clone or a borrowed binding |
 | `map_get_loop_str` | `m.get(k)` with `k` the loop variable over a list of string literals: `get(&k)` is `&&str` against `HashMap<String, _>` (E0277) |
 | `closure_string_param_literal` | `\|who: string\| ...` called with a string literal: parameter `String`, argument `&str` (E0308) |

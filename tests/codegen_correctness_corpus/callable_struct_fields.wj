@@ -1,0 +1,59 @@
+// A struct field declared `fn(A) -> R` holds any callable: a capturing closure or a plain function, alone or in a
+// `Vec`. It is called as `(h.run)(x)` or through a local (`let f = h.run`), as a `fn(A) -> R` parameter is.
+// expect: add 11 double 8
+// expect: 22
+// expect: 13 6
+struct Hook {
+    name: string,
+    run: fn(int) -> int,
+}
+
+struct Pipeline {
+    stages: Vec<fn(int) -> int>,
+}
+
+impl Pipeline {
+    fn add(self, f: fn(int) -> int) {
+        self.stages.push(f)
+    }
+
+    fn apply(self, x: int) -> int {
+        let mut v = x
+        for s in self.stages {
+            v = s(v)
+        }
+        v
+    }
+}
+
+impl Hook {
+    fn fire(self, x: int) -> int {
+        (self.run)(x)
+    }
+}
+
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn make(name: string, f: fn(int) -> int) -> Hook {
+    Hook { name: name, run: f }
+}
+
+fn call(h: Hook, x: int) -> int {
+    let f = h.run
+    f(x)
+}
+
+fn main() {
+    let offset = 10
+    let a = make("add", |x| x + offset)
+    let b = Hook { name: "double", run: double }
+    println("${a.name} ${a.fire(1)} ${b.name} ${b.fire(4)}")
+    let mut p = Pipeline { stages: [] }
+    p.add(double)
+    p.add(|x| x + offset)
+    println("${p.apply(6)}")
+    let both = Pipeline { stages: [double, |x| x + 1] }
+    println("${both.apply(6)} ${call(b, 3)}")
+}

@@ -235,6 +235,10 @@ pub fn from_ast(t: &Type, generics: &[String], al: &Aliases) -> Ty {
             params.iter().map(rec).collect(),
             Box::new(return_type.as_ref().map(|t| rec(t)).unwrap_or(Ty::Unit)),
         ),
+        Type::ClosureTrait { params, return_type, .. } => Ty::Fn(
+            params.iter().map(rec).collect(),
+            Box::new(return_type.as_ref().map(|t| rec(t)).unwrap_or(Ty::Unit)),
+        ),
         Type::Infer => Ty::Unknown,
         Type::TraitObject(n) | Type::ImplTrait(n) => Ty::Adt(n.clone(), vec![]),
         Type::Associated(..) | Type::RawPointer { .. } => Ty::Unknown,
