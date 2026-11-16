@@ -155,3 +155,27 @@ rules apply: the handler waits for it). No route changes.
 Kill criterion: if the blocking client in a handler measurably starves the server's blocking pool under the PC load
 test (p99 latency more than 2x the async version at 200 concurrent requests), keep `@async` for the client only, as a
 runtime-internal annotation, and revisit with the reactor variant.
+
+## Implementation steps, file by file
+
+1. `crates/windjammer-runtime/src/task.rs`: `pub fn io<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) -> Task<T>`
+   on a lazily started pool (`OnceLock<IoPool>`, `WJ_IO_THREADS`, default 2); registered in the current scope like
+   `spawn`. Unit test: two 50 ms sleeps through `io` finish in under 90 ms.
+2. `src/codegen/rust/async_generation.rs` `generate_async_call`: `task::io` when the operand's effect set
+   (`ir::effect_facts`, already computed per function for `wj check`) contains `net` or `fs`; `task::local` otherwise.
+   The effect lookup goes through the generator's existing effect facts handle, not a new registry call.
+3. `src/parser/item_parser.rs`: `async fn` records a `RemovedForm` (WJ0191) with the edit deleting `async `; the
+   decorator parser records one for `@async` (edit: delete the line). `parse()` then fails as for `thread { }`.
+4. `src/check/tasks.rs`: a typed fix for `.await` after a call of a former-async function. The parser keeps the names
+   of the `async fn`s it rejected (`Parser::removed_async_fns`), plus the std client list; `wj fix` iterates WJ0191,
+   then this fix (same fixed-point loop as today).
+5. `src/codegen/rust/async_generation.rs` `generate_await`: drop the `current_function_is_async` branch (and the field);
+   `.await` is always `.wait()`. `function_generation_signature.rs`: no `#[tokio::main]`.
+6. `src/interpreter/`: delete the lazy-future path for `async fn` (`await_value` keeps the `Task` case only).
+7. `std/http.wj`, `std/async.wj`: drop `@async`; `std/async.wj` keeps `sleep_ms`, loses `block_on` and `spawn`.
+8. Docs and samples: book chapters `tutorial/async.md` (rewrite around `async f()` / `spawn` / `scope`),
+   README concurrency lines, `docs/spec/concurrency.md` SPEC-CONC-005 becomes a removed-form rule with a
+   `should_fail` example.
+9. Gates: WJ0191 cases for `async fn` and `@async` (check, run, build, fix), the migration test from "A client
+   call" above interpreted and compiled against a loopback server (`crates/windjammer-runtime/tests/` pattern), a test
+   that a program without `std::http`/`std::db` generates no `tokio` reference, the existing HTTP runtime tests.
