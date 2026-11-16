@@ -122,6 +122,19 @@ every use names the same binding before and after; (2) every use borrows `b` (wh
 The wrapping block drops the buffer when the loop exits. Lines are preserved.
 Mutant caught: `ScratchIgnoresMoves` (`kept.push(s)` hoisted: use of moved value), tests/optimizer_scratch_reuse_test.rs.
 
+## P9 macro_arg_clone (ON)
+Rewrite: `m!(fmt, .., E.clone(), ..)` -> `m!(fmt, .., E, ..)` for `m` in the format family (`format`, `print`,
+`println`, `eprint`, `eprintln`, `panic`, and `write`/`writeln` after their destination argument), when the argument is
+exactly a zero-argument `.clone()` call.
+Why sound: the format family takes every argument by reference (`format_args!` borrows), so `E` is not moved and stays
+usable afterwards; `E.clone()` and `E` format identically for every `Clone` whose clone is equal to its source, which
+is the `Clone` contract. `E` is still evaluated exactly once, in the same position.
+Relies on: macro name and argument shape only (no type facts).
+Known deviation (documented, accepted): a user `Clone` impl with side effects (printing, counting) loses those side
+effects for the removed call, and a side-effecting `Drop` of the clone no longer runs. The code generator emits these
+clones for borrowed formatting; the deviation needs a user's own side-effecting `impl Clone` on a type they format.
+Mutant caught: `MacroCloneInVec` (the same rewrite inside `vec![..]`, which moves its arguments).
+
 ## Considered and rejected (stay OFF / not implemented)
 - Last-use clone elimination (`let y = x.clone();` with `x` unused afterwards): needs
   borrow facts (a live `&x` makes the move a compile error) and drop-order facts
