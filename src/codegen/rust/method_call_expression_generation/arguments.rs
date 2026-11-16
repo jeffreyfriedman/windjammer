@@ -406,15 +406,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let scope = self.arg_gen_scope();
-                let mut arg_str = self.generate_value_operand(arg_to_generate);
-                // A name converted at the argument (NUM-USIZE-TO-INT) is the whole argument: `xs.get(i as usize)`.
-                if matches!(arg_to_generate, Expression::Identifier { .. }) {
-                    if let Some(inner) = arg_str.strip_prefix('(').and_then(|s| s.strip_suffix(" as usize)")) {
-                        if !inner.contains(['(', ')', ' ']) {
-                            arg_str = format!("{inner} as usize");
-                        }
-                    }
-                }
+                let mut arg_str = crate::codegen::rust::solver_widths::bare_name_conversion_argument(arg_to_generate, self.generate_value_operand(arg_to_generate));
                 self.closure_predicate_typed_params = prev_closure_predicate;
                 self.restore_arg_gen_scope(scope);
                 self.suppress_borrowed_clone = prev_suppress;

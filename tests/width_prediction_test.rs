@@ -230,7 +230,6 @@ fn predictions_across_the_corpora() {
         "tests/check_negative/mutants/strings_format_specs__string_annotated_int.wj 1",
         "tests/check_negative/mutants/strings_unicode__string_annotated_int.wj 1",
         "tests/conformance_programs/174_closure_mut_capture.wj 3",
-        "tests/conformance_programs/62_vec_alias_semantics.wj 1",
         "tests/conformance_programs/98_bignum_factorial.wj 1",
         "tests/diagnostics/cases/let_string_to_int.wj 1",
         "tests/diagnostics/cases/numeric_string_to_int.wj 1",

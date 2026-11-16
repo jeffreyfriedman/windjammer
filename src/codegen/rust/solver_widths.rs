@@ -37,6 +37,18 @@ pub(crate) fn int_width_as_type(base: &BaseType) -> Option<Type> {
     })
 }
 
+/// A name converted at an argument (NUM-USIZE-TO-INT) is the whole argument: `xs.get(i as usize)`, not
+/// `xs.get((i as usize))` (rustc warns on the parentheses).
+pub(crate) fn bare_name_conversion_argument(arg: &crate::parser::Expression<'_>, emitted: String) -> String {
+    if !matches!(arg, crate::parser::Expression::Identifier { .. }) {
+        return emitted;
+    }
+    match emitted.strip_prefix('(').and_then(|s| s.strip_suffix(" as usize)")) {
+        Some(inner) if !inner.contains(['(', ')', ' ']) => format!("{inner} as usize"),
+        _ => emitted,
+    }
+}
+
 /// An index the solver converted (`(k as usize)`, NUM-USIZE-TO-INT at the index) is printed without the parentheses
 /// (the brackets delimit it: `v[k as usize]`), and a conversion the program wrote to another integer type is
 /// retargeted rather than stacked (`clamped as i64` indexes as `clamped as usize`).
