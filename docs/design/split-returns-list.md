@@ -2,6 +2,8 @@
 
 Status: open question for the owner. Nothing here is implemented.
 
+In one paragraph: keeping `split` an iterator matches Rust, keeps `for part in s.split(..)` and `.next()` / `.count()` allocation-free and gives the checker one declared source of truth, at the price of a rule agents get wrong about once per program (pilot 7: 12 of 40 trials; pilot 8: 2 of 8 failures forgot `.collect()`), which `wj check` now catches with a one-edit `wj fix`; making `split` return a `Vec<string>` removes that whole class and the borrowed-versus-owned element class with it, at the price of an eager list and one `String` per piece even for loops, a divergence from Rust's lazy adapters (`rev`, `take`, early exit), and a decision for every `split*` variant. Measure the allocation cost on the string-processing benchmarks before deciding.
+
 ## The class of failure today
 
 `"a b c".split(" ")` (and `split_whitespace()`, `lines()`, `chars()`) return an iterator, as the std declaration
