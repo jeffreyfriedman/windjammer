@@ -199,9 +199,9 @@ fn default_sheet_fits_its_ratchet_and_points_at_the_tools() {
 
 /// Shrink-only token budgets of the pilot-8 candidate sheets (bytes; 3.2 bytes per token). The pilot-7 sheets they extend are
 /// 1683 (U) and 1955 (V3) bytes; the idiom block (split+collect, exit status, trait objects, recursive enums, owned
-/// text, mutating through `self`) replaces the sheet's old example and adds 905 bytes (about 283 tokens). Lower these
+/// text, mutating through `self`) replaces the sheet's old example and adds 905 bytes (about 283 tokens), and the output line (agent mode: stderr included, `exit status: N`) 157 more (about 49). Lower these
 /// when the block shrinks; raise one only with a measurement (PILOT8_SHEET_AB.md).
-const PILOT8_BUDGET_BYTES: [(&str, usize); 3] = [("sheet_u8.md", 2_600), ("sheet_u8s.md", 2_640), ("sheet_v4.md", 3_000)];
+const PILOT8_BUDGET_BYTES: [(&str, usize); 3] = [("sheet_u8.md", 2_800), ("sheet_u8s.md", 2_840), ("sheet_v4.md", 3_200)];
 
 #[test]
 fn pilot8_sheets_are_executed_budgeted_and_state_the_verify_rule() {
@@ -210,7 +210,7 @@ fn pilot8_sheets_are_executed_budgeted_and_state_the_verify_rule() {
         let text = fs::read_to_string(pilot8_dir().join(name)).unwrap();
         assert!(text.len() <= budget, "{name} is {} bytes; ratchet is {budget}", text.len());
         assert!(all.iter().any(|b| b.file.ends_with(name) && b.kind == "windjammer"), "{name} carries an executed idiom block");
-        for needle in ["Box<E>", "Box<dyn Sh>", "process::exit", ".collect()", ".to_string()", "let mut"] {
+        for needle in ["Box<E>", "Box<dyn Sh>", "process::exit", ".collect()", ".to_string()", "let mut", "exit status: N", "no redirects, no chains"] {
             assert!(text.contains(needle), "{name} must show `{needle}`");
         }
         assert!(!text.contains("until it exits 0"), "{name}: `--verify` exits 0 for a program that exits 1 on purpose, so \"until it exits 0\" is wrong");
@@ -221,6 +221,46 @@ fn pilot8_sheets_are_executed_budgeted_and_state_the_verify_rule() {
     let (u8a, u8s) = (fs::read_to_string(pilot8_dir().join("sheet_u8.md")).unwrap(), fs::read_to_string(pilot8_dir().join("sheet_u8s.md")).unwrap());
     let rest = |t: &str| t.lines().skip(3).collect::<Vec<_>>().join("\n");
     assert_eq!(rest(&u8a), rest(&u8s), "U8 and U8s differ only in the opening paragraph");
+}
+
+/// Shell shapes an agent harness refuses (`Bash(wj run:*)` allow-lists match one plain command): none may appear in an
+/// example command of any agent sheet, so the sheets never teach them. The one sentence that names them to forbid them
+/// is the line that starts with "One command, no redirects".
+const DENIED_SHAPES: [&str; 8] = ["2>&1", "&&", "||", "$?", "${PIPESTATUS", " | ", "; ", "`wj run --verify FILE | "];
+
+fn denied_shape_in(text: &str) -> Option<String> {
+    for l in text.lines().filter(|l| !l.contains("no redirects, no chains")) {
+        // examples: shell-looking inline code and shell fences (the program fences are Windjammer, where `||` and `&&` are operators)
+        let mut rest = l;
+        while let Some(i) = rest.find('`') {
+            let Some(j) = rest[i + 1..].find('`') else { break };
+            let code = &rest[i + 1..i + 1 + j];
+            if code.starts_with("wj ") || code.starts_with("printf ") {
+                if let Some(s) = DENIED_SHAPES.iter().find(|s| code.contains(**s)) {
+                    return Some(format!("`{code}` contains {s}"));
+                }
+            }
+            rest = &rest[i + j + 2..];
+        }
+    }
+    None
+}
+
+#[test]
+fn agent_sheets_teach_no_denied_shell_shape() {
+    let mut files = vec![docs_dir().join("WINDJAMMER_FOR_AGENTS.md")];
+    for (name, _) in PILOT8_BUDGET_BYTES {
+        files.push(pilot8_dir().join(name));
+    }
+    files.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("bench/agent-dx/packs/pilot7/sheet_u.md"));
+    for f in files {
+        let t = fs::read_to_string(&f).unwrap();
+        assert_eq!(denied_shape_in(&t), None, "{}", f.display());
+    }
+    // the detector is not vacuous
+    assert!(denied_shape_in("- run `wj run --verify m.wj 2>&1 | head`").is_some());
+    assert!(denied_shape_in("- run `wj build m.wj && ./m`").is_some());
+    assert!(denied_shape_in("- run `wj run --verify m.wj`").is_none());
 }
 
 #[test]

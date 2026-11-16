@@ -507,3 +507,38 @@ args = ["run", "--verify", "{w}/m.wj"]
 exit = 0
 stdout_has = ["1 1"]
 stderr_has = ["wj verify: OK"]
+
+[[case]]
+name = "agent mode: run --verify output has stdout and stderr merged in order and ends with the exit status"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "use std::process\n\nfn main() {\n    println(\"error: bad command\")\n    process::exit(1)\n}\n" }
+args = ["run", "--error-format", "agent", "--verify", "{w}/m.wj"]
+exit = 0
+stdout_has = ["error: bad command", "wj verify: OK", "program exit status 1", "exit status: 0"]
+
+[[case]]
+name = "agent mode: a failing check reports its diagnostic on stdout and the exit status line"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let x: int = \"s\"\n    println(\"${x}\")\n}\n" }
+args = ["check", "--error-format", "agent", "{w}/m.wj"]
+exit = 1
+stdout_has = ["m.wj:2:", "error", "exit status: 1"]
+
+[[case]]
+name = "agent mode: a long output keeps its head and tail with an omitted-lines marker"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let mut i = 0\n    while i < 400 {\n        println(\"row ${i}\")\n        i += 1\n    }\n}\n" }
+args = ["run", "--error-format", "agent", "--interpret", "{w}/m.wj"]
+exit = 0
+stdout_has = ["row 0\n", "row 399", "output omitted (WJ_MAX_OUTPUT=160)", "exit status: 0"]
+output_lacks = ["row 200"]
+
+[[case]]
+name = "without agent mode the output is untouched (no exit line, no bound)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut i = 0\n    while i < 400 {\n        println(\"row ${i}\")\n        i += 1\n    }\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+exit = 0
+stdout_has = ["row 200"]
+output_lacks = ["exit status:", "omitted"]

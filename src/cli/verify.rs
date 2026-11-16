@@ -69,7 +69,7 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     let stdin: Option<Vec<u8>> = if std::io::stdin().is_terminal() { None } else { Some(capture_stdin(STDIN_FIRST_BYTE_WAIT)) };
     let Ok(exe) = std::env::current_exe() else { return 1 };
     let mut interp = Command::new(&exe);
-    interp.args(["run", "--interpret"]);
+    interp.args(["run", "--interpret"]).env("WJ_AGENT_CHILD", "1"); // the parent merges and bounds output once (cli::agent_wrap)
     if no_lint {
         interp.arg("--no-lint");
     }

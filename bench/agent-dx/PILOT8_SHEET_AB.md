@@ -34,6 +34,13 @@ Opening texts (the only difference between U8 and U8s):
 The sharp opening drops "not in your training data" (which invites doubt and re-derivation) and states the decision
 procedure instead: write once, check once. It is a hypothesis; the experiment can reject it.
 
+## Agent mode (all pilot-8 arms)
+
+The pilot-8 arms run with `WJ_AGENT=1`: `wj run|check|build|test` print stdout and stderr merged in order, bounded to 160
+lines (`WJ_MAX_OUTPUT=N`, 0 lifts it) with an omitted-lines marker, and end with `exit status: N`. The sheets and the prompt say so
+("do not use redirects, pipes, `$?` or `${PIPESTATUS}`"). Pilot 8 showed agents appending `2>&1 | head -40` and `$?`, which the
+allow-list refuses. Denials per arm are recorded; any recurring denial is a tool defect to fix before the next run.
+
 ## Metrics (all recorded by the harness already)
 
 Primary: first-write thinking tokens (`modelUsage.thinkingTokens`), assistant turns before the first Write, `wj docs`

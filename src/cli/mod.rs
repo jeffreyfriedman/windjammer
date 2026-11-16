@@ -3,6 +3,7 @@
 // This module provides the implementation for all CLI subcommands.
 
 pub mod add;
+pub mod agent_wrap;
 pub mod build;
 pub mod build_caps;
 pub mod build_json;

@@ -12,6 +12,7 @@ Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in
 - Printing `Option`/`Result`/`Vec` needs `${x:?}`. Sort `HashMap` keys before printing.
 - Loop: one command, `wj run --verify FILE` (input on stdin), runs the program, builds it with the production compiler, runs the build and compares. It prints `wj verify: OK` and exits 0 when both runs agree, even if your program exits 1 on purpose (the line names its status); otherwise fix what it reports (one line per problem: `file:line:col: error CODE: message | help | fix`) and re-run.
 - Rust crates: add `strsim = "0.11"` under `[dependencies]` in `wj.toml`, call `strsim::levenshtein(a, b)`; `wj rust-surface strsim` lists what is callable.
+- One command, no redirects, no chains (`2>&1`, `|`, `&&`, `;`, `$?`, `${PIPESTATUS}`): the tool already merges stderr and prints the exit status (last line `exit status: N`).
 - Unsure? `wj docs <terms>` searches the full reference, stdlib and verified examples; `wj explain <CODE>` explains an error code.
 
 Idioms:

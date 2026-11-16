@@ -106,6 +106,12 @@ $ wj check --error-format agent cost.wj
 cost.wj:3:20: warning W0017
 ```
 
+In agent mode (`--error-format agent`, `WJ_ERROR_FORMAT=agent`, or `WJ_AGENT=1`) `wj run`, `wj check`, `wj build` and
+`wj test` also put stdout and stderr in one stream, in the order they were written, keep it to 160 lines (the first half and
+the last half, with a marker saying how much was left out; `WJ_MAX_OUTPUT=N` changes the bound, `0` lifts it), and end with
+`exit status: N`. Stderr is already included and the status is stated, so there is no need for redirects, pipes, `$?` or
+`${PIPESTATUS}`, which agent harnesses usually refuse. Without agent mode nothing changes.
+
 See [What it costs agents](../showcase/agent-cost.md) for the measurements behind these choices.
 
 ## The caches: `wj cache`

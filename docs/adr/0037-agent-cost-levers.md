@@ -162,3 +162,8 @@ From `private-docs/pilot7-analysis.md`; each is gated.
 - **WJ0051 and partial moves (fix 10).** The agent format says where an insertion goes (`=> insert `mut ` at 2:9`), a
   deletion by span. A field moved into an assignment (`self.last = e2.text`) while the struct is read again afterwards
   is copied by the existing CLONE-USE-AFTER-MOVE rule (`field_copy_sites`); the assignment path did not apply it.
+- **Agent mode output (pilot 8 finding).** Agents appended `2>&1 | head -40`, `$?` and `${PIPESTATUS}` to `wj run --verify`
+  and were denied. With `WJ_AGENT=1` or the agent format, `wj run|check|build|test` re-run themselves with stdout and stderr
+  in one pipe, bounded to 160 lines (`WJ_MAX_OUTPUT`) with an omitted-lines marker, ending in `exit status: N`
+  (`src/cli/agent_wrap.rs`; the child is marked `WJ_AGENT_CHILD`). Human output is untouched. Gates: unit tests of the plan
+  and the budget, promise cases for `wj run`, the pilot-8 sheet gate, and the arm prompt (`AGENT_MODE_TEXT`).

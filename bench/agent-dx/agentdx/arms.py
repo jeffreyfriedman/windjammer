@@ -98,10 +98,12 @@ ARMS = {
     "V3": {"name": "verify-one-command", "loop": "verify-one-command", "pack_file": "pilot7/sheet_v3.md", "bash": "core+docs", "lang": "wj",
            "env": {"WJ_ERROR_FORMAT": "agent"}},
     # pilot 8 (design: PILOT8_SHEET_AB.md, not run): idiom block (U8), idioms + sharper opening (U8s), verify exits 0 on agreement (V4)
-    "U8": {"name": "compiled-first+idioms", "loop": "compiled-first", "pack_file": "pilot8/sheet_u8.md", "bash": "core+docs", "lang": "wj"},
-    "U8s": {"name": "compiled-first+idioms+sharp-opening", "loop": "compiled-first", "pack_file": "pilot8/sheet_u8s.md", "bash": "core+docs", "lang": "wj"},
+    "U8": {"name": "compiled-first+idioms", "loop": "compiled-first", "pack_file": "pilot8/sheet_u8.md", "bash": "core+docs", "lang": "wj",
+           "env": {"WJ_AGENT": "1"}, "agent_mode": True},
+    "U8s": {"name": "compiled-first+idioms+sharp-opening", "loop": "compiled-first", "pack_file": "pilot8/sheet_u8s.md", "bash": "core+docs", "lang": "wj",
+           "env": {"WJ_AGENT": "1"}, "agent_mode": True},
     "V4": {"name": "verify-ok", "loop": "verify-ok", "pack_file": "pilot8/sheet_v4.md", "bash": "core+docs", "lang": "wj",
-           "env": {"WJ_ERROR_FORMAT": "agent"}},
+           "env": {"WJ_ERROR_FORMAT": "agent", "WJ_AGENT": "1"}, "agent_mode": True},
     "U7": {"name": "compiled-first", "loop": "compiled-first", "pack_file": "pilot7/sheet_u.md", "bash": "core+docs", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
@@ -131,9 +133,14 @@ def head(lang):
             "Stop when you believe it is correct for all inputs.\n\n")
 
 
+# `wj run|check|build|test` in agent mode (WJ_AGENT=1, ADR-0037): one merged, bounded stream that ends with `exit status: N`
+AGENT_MODE_TEXT = (" One command, no redirects, no chains: `wj` output already includes stderr, is bounded, and ends with a line "
+                   "`exit status: N`, so do not use `2>&1`, pipes, `&&`, `;`, `$?` or `${PIPESTATUS}` (they are refused).")
+
+
 def prompt(task_id, arm):
     lang = ARMS[arm]["lang"]
-    return head(lang) + LOOP_TEXT[ARMS[arm]["loop"]] + "\n\n" + T.render_prompt(task_id, lang)
+    return head(lang) + LOOP_TEXT[ARMS[arm]["loop"]] + AGENT_MODE_TEXT * bool(ARMS[arm].get("agent_mode")) + "\n\n" + T.render_prompt(task_id, lang)
 
 
 def _bash(arm):
