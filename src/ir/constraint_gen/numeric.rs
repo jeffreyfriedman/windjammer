@@ -253,6 +253,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         if (mut_self && !self.core_surface_iterates_by_reference(object, method)) || self.core_surface_changes_receiver(object, method) {
             self.emit_mutref_on_receiver_root(object);
         }
+        if sig.as_ref().is_some_and(|s| s.has_self_receiver && s.param_ownership.first() == Some(&OwnershipMode::Owned)) {
+            self.emit_owned_for_consumed_receiver(object);
+        }
 
         let result = self.cs.fresh_var();
 
