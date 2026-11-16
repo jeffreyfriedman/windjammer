@@ -32,7 +32,7 @@ fn ledger_lines(text: &str) -> Vec<&str> {
 }
 
 /// The streams that own known divergences (the same list as `OWNERS` in scripts/wj/drift_ledger.wj).
-const OWNERS: [&str; 9] = [
+const OWNERS: &[&str] = &[
     "numeric-width",
     "codegen-refs",
     "codegen-types",
@@ -42,6 +42,7 @@ const OWNERS: [&str; 9] = [
     "language-decision",
     "gate-harness",
     "interp-literal-typing",
+    "interp-check",
 ];
 
 fn check_ledger(text: &str, ceiling: usize) -> Result<(), String> {
@@ -182,4 +183,14 @@ fn the_repro_scan_reads_paths_tables_and_repro_dirs() {
     names.sort();
     let _ = fs::remove_dir_all(&dir);
     assert_eq!(names, ["by_path", "in_dir", "table_row"]);
+}
+
+/// The owner list here is the one `scripts/wj/drift_ledger.wj` enforces (a stream added to one and not the other made this
+/// file stop compiling once, and could otherwise let the two disagree silently).
+#[test]
+fn owner_streams_match_the_ledger_script() {
+    let script = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/wj/drift_ledger.wj")).unwrap();
+    let line = script.lines().find(|l| l.starts_with("const OWNERS: string = ")).expect("OWNERS in drift_ledger.wj");
+    let listed: Vec<&str> = line.trim_start_matches("const OWNERS: string = ").trim_matches('"').split_whitespace().collect();
+    assert_eq!(listed, OWNERS.to_vec());
 }

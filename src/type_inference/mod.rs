@@ -11,6 +11,7 @@
 pub mod float_inference;
 pub mod int_implicit_casts;
 pub mod int_inference;
+pub mod sig_table;
 pub(crate) mod struct_field_registry;
 
 pub use float_inference::{ExprId, FloatInference, FloatType};

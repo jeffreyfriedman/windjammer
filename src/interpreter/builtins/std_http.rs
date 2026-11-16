@@ -281,6 +281,13 @@ pub fn register(r: &mut Registry) {
         let url = arg_str(&a, 1, "http::request")?;
         Ok(Value::Native(Rc::new(ClientRequestObj { method, url: url.to_string(), body: None, opts: ReqOpts::default() })))
     });
+    // `http::content_type(v)`: a header map with `Content-Type` set (std/http.wj declares it with this body)
+    r.func("http::content_type", |_, a| {
+        let v = arg_str(&a, 0, "http::content_type")?;
+        let mut m = std::collections::BTreeMap::new();
+        m.insert(crate::interpreter::value::Key(Value::str("Content-Type")), Value::str(v.to_string()));
+        Ok(Value::hash_map(m))
+    });
     r.native("ClientRequest", "header", |_, v, a| {
         let k = arg_str(&a, 0, "header")?;
         let val = arg_str(&a, 1, "header")?;

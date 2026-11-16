@@ -289,7 +289,15 @@ impl<'de> DeserializeSeed<'de> for Dec<'_> {
                 d.deserialize_map(MapV { it: self.it, k: &k, v: &v, hash: leaf(n) == "HashMap" })
             }
             Type::Custom(n) | Type::Parameterized(n, _) => {
-                let base = leaf(n).to_string();
+                // the type the name denotes where it is written (the calling module): two modules may each declare an `In`,
+                // registered under module-qualified keys (`type_keys.rs`); the bare name is only the fallback
+                // `state_model::State` with no module `state_model` in reach is no type at all: never the bare `State` this module
+                // happens to declare (the game host ran `skills.wj` without `state_model.wj` and decoded into its own `State`)
+                if !self.it.module_prefix_resolves(self.it.scope.module, n) {
+                    return Err(de::Error::custom(format!("cannot decode JSON into `{n}`: no module `{}` is in scope", n.rsplit_once("::").map_or(n.as_str(), |(p, _)| p))));
+                }
+                let key = self.it.type_key(self.it.scope.module, n);
+                let base = if self.it.structs.contains_key(&key) || self.it.enums.contains_key(&key) { key } else { leaf(n).to_string() };
                 if let Some(def) = self.it.structs.get(&base) {
                     let fields: Vec<(&'static str, Type)> = def.fields.iter().map(|(n, t)| (*n, t.clone())).collect();
                     // compiled: `#[serde(deny_unknown_fields)]` is emitted for a struct with named fields only (a struct

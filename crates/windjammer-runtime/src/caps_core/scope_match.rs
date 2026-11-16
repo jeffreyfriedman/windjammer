@@ -264,6 +264,28 @@ mod tests {
         assert!(path_matches("./a/**/c.txt", &canonical_abs("a/c.txt", &b), &b));
     }
 
+    /// Location-free: a grant resolves the same under /tmp, /private/tmp, the system temp dir (/var/folders on macOS)
+    /// and in directories whose names start with `-` (the scratch trees of agent sessions), absolute or relative.
+    #[test]
+    fn grants_resolve_under_every_temp_root_and_dash_named_directories() {
+        let mut roots = vec![std::env::temp_dir()];
+        for r in ["/tmp", "/private/tmp"] {
+            if Path::new(r).is_dir() {
+                roots.push(PathBuf::from(r));
+            }
+        }
+        for root in roots {
+            let base = root.join(format!("-wj-grant-{}", std::process::id())).join("-Users-x").join("app");
+            std::fs::create_dir_all(&base).unwrap();
+            let out = canonical_abs("out.txt", &base);
+            assert!(path_matches("./**", &out, &base), "{} under {}", out.display(), base.display());
+            assert!(path_matches(&format!("{}/**", base.display()), &out, &base), "absolute grant {}", base.display());
+            assert!(path_matches("./-sub/*.txt", &canonical_abs("-sub/a.txt", &base), &base));
+            assert!(!path_matches("./**", &canonical_abs("../elsewhere.txt", &base), &base));
+            let _ = std::fs::remove_dir_all(root.join(format!("-wj-grant-{}", std::process::id())));
+        }
+    }
+
     #[test]
     fn sibling_prefix_is_not_inside() {
         let b = base();

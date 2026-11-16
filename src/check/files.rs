@@ -79,7 +79,7 @@ mod tests {
 
 /// `entry` and the files reachable from it through `mod name` and `use a::b::..` (each segment tried as
 /// `a.wj` and `a/mod.wj` below the entry's directory, then below each found module's own directory).
-fn reachable(entry: &Path) -> Vec<PathBuf> {
+pub(crate) fn reachable(entry: &Path) -> Vec<PathBuf> {
     let root = entry.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut out: Vec<PathBuf> = vec![entry.to_path_buf()];
     let mut i = 0;

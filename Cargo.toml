@@ -112,7 +112,7 @@ thiserror = "1.0"
 typed-arena = "2.0"
 colored = "2.0"
 # no `wasmbind`: the browser playground (ADR-0034) imports nothing from JavaScript; native builds are unaffected
-chrono = { version = "0.4", default-features = false, features = ["clock", "std", "oldtime"] }
+chrono = { version = "0.4", default-features = false, features = ["now", "std", "oldtime"] }
 # interpreter std modules (regex, crypto, csv, url): same crates the runtime uses
 regex = "1"
 sha2 = "0.10"
@@ -461,6 +461,11 @@ path = "tests/interpreter_features_test.rs"
 [[test]]
 name = "interpreter_one_thread_tasks"
 path = "tests/interpreter_one_thread_tasks_test.rs"
+
+# wj links no heavy system library (CoreFoundation...): cargo test --release --test run_path_dylibs
+[[test]]
+name = "run_path_dylibs"
+path = "tests/run_path_dylibs_test.rs"
 
 [[test]]
 name = "wasm_clock_gate"

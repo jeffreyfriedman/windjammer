@@ -83,3 +83,39 @@ pub fn inputs_key(root: &Path) -> String {
     }
     d.hex()
 }
+
+/// Whether any input file under `root` was modified after `secs` (Unix seconds): one pass, one `stat` per file
+/// (directory entries are told apart by their type, without a `stat`), stopping at the first newer file. The
+/// staleness check asks this on every `wj` run inside a checkout, so it must not build the path list first.
+#[allow(dead_code)]
+pub fn any_input_newer_than(root: &Path, secs: i64) -> bool {
+    fn newer(path: &Path, secs: i64) -> bool {
+        std::fs::metadata(path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .is_some_and(|d| d.as_secs() as i64 > secs)
+    }
+    fn walk_newer(dir: &Path, secs: i64) -> bool {
+        let Ok(rd) = std::fs::read_dir(dir) else { return false };
+        for e in rd.flatten() {
+            let is_dir = match e.file_type() {
+                Ok(t) if t.is_symlink() => e.path().is_dir(),
+                Ok(t) => t.is_dir(),
+                Err(_) => false,
+            };
+            if if is_dir { walk_newer(&e.path(), secs) } else { newer(&e.path(), secs) } {
+                return true;
+            }
+        }
+        false
+    }
+    INPUTS.iter().any(|rel| {
+        let p = root.join(rel);
+        if p.is_dir() {
+            walk_newer(&p, secs)
+        } else {
+            p.is_file() && newer(&p, secs)
+        }
+    })
+}

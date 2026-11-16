@@ -184,6 +184,7 @@ impl Cx<'_, '_> {
                 ck.cx.out.push(d);
             }
         }
+        super::arms::check(params, body, ret.is_none(), &ck.cx.loc, ck.cx.out);
     }
 }
 

@@ -1,0 +1,3 @@
+[package]
+name = "same_named_struct_decode"
+version = "0.1.0"

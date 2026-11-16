@@ -647,7 +647,17 @@ impl Interpreter {
         }
         for args in calls {
             let r = self.call_func(&f, args, None);
-            self.finish(r)?;
+            let v = self.finish(r)?;
+            // a test returning `Err` fails, as the compiled harness fails it (Rust prints `Error: {e:?}` and the test fails)
+            if let Value::Enum(e) = &v {
+                if &*e.ty == "Result" && &*e.variant == "Err" {
+                    let text = match &e.payload {
+                        super::value::Payload::Tuple(items) => items.first().map(|x| self.debug_string(x).unwrap_or_default()).unwrap_or_default(),
+                        _ => String::new(),
+                    };
+                    return Err(RuntimeError::new(ErrorKind::Panic, format!("test {name} returned Err: {text}")));
+                }
+            }
         }
         Ok(())
     }

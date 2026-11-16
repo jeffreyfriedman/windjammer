@@ -1,0 +1,14 @@
+use std::json
+
+pub struct Item {
+    pub kind: string,
+    pub count: int,
+}
+
+pub fn parse(t: string) -> string {
+    let r: Result<Vec<Item>, string> = json.parse_string(t)
+    match r {
+        Ok(v) => "stock ok ${v.len()} ${v[1].kind} ${v[1].count}",
+        Err(e) => "stock err ${e}",
+    }
+}

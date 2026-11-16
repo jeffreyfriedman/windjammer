@@ -102,6 +102,16 @@ fn private_struct_renames(files: &[LoadedFile]) -> Vec<HashMap<String, String>> 
 /// Files reachable from a loose script through `use` / `mod` (a script does not own its directory).
 pub fn script_sources(entry: &Path) -> Result<Vec<LoadedFile>, RuntimeError> {
     let root = entry.parent().map(Path::to_path_buf).unwrap_or_default();
+    // a module is found next to the script, else in the project root (the manifest's directory) or its `src/`, as `wj check`
+    // and the reference say: a runner in `tools/` or a test in `tests/` imports the root's modules (no folder name assumed)
+    let mut roots = vec![root.clone()];
+    if let Some(project) = crate::module_system::project::find_manifest_dir(entry) {
+        for r in [project.clone(), project.join("src")] {
+            if !roots.iter().any(|x| same_dir(x, &r)) {
+                roots.push(r);
+            }
+        }
+    }
     let first = parse_files(&[SourceFile { module_path: Vec::new(), file: entry.to_path_buf() }])?;
     let mut out: Vec<LoadedFile> = first;
     let mut seen: HashSet<Vec<String>> = HashSet::from([Vec::new()]);
@@ -116,8 +126,8 @@ pub fn script_sources(entry: &Path) -> Result<Vec<LoadedFile>, RuntimeError> {
                 if seen.contains(&prefix) {
                     continue;
                 }
-                let Some(file) = module_file(&root, &prefix) else {
-                    if root.join(prefix.join("/")).is_dir() {
+                let Some(file) = roots.iter().find_map(|r| module_file(r, &prefix)) else {
+                    if roots.iter().any(|r| r.join(prefix.join("/")).is_dir()) {
                         continue; // a directory module without mod.wj: keep walking
                     }
                     break;
@@ -129,6 +139,11 @@ pub fn script_sources(entry: &Path) -> Result<Vec<LoadedFile>, RuntimeError> {
         i += 1;
     }
     Ok(out)
+}
+
+fn same_dir(a: &Path, b: &Path) -> bool {
+    let c = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    c(a) == c(b)
 }
 
 fn module_file(root: &Path, path: &[String]) -> Option<PathBuf> {

@@ -1,0 +1,14 @@
+order 1 ann: $164.91
+order 2 bob: $399.00
+order 5 eve: $389.70
+order 6 fay: $357.98
+orders filled: 4, units: 48, revenue: $1311.59
+  hardware: 201 in stock
+  service: 36 in stock
+  software: 102 in stock
+over $100: debugger licence, editor licence
+rejected (4):
+  expected 5 fields in 'x500, broken line, hw', found 3
+  bad price 'abc'
+  order 3: only 5 of d700 left, 6 wanted
+  order 4: unknown sku z999

@@ -81,12 +81,16 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     crate::debug_env::phase("check-effects");
     let programs: Vec<_> = parsed.iter().map(|p| &p.program).collect();
     let idx = Index::build(&programs);
+    crate::debug_env::phase("check-calls-index");
     // ADR-0026: calls into Rust crates checked against `rust/<crate>.wji`
     let manifest_dir = super::effects::manifest_path(root).and_then(|m| m.parent().map(std::path::Path::to_path_buf));
     let crates = manifest_dir.as_deref().map(crate::package::rust_surface::load).unwrap_or_default();
+    crate::debug_env::phase("check-calls-crates");
     super::rust_calls::run(&crates, &idx, parsed, out);
+    crate::debug_env::phase("check-calls-rust");
     // a call to a function a std module does not provide (`strings.index_of`)
     super::std_calls::run(parsed, out);
+    crate::debug_env::phase("check-calls-std");
     // a `match` whose arms name the other wrapper's variants (`Some` against a `Result`)
     super::match_variants::run(parsed, &idx, out);
     if let Some(dir) = &manifest_dir {
@@ -348,12 +352,16 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     let mut out = Vec::new();
     use crate::analyzer::{Analyzer, SignatureRegistry};
     let mut analyzer = Analyzer::new();
-    let sigs = SignatureRegistry::new();
-    let analysis = analyzer.analyze_program_with_global_signatures(&p.program, &sigs);
+    crate::debug_env::phase("check-analyzer-new");
+    // the analysis only reads the global signatures: the per-process stdlib registry itself, not a clone of it
+    let sigs = SignatureRegistry::stdlib();
+    crate::debug_env::phase("check-analyzer-sigs");
+    let analysis = analyzer.analyze_program_with_global_signatures(&p.program, sigs);
     crate::debug_env::phase("check-analyzer");
     match analysis {
         Ok((analyzed, registry, _)) => {
             let mut num = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+            crate::debug_env::phase("check-numeric-new");
             num.infer_program(&p.program);
             for e in &num.errors {
                 out.push(

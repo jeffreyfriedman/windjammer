@@ -33,7 +33,7 @@ pub fn from_table(table: &toml::value::Table, root: &Path) -> Result<Grant, Stri
                         if pats.is_empty() {
                             g.declare_empty(kind.clone());
                         }
-                        for p in pats {
+                        for p in pats.iter().flat_map(|p| expand_temp(p)) {
                             g.allow(kind.clone(), &p);
                         }
                     }
@@ -42,6 +42,22 @@ pub fn from_table(table: &toml::value::Table, root: &Path) -> Result<Grant, Stri
         }
     }
     Ok(g)
+}
+
+/// `$TMP` at the start of a pattern is this run's system temp directory (`std::env::temp_dir()`): `/tmp` is not it on
+/// macOS (`/var/folders/..`), so a grant that names `/tmp` alone is not location-free. The directory as named and as
+/// resolved (`/var` is a link to `/private/var`) are both granted.
+pub fn expand_temp(p: &str) -> Vec<String> {
+    let Some(rest) = p.strip_prefix("$TMP").filter(|r| r.is_empty() || r.starts_with('/')) else { return vec![p.to_string()] };
+    let named = std::env::temp_dir();
+    let mut out = Vec::new();
+    for dir in [named.clone(), std::fs::canonicalize(&named).unwrap_or(named)] {
+        let s = format!("{}{rest}", dir.to_string_lossy().trim_end_matches('/'));
+        if !out.contains(&s) {
+            out.push(s);
+        }
+    }
+    out
 }
 
 /// Parse the `[capabilities]` table out of a whole `wj.toml` text. `Ok(None)` = the table is absent.
@@ -89,6 +105,42 @@ mod tests {
 
     fn g(manifest: &str) -> Grant {
         grant_from_manifest_text(&format!("[capabilities]\n{manifest}"), &root()).unwrap().unwrap()
+    }
+
+    /// `$TMP/**` grants the system temp directory wherever it is (`/var/folders/..` on macOS), named or resolved, and
+    /// nothing beside it.
+    #[test]
+    fn the_temp_token_grants_the_system_temp_directory_by_both_names() {
+        let g = g("fs.write = [\"$TMP/**\"]");
+        let named = std::env::temp_dir().join("wj-grant-probe/a.txt");
+        assert!(g.check(&EffectKind::FsWrite, Some(&named.to_string_lossy())).is_ok(), "{}", named.display());
+        let dir = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+        assert!(g.check(&EffectKind::FsWrite, Some(&dir.join("b.txt").to_string_lossy())).is_ok());
+        assert!(g.check(&EffectKind::FsWrite, Some("/etc/hosts")).is_err());
+        assert_eq!(expand_temp("$TMPDIR/x"), vec!["$TMPDIR/x".to_string()], "only the token itself expands");
+    }
+
+    /// Location-free gate: every tooling manifest under `scripts/` that grants scratch space under `/tmp` also grants the
+    /// system temp directory, where `env::temp_dir()` puts scratch files (the drift gate's fuzz step was denied on macOS).
+    #[test]
+    fn tooling_grants_cover_the_system_temp_directory() {
+        let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mut checked = 0;
+        for dir in std::fs::read_dir(repo.join("scripts")).unwrap().flatten() {
+            let manifest = dir.path().join("wj.toml");
+            let Ok(text) = std::fs::read_to_string(&manifest) else { continue };
+            if !text.contains("\"/tmp/**\"") {
+                continue;
+            }
+            let g = grant_from_manifest_text(&text, &dir.path()).unwrap().unwrap();
+            let probe = std::env::temp_dir().join("wj-scratch-probe/out.txt");
+            for p in [probe.clone(), std::fs::canonicalize(std::env::temp_dir()).unwrap().join("wj-scratch-probe/out.txt")] {
+                assert!(g.check(&EffectKind::FsWrite, Some(&p.to_string_lossy())).is_ok(), "{} does not grant {}", manifest.display(), p.display());
+                assert!(g.check(&EffectKind::FsRead, Some(&p.to_string_lossy())).is_ok(), "{} does not grant reading {}", manifest.display(), p.display());
+            }
+            checked += 1;
+        }
+        assert!(checked >= 2, "scripts/wj and scripts/book grant /tmp: {checked} manifests checked");
     }
 
     #[test]

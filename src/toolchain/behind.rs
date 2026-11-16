@@ -1,4 +1,5 @@
-//! Commit-based staleness: is this `wj` built from an older commit than the compiler checkout it runs in?
+//! Staleness: is this `wj` built from other sources than the compiler checkout it runs in? By the content key of
+//! the sources the binary carries (`key_behind_text`; every build since build-key), else by commit (older binaries).
 //!
 //! The age-based check (`stale.rs`) waits 30 days; a `wj` a few days behind its checkout already lacks
 //! subcommands and accepted inputs (`wj eval`, `wj run -`), and the failure it gives ("plugin not found", "no
@@ -127,24 +128,66 @@ pub fn checkout_inputs_key(checkout: &Path) -> String {
 /// git-free. To stay off the hot path, the digest is computed only when an input file is newer than the build.
 pub fn key_behind_text(id: &Identity, checkout: &Path) -> Option<String> {
     let mine = id.key.as_deref()?;
-    let newest = content_key::input_files(checkout)
-        .iter()
-        .filter_map(|f| std::fs::metadata(checkout.join(f)).and_then(|m| m.modified()).ok())
-        .filter_map(|t| t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64))
-        .max()?;
-    if id.build_ts.is_some_and(|built| newest <= built) {
-        return None;
+    // one pass, one `stat` per input, stopping at the first newer one (no path list built first)
+    if let Some(built) = id.build_ts {
+        if !content_key::any_input_newer_than(checkout, built) {
+            return None;
+        }
     }
     let theirs = content_key::inputs_key(checkout);
     if theirs.starts_with(mine) || mine.starts_with(theirs.as_str()) {
         return None;
     }
     let built = id.build_ts.map(iso_datetime).unwrap_or_else(|| "unknown".into());
+    let commit = id.commit.as_deref().map(|c| format!("commit {}, ", &c[..c.len().min(12)])).unwrap_or_default();
     Some(format!(
-        "wj: this wj (sources {}, built {built}) is not built from this checkout's sources ({}); run `wj install-dev --from <fresh build>` (for example `cargo build --release --bin wj && target/release/wj install-dev`)",
+        "wj: this wj ({commit}sources {}, built {built}) is not built from this checkout's sources ({}); run `wj install-dev --from <fresh build>` (for example `cargo build --release --bin wj && target/release/wj install-dev`)",
         &mine[..mine.len().min(10)],
         &theirs[..10]
     ))
+}
+
+/// How long a verdict of [`key_behind_text`] is reused: the check costs a `stat` per compiler source (about 33M
+/// instructions per `wj` run inside a checkout, ADR-0038), and the warning a developer or an agent needs after editing the
+/// compiler arrives at most this late.
+pub const VERDICT_TTL_SECS: i64 = 60;
+
+fn verdict_dir() -> std::path::PathBuf {
+    crate::cargo_cache::cache_root().join("toolchain").join("behind")
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
+
+/// [`key_behind_text`], reused for [`VERDICT_TTL_SECS`] from a file under `dir` named by the binary's key and the
+/// checkout (the shared cache root, not the temp dir). The file holds the time of the verdict and the line (empty when
+/// current); anything unreadable, older or from the future recomputes. A new build has a new key, so it never reads
+/// an old binary's verdict.
+pub fn cached_key_behind_text(id: &Identity, checkout: &Path, dir: &Path, now: i64) -> Option<String> {
+    let key = id.key.as_deref()?;
+    let canon = std::fs::canonicalize(checkout).unwrap_or_else(|_| checkout.to_path_buf());
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in key.bytes().chain([0u8]).chain(canon.to_string_lossy().bytes()) {
+        h = (h ^ b as u64).wrapping_mul(0x100000001b3);
+    }
+    let file = dir.join(format!("{h:016x}"));
+    if let Ok(text) = std::fs::read_to_string(&file) {
+        if let Some((at, line)) = text.split_once('\n') {
+            if let Ok(at) = at.trim().parse::<i64>() {
+                if at <= now && now - at < VERDICT_TTL_SECS {
+                    return (!line.is_empty()).then(|| line.to_string());
+                }
+            }
+        }
+    }
+    let verdict = key_behind_text(id, checkout);
+    let _ = std::fs::create_dir_all(dir);
+    let tmp = dir.join(format!("{h:016x}.{}", std::process::id()));
+    if std::fs::write(&tmp, format!("{now}\n{}", verdict.as_deref().unwrap_or(""))).is_ok() {
+        let _ = std::fs::rename(&tmp, &file);
+    }
+    verdict
 }
 
 /// What goes into a `wj` binary: the compiler's sources, the embedded std and runtime crates, the build script and the
@@ -183,23 +226,37 @@ pub fn behind_text_in(checkout: &Path, id: &Identity, head: &Head) -> Option<Str
     Some(line)
 }
 
-/// The checkout enclosing the current directory (or this executable), and the line for it, if behind.
-/// The checkout enclosing the current directory (or this executable), and the line for it, if behind: by commit
-/// for a build stamped with one (ignoring commits that touch no compiler input), else by the content key of the sources.
+/// The line for `id` run in `checkout`, if behind. A binary that carries the content key of its sources (every build
+/// since build-key) is compared by that key: exact, and blind to commits and files that are not compiler inputs, so a
+/// stamped and an unstamped build of the same sources agree, and an uncommitted change to an input is seen either way.
+/// The commit comparison is the fallback for older binaries without a key.
+pub fn behind_for(id: &Identity, checkout: &Path) -> Option<String> {
+    if id.key.is_some() {
+        return key_behind_text(id, checkout);
+    }
+    behind_text_in(checkout, id, &checkout_head(checkout)?)
+}
+
+/// The checkout enclosing the current directory (or this executable), and the line for it, if behind ([`behind_for`]).
 pub fn current_behind_text() -> Option<String> {
     let checkout = std::env::current_dir()
         .ok()
         .and_then(|d| super::stale::enclosing_checkout(&d))
         .or_else(|| std::env::current_exe().ok().and_then(|e| super::stale::enclosing_checkout(&e)))?;
     let id = super::identity::current();
-    if id.commit.is_some() {
-        return behind_text_in(&checkout, &id, &checkout_head(&checkout)?);
+    // the per-run path reuses a recent verdict ([`VERDICT_TTL_SECS`]); [`behind_for`] itself always judges afresh
+    if id.key.is_some() {
+        return cached_key_behind_text(&id, &checkout, &verdict_dir(), unix_now());
     }
-    key_behind_text(&id, &checkout)
+    behind_for(&id, &checkout)
 }
 
 /// Print the line to stderr when this `wj` runs inside a compiler checkout it was not built from.
 pub fn warn_if_behind() {
+    // the instruction gates measure the interpreter, not this check (a `stat` per compiler source inside a checkout)
+    if super::env::flag("WJ_NO_STALE_WARN") {
+        return;
+    }
     if let Some(line) = current_behind_text() {
         eprintln!("{line}");
     }
@@ -208,6 +265,39 @@ pub fn warn_if_behind() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A verdict is reused inside the TTL (no walk, even after an input changed), recomputed after it, and never shared
+    /// with another binary key.
+    #[test]
+    fn the_behind_verdict_is_reused_for_its_ttl_and_per_binary_key() {
+        let root = std::env::temp_dir().join(format!("wj-behind-ttl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (checkout, cache) = (root.join("co"), root.join("cache"));
+        std::fs::create_dir_all(checkout.join("src")).unwrap();
+        std::fs::write(checkout.join("src/a.rs"), "fn a() {}").unwrap();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let mut id = Identity { key: Some("0123456789abcdef".into()), version: "0.50.0".into(), commit: None, commit_ts: None, dirty: false, profile: None, build_ts: Some(now + 3600) };
+        assert_eq!(cached_key_behind_text(&id, &checkout, &cache, now), None, "built after every input: current");
+        id.build_ts = Some(now - 3600);
+        assert_eq!(cached_key_behind_text(&id, &checkout, &cache, now + 1), None, "inside the TTL the cached verdict stands");
+        assert!(cached_key_behind_text(&id, &checkout, &cache, now + VERDICT_TTL_SECS + 1).is_some(), "after the TTL the walk runs and sees the newer input");
+        id.key = Some("fedcba9876543210".into());
+        assert!(cached_key_behind_text(&id, &checkout, &cache, now + VERDICT_TTL_SECS + 2).is_some(), "another binary key computes its own verdict");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_input_newer_than_the_build_is_found_and_an_older_tree_is_not() {
+        let root = std::env::temp_dir().join(format!("wj-behind-newer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src/deep")).unwrap();
+        std::fs::write(root.join("src/deep/a.rs"), "fn a() {}").unwrap();
+        std::fs::write(root.join("unrelated.txt"), "x").unwrap();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        assert!(content_key::any_input_newer_than(&root, now - 3600), "a file written now is newer than an hour ago");
+        assert!(!content_key::any_input_newer_than(&root, now + 3600), "nothing is newer than an hour from now");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     fn id(commit: &str, ts: i64) -> Identity {
         Identity {
@@ -270,6 +360,35 @@ mod tests {
         let me = id(&built, 1_000);
         assert_eq!(behind_text_in(&dir, &me, &Head { sha: docs_only, commit_ts: Some(2_000) }), None);
         assert!(behind_text_in(&dir, &me, &Head { sha: source, commit_ts: Some(3_000) }).is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A stamped binary that carries its sources' key is judged by the key, as an unstamped one is: an uncommitted
+    /// change to a compiler input is flagged although the commit matches, and a change to a non-input is not.
+    /// Mutation-checked: with the commit logic for stamped builds the source case passes as current and fails here.
+    #[test]
+    fn a_stamped_binary_with_a_key_is_judged_by_its_sources_not_its_commit() {
+        let dir = std::env::temp_dir().join(format!("wj-behind-key-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+        std::fs::write(dir.join("src/lib.rs"), "fn a() {}\n").unwrap();
+        std::fs::write(dir.join("docs/a.md"), "a\n").unwrap();
+        let built_from = content_key::inputs_key(&dir);
+        let head = "1234567890abcdef1234567890abcdef12345678";
+        std::fs::create_dir_all(dir.join(".git/refs/heads")).unwrap();
+        std::fs::write(dir.join(".git/HEAD"), format!("{head}\n")).unwrap();
+        // built before the edits below (the mtime shortcut must not skip them)
+        let me = Identity { key: Some(built_from), build_ts: Some(1), ..id(head, 1) };
+        assert_eq!(behind_for(&me, &dir), None, "the sources it was built from");
+        std::fs::write(dir.join("docs/a.md"), "b\n").unwrap();
+        assert_eq!(behind_for(&me, &dir), None, "a documentation change is no compiler input");
+        std::fs::write(dir.join("src/lib.rs"), "fn b() {}\n").unwrap();
+        let line = behind_for(&me, &dir).expect("an uncommitted source change on the binary's own commit is flagged");
+        assert!(line.contains("commit 1234567890ab") && line.contains("is not built from this checkout"), "{line}");
+        // the same binary without a key (an older build) falls back to the commit: same commit, nothing claimed
+        let old = Identity { key: None, ..me };
+        assert_eq!(behind_for(&old, &dir), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
