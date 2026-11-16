@@ -57,6 +57,12 @@ const CASES: &[Case] = &[
         src: "fn main() {\n    let parts = \"a b\".split(\" \")\n    println(\"${parts.contains(\"a\")}\")\n}\n",
     },
     Case {
+        name: "iterator given to a declared list",
+        code: "WJ0003",
+        auto_fix: true,
+        src: "fn main() {\n    let line = \"hello world\"\n    let parts: Vec<string> = line.split(\" \")\n    println(\"${parts.len()}\")\n}\n",
+    },
+    Case {
         name: "bodyless trait receiver",
         code: "W0016",
         auto_fix: false,
