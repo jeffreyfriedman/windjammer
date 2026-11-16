@@ -23,13 +23,15 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 
 | # | Candidate | Dimension | Today (RESULTS.md) | Expected after | Effort | Verdict |
 |---|---|---|---|---|---|---|
-| C1 | Interpreter-first verify loop as the default agent loop | D2, D1 | see RESULTS D2 | at most 0.5x Rust, in instructions, on every `dx` program | 1-2 agent-days (L5 of ADR-0037 + default) | **Top 3** |
-| C2 | Pay-for-what-you-use runtime (no dependency build unless used) | D3, D4 | cold build of every generated crate: 69 crates; Rust twin: 0 | 0 crates for 18/78 programs, at most 2 for the rest | 2-3 agent-days | **Top 3** (removes the largest loss) |
+| C1 | Interpreter-first verify loop as the default agent loop | D2, D1 | **measured win: 0.24x CPU (0.62x cycles) on 58/58 `dx` programs**; 6x loss on compute kernels | keep <= 0.5x on `dx`; agents actually use it (pilot tool-wait) | 1-2 agent-days (L5 of ADR-0037 + default) | **Top 3** |
+| C2 | Pay-for-what-you-use runtime (no dependency build unless used) | D3, D4, D6 | **measured loss**: cold build 30.8 s CPU / 450 MB / 59 crates before the first program (twin: none); dx binaries 1.19x; dx compile 1.36x cycles (runtime under LTO) | 0 crates for 18/78 programs, at most 2 for the rest; dx size and compile to parity | 2-3 agent-days | **Top 3** (removes the largest loss) |
 | C3 | Solver-decided borrow of read-only aggregate parameters + last-use move | D5, D4 | 156 `.clone()` in the generated `dx` code vs 12 in the twins | at most 20 | 3-5 agent-days (ADR-0001 solver work) | **Top 3** (closes the run-time gap) |
 | C4 | Release profile chosen by the compiler (LTO, one codegen unit, strip) | D5, D6 | shipped profile already has LTO; see RESULTS D5/D6 | smaller and faster than `cargo build --release` defaults; equal to a hand-tuned profile | 0.5 agent-day | do with C2 |
 | C5 | Auto-arena scratch reuse (P8, default off) | D5, D4 | off | fewer allocations than the idiomatic twin when the twin allocates per iteration | 1 agent-day (benchmark + default flip) | next |
 | C6 | Ceremony-free source | D7, D1 | ceremony 0.46x (measured, win) ; tokens 1.06x on the verbose reference set | tokens at most 0.85x on agent-written programs | ongoing (std surface, sheet) | holding |
 | C7 | Smaller generated Rust (less for rustc to compile) | D3 | generated `dx` Rust has 1.76x the twin's lines | at most 1.2x | 2-3 agent-days, spread | after C3 |
+| C11 | Idiom lowering in codegen: fill loops to `vec![x; n]`/`resize`, `push_str("${..}")` to `write!`, get-then-insert to `entry` | D5 | **measured loss** on 6 kernels: vec_fill 2.79x, strings 2.16x, sieve 1.49x / 1.22x, hashmap 1.42x, string_build 1.34x cycles | parity (<= 1.02x) on every kernel | 3-4 agent-days | next after C2 |
+| C12 | Single-file build reads only reached peers' metadata | D2 compiled, D3 | **measured**: 1.26 s CPU inside this repository vs 0.09 s for the same file alone (docs/known-issues/build-scans-enclosing-tree-for-metadata.md) | location-independent | 1 agent-day | quick fix |
 | C8 | Defer-drop of large values | D5 latency | live (`--defer-drop auto`, 100 KB) | latency only; no instruction win | - | keep, not a headline |
 | C9 | Small-string / arena types chosen by ownership facts | D5, D4 | not started | unknown | weeks | research |
 | C10 | Overflow-check elimination from solver ranges | D5 | shipped binaries keep overflow checks (spec) | the twin has none in release, so this is a loss to close | 3+ agent-days | after C3 |
@@ -39,7 +41,7 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 - **Expected win:** the D2 ratio. An agent's iteration is "edit, verify, read the result". Rust has to compile
   (`rustc` debug: hundreds of millions of instructions even for a 30-line program); `wj run --interpret` parses,
   checks and runs (interpreter startup is 69M instructions on macOS, `bench/interp/instr_baseline.json`).
-- **Evidence:** RESULTS.md D2 (`verify_interp_instr`). Pilot 6 shows the other side: tool-wait was 2.1 s for Rust and
+- **Evidence:** RESULTS.md D2: `wj run --interpret` costs 0.24x the CPU of `rustc` debug + run on the 58 clean `dx` programs (0.62x in cycles of the process alone; every one of the 58 is cheaper); on the compute kernels it costs 6x, and those are the programs a final compiled build is for. Pilot 6 shows the other side: tool-wait was 2.1 s for Rust and
   11.3 / 17.4 s for the Windjammer arms, because agents ran compiled builds (`wj run --verify`) on every call
   (ADR-0037 table, "the interpreted-first arm never used the interpreter").
 - **Pass/feature:** ADR-0037 L5: one command that is the whole loop and is cheap: `wj run --verify` interprets first,
@@ -134,6 +136,23 @@ programmer has to decide by hand (and often decides expensively), or where it ca
   (ADR-0028), `#[inline]` only where P6 would keep it).
 - **Soundness:** each is the identity on behaviour; the existing optimizer fixtures and ratchet cover them.
 
+## C11 Idiom lowering in codegen
+
+- **Evidence (RESULTS.md, run per kernel, cycles):** `parity/vec_fill` 2.79x (index loop with `as u64` casts vs iterator
+  `sum`), `interp/strings` 2.16x (`s.push_str("${i % 10},")` builds a temporary String per iteration; the twin writes
+  with `write!`), `parity/sieve` 1.49x and `interp/sieve` 1.22x (a push loop vs `vec![true; n]`), `interp/hashmap` 1.42x
+  (the kernel calls `get` then `insert`; the twin uses `entry`, so part of this is how the kernel was written),
+  `parity/string_build` 1.34x.
+- **Pass/feature:** emission rules with the shape known at codegen: interpolation appended to a String binding lowers to
+  `write!` (the P5 argument extended to `push_str`); a `0..n` loop whose only effect is `v.push(c)` with a loop-invariant
+  `c` lowers to `v.resize(len + n, c)`; `match m.get(&k) { Some(v) => *v, None => d }` followed by `m.insert(k, f(..))`
+  lowers to `entry` when the map is not read in between.
+- **Soundness:** each is an identity on observable behaviour under preconditions of the P4/P5 kind (no early exit, no
+  aliasing of the target, `Clone` of a Copy or literal value); each gets a PASSES.md section and a mutant before it is
+  on.
+- **Gate:** the per-kernel cycle ratios in `bench/economics/results/` (a ratchet per kernel, 3% slack, the
+  `interp_instr.wj --check` pattern).
+
 ## C8-C10
 
 - **Defer-drop** never fires on this suite (no value above 100 KB is dropped on a hot path); it lowers latency, not
@@ -146,5 +165,8 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 
 ## Where Windjammer loses today
 
-Stated plainly, from RESULTS.md: the cold dependency build (C2), more generated code per program (C7), clones in
-read-heavy helpers (C3), and agent cost per passing program (C6/D1). None is structural; each has a named fix above.
+Stated plainly, from RESULTS.md: the cold dependency build (C2: 31 s CPU before the first program), runtime linked
+into every `dx` binary (C2: 1.19x size, 1.36x release compile), six kernels slower by 1.1x to 2.8x (C11), overflow
+checks in shipped binaries (C10: up to 1.5x on arithmetic kernels), clones in read-heavy helpers (C3), the interpreter on
+compute kernels (6x; those are compiled), and agent cost per passing program (C6/D1). None is structural; each has a
+named fix above.

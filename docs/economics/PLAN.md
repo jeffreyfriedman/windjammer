@@ -11,8 +11,8 @@ status: proposal
 ## The top three expected wins, plainly
 
 1. **Verifying a change costs a fraction of what it costs in Rust** (C1): `wj run --interpret` against `rustc` + run.
-   Already measured as a win on instructions (RESULTS.md D2); the work is making it the loop agents actually use and
-   recording it on a quiet machine in seconds.
+   Measured: 0.24x the CPU on 58/58 agent-sized programs (RESULTS.md D2). The work is making it the loop agents
+   actually use (pilot 6 agents ran compiled builds instead) and recording it on a quiet machine in seconds.
 2. **A new Windjammer program builds with no third-party dependencies** (C2), like its Rust twin, instead of compiling
    69 crates first. Today this is Windjammer's largest economic loss; fixed, it is parity on cold builds and a
    win on "first build in a fresh sandbox" against any Rust project that pulls a runtime-sized dependency set.
@@ -26,7 +26,7 @@ The fourth, cheap, add-on: the compiler-owned release profile (C4) makes shipped
 
 | Step | What | Agent-days | Depends on | Gate (must fail when the advantage regresses) |
 |---|---|---:|---|---|
-| 0 | Land this suite: `economics.wj`, `economics_report.wj`, twins, DEFINITION/RESULTS (this change) | done | - | `--static` is deterministic: a test compares its D7 numbers to the committed `bench/economics/results/static.json` |
+| 0 | Land this suite: `economics.wj`, `economics_report.wj`, twins, DEFINITION/RESULTS (this change) | done | - | CI: `economics.wj --static --check` (D7 counts, deterministic) and `economics_report.wj <run> --gate` (the claimed wins, D2 CPU <= 0.5 and D7 ceremony <= 0.5, hold in the committed run; fails when they do not) |
 | 1 | Quiet-box run on the PC (Linux, perf counters), wall-clock D2/D3/D5 rows | 0.5 | 0 | results committed with load; RESULTS.md updated |
 | 2 | C1: `wj run --verify` interprets first and builds once at the end; agent sheet names only it; D2 ratio recorded as a ratchet (`bench/economics/d2_baseline.json`, 3% slack, `--check` mode like `interp_instr.wj`) | 1.5 | 0 | D2 ratio check in the gate list; agreement suites (`compiled_agreement`, `engine_parity`) |
 | 3 | `wj optimize --explain/--json/--pass/--list` (COMMANDS.md), promise entries + acceptance cases | 1 | 0 | `tests/promise_registry_test.rs`; mutation check on the report |
@@ -39,7 +39,13 @@ The fourth, cheap, add-on: the compiler-owned release profile (C4) makes shipped
 | 10 | C5: a parsing kernel whose idiomatic twin allocates per line; flip P8 on if the allocation win holds | 1 | 0 | allocation-count row; P8 mutant |
 | 11 | Pilot 9 (paid): R vs interpreted-first with C1 in place, 10 tasks x 3 trials | 1 + spend | 2 | D1 cost per passing program with CI; acceptance: Windjammer CI upper bound below Rust's mean |
 
-Total to two gated wins (steps 0-6): about 6.5 agent-days. With C3 (steps 7-8): about 11.5.
+Status after step 0 (measured, Mac, wj 37d50458ec6a): two rows already meet their win threshold and are gated:
+D2 verify loop on `dx` (0.24x CPU) and D7 ceremony (0.45x). What remains for "two advantages before beta" is to keep
+them (gates), confirm D2 in seconds on the quiet PC (step 1) and make agents use the loop (step 2), and to remove the
+largest losses (C2, C11) so the advantages are not cancelled by the first `cargo build`.
+
+Total for steps 1-6: about 6.5 agent-days. With C3 (steps 7-8): about 11.5. C11 (idiom lowering, 3-4 agent-days)
+and C12 (location-independent single-file builds, 1 agent-day) slot in after step 6.
 
 Order rationale: C1 and C2 need no solver change and their measurements already exist; C3 depends on the ADR-0001
 solver migration and is scheduled with that stream, not against it. Step 11 is the only paid step and comes last,

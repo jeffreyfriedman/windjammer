@@ -60,14 +60,18 @@ actually wrote in pilot 6 were 0.88x (`cost.write.pilot6_token_ratio_wj_over_rus
 
 ## Dimensions
 
-Every measured command runs under `/usr/bin/time -l` (macOS) or GNU `time -v` with `perf stat -e instructions:u`
-(Linux). A count is the smallest of N runs (noise only adds). Every run's output must equal the expected output (the
+Every measured command runs under `/usr/bin/time -l` (macOS: instructions retired, cycles, peak RSS, CPU) or GNU
+`time -v` with `perf stat -e instructions:u,cycles:u` (Linux). A count is the smallest of N runs (noise only adds).
+Cross-program ratios use **cycles** and **CPU seconds**, not instructions: IPC differs several-fold between programs
+(the interpreter retires 2.6 instructions per cycle, rustc far fewer), and only CPU seconds include child processes
+(rustc's linker, cargo's rustc). Every run's output must equal the expected output (the
 sample's stdout, or the Rust twin's output for kernels); a program with any mismatch is excluded from the summaries and
 listed as a problem. The runner is `scripts/wj/economics.wj` (interpreted Windjammer); the renderer is
 `scripts/wj/economics_report.wj`.
 
 **Loaded-box rule** (see the measurement-discipline note in RESULTS.md): on a machine with load above its core count,
-wall-clock is noise. Decisions use instruction counts (and peak RSS, which is stable under load). Wall-clock numbers
+wall-clock is noise. Decisions use cycles and CPU seconds of the measured process (and peak RSS, which is stable
+under load). Wall-clock numbers
 are taken only on a quiet machine (the Linux PC), with alternating runs, and are labelled with the load.
 
 ### D1 Agent cost
@@ -84,7 +88,7 @@ are taken only on a quiet machine (the Linux PC), with alternating runs, and are
 
 | | |
 |---|---|
-| Metric | instructions (and CPU s) from source text to the program's verified output on the sample input |
+| Metric | CPU seconds (children included) and cycles from source text to the program's verified output on the sample input |
 | Windjammer | `wj run --interpret main.wj` (interpreted-first loop); also `wj build --no-cargo` + rustc debug + run (compiled loop) |
 | Rust baseline | `rustc -C opt-level=0 -C debuginfo=0 main.rs` + run (what an agent's `rustc` loop does) |
 | Win | geometric mean at most **0.50x** on `dx` with zero output mismatches (the interpreted-first loop is the language's structural advantage: no compile step) |
