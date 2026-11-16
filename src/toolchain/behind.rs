@@ -275,7 +275,7 @@ mod tests {
         let (checkout, cache) = (root.join("co"), root.join("cache"));
         std::fs::create_dir_all(checkout.join("src")).unwrap();
         std::fs::write(checkout.join("src/a.rs"), "fn a() {}").unwrap();
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let now = unix_now();
         let mut id = Identity { key: Some("0123456789abcdef".into()), version: "0.50.0".into(), commit: None, commit_ts: None, dirty: false, profile: None, build_ts: Some(now + 3600) };
         assert_eq!(cached_key_behind_text(&id, &checkout, &cache, now), None, "built after every input: current");
         id.build_ts = Some(now - 3600);
@@ -293,7 +293,7 @@ mod tests {
         std::fs::create_dir_all(root.join("src/deep")).unwrap();
         std::fs::write(root.join("src/deep/a.rs"), "fn a() {}").unwrap();
         std::fs::write(root.join("unrelated.txt"), "x").unwrap();
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let now = unix_now();
         assert!(content_key::any_input_newer_than(&root, now - 3600), "a file written now is newer than an hour ago");
         assert!(!content_key::any_input_newer_than(&root, now + 3600), "nothing is newer than an hour from now");
         let _ = std::fs::remove_dir_all(&root);
