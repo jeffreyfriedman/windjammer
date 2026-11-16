@@ -1,7 +1,7 @@
 //! How much of the file system a build's metadata merge touched: directories listed and `.wj.meta` files read.
 //!
-//! `WJ_META_SCAN_STATS=1` prints `meta-scan: dirs=N meta_files=M` to stderr when a build ends
-//! (`report_if_requested`). Timing-independent evidence for the location-agnostic gate
+//! `WJ_META_SCAN_STATS=1` prints the cumulative `meta-scan: dirs=N meta_files=M` to stderr after every metadata
+//! root a command merges and when a build ends (`report_if_requested`); the last line is the command's total. Timing-independent evidence for the location-agnostic gate
 //! (tests/meta_scan_locality.rs): a single-file build must touch the same amount whatever surrounds the file.
 
 use std::sync::atomic::{AtomicUsize, Ordering};

@@ -204,6 +204,11 @@ path = "tests/all.rs"
 name = "meta_scan_locality"
 path = "tests/meta_scan_locality.rs"
 
+# A generated crate depends only on the default crates its code names (C2): cargo test --release --test lean_manifest
+[[test]]
+name = "lean_manifest"
+path = "tests/lean_manifest.rs"
+
 # Resolved engine vs the walker on every corpus program: cargo test --release --test engine_parity
 [[test]]
 name = "engine_parity"

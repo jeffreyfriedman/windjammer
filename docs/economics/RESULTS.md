@@ -92,6 +92,28 @@ reported, not gated). Gate: `cargo test --release --test meta_scan_locality` (fi
 unrelated cached modules; a file in a project opens no more than a file alone); mutation check: counting the read
 before the reachability check (the old order) fails both tests (2 vs 40, 40 vs 0).
 
+## C2 step 4: lean generated manifest (measured before/after)
+
+The generated `Cargo.toml` now names `windjammer-runtime`, `smallvec` and `serde` only when the generated code names
+them (`cargo_toml::toml_generation::names_default_deps`). Cold `cargo build` (debug) of the generated crate into an
+empty target directory, `/usr/bin/time -l`:
+
+| program | before (wj 37d50458): deps / CPU / peak RSS / rlibs / target | after: deps / CPU / peak RSS / rlibs / target |
+|---|---|---|
+| `interp/fib30` (std only) | 3 / 32.2 s / 463 MB / 61 / 191 MB | **0 / 0.19 s / 94 MB / 0 / 1.1 MB** |
+| `dx/t001_gcd_lcm` (reads stdin through the runtime's `io`) | 3 / 28.4 s / 459 MB / 61 / 193 MB | 1 / 29.2 s / 456 MB / 61 / 193 MB |
+
+18 of the 78 suite programs never name the runtime and now build like their Rust twin (about 170x less CPU on the
+first build). The other 60 still pay the runtime's dependency tree: C2 step 5 (runtime dependencies behind features)
+is what removes that. Gate: `cargo test --release --test lean_manifest` (a std-only program has no dependencies; a
+runtime-using one has exactly the runtime); mutation check: always adding the runtime fails the first test.
+
+`wj check` of one file inside this repository vs the same file alone (the 40 s report from another stream): on this
+head the first check inside the repository costs 0.58-1.13 G instructions against 0.43 G alone, repeated checks
+0.40 G (the check cache); `wj check` merges no peer metadata here. The 40 s case did not reproduce in three
+checkouts (this worktree, the concurrency worktree, the main checkout with a 3.5 GB `target/`); the gate now covers
+`wj check` and `wj run --interpret` too (`check_and_run_open_no_metadata_of_unrelated_modules_either`).
+
 ## C4: release profile and overflow checks (measured)
 
 `economics.wj --profiles` (`bench/economics/results/mac-20261116-profiles.{json,md}`): the 17 std-only kernels (the

@@ -104,11 +104,19 @@ pub(crate) fn write_cargo_toml(
                 .join(", ")
         )
     };
-    let mut deps = vec![
-        runtime_dep,
-        "smallvec = \"1.13\"".to_string(),
-        "serde = { version = \"1.0\", features = [\"derive\"] }".to_string(),
-    ];
+    // Only the default dependencies the generated code names (docs/economics C2): an unused runtime still costs a cold
+    // build of its whole dependency tree (59 crates), although rustc never links it.
+    let used = names_default_deps(output_dir);
+    let mut deps = Vec::new();
+    if used.runtime {
+        deps.push(runtime_dep);
+    }
+    if used.smallvec {
+        deps.push("smallvec = \"1.13\"".to_string());
+    }
+    if used.serde {
+        deps.push("serde = { version = \"1.0\", features = [\"derive\"] }".to_string());
+    }
 
     // Detect external crate imports from generated Rust source files
     let mut external_deps = detect_external_crate_deps(output_dir, source_dir);
@@ -494,4 +502,60 @@ fn extract_package_name_from_toml(content: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Which default dependencies the generated Rust under `output_dir` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DefaultDepsUsed {
+    pub runtime: bool,
+    pub smallvec: bool,
+    pub serde: bool,
+}
+
+/// Scan the generated `.rs` files (recursively, skipping `target/`) for the crates the code names. A name that appears
+/// anywhere (paths, `use`, derives, macros) counts: a false positive only costs a dependency build, never correctness.
+pub(crate) fn names_default_deps(output_dir: &Path) -> DefaultDepsUsed {
+    let mut used = DefaultDepsUsed { runtime: false, smallvec: false, serde: false };
+    scan_rs(output_dir, 0, &mut used);
+    used
+}
+
+fn scan_rs(dir: &Path, depth: usize, used: &mut DefaultDepsUsed) {
+    if depth > 16 || (used.runtime && used.smallvec && used.serde) {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            if p.file_name().is_some_and(|n| n == "target" || n == ".git") {
+                continue;
+            }
+            scan_rs(&p, depth + 1, used);
+        } else if p.extension().is_some_and(|x| x == "rs") {
+            if let Ok(text) = std::fs::read_to_string(&p) {
+                used.runtime |= text.contains("windjammer_runtime");
+                used.smallvec |= text.contains("smallvec") || text.contains("SmallVec");
+                used.serde |= text.contains("serde") || text.contains("Serialize") || text.contains("Deserialize");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod lean_manifest_tests {
+    use super::*;
+
+    #[test]
+    fn only_named_default_dependencies_are_used() {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::write(t.path().join("main.rs"), "fn main() { println!(\"hi\"); }\n").unwrap();
+        assert_eq!(names_default_deps(t.path()), DefaultDepsUsed { runtime: false, smallvec: false, serde: false });
+        std::fs::create_dir_all(t.path().join("m")).unwrap();
+        std::fs::write(t.path().join("m/a.rs"), "use windjammer_runtime::io;\n#[derive(serde::Serialize)] struct S;\n").unwrap();
+        assert_eq!(names_default_deps(t.path()), DefaultDepsUsed { runtime: true, smallvec: false, serde: true });
+        std::fs::create_dir_all(t.path().join("target")).unwrap();
+        std::fs::write(t.path().join("target/x.rs"), "use smallvec::SmallVec;\n").unwrap();
+        assert!(!names_default_deps(t.path()).smallvec, "target/ is build output, not generated code");
+    }
 }

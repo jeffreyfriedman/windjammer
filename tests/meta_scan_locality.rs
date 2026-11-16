@@ -31,21 +31,28 @@ fn project(root: &Path, junk: usize) -> std::path::PathBuf {
     file
 }
 
-fn scan_counts(file: &Path, out: &Path) -> (usize, usize) {
-    let o = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", "--no-cargo", "--no-lint", "-o"])
-        .arg(out)
-        .arg(file)
-        .env("WJ_META_SCAN_STATS", "1")
-        .output()
-        .expect("run wj build");
+/// (directories listed, metadata files opened) by `wj <cmd>` on `file`: the last `meta-scan:` line (cumulative).
+fn scan_counts_cmd(cmd: &str, file: &Path, out: &Path) -> (usize, usize) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_wj"));
+    match cmd {
+        "build" => c.args(["build", "--no-cargo", "--no-lint", "-o"]).arg(out).arg(file),
+        "check" => c.arg("check").arg(file),
+        _ => c.args(["run", "--interpret"]).arg(file),
+    };
+    let o = c.env("WJ_META_SCAN_STATS", "1").output().expect("run wj");
     let err = String::from_utf8_lossy(&o.stderr);
-    assert!(o.status.success(), "wj build failed:\n{err}");
-    let line = err.lines().find(|l| l.starts_with("meta-scan: ")).unwrap_or_else(|| panic!("no meta-scan line in:\n{err}"));
+    assert!(o.status.success(), "wj {cmd} failed:\n{err}");
+    let Some(line) = err.lines().filter(|l| l.starts_with("meta-scan: ")).last() else {
+        return (0, 0); // this command merged no metadata at all
+    };
     let num = |k: &str| -> usize {
         line.split_whitespace().find_map(|w| w.strip_prefix(k)).and_then(|v| v.parse().ok()).unwrap()
     };
     (num("dirs="), num("meta_files="))
+}
+
+fn scan_counts(file: &Path, out: &Path) -> (usize, usize) {
+    scan_counts_cmd("build", file, out)
 }
 
 #[test]
@@ -73,4 +80,17 @@ fn a_file_in_a_project_opens_no_more_metadata_than_a_file_alone() {
     let (_, files_alone) = scan_counts(&f_alone, &alone.path().join("out"));
     let (_, files_big) = scan_counts(&f_big, &big.path().join("out"));
     assert_eq!(files_big, files_alone, "metadata files opened: {files_big} in a project vs {files_alone} alone");
+}
+
+#[test]
+fn check_and_run_open_no_metadata_of_unrelated_modules_either() {
+    for cmd in ["check", "run"] {
+        let small = tempfile::tempdir().unwrap();
+        let big = tempfile::tempdir().unwrap();
+        let f_small = project(small.path(), 2);
+        let f_big = project(big.path(), 40);
+        let (_, a) = scan_counts_cmd(cmd, &f_small, &small.path().join("out"));
+        let (_, b) = scan_counts_cmd(cmd, &f_big, &big.path().join("out"));
+        assert_eq!(a, b, "wj {cmd}: metadata files opened {a} with 2 unrelated cached modules, {b} with 40");
+    }
 }

@@ -58,6 +58,8 @@ pub(super) fn merge_root(
         super::PEER_SCOPE.with(|c| *c.borrow_mut() = None);
     }
     DECLARED.with(|c| *c.borrow_mut() = prev);
+    // cumulative counts after every root, so any command that merges metadata (build, check, run) reports them
+    super::scan_stats::report_if_requested();
 }
 
 /// The `.wj` source a `.wj.meta` was written for: `<project>/.wj-cache/foo/bar.wj.meta` is `<project>/src/foo/bar.wj`
