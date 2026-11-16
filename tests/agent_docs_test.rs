@@ -210,7 +210,7 @@ fn pilot8_sheets_are_executed_budgeted_and_state_the_verify_rule() {
         let text = fs::read_to_string(pilot8_dir().join(name)).unwrap();
         assert!(text.len() <= budget, "{name} is {} bytes; ratchet is {budget}", text.len());
         assert!(all.iter().any(|b| b.file.ends_with(name) && b.kind == "windjammer"), "{name} carries an executed idiom block");
-        for needle in ["Box<E>", "Box<dyn Sh>", "process::exit", ".collect()", ".to_string()", "let mut", "exit status: N", "no redirects, no chains", "--stdin-file"] {
+        for needle in ["Box<E>", "Box<dyn Sh>", "process::exit", ".collect()", ".to_string()", "let mut", "exit status: N", "no redirects, no chains", "--stdin-file", "space followed by `=`"] {
             assert!(text.contains(needle), "{name} must show `{needle}`");
         }
         assert!(!text.contains("until it exits 0"), "{name}: `--verify` exits 0 for a program that exits 1 on purpose, so \"until it exits 0\" is wrong");
@@ -239,6 +239,11 @@ fn denied_shape_in(text: &str) -> Option<String> {
                 if let Some(s) = DENIED_SHAPES.iter().find(|s| code.contains(**s)) {
                     return Some(format!("`{code}` contains {s}"));
                 }
+                // the Bash safety check refuses a space followed by `=` and a non-space, quoted or not (measured, pilot 8)
+                let b = code.as_bytes();
+                if b.windows(3).any(|w| w[0] == b' ' && w[1] == b'=' && !w[2].is_ascii_whitespace()) {
+                    return Some(format!("`{code}` has a space followed by `=`"));
+                }
             }
             rest = &rest[i + j + 2..];
         }
@@ -263,6 +268,10 @@ fn agent_sheets_teach_no_denied_shell_shape() {
     assert!(denied_shape_in("- run `wj run --verify m.wj`").is_none());
     assert!(denied_shape_in("- run `wj run --verify --stdin-file in.txt m.wj`").is_none());
     assert!(denied_shape_in("- then `./build/main`").is_some());
+    assert!(denied_shape_in("- `printf 'set A2 =A1*3' > in.txt`").is_some(), "space then = then non-space");
+    assert!(denied_shape_in("- `wj run --verify m.wj 'a =SUM(b)'`").is_some());
+    assert!(denied_shape_in("- `wj run m.wj 'A2=A1*3'`").is_none(), "no space before =");
+    assert!(denied_shape_in("- `wj run m.wj 'x = y'`").is_none(), "a space after = is allowed");
     assert!(denied_shape_in("- `printf 'a' | wj run m.wj`").is_some());
 }
 

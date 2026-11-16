@@ -48,7 +48,7 @@ allow-list refuses. Denials per arm are recorded; any recurring denial is a tool
 | idioms program (split+collect, exit status, trait objects, recursive enum, owned text, mutating through `self`), replaces the old example | +905 | +283 |
 | one command / no redirects / exit status line, `--stdin-file`, `run:` hint | +300 | +94 |
 | style (`match`, tail expression, no let per sub-expression) and the already-exists helpers (+ 1 executed program) | +670 | +209 |
-| total U8 (sheet_u8.md 3658 B vs 1683 B) | +1975 | +617 (+117%) |
+| total U8 (sheet_u8.md 3698 B vs 1683 B) | +2015 | +630 (+120%) |
 
 The size is the cost of the experiment, not a proposal: the default sheet is unchanged and its budget stays. If U8 wins, the
 block is rewritten for brevity before it ships (candidates: drop the helper list the model already knows).

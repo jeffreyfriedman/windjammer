@@ -141,7 +141,7 @@ def head(lang):
 
 # `wj run|check|build|test` in agent mode (WJ_AGENT=1, ADR-0037): one merged, bounded stream that ends with `exit status: N`
 AGENT_MODE_TEXT = (" One command, no redirects, no chains: `wj` output already includes stderr, is bounded, and ends with a line "
-                   "`exit status: N`, so do not use `2>&1`, pipes, `&&`, `;`, `$?` or `${PIPESTATUS}` (they are refused).")
+                   "`exit status: N`, so do not use `2>&1`, pipes, `&&`, `;`, `$?` or `${PIPESTATUS}` (they are refused). Never write a space followed by `=` in a Bash command (refused even inside quotes): write multi-line input with the Write tool and pass it with `--stdin-file`.")
 
 
 def head_agent(lang):
@@ -152,7 +152,7 @@ def head_agent(lang):
 
 def prompt(task_id, arm):
     lang = ARMS[arm]["lang"]
-    return (head_agent(lang) if ARMS[arm].get("agent_mode") else head(lang)) + LOOP_TEXT[ARMS[arm]["loop"]] + AGENT_MODE_TEXT * bool(ARMS[arm].get("agent_mode")) + "\n\n" + T.render_prompt(task_id, lang)
+    return (head_agent(lang) if ARMS[arm].get("agent_mode") else head(lang)) + LOOP_TEXT[ARMS[arm]["loop"]] + AGENT_MODE_TEXT * bool(ARMS[arm].get("agent_mode")) + "\n\n" + T.render_prompt(task_id, lang, bool(ARMS[arm].get("agent_mode")))
 
 
 def _bash(arm):

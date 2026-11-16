@@ -12,7 +12,7 @@ Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in
 - Printing `Option`/`Result`/`Vec` needs `${x:?}`. Sort `HashMap` keys before printing.
 - Rust crates: add `strsim = "0.11"` under `[dependencies]` in `wj.toml`, call `strsim::levenshtein(a, b)`; `wj rust-surface strsim` lists what is callable.
 - One command, no redirects, no chains (`2>&1`, `|`, `&&`, `;`, `$?`, `${PIPESTATUS}`): the tool already merges stderr and prints the exit status (last line `exit status: N`).
-- Input: write it to a file with the Write tool, pass `--stdin-file in.txt` (never `printf`, `$()` or a heredoc; a `printf` argument starting with `=` is refused). `wj build` prints `run: ...`; there is no `./build/main`.
+- Input: write it to a file with the Write tool, pass `--stdin-file in.txt` (never `printf`, `$()` or a heredoc). Never write a space followed by `=` in a Bash command: it is refused, even inside quotes. `wj build` prints `run: ...`; there is no `./build/main`.
 - Style: dispatch with `match` on strings and enums, not if-chains; the last expression is the value (no `return`); no `let` per sub-expression.
 - Already exists, never hand-roll: `x.abs()`, `a.min(b)`, `a.max(b)`, `s.contains("t")`, `s.parse::<int>()`, `c.is_alphabetic()`, `c.is_ascii_digit()`, `[0; n]`.
 - Unsure? `wj docs <terms>` searches the full reference, stdlib and verified examples; `wj explain <CODE>` explains an error code.
