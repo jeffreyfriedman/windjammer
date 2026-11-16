@@ -46,7 +46,14 @@ pub fn render_agent(d: &Diagnostic) -> String {
         out.push_str(&format!(" | fix{}: {}", if auto { "(auto: wj check --fix)" } else { "" }, f.description));
         if let [e] = f.edits.as_slice() {
             if !e.replacement.contains('\n') && e.replacement.len() <= 80 {
-                out.push_str(&format!(" => `{}`", e.replacement));
+                if e.span.byte_start == e.span.byte_end && !e.replacement.is_empty() {
+                    // an insertion says where: `mut ` before the name is not obvious from the bare replacement
+                    out.push_str(&format!(" => insert `{}` at {}:{}", e.replacement, e.span.line_start, e.span.col_start));
+                } else if e.replacement.is_empty() {
+                    out.push_str(&format!(" => delete {}:{}-{}:{}", e.span.line_start, e.span.col_start, e.span.line_end, e.span.col_end));
+                } else {
+                    out.push_str(&format!(" => `{}`", e.replacement));
+                }
             }
         }
     }

@@ -131,7 +131,7 @@ def analyse_invocations(log, lang="wj"):
 def violations(arm, inv):
     """Calls using the other arm's loop commands. D may build; native baselines have no modes."""
     loop = A.ARMS[arm]["loop"]
-    if loop.startswith("native") or loop == "verify-one-command":
+    if loop.startswith("native") or loop in ("verify-one-command", "verify-ok"):
         return 0
     if loop == "interpreted-plus-build":
         return sum(1 for r in inv if r["verb"] in S.VERIFY_VERBS and r["mode"] == "compiled" and r["verb"] != "build")

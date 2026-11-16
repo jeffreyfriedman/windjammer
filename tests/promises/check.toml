@@ -221,3 +221,36 @@ files = { "m.wj" = "fn main() {\n    let d = 4\n    println(\"$${d}.50\")\n}\n" 
 args = ["check", "--error-format", "agent", "{w}/m.wj"]
 exit = 0
 output_has = ["warning W0017", "| fix: replace `$${` with `\\$${`"]
+
+[[case]]
+name = "check reports `mut self` as one coded WJ0011 with a machine-applicable fix"
+polarity = "negative"
+files = { "m.wj" = "struct Acc {\n    total: int,\n}\n\nimpl Acc {\n    fn add(mut self, x: int) {\n        self.total += x\n    }\n}\n\nfn main() {\n    let mut a = Acc { total: 0 }\n    a.add(1)\n    println(\"${a.total}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+exit = 1
+output_has = ["error[WJ0011]", "`mut self` is not Windjammer", "m.wj:6:12", "remove `mut`", "fix (auto-fixable)"]
+output_lacks = ["Parse error", "(at line"]
+
+[[case]]
+name = "check --fix deletes the `mut` of `mut self`"
+polarity = "positive"
+files = { "m.wj" = "struct Acc {\n    total: int,\n}\n\nimpl Acc {\n    fn add(mut self, x: int) {\n        self.total += x\n    }\n}\n\nfn main() {\n    let mut a = Acc { total: 0 }\n    a.add(1)\n    println(\"${a.total}\")\n}\n" }
+args = ["check", "--fix", "{w}/m.wj"]
+file_has = { "m.wj" = "fn add(self, x: int)" }
+output_has = ["1 edit(s) applied"]
+
+[[case]]
+name = "check --error-format agent shows the `mut self` fix on one line"
+polarity = "negative"
+files = { "m.wj" = "struct Acc {\n    total: int,\n}\n\nimpl Acc {\n    fn add(mut self, x: int) {\n        self.total += x\n    }\n}\n\nfn main() {\n    let mut a = Acc { total: 0 }\n    a.add(1)\n    println(\"${a.total}\")\n}\n" }
+args = ["check", "--error-format", "agent", "{w}/m.wj"]
+exit = 1
+output_has = ["m.wj:6:12: error WJ0011: `mut self` is not Windjammer", "| fix(auto: wj check --fix): remove `mut` => delete 6:12-6:16"]
+
+[[case]]
+name = "check --error-format agent shows where the WJ0051 `mut` goes"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let cur = 0\n    cur += 1\n    println(\"${cur}\")\n}\n" }
+args = ["check", "--error-format", "agent", "{w}/m.wj"]
+exit = 1
+output_has = ["m.wj:3:5: error WJ0051", "| fix(auto: wj check --fix): declare `cur` as `mut` => insert `mut ` at 2:9"]

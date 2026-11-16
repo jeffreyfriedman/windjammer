@@ -80,7 +80,9 @@ get:
 
 - `--verify` interprets, then builds the program and runs the compiled version too, and compares the two. The interpreted
   output streams as the program prints; the comparison comes at the end, on stderr. Standard input is read once and given
-  to both runs.
+  to both runs. When the two runs agree, `--verify` prints `wj verify: OK, ...` (naming the program's own exit status) and
+  exits 0, whatever that status is: a correct program that exits 1 on purpose verifies. A difference or a failed build exits
+  non-zero.
 - `--compiled` builds and runs the compiled program. A compiled run prints only your program's output and real
   diagnostics: the build's own progress lines stay out of the way.
 - `--error-format agent` (or `json`) changes how problems are reported, for tools that read them.
@@ -90,7 +92,7 @@ $ printf 'fn main() {\n    println("one")\n    println("two")\n}\n' > v.wj
 $ wj run --verify v.wj < /dev/null
 one
 two
-wj verify: compiled build OK; the compiled run matches
+wj verify: OK, the compiled run matches the interpreted run (stdout 8 bytes, program exit status 0)
 ```
 
 ### One line per problem, for programs that read them
@@ -103,6 +105,12 @@ $ printf 'fn main() {\n    let price = 5\n    println("cost: $${price}")\n}\n' >
 $ wj check --error-format agent cost.wj
 cost.wj:3:20: warning W0017
 ```
+
+In agent mode (`--error-format agent`, `WJ_ERROR_FORMAT=agent`, or `WJ_AGENT=1`) `wj run`, `wj check`, `wj build` and
+`wj test` also put stdout and stderr in one stream, in the order they were written, keep it to 160 lines (the first half and
+the last half, with a marker saying how much was left out; `WJ_MAX_OUTPUT=N` changes the bound, `0` lifts it), and end with
+`exit status: N`. Stderr is already included and the status is stated, so there is no need for redirects, pipes, `$?` or
+`${PIPESTATUS}`, which agent harnesses usually refuse. Without agent mode nothing changes. `wj run --stdin-file FILE` reads standard input from a file (any mode), so input needs no pipe or quoting; in agent mode a successful `wj build FILE` ends with `run: wj run --compiled FILE`.
 
 See [What it costs agents](../showcase/agent-cost.md) for the measurements behind these choices.
 

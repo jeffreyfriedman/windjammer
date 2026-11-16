@@ -263,3 +263,12 @@ polarity = "negative"
 args = ["build", "{w}/nope.wj", "--no-cargo", "--unchecked-arithmetic", "-o", "{w}/out"]
 output_has = ["path not found"]
 output_lacks = ["Success"]
+
+[[case]]
+name = "build reports `mut self` in the same shape as check, with its fix"
+polarity = "negative"
+files = { "m.wj" = "struct Acc {\n    total: int,\n}\n\nimpl Acc {\n    fn add(mut self, x: int) {\n        self.total += x\n    }\n}\n\nfn main() {\n    let mut a = Acc { total: 0 }\n    a.add(1)\n    println(\"${a.total}\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["error[WJ0011]", "`mut self` is not Windjammer", "m.wj:6:12", "fix (auto-fixable): remove `mut`"]
+output_lacks = ["Parse error"]

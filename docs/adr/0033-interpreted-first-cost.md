@@ -245,8 +245,11 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
   given to both runs). No grant is involved in such a run. Otherwise it reports the build's verdict:
   `wj verify: compiled build OK; not run a second time (fs.write)`.
 - Everything it says is on stderr, prefixed `wj verify:`. Exit status: the interpreted program's when that is
-  non-zero; otherwise 1 when the build fails (`the interpreter ran the program, but the compiled build failed ...`) or
-  the compiled run differs (first differing line, both exit statuses, the contract's documented differences), else 0.
+  non-zero and the runs were not compared; otherwise 1 when the build fails (`the interpreter ran the program, but the
+  compiled build failed ...`) or the compiled run differs (first differing line, both exit statuses, the contract's
+  documented differences). When the runs agree it prints `wj verify: OK, the compiled run matches the interpreted run
+  (stdout N bytes, program exit status C)` and exits 0 whatever C is (pilot 7: 44% of recorded "failing" runs were a
+  correct program exiting 1 on purpose).
   A program `wj check` refuses is refused once, and nothing is built.
 - It conflicts with `--compiled`, `--release`, `--watch`, `--hot`, `--record` and `--replay`, and takes only the Rust
   target. Gates: `tests/run_verify_test.rs` (stdin replay and exit status, a file write built but not run again, a

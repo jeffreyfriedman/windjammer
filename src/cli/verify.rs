@@ -8,7 +8,9 @@
 //!   beyond the console and a read of `/dev/stdin`, and stdin was captured: running it again then repeats no effect,
 //!   and no grant is involved. Otherwise the build's verdict is reported and the program is not run again.
 //! - Everything `--verify` says goes to stderr, prefixed `wj verify:`. Exit status: the interpreted program's when it
-//!   is non-zero; otherwise 1 when the build fails or the compiled run differs, else 0.
+//!   is non-zero and the runs were not compared; otherwise 1 when the build fails or the compiled run differs. When both runs
+//!   agree (same stdout, same exit status) the verdict is `wj verify: OK, ...` and the exit status is 0, whatever
+//!   the program's own exit status is: the line reports it (`program exit status N`).
 
 use crate::ir::effect_facts::EffectKind;
 use std::io::{IsTerminal, Read, Write};
@@ -67,7 +69,7 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     let stdin: Option<Vec<u8>> = if std::io::stdin().is_terminal() { None } else { Some(capture_stdin(STDIN_FIRST_BYTE_WAIT)) };
     let Ok(exe) = std::env::current_exe() else { return 1 };
     let mut interp = Command::new(&exe);
-    interp.args(["run", "--interpret"]);
+    interp.args(["run", "--interpret"]).env("WJ_AGENT_CHILD", "1"); // the parent merges and bounds output once (cli::agent_wrap)
     if no_lint {
         interp.arg("--no-lint");
     }
@@ -135,8 +137,9 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     let code = out.status.code().unwrap_or(1);
     let (a, b) = (String::from_utf8_lossy(&interp_out.stdout), String::from_utf8_lossy(&out.stdout));
     if a == b && code == interp_code {
-        say(&format!("compiled build OK; the compiled run matches (stdout {} bytes, exit status {code})", out.stdout.len()));
-        return interp_code;
+        // the two runs agree: that is the verdict, whatever the program's own exit status is (a correct program may exit 1 on purpose)
+        say(&format!("OK, the compiled run matches the interpreted run (stdout {} bytes, program exit status {code})", out.stdout.len()));
+        return 0;
     }
     if code != interp_code {
         say(&format!("the compiled run exited with status {code}, the interpreted run with {interp_code}"));
