@@ -271,17 +271,11 @@ fn a_copied_compiler_accepts_the_entries_the_original_wrote() {
     assert_eq!(entry, std::fs::read(meta_of(&p, "chain.wj")).unwrap(), "the copy rewrote the peer's entry");
 }
 
-/// Expected-failure ledger. A REACHED peer (the probe does `use chain`) that declares a free `fn len` still turns the
-/// probe's `cur.len() > 0` into `0_i64`: a method call resolving to a same-named free function. That is a resolution
-/// bug, not a cache bug (repro: transfer branch `repro-bare-name-method`; owner: the sig-keys work). The case is
-/// pinned here only so this gate notices the fix: when the reached case emits `0`, remove it from this ledger and
-/// make `known_open_reached_peer_case_is_still_open` assert the clean output instead. Never extend the ledger to hide
-/// a cache leak.
-const KNOWN_OPEN: &[&str] = &["reached peer declaring a same-named free function: cur.len() > 0_i64 (expected 0)"];
-
+/// A REACHED peer (the probe does `use chain`) that declares a free `fn len`: the probe's `cur.len() > 0` is a method
+/// call and never resolves to that free function, so the literal stays `0` (it was `0_i64` while the bare-name method
+/// bug was open; the expected-failure ledger that pinned it is closed).
 #[test]
-fn known_open_reached_peer_case_is_still_open() {
-    assert_eq!(KNOWN_OPEN.len(), 1, "the ledger lists exactly the reached-peer case");
+fn reached_peer_free_function_is_not_the_probe_method() {
     let d = tempfile::tempdir().unwrap();
     let p = project(&d.path().join("p"));
     let cache = d.path().join("cache");
@@ -289,9 +283,5 @@ fn known_open_reached_peer_case_is_still_open() {
     build(&p, "src/chain.wj", &cache);
     build(&p, "src/layout.wj", &cache);
     let rust: String = emitted(&p).into_values().collect();
-    assert!(
-        rust.contains("cur.len() > 0_i64"),
-        "the ledgered case now emits `cur.len() > 0`: the bare-name method bug is fixed; remove it from KNOWN_OPEN \
-         and assert the clean output here"
-    );
+    assert!(rust.contains("cur.len() > 0") && !rust.contains("cur.len() > 0_i64"), "a method call resolved to the reached peer's free fn len:\n{rust}");
 }
