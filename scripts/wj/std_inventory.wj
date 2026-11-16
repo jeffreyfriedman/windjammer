@@ -5,6 +5,7 @@
 //
 // Run from the repository root. The ecosystem column is filled from --eco, else from $WJ_ECOSYSTEM, else left "-".
 // --write stores the table as docs/generated/std_removal_inventory.tsv (the shrink-only migration ledger).
+// --widths counts the integer-width casts behind ADR-0039 decision B, by kind, and exits.
 // --surface prints the canonical surface as a Markdown table and exits.
 // --check fails (exit 1) when any count rose above that ledger or a known name is neither canonical nor removed.
 // Counts are lexical (`git grep -o -P` over tracked files): a match inside a string or a comment counts. Rust test
@@ -122,7 +123,13 @@ fn count(root: string, pattern: string, specs: Vec<string>) -> int {
         args.push(s)
     }
     match process.run_with_args("git", args) {
-        Ok(out) => out.lines().count() as int,
+        Ok(out) => {
+            let mut n = 0
+            for _ in out.lines() {
+                n = n + 1
+            }
+            n
+        },
         Err(e) => {
             if e.trim() != "" {
                 stderr.println("std_inventory: git grep failed for /${pattern}/: ${e.trim()}")
@@ -231,6 +238,7 @@ fn main() {
     let mut write = false
     let mut check = false
     let mut surface = false
+    let mut widths = false
     let mut i = 1
     while i < args.len() {
         if args[i] == "--eco" && i + 1 < args.len() {
@@ -238,6 +246,8 @@ fn main() {
             i = i + 1
         } else if args[i] == "--write" {
             write = true
+        } else if args[i] == "--widths" {
+            widths = true
         } else if args[i] == "--surface" {
             surface = true
         } else if args[i] == "--check" {
@@ -255,6 +265,10 @@ fn main() {
     }
     if surface {
         print_surface(text)
+        return
+    }
+    if widths {
+        print_widths(areas(eco))
         return
     }
     let rs = removed_rows(text)
@@ -349,5 +363,39 @@ fn print_surface(text: string) {
         let sig = field(line, "sig").replace("|", "\\|")
         let note = field(line, "summary").replace("|", "\\|")
         println("| ${field(line, "type")} | `${field(line, "name").replace("|", "\\|")}` | `${sig}` | ${note} |")
+    }
+}
+
+// Integer-width evidence for decision B: which casts each option makes unnecessary.
+fn print_widths(cols: Vec<Area>) {
+    let kinds = [
+        ("W1 length cast to usize (a no-op today)", "\\.(len|count|capacity)\\(\\)\\s+as\\s+usize\\b"),
+        ("W2 length cast to another integer (int, i64, i32, u32, ...)", "\\.(len|count|capacity)\\(\\)\\s+as\\s+(int|i64|i32|u32|u64|isize)\\b"),
+        ("W3 cast to usize inside an index or slice xs[..]", "\\[[^\\[\\]\\n]*\\bas\\s+usize\\b[^\\[\\]\\n]*\\]"),
+        ("W4 cast to usize in a std length or position argument", "\\.(truncate|resize|insert|remove|swap|take|skip|step_by|split_at|split_off|repeat|with_capacity|nth|get|get_mut|swap_remove|rotate_left|rotate_right|drain)\\([^()\\n]*\\bas\\s+usize\\b"),
+        ("W5 every cast to usize", "\\bas\\s+usize\\b"),
+        ("W6 every cast to int or i64", "\\bas\\s+(int|i64)\\b"),
+        ("W7 a let annotated int whose value calls len()/count()", "let\\s+(mut\\s+)?\\w+\\s*:\\s*(int|i64)\\s*=[^\\n]*\\.(len|count)\\(\\)"),
+        ("W8 a let annotated usize", "let\\s+(mut\\s+)?\\w+\\s*:\\s*usize\\b"),
+    ]
+    let mut head = "| kind |"
+    let mut rule = "|---|"
+    for a in cols {
+        head += " ${a.name} |"
+        rule += "---:|"
+    }
+    println(head + " code total |")
+    println(rule + "---:|")
+    for (label, pattern) in kinds {
+        let mut line = "| ${label} |"
+        let mut total = 0
+        for a in cols {
+            let n = count(a.root, pattern, a.specs)
+            line += " ${cell(n)} |"
+            if n > 0 && a.name != "docs" && a.name != "eco_docs" {
+                total = total + n
+            }
+        }
+        println(line + " ${total} |")
     }
 }

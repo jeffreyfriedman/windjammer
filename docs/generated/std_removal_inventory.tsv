@@ -6,14 +6,11 @@ R004	error	auto	25	14	4	0	0	1	429	1	1	45	String / str / &str type
 R005	error	auto	0	9	2	0	3	0	41	0	0	14	String::new() / String::from(x)
 R006	error	auto	0	54	0	4	0	1	46	1	0	60	"lit".to_string()
 R007	error	auto	131	329	24	14	5	21	292	217	1	741	Option<T> in a type
-R008	error	auto	4	696	6	116	41	179	45	846	5	1888	Vec::new()
+R008	error	auto	4	696	6	116	41	184	45	846	5	1893	Vec::new()
 R010	error	auto	1	68	7	3	8	1	117	0	0	88	.iter() / .iter_mut() / .into_iter()
-R011	error	typed	11	119	47	110	114	12	101	15	0	428	.collect() / .collect::<T>()
 R012	error	auto	0	11	23	7	2	0	18	0	0	43	.cloned() / .copied()
-R013	error	auto	0	24	8	2	0	2	19	1	0	37	.count() (no arguments)
-R014	error	auto	0	13	4	0	0	1	6	0	0	18	.rev()
 R015	error	manual	0	1	0	0	0	0	1	0	0	1	.for_each(f)
-R016	error	auto	0	0	0	0	0	0	0	0	0	0	.peekable() / .by_ref() / .fuse()
+R016	delete	manual	0	0	0	0	0	0	0	0	0	0	.by_ref() / .fuse()
 R017	delete	auto	0	4	8	0	0	0	10	0	0	12	.sum::<T>() / .product::<T>()
 R018	delete	typed	0	1	0	0	7	0	3	0	0	8	.nth(i) on a list
 R019	delete	auto	0	0	0	0	0	0	1	0	0	0	.frequencies()
@@ -21,8 +18,9 @@ R020	delete	auto	0	2	0	0	0	0	2	0	0	2	.each_slice(n)
 R021	delete	auto	0	2	0	0	0	0	2	0	0	2	.partition_by(p)
 R022	delete	manual	0	8	0	0	0	0	4	0	0	8	.zip_with(ys, f)
 R023	delete	manual	0	0	0	0	0	0	2	0	0	0	.find_map(f) / .reduce(f) / .inspect(f) / .rposition(p) / .next_back()
-R030	delete	auto	10	87	6	30	83	11	33	94	1	321	.len() as int / .count() as int (any integer cast of a length)
-R031	delete	typed	0	54	0	80	408	31	28	203	3	776	x as usize in an index or a length argument
+R024	delete	auto	0	1	0	0	0	0	2	0	0	1	.to_list() (enumerable)
+R030	pending	auto	10	87	6	30	83	11	33	94	1	321	.len() as int / .count() as int (any integer cast of a length)
+R031	pending	typed	0	54	0	80	408	31	28	203	3	776	x as usize in an index or a length argument
 R040	error	typed	0	106	17	0	28	0	115	163	15	314	.unwrap()
 R041	error	auto	2	168	30	187	614	118	133	88	2	1207	.unwrap_or(d)
 R042	error	typed	0	0	0	0	0	0	3	0	0	0	.unwrap_or_else(f)
@@ -36,7 +34,7 @@ R050	error	typed	0	29	1	0	5	0	20	0	0	35	s.push_str(t) / s.push(c) on a string
 R051	error	typed	6	1	0	1	2	0	17	0	2	10	s.to_string() / .to_owned() / .as_str() / .into_string() on a string
 R052	delete	auto	5	6	0	1	1	9	5	5	0	27	s.as_bytes() / .into_bytes()
 R053	delete	auto	0	227	2	0	0	9	2	236	0	474	s.substring(a, b) / s.slice(a, b) / s.get(a..b) / s.char_count()
-R054	delete	auto	0	0	0	0	0	0	0	0	0	0	s.split_ascii_whitespace() / .split_terminator(p) / .rsplit(p) / .rsplitn(n, p)
+R054	delete	auto	0	0	0	0	0	0	0	0	0	0	s.split_ascii_whitespace() / .split_terminator(p) / .rsplitn(n, p)
 R055	delete	manual	0	0	0	0	0	0	0	0	0	0	s.insert(i, c) / .insert_str(i, t) / .remove(i) on a string
 R056	delete	manual	0	2	0	0	0	0	2	0	0	2	s.capacity() / .reserve(n) / .is_char_boundary(i)
 R057	error	auto	0	7	2	0	11	0	1	0	0	20	s.to_ascii_uppercase() / .to_ascii_lowercase() / .eq_ignore_ascii_case(t)

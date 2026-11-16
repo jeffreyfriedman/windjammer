@@ -24,7 +24,9 @@
 #            ranges, Iter), Vec, VecDeque, Iter, string, char, int (every integer type), float (f32, f64), Option,
 #            Result, HashMap, BTreeMap, HashSet, BTreeSet, Entry
 #   name     method name (as written after the dot), or the intrinsic / literal form
-#   sig      the signature as a reader writes the call; `int` is the default integer type (ADR-0039 decision B)
+#   sig      the signature as a reader writes the call. Lengths, counts and positions are written `int`, as the agent
+#            index documents them today; their type is ADR-0039 decision B, which the owner has NOT decided (under B2/B3
+#            they are `usize` when compiled)
 #   summary  one line for `wj docs`
 #   kind     method (default) | enumerable (src/stdlib_surface/enumerable.rs) | operator | literal | intrinsic
 #   lower    the Rust core method it lowers to (std/rust_core.wji), when the name differs or the lowering adapts
@@ -36,7 +38,8 @@
 #   pattern      PCRE matched against source text by the inventory (approximate: also matches inside strings/comments)
 #   replacement  the canonical form
 #   action       error (WJ0180 with this hint, a catalog example and an oracle case) | delete (absent; the generic
-#                unknown-method error still quotes this row's replacement as its hint)
+#                unknown-method error still quotes this row's replacement as its hint) | pending (counted, not removed:
+#                waits for an owner decision)
 #   fix          auto (lexical, always safe) | typed (needs the checker's receiver type) | manual (reported, not rewritten)
 #   note         optional: behaviour change or reason
 
@@ -57,40 +60,41 @@ methods = [
   { type = "intrinsic", name = "unreachable", sig = "unreachable(msg: string = \"\")", summary = "panic: this path cannot run", kind = "intrinsic" },
 
   # ---- literals and operators ----
-  { type = "literal", name = "[a, b]", sig = "[a, b, c]", summary = "a list (Vec<T>); `[]` is the empty list", kind = "literal" },
+  { type = "literal", name = "[a, b]", sig = "[a, b, c]", summary = "a list (Vec<T>); [] is the empty list", kind = "literal" },
   { type = "literal", name = "[x; n]", sig = "[x; n: int]", summary = "a list of n copies of x, e.g. [0; 10]", kind = "literal" },
   { type = "literal", name = "{k: v}", sig = "{k1: v1, k2: v2}", summary = "a map literal (HashMap<K, V>); the empty map is HashMap::new()", kind = "literal" },
-  { type = "literal", name = "a..b", sig = "a..b, a..=b", summary = "an integer range; `for i in 0..n`; a sequence (every `seq` method applies)", kind = "literal" },
+  { type = "literal", name = "a..b", sig = "a..b, a..=b", summary = "an integer range: for i in 0..n; (0..n).map(f) is an Iter", kind = "literal" },
   { type = "operator", name = "??", sig = "x ?? default", summary = "the value inside an Option (Some) or Result (Ok), else default; default is evaluated only when needed", kind = "operator" },
   { type = "operator", name = "?", sig = "expr?", summary = "return early with the None / Err from the enclosing function (main may return Result<(), E>)", kind = "operator" },
   { type = "operator", name = "[i]", sig = "xs[i: int], m[k], s[a..b]", summary = "index a list (panics out of range), a map (panics when the key is missing), slice a list or string", kind = "operator", aka = "slice_from" },
   { type = "operator", name = "+=", sig = "s += t", summary = "append a string or a char to a `let mut` string; also numbers", kind = "operator" },
 
   # ---- every sequence (Vec, VecDeque, HashSet, HashMap pairs, ranges, Iter) ----
-  # Adapters on a Vec, set, map or range return a Vec; on an Iter (from `.lazy()`) they return an Iter.
-  # A chain of adapters runs element by element (fused) and allocates once, at the end of the chain.
-  { type = "seq", name = "len", sig = "xs.len() -> int", summary = "number of elements (the one size method; there is no count())" },
+  # Adapters (map, filter, ...) start at the collection and return a lazy Iter; `.collect()` is the one way to get a list.
+  # Consumers (len on a collection, count, sum, fold, any, find, collect, ...) end a chain. An Iter used where a list is
+  # needed (indexed, sliced, len, contains, passed or returned as a Vec) is WJ0035 with a machine-applicable fix (ADR-0039 H).
+  { type = "seq", name = "len", sig = "xs.len() -> int", summary = "number of elements of a collection (an Iter has count())" },
   { type = "seq", name = "is_empty", sig = "xs.is_empty() -> bool", summary = "true if no elements" },
   { type = "seq", name = "contains", sig = "xs.contains(x) -> bool", summary = "membership test, e.g. [1, 2].contains(2)" },
-  { type = "seq", name = "map", sig = "xs.map(|x| expr) -> Vec<U>", summary = "transform each element" },
-  { type = "seq", name = "filter", sig = "xs.filter(|x| cond) -> Vec<T>", summary = "keep elements where cond is true" },
-  { type = "seq", name = "filter_map", sig = "xs.filter_map(|x| option) -> Vec<U>", summary = "map and keep the Some values" },
-  { type = "seq", name = "flat_map", sig = "xs.flat_map(|x| list) -> Vec<U>", summary = "map then flatten" },
-  { type = "seq", name = "flatten", sig = "xss.flatten() -> Vec<T>", summary = "join a list of lists (or drop the None of a list of options)" },
-  { type = "seq", name = "try_map", sig = "xs.try_map(|x| result) -> Result<Vec<U>, E>", summary = "map with a fallible step; the first Err (or None) wins" },
-  { type = "seq", name = "enumerate", sig = "xs.enumerate() -> Vec<(int, T)>", summary = "pairs (index, element); `for (i, x) in xs.enumerate()`" },
-  { type = "seq", name = "zip", sig = "xs.zip(ys) -> Vec<(T, U)>", summary = "pairs of elements, up to the shorter length" },
-  { type = "seq", name = "chain", sig = "xs.chain(ys) -> Vec<T>", summary = "concatenate" },
-  { type = "seq", name = "take", sig = "xs.take(n: int) -> Vec<T>", summary = "first n elements" },
-  { type = "seq", name = "skip", sig = "xs.skip(n: int) -> Vec<T>", summary = "all but the first n elements" },
-  { type = "seq", name = "take_while", sig = "xs.take_while(|x| cond) -> Vec<T>", summary = "leading elements while cond holds" },
-  { type = "seq", name = "skip_while", sig = "xs.skip_while(|x| cond) -> Vec<T>", summary = "drop leading elements while cond holds" },
-  { type = "seq", name = "step_by", sig = "xs.step_by(n: int) -> Vec<T>", summary = "every nth element" },
-  { type = "seq", name = "scan", sig = "xs.scan(init, |acc, x| expr) -> Vec<A>", summary = "running accumulation, one result per element" },
-  { type = "seq", name = "reversed", sig = "xs.reversed() -> Vec<T>", summary = "a reversed copy (in place: `reverse()`)", lower = "rev" },
-  { type = "seq", name = "sorted", sig = "xs.sorted() -> Vec<T>", summary = "a sorted copy (in place: `sort()`)", kind = "enumerable" },
+  { type = "seq", name = "count", sig = "it.count() -> int", summary = "number of elements an Iter yields (consumes it), e.g. s.split(\",\").count()" },
+  { type = "seq", name = "map", sig = "xs.map(|x| expr) -> Iter<U>", summary = "transform each element" },
+  { type = "seq", name = "filter", sig = "xs.filter(|x| cond) -> Iter<T>", summary = "keep elements where cond is true" },
+  { type = "seq", name = "filter_map", sig = "xs.filter_map(|x| option) -> Iter<U>", summary = "map and keep the Some values" },
+  { type = "seq", name = "flat_map", sig = "xs.flat_map(|x| list) -> Iter<U>", summary = "map then flatten" },
+  { type = "seq", name = "flatten", sig = "xss.flatten() -> Iter<T>", summary = "join a list of lists (or drop the None of a list of options)" },
+  { type = "seq", name = "enumerate", sig = "xs.enumerate() -> Iter<(int, T)>", summary = "pairs (index, element); `for (i, x) in xs.enumerate()`" },
+  { type = "seq", name = "zip", sig = "xs.zip(ys) -> Iter<(T, U)>", summary = "pairs of elements, up to the shorter length" },
+  { type = "seq", name = "chain", sig = "xs.chain(ys) -> Iter<T>", summary = "concatenate" },
+  { type = "seq", name = "take", sig = "xs.take(n: int) -> Iter<T>", summary = "first n elements" },
+  { type = "seq", name = "skip", sig = "xs.skip(n: int) -> Iter<T>", summary = "all but the first n elements" },
+  { type = "seq", name = "take_while", sig = "xs.take_while(|x| cond) -> Iter<T>", summary = "leading elements while cond holds" },
+  { type = "seq", name = "skip_while", sig = "xs.skip_while(|x| cond) -> Iter<T>", summary = "drop leading elements while cond holds" },
+  { type = "seq", name = "step_by", sig = "xs.step_by(n: int) -> Iter<T>", summary = "every nth element" },
+  { type = "seq", name = "scan", sig = "xs.scan(init, |acc, x| expr) -> Iter<A>", summary = "running accumulation, one result per element" },
+  { type = "seq", name = "rev", sig = "xs.rev() -> Iter<T>", summary = "reverse order (in place on a list: reverse())" },
+  { type = "seq", name = "sorted", sig = "xs.sorted() -> Vec<T>", summary = "a sorted list (in place: sort())", kind = "enumerable" },
   { type = "seq", name = "sorted_by", sig = "xs.sorted_by(|a, b| a.cmp(b)) -> Vec<T>", summary = "a copy sorted with a comparator", kind = "enumerable" },
-  { type = "seq", name = "sorted_by_key", sig = "xs.sorted_by_key(|x| key) -> Vec<T>", summary = "a copy sorted by key (stable)", kind = "enumerable" },
+  { type = "seq", name = "sorted_by_key", sig = "xs.sorted_by_key(|x| key) -> Vec<T>", summary = "a sorted list by key (stable)", kind = "enumerable" },
   { type = "seq", name = "sorted_by_key_desc", sig = "xs.sorted_by_key_desc(|x| key) -> Vec<T>", summary = "a copy sorted by key, largest first (stable)", kind = "enumerable" },
   { type = "seq", name = "unique", sig = "xs.unique() -> Vec<T>", summary = "first occurrence of each distinct element, in order", kind = "enumerable" },
   { type = "seq", name = "unique_by", sig = "xs.unique_by(|x| key) -> Vec<T>", summary = "first element of each distinct key", kind = "enumerable" },
@@ -104,8 +108,8 @@ methods = [
   { type = "seq", name = "sum", sig = "xs.sum() -> T", summary = "sum of the elements (0 when empty)" },
   { type = "seq", name = "sum_by", sig = "xs.sum_by(|x| n) -> N", summary = "sum of f(x)", kind = "enumerable" },
   { type = "seq", name = "product", sig = "xs.product() -> T", summary = "product of the elements (1 when empty)" },
-  { type = "seq", name = "min", sig = "xs.min() -> T?", summary = "smallest element, None when empty: `xs.min() ?? 0`", lower = "iter().min().cloned()" },
-  { type = "seq", name = "max", sig = "xs.max() -> T?", summary = "largest element, None when empty: `xs.max() ?? 0`", lower = "iter().max().cloned()" },
+  { type = "seq", name = "min", sig = "xs.min() -> T?", summary = "smallest element, None when empty: `xs.min() ?? 0`", lower = "iter().min().cloned() on a list" },
+  { type = "seq", name = "max", sig = "xs.max() -> T?", summary = "largest element, None when empty: `xs.max() ?? 0`", lower = "iter().max().cloned() on a list" },
   { type = "seq", name = "min_by_key", sig = "xs.min_by_key(|x| key) -> T?", summary = "element with the smallest key" },
   { type = "seq", name = "max_by_key", sig = "xs.max_by_key(|x| key) -> T?", summary = "element with the largest key" },
   { type = "seq", name = "min_by", sig = "xs.min_by(|a, b| a.cmp(b)) -> T?", summary = "smallest element by a comparator" },
@@ -117,11 +121,10 @@ methods = [
   { type = "seq", name = "index_of", sig = "xs.index_of(x) -> int?", summary = "index of the first element equal to x", kind = "enumerable" },
   { type = "seq", name = "first", sig = "xs.first() -> T?", summary = "first element" },
   { type = "seq", name = "last", sig = "xs.last() -> T?", summary = "last element" },
-  { type = "seq", name = "join", sig = "xs.join(sep: string) -> string", summary = "join strings or chars, e.g. cs.join(\"\")" },
-  { type = "seq", name = "to_set", sig = "xs.to_set() -> HashSet<T>", summary = "the distinct elements as a set" },
-  { type = "seq", name = "to_map", sig = "pairs.to_map() -> HashMap<K, V>", summary = "a map from (key, value) pairs; a later pair wins" },
-  { type = "seq", name = "to_list", sig = "it.to_list() -> Vec<T>", summary = "materialise an Iter (or copy any sequence) into a list", kind = "enumerable" },
-  { type = "seq", name = "lazy", sig = "xs.lazy() -> Iter<T>", summary = "a lazy, single-pass view: next/peek, infinite ranges, early exit; adapters on it stay lazy" },
+  { type = "seq", name = "join", sig = "xs.join(sep: string) -> string", summary = "join strings with a separator, e.g. words.join(\" \")" },
+  { type = "seq", name = "collect", sig = "it.collect() -> Vec<T>", summary = "gather into a list; the annotated target decides another collection: let s: HashSet<int> = it.collect() (also HashMap from pairs, string from chars or strings, Result<Vec<T>, E> from results)" },
+  { type = "seq", name = "peekable", sig = "it.peekable() -> Iter<T>", summary = "an Iter that can also peek() (tokenizers)" },
+  { type = "seq", name = "nth", sig = "it.nth(i: int) -> T?", summary = "the element at position i of an Iter (on a list: get(i))" },
 
   # ---- Vec (list) ----
   { type = "Vec", name = "push", sig = "xs.push(x)", summary = "append an element", mutates = true },
@@ -140,7 +143,7 @@ methods = [
   { type = "Vec", name = "sort_by", sig = "xs.sort_by(|a, b| a.cmp(b))", summary = "sort with a comparator returning Ordering", mutates = true },
   { type = "Vec", name = "sort_by_key", sig = "xs.sort_by_key(|x| key)", summary = "stable sort by key", mutates = true },
   { type = "Vec", name = "sort_by_key_desc", sig = "xs.sort_by_key_desc(|x| key)", summary = "stable sort by key, largest first", mutates = true, kind = "enumerable" },
-  { type = "Vec", name = "reverse", sig = "xs.reverse()", summary = "reverse in place (a reversed copy: `reversed()`)", mutates = true },
+  { type = "Vec", name = "reverse", sig = "xs.reverse()", summary = "reverse in place (lazily: rev())", mutates = true },
   { type = "Vec", name = "rotate_left", sig = "xs.rotate_left(n: int)", summary = "rotate elements left", mutates = true },
   { type = "Vec", name = "rotate_right", sig = "xs.rotate_right(n: int)", summary = "rotate elements right", mutates = true },
   { type = "Vec", name = "drain", sig = "xs.drain(a..b) -> Vec<T>", summary = "remove a range and return it", mutates = true },
@@ -163,14 +166,14 @@ methods = [
   { type = "VecDeque", name = "pop_front", sig = "q.pop_front() -> T?", summary = "remove from the front (queue order: push + pop_front)", mutates = true },
   { type = "VecDeque", name = "new", sig = "VecDeque::new() -> VecDeque<T>", summary = "an empty double-ended queue" },
 
-  # ---- Iter (only from `.lazy()`) ----
+  # ---- Iter (what adapters, split, lines, chars, keys, values and set operations return) ----
   { type = "Iter", name = "next", sig = "it.next() -> T?", summary = "the next element", mutates = true },
-  { type = "Iter", name = "peek", sig = "it.peek() -> T?", summary = "the next element without consuming it", mutates = true },
+  { type = "Iter", name = "peek", sig = "it.peek() -> T?", summary = "the next element without consuming it (after peekable())", mutates = true },
   { type = "Iter", name = "next_if", sig = "it.next_if(|x| cond) -> T?", summary = "consume the next element only when cond holds", mutates = true },
   { type = "Iter", name = "cycle", sig = "it.cycle() -> Iter<T>", summary = "repeat forever (end the chain with take(n))" },
 
   # ---- string ----
-  { type = "string", name = "len", sig = "s.len() -> int", summary = "length in bytes (characters: s.chars().len())" },
+  { type = "string", name = "len", sig = "s.len() -> int", summary = "length in bytes (characters: s.chars().count())" },
   { type = "string", name = "is_empty", sig = "s.is_empty() -> bool", summary = "true if length is 0" },
   { type = "string", name = "contains", sig = "s.contains(pat) -> bool", summary = "substring (or char) test" },
   { type = "string", name = "starts_with", sig = "s.starts_with(pat) -> bool", summary = "prefix test" },
@@ -187,16 +190,17 @@ methods = [
   { type = "string", name = "trim_end_matches", sig = "s.trim_end_matches(pat) -> string", summary = "strip a suffix repeatedly" },
   { type = "string", name = "strip_prefix", sig = "s.strip_prefix(p) -> string?", summary = "the rest after a prefix, None when absent" },
   { type = "string", name = "strip_suffix", sig = "s.strip_suffix(p) -> string?", summary = "the rest before a suffix, None when absent" },
-  { type = "string", name = "split", sig = "s.split(sep) -> Vec<string>", summary = "the pieces between separators, as a list: parts[0], parts.len() work" },
-  { type = "string", name = "splitn", sig = "s.splitn(n: int, sep) -> Vec<string>", summary = "at most n pieces" },
+  { type = "string", name = "split", sig = "s.split(sep) -> Iter<string>", summary = "the pieces between separators, lazily: for p in s.split(\",\") { .. }; a list: let parts = s.split(\",\").collect()" },
+  { type = "string", name = "splitn", sig = "s.splitn(n: int, sep) -> Iter<string>", summary = "at most n pieces" },
   { type = "string", name = "split_once", sig = "s.split_once(sep) -> (string, string)?", summary = "split at the first separator" },
   { type = "string", name = "rsplit_once", sig = "s.rsplit_once(sep) -> (string, string)?", summary = "split at the last separator" },
-  { type = "string", name = "split_whitespace", sig = "s.split_whitespace() -> Vec<string>", summary = "the words between runs of whitespace" },
-  { type = "string", name = "lines", sig = "s.lines() -> Vec<string>", summary = "the lines, without line endings" },
-  { type = "string", name = "chars", sig = "s.chars() -> Vec<char>", summary = "the characters" },
-  { type = "string", name = "char_indices", sig = "s.char_indices() -> Vec<(int, char)>", summary = "(byte index, char) pairs" },
-  { type = "string", name = "bytes", sig = "s.bytes() -> Vec<u8>", summary = "the UTF-8 bytes" },
-  { type = "string", name = "matches", sig = "s.matches(pat) -> Vec<string>", summary = "the non-overlapping matches" },
+  { type = "string", name = "split_whitespace", sig = "s.split_whitespace() -> Iter<string>", summary = "the words between runs of whitespace" },
+  { type = "string", name = "lines", sig = "s.lines() -> Iter<string>", summary = "the lines, without line endings" },
+  { type = "string", name = "chars", sig = "s.chars() -> Iter<char>", summary = "the characters" },
+  { type = "string", name = "char_indices", sig = "s.char_indices() -> Iter<(int, char)>", summary = "(byte index, char) pairs" },
+  { type = "string", name = "bytes", sig = "s.bytes() -> Iter<u8>", summary = "the UTF-8 bytes" },
+  { type = "string", name = "matches", sig = "s.matches(pat) -> Iter<string>", summary = "the non-overlapping matches" },
+  { type = "string", name = "rsplit", sig = "s.rsplit(sep) -> Iter<string>", summary = "the pieces from the right" },
   { type = "string", name = "to_uppercase", sig = "s.to_uppercase() -> string", summary = "upper-case copy (Unicode)" },
   { type = "string", name = "to_lowercase", sig = "s.to_lowercase() -> string", summary = "lower-case copy (Unicode)" },
   { type = "string", name = "eq_ignore_case", sig = "s.eq_ignore_case(t) -> bool", summary = "case-insensitive equality", lower = "to_lowercase() == t.to_lowercase()" },
@@ -299,8 +303,8 @@ methods = [
   { type = "HashMap", name = "get_mut", sig = "m.get_mut(k) -> V?", summary = "lookup for changing the value in place", mutates = true },
   { type = "HashMap", name = "contains", sig = "m.contains(k) -> bool", summary = "key test (same name as list, set and string)", lower = "contains_key" },
   { type = "HashMap", name = "remove", sig = "m.remove(k) -> V?", summary = "delete an entry, returning its value", mutates = true },
-  { type = "HashMap", name = "keys", sig = "m.keys() -> Vec<K>", summary = "the keys (order unspecified: m.keys().sorted() to print)" },
-  { type = "HashMap", name = "values", sig = "m.values() -> Vec<V>", summary = "the values (order unspecified)" },
+  { type = "HashMap", name = "keys", sig = "m.keys() -> Iter<K>", summary = "the keys (order unspecified: m.keys().sorted() is a sorted list)" },
+  { type = "HashMap", name = "values", sig = "m.values() -> Iter<V>", summary = "the values (order unspecified)" },
   { type = "HashMap", name = "entry", sig = "m.entry(k).or_insert(v)", summary = "the value for k, inserting v first when missing: `*m.entry(w).or_insert(0) += 1`", mutates = true },
   { type = "HashMap", name = "retain", sig = "m.retain(|k, v| keep)", summary = "keep entries where the closure is true", mutates = true },
   { type = "HashMap", name = "extend", sig = "m.extend(other)", summary = "add every entry of another map or pair list", mutates = true },
@@ -311,13 +315,13 @@ methods = [
   { type = "BTreeMap", name = "range", sig = "m.range(a..b) -> Vec<(K, V)>", summary = "the entries with keys in a range, in order" },
 
   # ---- HashSet (BTreeSet: the same, plus first/last) ----
-  { type = "HashSet", name = "new", sig = "HashSet::new() -> HashSet<T>", summary = "an empty set (from a list: xs.to_set())" },
+  { type = "HashSet", name = "new", sig = "HashSet::new() -> HashSet<T>", summary = "an empty set (from a sequence: let s: HashSet<T> = xs.collect())" },
   { type = "HashSet", name = "insert", sig = "s.insert(x) -> bool", summary = "add an element; false when it was present", mutates = true },
   { type = "HashSet", name = "remove", sig = "s.remove(x) -> bool", summary = "delete an element", mutates = true },
-  { type = "HashSet", name = "union", sig = "a.union(b) -> HashSet<T>", summary = "elements in either set" },
-  { type = "HashSet", name = "intersection", sig = "a.intersection(b) -> HashSet<T>", summary = "elements in both sets" },
-  { type = "HashSet", name = "difference", sig = "a.difference(b) -> HashSet<T>", summary = "elements in a but not b" },
-  { type = "HashSet", name = "symmetric_difference", sig = "a.symmetric_difference(b) -> HashSet<T>", summary = "elements in exactly one set" },
+  { type = "HashSet", name = "union", sig = "a.union(b) -> Iter<T>", summary = "elements in either set (a set: .collect() into a HashSet)" },
+  { type = "HashSet", name = "intersection", sig = "a.intersection(b) -> Iter<T>", summary = "elements in both sets" },
+  { type = "HashSet", name = "difference", sig = "a.difference(b) -> Iter<T>", summary = "elements in a but not b" },
+  { type = "HashSet", name = "symmetric_difference", sig = "a.symmetric_difference(b) -> Iter<T>", summary = "elements in exactly one set" },
   { type = "HashSet", name = "is_subset", sig = "a.is_subset(b) -> bool", summary = "every element of a is in b" },
   { type = "HashSet", name = "is_superset", sig = "a.is_superset(b) -> bool", summary = "every element of b is in a" },
   { type = "HashSet", name = "is_disjoint", sig = "a.is_disjoint(b) -> bool", summary = "no shared elements" },
@@ -341,23 +345,21 @@ removed = [
 
   # ---- iteration ----
   { id = "R010", form = ".iter() / .iter_mut() / .into_iter()", pattern = '\.(iter|iter_mut|into_iter)\(\)', replacement = "nothing: `for x in xs`, `xs.map(..)`", action = "error", fix = "auto", note = "W0003 folds into WJ0180" },
-  { id = "R011", form = ".collect() / .collect::<T>()", pattern = '\.collect(::<[^()]*>)?\(\)', replacement = "nothing (adapters return a list); .to_set(), .to_map(), .join(\"\"), .try_map(..)", action = "error", fix = "typed" },
   { id = "R012", form = ".cloned() / .copied()", pattern = '\.(cloned|copied)\(\)', replacement = "nothing (elements are values)", action = "error", fix = "auto" },
-  { id = "R013", form = ".count() (no arguments)", pattern = '\.count\(\)', replacement = ".len()", action = "error", fix = "auto" },
-  { id = "R014", form = ".rev()", pattern = '\.rev\(\)', replacement = ".reversed()", action = "error", fix = "auto" },
   { id = "R015", form = ".for_each(f)", pattern = '\.for_each\(', replacement = "for x in xs { .. }", action = "error", fix = "manual" },
-  { id = "R016", form = ".peekable() / .by_ref() / .fuse()", pattern = '\.(peekable|by_ref|fuse)\(\)', replacement = ".lazy() (an Iter has next and peek)", action = "error", fix = "auto" },
+  { id = "R016", form = ".by_ref() / .fuse()", pattern = '\.(by_ref|fuse)\(\)', replacement = "nothing: bind the Iter with let mut and keep calling next()", action = "delete", fix = "manual" },
   { id = "R017", form = ".sum::<T>() / .product::<T>()", pattern = '\.(sum|product)::<', replacement = ".sum() / .product() (the element type decides)", action = "delete", fix = "auto" },
   { id = "R018", form = ".nth(i) on a list", pattern = '\.nth\(', replacement = ".get(i) (an Iter keeps nth)", action = "delete", fix = "typed" },
   { id = "R019", form = ".frequencies()", pattern = '\.frequencies\(\)', replacement = ".tally()", action = "delete", fix = "auto" },
   { id = "R020", form = ".each_slice(n)", pattern = '\.each_slice\(', replacement = ".chunks(n)", action = "delete", fix = "auto" },
   { id = "R021", form = ".partition_by(p)", pattern = '\.partition_by\(', replacement = ".partition(p)", action = "delete", fix = "auto" },
   { id = "R022", form = ".zip_with(ys, f)", pattern = '\.zip_with\(', replacement = ".zip(ys).map(|(a, b)| f(a, b))", action = "delete", fix = "manual" },
-  { id = "R023", form = ".find_map(f) / .reduce(f) / .inspect(f) / .rposition(p) / .next_back()", pattern = '\.(find_map|reduce|inspect|rposition|next_back)\(', replacement = ".filter_map(f).first() / .fold(..) / a for loop / .reversed().position(p)", action = "delete", fix = "manual" },
+  { id = "R023", form = ".find_map(f) / .reduce(f) / .inspect(f) / .rposition(p) / .next_back()", pattern = '\.(find_map|reduce|inspect|rposition|next_back)\(', replacement = ".filter_map(f).next() / .fold(..) / a for loop / .rev().position(p)", action = "delete", fix = "manual" },
+  { id = "R024", form = ".to_list() (enumerable)", pattern = '\.to_list\(\)', replacement = ".collect()", action = "delete", fix = "auto" },
 
-  # ---- integer width at the surface (decision B) ----
-  { id = "R030", form = ".len() as int / .count() as int (any integer cast of a length)", pattern = '\.(len|count|capacity)\(\)\s+as\s+(int|i64|i32|u32|u64|usize|isize)\b', replacement = ".len() (it is int)", action = "delete", fix = "auto" },
-  { id = "R031", form = "x as usize in an index or a length argument", pattern = '\bas\s+usize\b', replacement = "nothing: xs[i] and xs.truncate(n) take int", action = "delete", fix = "typed", note = "only the casts that feed an index or a std length parameter are rewritten; usize stays a type" },
+  # ---- integer width at the surface (decision B, NOT decided: action = "pending", nothing is removed yet) ----
+  { id = "R030", form = ".len() as int / .count() as int (any integer cast of a length)", pattern = '\.(len|count|capacity)\(\)\s+as\s+(int|i64|i32|u32|u64|usize|isize)\b', replacement = "under B1: .len() (it is int); under B2/B3 only the `as usize` ones are redundant", action = "pending", fix = "auto" },
+  { id = "R031", form = "x as usize in an index or a length argument", pattern = '\bas\s+usize\b', replacement = "under B1 and B2: nothing at an index (xs[i] converts); under B1 also std length arguments", action = "pending", fix = "typed", note = "only the casts that feed an index or a std length parameter are rewritten; usize stays a type" },
 
   # ---- Option / Result ----
   { id = "R040", form = ".unwrap()", pattern = '\.unwrap\(\)', replacement = "x? (propagate), x ?? default, match / if let, or x.expect(\"why\")", action = "error", fix = "typed", note = "W0002 retires: wj fix writes `?` when the function returns Option/Result, else .expect(\"<expr> is present\")" },
@@ -374,8 +376,8 @@ removed = [
   { id = "R050", form = "s.push_str(t) / s.push(c) on a string", pattern = '\.push_str\(', replacement = "s += t / s += c", action = "error", fix = "typed" },
   { id = "R051", form = "s.to_string() / .to_owned() / .as_str() / .into_string() on a string", pattern = '\.(to_owned|as_str|into_string)\(\)', replacement = "nothing (one string type)", action = "error", fix = "typed", note = "W0012 folds in; .to_string() on a non-literal string is the same row, found by type" },
   { id = "R052", form = "s.as_bytes() / .into_bytes()", pattern = '\.(as_bytes|into_bytes)\(\)', replacement = "s.bytes()", action = "delete", fix = "auto" },
-  { id = "R053", form = "s.substring(a, b) / s.slice(a, b) / s.get(a..b) / s.char_count()", pattern = '\.(substring|char_count)\(', replacement = "s[a..b] / s.chars().len()", action = "delete", fix = "auto", note = "substring was char-indexed in the interpreter; wj fix writes s.chars()[a..b].join(\"\") when the receiver may be non-ASCII" },
-  { id = "R054", form = "s.split_ascii_whitespace() / .split_terminator(p) / .rsplit(p) / .rsplitn(n, p)", pattern = '\.(split_ascii_whitespace|split_terminator|rsplit|rsplitn)\(', replacement = ".split_whitespace() / .split(p) / .split(p).reversed()", action = "delete", fix = "auto" },
+  { id = "R053", form = "s.substring(a, b) / s.slice(a, b) / s.get(a..b) / s.char_count()", pattern = '\.(substring|char_count)\(', replacement = "s[a..b] / s.chars().count()", action = "delete", fix = "auto", note = "substring was char-indexed in the interpreter; wj fix writes s.chars().skip(a).take(b - a).collect() when the receiver may be non-ASCII" },
+  { id = "R054", form = "s.split_ascii_whitespace() / .split_terminator(p) / .rsplitn(n, p)", pattern = '\.(split_ascii_whitespace|split_terminator|rsplitn)\(', replacement = ".split_whitespace() / .split(p) / .rsplit(p).take(n)", action = "delete", fix = "auto" },
   { id = "R055", form = "s.insert(i, c) / .insert_str(i, t) / .remove(i) on a string", pattern = '\.insert_str\(', replacement = "s[..i] + t + s[i..]", action = "delete", fix = "manual" },
   { id = "R056", form = "s.capacity() / .reserve(n) / .is_char_boundary(i)", pattern = '\.(reserve|is_char_boundary)\(', replacement = "nothing (storage detail)", action = "delete", fix = "manual" },
   { id = "R057", form = "s.to_ascii_uppercase() / .to_ascii_lowercase() / .eq_ignore_ascii_case(t)", pattern = '\.(to_ascii_uppercase|to_ascii_lowercase|eq_ignore_ascii_case)\(', replacement = ".to_uppercase() / .to_lowercase() / .eq_ignore_case(t)", action = "error", fix = "auto", note = "Unicode-aware: differs only for non-ASCII letters" },
