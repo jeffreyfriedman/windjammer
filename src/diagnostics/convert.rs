@@ -102,6 +102,11 @@ pub fn ir(severity_is_error: bool, severity_is_warning: bool, message: &str) -> 
     Diagnostic::new(code, severity, message.to_string())
 }
 
+/// A marker such as `.unwrap` must not be the front of a longer name (`.unwrap_or`).
+fn ends_at_word_boundary(text: &str, end: usize) -> bool {
+    !text[end.min(text.len())..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+}
+
 /// Lint locations come from AST nodes (0-based columns, often just after the construct, or a
 /// default of 1:1); find the offending text itself.
 fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::Span {
@@ -124,7 +129,14 @@ fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::
     let lo = (lo..=offset).find(|&i| text.is_char_boundary(i)).unwrap_or(0);
     let near = markers
         .iter()
-        .filter_map(|m| text[lo..offset.min(text.len())].rfind(m).map(|i| (lo + i, m.len())))
+        .filter_map(|m| {
+            text[lo..offset.min(text.len())]
+                .match_indices(m)
+                .map(|(i, _)| lo + i)
+                .filter(|&i| ends_at_word_boundary(text, i + m.len()))
+                .last()
+                .map(|i| (i, m.len()))
+        })
         .max_by_key(|(i, _)| *i);
     let found = near.or_else(|| {
         let from_decl = |i: usize| {
@@ -135,7 +147,12 @@ fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::
         };
         markers
             .iter()
-            .filter_map(|m| text.match_indices(m).map(|(i, _)| i).find(|&i| from_decl(i)).map(|i| (i, m.len())))
+            .filter_map(|m| {
+                text.match_indices(m)
+                    .map(|(i, _)| i)
+                    .find(|&i| from_decl(i) && ends_at_word_boundary(text, i + m.len()))
+                    .map(|i| (i, m.len()))
+            })
             .min_by_key(|(i, _)| *i)
     });
     match found {
