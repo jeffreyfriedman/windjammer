@@ -465,7 +465,11 @@ fn measure_prog(p: Prog, wj: string, target: string, ext_dbg: string, ext_rel: s
     problems = check(p, "wj interpreter run", r_interp, expected, problems)
 
     // Windjammer: transpile, then the same rustc flags as the twin
-    let c_trans = measure(work, quote(wj) + " build --no-cargo -o " + quote(gen_dir) + " " + quote(wj_src) + " >/dev/null", "", 1, flag)
+    // the program alone in its own directory, as in an agent workspace: a single-file build also scans the
+    // directories around the file for metadata, which inside this repository costs about 1 s (docs/known-issues/)
+    let src_dir = work + "/prog"
+    let _ = run_sh("mkdir -p " + quote(src_dir) + " && cp " + quote(wj_src) + " " + quote(src_dir + "/main.wj"))
+    let c_trans = measure(work, quote(wj) + " build --no-cargo -o " + quote(gen_dir) + " " + quote(src_dir + "/main.wj") + " >/dev/null", "", 1, flag)
     let grs = gen_rs(gen_dir)
     let mut gdoc = object()
     if c_trans.status != 0 || grs == "" {
