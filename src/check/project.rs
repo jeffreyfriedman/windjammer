@@ -290,9 +290,10 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     use crate::analyzer::{Analyzer, SignatureRegistry};
     let mut analyzer = Analyzer::new();
     crate::debug_env::phase("check-analyzer-new");
-    let sigs = SignatureRegistry::new();
+    // the analysis only reads the global signatures: the per-process stdlib registry itself, not a clone of it
+    let sigs = SignatureRegistry::stdlib();
     crate::debug_env::phase("check-analyzer-sigs");
-    let analysis = analyzer.analyze_program_with_global_signatures(&p.program, &sigs);
+    let analysis = analyzer.analyze_program_with_global_signatures(&p.program, sigs);
     crate::debug_env::phase("check-analyzer");
     match analysis {
         Ok((analyzed, registry, _)) => {
