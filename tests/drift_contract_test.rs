@@ -32,7 +32,7 @@ fn ledger_lines(text: &str) -> Vec<&str> {
 }
 
 /// The streams that own known divergences (the same list as `OWNERS` in scripts/wj/drift_ledger.wj).
-const OWNERS: [&str; 9] = [
+const OWNERS: [&str; 10] = [
     "numeric-width",
     "codegen-refs",
     "codegen-types",
