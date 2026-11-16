@@ -378,8 +378,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Runtime `Row` / `Connection` stubs in std/*.wj are empty but map to non-Copy Rust types.
-        self.apply_runtime_non_copy_type_overrides();
+        self.register_local_non_copy_declarations(program); // and runtime `Row` / `Connection` stubs (non-Copy Rust)
 
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
@@ -1355,6 +1354,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         scan_dir(&std_dir, &mut names);
         names
+    }
+
+    /// A type declared in this file that did not reach Copy is non-Copy here, whatever a same-named type of another
+    /// module is (a unit enum elsewhere must not make this file's struct Copy: rustc E0507 on an indexed element).
+    fn register_local_non_copy_declarations(&mut self, program: &Program<'ast>) {
+        for item in &program.items {
+            let name = match item {
+                Item::Struct { decl, .. } => &decl.name,
+                Item::Enum { decl, .. } => &decl.name,
+                _ => continue,
+            };
+            if !self.copy_types_registry.contains(name) {
+                self.non_copy_types_registry.insert(name.clone());
+            }
+        }
+        // Runtime `Row` / `Connection` stubs in std/*.wj are empty but map to non-Copy Rust types.
+        self.apply_runtime_non_copy_type_overrides();
     }
 
     /// Remove empty WJ std stubs from `copy_types_registry` when runtime scan says non-`Copy`.

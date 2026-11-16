@@ -8857,7 +8857,7 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_str.ends_with(".clone()") {
             if let Expression::Identifier { name, .. } = arg_expr {
                 let text_alias = self.explicit_ref_let_bindings.contains(name) && self.local_var_types.get(name).is_some_and(crate::codegen::rust::types::is_windjammer_text_type); // `let s = t` of a borrowed text `t`
-                if text_alias || self.emitted_rust_ref_formals.contains(name)
+                if text_alias || self.emitted_rust_ref_formals.contains(name) || self.idiom.str_slice_loop_vars.contains(name)
                     || (self.inferred_borrowed_params.contains(name)
                         && self.current_function_params.iter().any(|p| {
                             p.name == *name
@@ -8884,7 +8884,7 @@ impl<'ast> CodeGenerator<'ast> {
         // A module `const NAME: string` is emitted `&'static str`: borrowed text whatever its WJ type
         // says. This is the one place that decides it; every owned position (call argument, field,
         // vec! element, let, return) then gets `.to_string()` from the coercion engine.
-        if self.expression_is_static_str_value(arg_expr) {
+        if self.expression_is_static_str_value(arg_expr) || self.is_text_slice_expr(arg_expr) || matches!(arg_expr, Expression::Identifier { name, .. } if self.idiom.str_slice_loop_vars.contains(name)) {
             return SafetyType::borrowed(BaseType::String, Region::fresh(13));
         }
         if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(

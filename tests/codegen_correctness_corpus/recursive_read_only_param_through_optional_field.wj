@@ -1,0 +1,49 @@
+// expect: 9
+// expect: 0
+// A read-only parameter passed down its own recursion borrows (the recursive call's formal is the parameter
+// itself), so a method handing `self` to it borrows too, and so does a caller reaching it through an optional
+// field of a borrowed receiver (it was owned `self`, rustc E0507 behind the `if let`).
+pub struct Node {
+    pub left: i32,
+    pub weight: i32,
+}
+
+pub struct Tree {
+    pub nodes: Vec<Node>,
+    pub labels: Vec<string>,
+}
+
+fn walk(t: Tree, i: i32) -> i32 {
+    let node = t.nodes[i as usize]
+    if node.left < 0 {
+        return node.weight
+    }
+    node.weight + walk(t, node.left)
+}
+
+impl Tree {
+    pub fn total(self) -> i32 {
+        walk(self, 0)
+    }
+}
+
+pub struct Mesh {
+    pub tree: Option<Tree>,
+}
+
+impl Mesh {
+    pub fn probe(self) -> i32 {
+        if let Some(t) = self.tree {
+            t.total()
+        } else {
+            0
+        }
+    }
+}
+
+fn main() {
+    let m = Mesh { tree: Some(Tree { nodes: [Node { left: 1, weight: 4 }, Node { left: -1, weight: 5 }], labels: ["a"] }) }
+    println("${m.probe()}")
+    let e = Mesh { tree: None }
+    println("${e.probe()}")
+}

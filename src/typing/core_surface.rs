@@ -146,6 +146,15 @@ impl CoreSurface {
         (!e.is_static).then_some(e.changes_receiver)
     }
 
+    /// Whether `receiver.method(..)` is an iterator method called directly on a sequence: it iterates the sequence
+    /// by reference (`v.any(f)` is `v.iter().any(f)`), so the sequence itself is read, not changed, whatever the
+    /// iterator method's own `&mut self` says.
+    pub fn iterates_by_reference(&self, receiver: &Type, method: &str) -> bool {
+        let Some((name, _)) = head(receiver) else { return false };
+        name != ITERATOR && !self.table.contains_key(&(name.to_string(), method.to_string())) && !self.enumerable.contains_key(method)
+            && self.table.contains_key(&(ITERATOR.to_string(), method.to_string()))
+    }
+
     /// Whether `type_name::name` is declared without `self` (an associated function).
     pub fn is_static(&self, type_name: &str, name: &str) -> bool {
         self.table.get(&(type_name.to_string(), name.to_string())).is_some_and(|e| e.is_static)

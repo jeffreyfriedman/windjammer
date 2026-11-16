@@ -193,8 +193,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
         }
 
-        // Ownership seeds: explicit borrows and Copy types only.
-        // Non-copy bare `T` params are resolved by body usage, call sites, and impl convergence.
+        if crate::ir::node::implicit_self_mode(analyzed).is_some() { param_vars.insert("self".to_string(), cs.fresh_var()); } // an implicit receiver is a parameter too
+        // Ownership seeds: explicit borrows and Copy types only (bare non-Copy `T`: body usage, call sites, impl convergence).
         for param in &analyzed.decl.parameters {
             if let Some(&var) = param_vars.get(&param.name) {
                 match &param.type_ {
@@ -238,7 +238,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                             );
                         }
                     }
-                    _ => {}
+                    _ => stored::seed_mut_declared_param(&mut cs, var, param),
                 }
             }
         }
@@ -506,7 +506,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.numeric_unmodelled.opaque.push(arg_var);
             }
 
-            if let Some(mode) = sig.param_ownership.get(param_idx) {
+            if let Some(mode) = sig.param_ownership.get(param_idx).filter(|_| !self.link_recursive_formal(param_idx, arg_index, arg_var)) {
                 let own = self.ownership_mode_to_owned(*mode);
                 self.cs.add_because(
                     Constraint::OwnershipIs(expected_var, own),

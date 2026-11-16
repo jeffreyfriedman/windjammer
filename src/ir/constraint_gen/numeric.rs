@@ -250,7 +250,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     reg,
                 )
             }));
-        if mut_self {
+        if (mut_self && !self.core_surface_iterates_by_reference(object, method)) || self.core_surface_changes_receiver(object, method) {
             self.emit_mutref_on_receiver_root(object);
         }
 
@@ -870,6 +870,49 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             self.cs.add_because(Constraint::TypeEquals(v, obj_var), origin("NUM-STD-SIG", format!("`.{}()` takes the receiver's type", method), &a.location()));
         }
         self.cs.add_because(Constraint::TypeEquals(result, obj_var), tagged("NUM-STD-SIG"));
+        true
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// The core surface (`std/rust_core.wji`) declares the method `&mut self` for the receiver's declared type
+    /// (`self.map.insert(k, v)` on a `HashMap` field): the receiver root is written through (OWN-MUT-RECEIVER),
+    /// whatever the signature registry of this build holds.
+    fn core_surface_changes_receiver(&self, object: &Expression<'ast>, method: &str) -> bool {
+        let Some(surface) = self.core_surface else { return false };
+        let fields = self.struct_field_types.unwrap_or_else(|| super::empty_struct_field_types());
+        crate::ir::receiver_type::infer_receiver_type(object, &self.analyzed.decl, fields)
+            .is_some_and(|ty| surface.changes_receiver(&ty, method) == Some(true))
+    }
+
+    /// `v.any(f)` on a sequence is `v.iter().any(f)`: decided by the core surface, not by a same-named `&mut self`
+    /// iterator method.
+    fn core_surface_iterates_by_reference(&self, object: &Expression<'ast>, method: &str) -> bool {
+        let Some(surface) = self.core_surface else { return false };
+        let fields = self.struct_field_types.unwrap_or_else(|| super::empty_struct_field_types());
+        crate::ir::receiver_type::infer_receiver_type(object, &self.analyzed.decl, fields)
+            .is_some_and(|ty| surface.iterates_by_reference(&ty, method))
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A call of the function being solved (direct recursion: `walk(t, ..)` inside `walk`, `self.visit(..)` inside
+    /// `visit`): its formal is this function's own parameter, not the registry's prediction of it, so the argument
+    /// takes that parameter's requirement (OWN-CALL-FORMAL through the variable; the least fixed point, a read-only
+    /// recursive parameter stays borrowed). True when the link was made.
+    pub(super) fn link_recursive_formal(&mut self, param_idx: usize, arg_index: usize, arg_var: ConstraintVar) -> bool {
+        let decl = &self.analyzed.decl;
+        let own = crate::ir::node::ir_function_name_from_decl(&decl.name, decl.parent_type.as_deref());
+        if self.call_targets.last() != Some(&own) {
+            return false;
+        }
+        // The declaration lists `self` only when it is written; the signature's slot index counts it either way.
+        let idx = if decl.parameters.first().is_some_and(|p| p.name == "self") { param_idx } else { arg_index };
+        let Some(&formal) = decl.parameters.get(idx).and_then(|p| self.param_vars.get(&p.name)) else { return false };
+        self.cs.add_because(
+            Constraint::UsedAs(arg_var, formal),
+            origin("OWN-CALL-FORMAL", format!("argument {param_idx} of a recursive call takes the parameter's own requirement"), &None),
+        );
         true
     }
 }

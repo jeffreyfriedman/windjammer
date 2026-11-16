@@ -1,0 +1,24 @@
+// expect: 1 0
+// A `mut` parameter read by another function first: the caller passes a copy, the callee owns it (SPEC-OWN-008).
+struct P {
+    pos: int,
+}
+
+fn peek(p: P) -> int {
+    p.pos
+}
+
+fn step(mut p: P) -> int {
+    if peek(p) == 7 {
+        p.pos += 1
+        return 0
+    }
+    p.pos += 1
+    p.pos
+}
+
+fn main() {
+    let mut p = P { pos: 0 }
+    let r = step(p)
+    println("${r} ${p.pos}")
+}

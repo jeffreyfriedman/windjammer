@@ -1394,11 +1394,9 @@ impl<'ast> Analyzer<'ast> {
         self.self_impl_context
             .as_ref()
             .map(|ctx| ctx.impl_type_base.as_str())
-            .and_then(|struct_name| {
-                self.global_struct_field_types
-                    .get(struct_name)
-                    .and_then(|fields| fields.get(field).cloned())
-            })
+            // The struct may be declared in another file of the library (an impl split across files): the
+            // module-aware lookup finds it under its defining module's key.
+            .and_then(|struct_name| self.lookup_struct_fields_for_type(struct_name).and_then(|fields| fields.get(field).cloned()))
     }
 
     pub(crate) fn expression_returns_self_type(&self, expr: &Expression, type_name: &str) -> bool {

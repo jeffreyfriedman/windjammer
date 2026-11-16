@@ -1,0 +1,10 @@
+// expect: ["hello"]
+// A string slice pushed into a `Vec<string>` is copied into an owned string (it was `s[i..j].clone()` on `str`).
+fn main() {
+    let s = "hello world"
+    let mut toks: Vec<string> = []
+    let mut i = 0
+    let j = 5
+    toks.push(s[i..j])
+    println("${toks:?}")
+}

@@ -1,0 +1,35 @@
+// expect: none true 1
+// `opt.unwrap_or(default)` on an Option field of a borrowed value reads the field's value: a Copy option is
+// copied and any other is cloned (rustc E0308 on `.as_ref().unwrap_or(String)`, E0507 on a move out of `&`).
+pub struct Req {
+    pub name: Option<string>,
+    pub flag: Option<bool>,
+    pub tags: Option<Vec<string>>,
+}
+
+pub struct Bag {
+    pub reqs: Vec<Req>,
+}
+
+fn label(r: Req) -> string {
+    r.name.unwrap_or("none")
+}
+
+fn flagged(r: Req) -> bool {
+    r.flag.unwrap_or(false)
+}
+
+fn tag_count(b: Bag) -> int {
+    let mut n = 0
+    for r in b.reqs {
+        n += r.tags.unwrap_or([]).len()
+    }
+    n
+}
+
+fn main() {
+    let tags: Vec<string> = ["a"]
+    let r = Req { name: None, flag: Some(true), tags: Some(tags) }
+    let b = Bag { reqs: [r] }
+    println("${label(b.reqs[0])} ${flagged(b.reqs[0])} ${tag_count(b)}")
+}
