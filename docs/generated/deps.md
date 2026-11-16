@@ -7,7 +7,7 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | from \ to | analyzer | auto_clone | auto_fix | build_utils | cargo_cache | cargo_integration | cargo_toml | check | cli_args | cli_execution | cli_project_build | codegen | compilation_error_handling | compiler | compiler_config | compiler_database | component_analyzer | config | debug_env | decorator_registry | diagnostics | ejector | embedded_assets | error | error_codes | error_handling | error_mapper | errors | file_compilation_pipeline | file_compiler | formatter | fuzzy_matcher | inference | interpreter | intrinsics | ir | lexer | linter | metadata | module_system | optimizer | output_generation | package | parser | parser_impl | project_paths | reduce | resolve | rust_integration_tests | source_map | stdlib_scanner | stdlib_surface | syntax_highlighter | test_module_gate | test_runner | test_utils | toolchain | type_classification | type_display | type_inference | typing | wjsl |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **agent_index** (tooling) | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | | | | | 2 | | | | | | | | | | | | | | | | | | | | | | | | | | |
-| **analyzer** (ownership) | | 2 | | | | | | | | | | 28! | | | | | | | 10 | | | | 3 | | | | | | | | | | | | | 12! | 8 | | 1! | | | | | 143 | | | | | | | 5 | 1 | | | | 1 | | 35 | | 1 | | |
+| **analyzer** (ownership) | | 2 | | | | | | | | | | 28! | | | | | | | 10 | | | | 3 | | | | | | | | | | | | | 12! | 9 | | 1! | | | | | 146 | | | | | | | 5 | 1 | | | | 1 | | 35 | | 1 | | |
 | **auto_clone** (ownership) | 15 | | | | | | | | | | | 3! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 34 | | | | | | | | | | | | | | 1 | | | | |
 | **auto_clone_tests** (ownership) | 23 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | 27 | | | | | | | | | | | | 1! | | | | | | |
 | **build_utils** (driver) | | | | | | | | | | | | | | | | | | 6 | | | | | | | | | | | | | | | | | | | | | 1 | 4 | | | | | | 1 | | | 2 | | | | | 1 | | | | | | | | |
@@ -20,7 +20,7 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | **cli_execution** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | 6 | | | | | | | | | | | | | | | | | | | | | | | | |
 | **cli_output** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | |
 | **cli_project_build** (driver) | 1 | | | 1 | | 1 | | | 1 | | | 1 | | 1 | 1 | | | 1 | | | | | | | | | | | | 1 | | | | | | | 1 | | | | | | | 2 | 1 | 1 | | | | | | | | | | | | 1 | | | | |
-| **codegen** (backend) | 639 | 6 | | | | | | | | | | | | 6! | 5 | | 2 | | 5 | 3 | | | 2 | | | | | | | | | | 2 | | 3! | 421 | 24 | 2! | | 2 | | | | 710 | 2 | | | 4 | | 9 | | 4 | | | | 7 | | 247 | | 63 | | 3! |
+| **codegen** (backend) | 640 | 6 | | | | | | | | | | | | 6! | 5 | | 2 | | 5 | 3 | | | 2 | | | | | | | | | | 2 | | 3! | 421 | 24 | 2! | | 2 | | | | 712 | 2 | | | 4 | | 9 | | 4 | | | | 7 | | 247 | | 63 | | 3! |
 | **compilation_error_handling** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | |
 | **compiler** (driver) | 35 | | | 3 | 3 | | 4 | | | | | 39 | | | 6 | 1 | | 2 | 4 | 1 | | | 2 | | | | | | | | | | 1 | | | 16 | 4 | 2 | 49 | 2 | 1 | | 1 | 101 | | 9 | | 4! | 2 | | | | | | | | | 7 | | 7 | | |
 | **compiler_config** (support) | | | | | | | | | | | | 1! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
@@ -40,7 +40,7 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | **inference** (types) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 9 | | | | | | | | | | | | 1 | | | | | | |
 | **interpreter** (tooling) | 5 | | | | | | | | | | | 1 | | | | | | | 5 | | | | | 2 | | | | | | | | | | | 3! | 48 | 4 | | | 8 | | | 4 | 141 | | | | 13 | | 17 | | 1 | | 1 | | | | | 2 | 1 | | |
 | **intrinsics** (syntax) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | 3 | | | | | | | | | | | | | | | | | | |
-| **ir** (ir) | 52 | 1 | | | | | | | | | | 51! | | 1! | | | | | | | | | | | | | | | | | | | | | 3 | | 24 | | | | | | | 102 | | | | 9 | | 6 | | | | | | | | 32 | 2 | 9 | 25 | |
+| **ir** (ir) | 52 | 1 | | | | | | | | | | 51! | | 1! | | | | | | | | | | | | | | | | | | | | | 3 | | 24 | | | | | | | 106 | | | | 9 | | 6 | | | | | | | | 32 | 2 | 9 | 25 | |
 | **lexer** (syntax) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1! | | | | |
 | **linter** (tooling) | 4 | 1 | | | | | | | | | | | | | | | | | | | | | | 3 | | | | | | | | | | | 1! | | 6 | | | | | | | 34 | | | | | | 4 | | | | | | | | 1 | | | | |
 | **metadata** (tooling) | 36 | | | | | | | | | | | 5 | | 5! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 29 | | | | | | | | | | | | | | 2 | | | | |
