@@ -201,7 +201,7 @@
 "src/codegen/rust/call_expression_generation/function_call_generation.rs::generate_plain_function_call" = 737
 "src/codegen/rust/call_expression_generation/trait_call_generation.rs::generate_call_on_field_access" = 699
 "src/codegen/rust/call_signature_resolution.rs::effective_param_ownership" = 314
-"src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 373
+"src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 364
 "src/codegen/rust/expression_generation.rs::generate_expression_immut" = 453
 "src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 649
 "src/codegen/rust/for_statement_generation.rs::generate_for_statement" = 553
@@ -240,7 +240,7 @@
 "src/parser/call_expression_parser.rs::parse_postfix_chain" = 458
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
 "src/parser/primary_expression_parser.rs::parse_primary_expression_inner" = 543
-"src/parser/type_parser.rs::parse_type_core" = 428
+"src/parser/type_parser.rs::parse_type_core" = 418
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 427
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433
 
