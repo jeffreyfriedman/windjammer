@@ -1,0 +1,21 @@
+// ==== main.rs ====
+#[inline]
+fn count_set(modes: &Vec<u32>) -> u32 {
+    let mut m2 = modes.clone();
+    m2.push(1_u32);
+    let mut d: u32 = 0_u32;
+    let mut k: usize = 0_usize;
+    while k < m2.len() {
+        if m2[k] == 1_u32 || m2[k] == 2_u32 {
+            d += 1;
+        }
+        k += 1;
+    }
+    d
+}
+
+fn main() {
+    let modes: Vec<u32> = vec![1_u32, 2_u32, 3_u32];
+    println!("{}", count_set(&modes));
+}
+
