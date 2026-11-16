@@ -61,8 +61,10 @@ fn repo_corpus_location_classes_are_ratcheted() {
                 }
             }
             ParseOutcome::ParseError(e) | ParseOutcome::LexerPanic(e) => {
-                // Negative programs written for the diagnostics gate fail to parse on purpose.
-                if !rel(&p).starts_with("tests/diagnostics_oracle/") {
+                // Negative programs fail to parse on purpose: the diagnostics gate's, and spec examples whose rule
+                // says the program is rejected (`// mode: parse-error`, checked by tests/spec_conformance_test.rs).
+                let negative = rel(&p).starts_with("tests/diagnostics_oracle/") || src.lines().any(|l| l.trim() == "// mode: parse-error");
+                if !negative {
                     if std::env::var_os("SPAN_ORACLE_VERBOSE").is_some() {
                         eprintln!("PARSEFAIL {}: {}", rel(&p), e.lines().next().unwrap_or(""));
                     }
