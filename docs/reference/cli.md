@@ -128,6 +128,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--jit-mutant` | NAME |  | Interpreted runs (debug builds only): leave one machine-code check out (mutation tests) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--no-locals` | NO_LOCALS |  | Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether) |
+| `--pair-list` | FILE |  | Interpreted runs (internal, hidden from help): run every program listed in FILE (one path per line) under the tree walker and the resolved engine in this one process and print a JSON line per program and engine (exit status, stdout, stderr); the drift fuzz step's batch mode (ADR-0038 C4) |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
 | `--record` | FILE |  | Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings) to FILE, a replayable log (ADR-0021) |
 | `--replay` | FILE |  | Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and none is performed; seeds, arguments and the time mode come from the log (ADR-0021) |

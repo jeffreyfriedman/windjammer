@@ -225,7 +225,7 @@
 "src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 971
 "src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2140
 "src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 317
-"src/codegen/rust/program_generation.rs::generate_program" = 999
+"src/codegen/rust/program_generation.rs::generate_program" = 998
 "src/codegen/rust/stdlib_method_signatures.rs::init_stdlib_method_signatures" = 345
 "src/codegen/rust/type_balancing.rs::balance_eq_operands_for_rust" = 497
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
