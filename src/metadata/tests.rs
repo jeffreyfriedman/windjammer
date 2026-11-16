@@ -297,22 +297,22 @@ fn wj_meta_sidecar_is_trusted_only_when_current() {
     let now = compiler_build_identity();
     let h = hash_source("fn f() {}\n");
 
-    assert!(wj_meta_is_current(&meta_path, &meta_with_fingerprint(now.clone(), h)), "matching sidecar is current");
+    assert!(wj_meta_is_current(&meta_path, None, &meta_with_fingerprint(now.clone(), h)), "matching sidecar is current");
     assert!(
-        !wj_meta_is_current(&meta_path, &meta_with_fingerprint(now.clone(), h ^ 1)),
+        !wj_meta_is_current(&meta_path, None, &meta_with_fingerprint(now.clone(), h ^ 1)),
         "source text changed since the sidecar was written: stale"
     );
     assert!(
-        !wj_meta_is_current(&meta_path, &meta_with_fingerprint("other-build".into(), h)),
+        !wj_meta_is_current(&meta_path, None, &meta_with_fingerprint("other-build".into(), h)),
         "written by another compiler build: stale"
     );
     assert!(
-        !wj_meta_is_current(&meta_path, &ModuleMetadata::new("m".into())),
+        !wj_meta_is_current(&meta_path, None, &ModuleMetadata::new("m".into())),
         "a cached sidecar without a fingerprint is not trusted (the embedded stdlib_meta is read from memory)"
     );
     // No source left (deleted, or never there): nothing proves the entry current, so it is ignored.
     std::fs::remove_file(&src).unwrap();
-    assert!(!wj_meta_is_current(&meta_path, &meta_with_fingerprint(now, h)));
+    assert!(!wj_meta_is_current(&meta_path, None, &meta_with_fingerprint(now, h)));
 }
 
 #[test]
