@@ -566,6 +566,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// A bare call names a free function: never a method of the same name (a trait's `list_webhooks(self, ..)`
     /// beside a free `list_webhooks(deps, ..)`), and nothing at all when a parameter or local shadows the name.
     fn resolve_free_callee_signature(&self, name: &str, arg_count: usize) -> Option<&FunctionSignature> {
+        let name = name.strip_prefix("crate::").unwrap_or(name); // `crate::ffi::f(..)` is the function `ffi::f`
         let local = !name.contains("::") && (self.param_vars.contains_key(name) || self.scopes.iter().any(|s| s.contains_key(name)));
         let registry = self.registry.filter(|_| !local)?;
         let scoped = registry.scoped_key(&self.analyzed.module_path, name);
@@ -862,7 +863,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Statement::Match { value, arms, .. } => {
                 let value_var = self.walk_expression(value);
-                let _ = self.walk_match_arms(value_var, arms);
+                let _ = self.walk_match_arms(value_var, value, arms);
             }
 
             Statement::For { pattern, iterable, body, location, .. } => {
@@ -881,7 +882,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.cs.add_because(Constraint::TypeEquals(loop_var, s), tagged("TY-UNIFY"));
                 } else {
                     let it = self.walk_expression(iterable);
-                    let loop_var = self.bind_pattern(pattern);
+                    let loop_var = self.bind_loop_pattern(pattern, iterable);
                     self.type_loop_element(loop_var, it, iterable);
                 }
                 self.loop_writes_scope(Some(location));
@@ -1214,7 +1215,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Expression::Array { elements, .. } => self.walk_collection_literal(elements),
 
-            Expression::MacroInvocation { args, delimiter, is_repeat, .. } => self.walk_macro(args, delimiter, *is_repeat),
+            Expression::MacroInvocation { name, args, delimiter, is_repeat, .. } => self.walk_macro(name, args, delimiter, *is_repeat),
 
             Expression::TryOp { expr, .. } => {
                 let inner = self.walk_expression(expr);
@@ -1296,7 +1297,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Statement::Match { value, arms, .. } => {
                 let value_var = self.walk_expression(value);
-                self.walk_match_arms(value_var, arms)
+                self.walk_match_arms(value_var, value, arms)
             }
             Statement::Loop { body, .. } => vec![self.walk_loop(body)],
             other => {

@@ -129,3 +129,17 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_return_type.as_ref().and_then(Self::list_element_tuple_slots)
     }
 }
+
+impl<'ast> CodeGenerator<'ast> {
+    /// A value stored into a struct field of declared type `field_type`: a `usize` into a declared int is converted,
+    /// and a local bound to a list literal (a `Vec`, ADR-0014) stored into a fixed-array field (`sh: [f32; 9]`) becomes
+    /// that array (`.try_into().unwrap()`: the literal's length is the array's).
+    pub(in crate::codegen::rust) fn convert_into_declared_field(&self, expr_str: &mut String, expr: &Expression<'ast>, field_type: &Type) {
+        self.convert_usize_into_declared_int(expr_str, expr, field_type);
+        if let (Type::Array(..), Expression::Identifier { name, .. }) = (field_type, expr) {
+            if self.clone_facts.list_literal_locals.contains(name) && !expr_str.ends_with(".try_into().unwrap()") {
+                expr_str.push_str(".try_into().unwrap()");
+            }
+        }
+    }
+}

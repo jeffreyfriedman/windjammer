@@ -37,6 +37,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
         match crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields)
             .or_else(|| self.local_struct_field_type(object, expr, fields))
+            .or_else(|| match expr {
+                // `m.metallic` where `m` is a loop element or a method result of a declared struct type.
+                Expression::FieldAccess { field, .. } => self.declared_field_type(&self.static_type(object)?, field),
+                _ => None,
+            })
             .map(|ty| parser_type_to_base_type(&ty))
             .filter(|b| *b != BaseType::Inferred)
         {
@@ -108,7 +113,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         arg_vars: &[ConstraintVar],
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) {
-        let Some(payload) = self.struct_field_types.and_then(|f| f.get(callee)) else { return };
+        let Some(payload) = self.variant_payload_fields(callee) else { return };
         for (i, (&v, (_, a))) in arg_vars.iter().zip(arguments.iter()).enumerate() {
             let Some(ty) = payload.get(&i.to_string()) else { continue };
             let base = parser_type_to_base_type(ty);
@@ -202,8 +207,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         };
         self.call_targets.push(qualified.clone());
 
-        let sig = self
-            .resolve_callee_signature(&qualified, arguments.len())
+        // A receiver whose static type is a user type the name-based receiver inference does not see (a local bound to
+        // a method result, an operator expression, a loop element): the method is that type's.
+        let typed = receiver_type.clone().or_else(|| self.user_receiver_type(object));
+        let sig = typed
+            .and_then(|t| self.resolve_type_member(&t, method, arguments.len()))
+            .or_else(|| self.resolve_callee_signature(&qualified, arguments.len()))
             .or_else(|| {
                 // Runtime-std `json::to_string` must not fall back to the first
                 // `*::to_string` method-index hit (often MutBorrowed self).
@@ -504,8 +513,26 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     }
                 }
                 let receiver = self.static_type(object)?;
-                let sig = self.core_surface?.method_signature(&receiver, method, type_args.as_deref().unwrap_or(&[]))?;
-                sig.ret.filter(|t| !contains_generic(t))
+                if let Some(sig) = self.core_surface.and_then(|s| s.method_signature(&receiver, method, type_args.as_deref().unwrap_or(&[]))) {
+                    return sig.ret.filter(|t| !contains_generic(t));
+                }
+                // A method of a user type: its declared return type (`self.dir.normalize()` is a `Vec3`).
+                self.user_method_return(&receiver, method, arguments.len())
+            }
+            // `(a + b) * 0.5` on a user type: the operator impl's declared result.
+            Expression::Binary { left, op, .. } => self.operator_impl_result(op, left),
+            Expression::FieldAccess { object, field, .. } => {
+                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+                crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields)
+                    .or_else(|| self.declared_field_type(&self.static_type(object)?, field))
+            }
+            // `nodes[i]` where `nodes` is a local `Vec<Node>`: a `Node`.
+            Expression::Index { object, index, .. } if !matches!(index, Expression::Range { .. }) => {
+                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+                crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields).or_else(|| match strip_refs(&self.static_type(object)?) {
+                    Type::Vec(e) | Type::Array(e, _) => Some(strip_refs(e).clone()).filter(|t| !contains_unfixed(t)),
+                    _ => None,
+                })
             }
             Expression::Call { function, arguments, .. } => {
                 let name = Self::extract_callee_name(function)?;
@@ -522,6 +549,131 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 crate::ir::expr_static_type::declared_type_of(other, &self.analyzed.decl, fields)
             }
         }
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// The declared type of field `field` of a struct-typed value (`None` for a field the struct table does not
+    /// declare, or a receiver that is not a struct).
+    pub(super) fn declared_field_type(&self, receiver: &Type, field: &str) -> Option<Type> {
+        let base = crate::ir::receiver_type::type_to_struct_base(receiver)?;
+        let fields = self.struct_field_types?;
+        // The struct the file imports under this name (a homonym in another module is another struct), or the path
+        // the type is written with (`Vec<crate::port::MaterialData>`).
+        let imported = self.analyzed.imported_paths.get(base.rsplit("::").next().unwrap_or(&base));
+        let written = base.strip_prefix("crate::").filter(|b| b.contains("::")).and_then(|b| fields.get(b));
+        let by_identity = written.or_else(|| imported.and_then(|p| fields.get(p.as_str()).or_else(|| fields.get(&format!("crate::{p}")))));
+        let ty = by_identity
+            .or_else(|| crate::type_inference::struct_field_registry::lookup_struct_field_map(fields, &base, &HashMap::new(), &HashMap::new()))?
+            .get(field)?;
+        Some(strip_refs(ty).clone()).filter(|t| !contains_generic(t))
+    }
+
+    /// Binds a `for` pattern. `for line in text.lines()`: a plain loop binding has the declared element type of the
+    /// sequence (`&str`), read before the binding exists (`for x in x` names the outer `x`).
+    pub(super) fn bind_loop_pattern(&mut self, pattern: &Pattern<'ast>, iterable: &Expression<'ast>) -> ConstraintVar {
+        let element = self.surface_shape(iterable).and_then(|t| sequence_element(&t));
+        let loop_var = self.bind_pattern(pattern);
+        if let (Some(t), Pattern::Identifier(_) | Pattern::MutBinding(_)) = (element, pattern) {
+            self.var_static_types.insert(loop_var, t);
+        }
+        loop_var
+    }
+
+    /// The declared payload types of a variant a pattern or constructor names, by its path: as written, without
+    /// `crate::` (`crate::shapes::Shape::Ball` is registered as `shapes::Shape::Ball`), or `Enum::Variant` when that
+    /// key is unique.
+    pub(super) fn variant_payload_fields(&self, name: &str) -> Option<HashMap<String, Type>> {
+        let fields = self.struct_field_types?;
+        let stripped = name.strip_prefix("crate::").unwrap_or(name);
+        if let Some(f) = fields.get(name).or_else(|| fields.get(stripped)) {
+            return Some(f.clone());
+        }
+        let mut segs = stripped.rsplitn(3, "::");
+        let (variant, enum_name) = (segs.next()?, segs.next()?);
+        segs.next()?;
+        crate::type_inference::struct_field_registry::lookup_struct_field_map(fields, &format!("{enum_name}::{variant}"), &HashMap::new(), &HashMap::new()).cloned()
+    }
+
+    /// `positions.push(p)` on a local bound to `Vec::new()` (element unknown): the element is the argument's declared
+    /// type when the surface signature takes the container's own element (`push(value: T)`), so later reads of
+    /// `positions[i]` have it (`(positions[a] + positions[b]) * 0.5` on a user type).
+    pub(super) fn refine_element_from_argument(
+        &mut self,
+        object: &Expression<'ast>,
+        type_generics: &[String],
+        params: &[Type],
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+    ) {
+        let (Expression::Identifier { name, .. }, [elem]) = (object, type_generics) else { return };
+        let Some(var) = self.bound_var(name) else { return };
+        let Some(Type::Vec(old)) = self.var_static_types.get(&var).cloned() else { return };
+        let open = contains_unfixed(&old) || matches!(old.as_ref(), Type::Custom(n) if n == elem);
+        if !open {
+            return;
+        }
+        for (param, (_, arg)) in params.iter().zip(arguments) {
+            let (Type::Generic(n) | Type::Custom(n)) = param else { continue };
+            if n != elem {
+                continue;
+            }
+            if let Some(t) = self.static_type(arg).filter(|t| !contains_unfixed(t)) {
+                self.var_static_types.insert(var, Type::Vec(Box::new(strip_refs(&t).clone())));
+                return;
+            }
+        }
+    }
+
+    /// The user type (not a core surface type) an expression statically has: the struct a method on it belongs to.
+    pub(super) fn user_receiver_type(&self, object: &Expression<'ast>) -> Option<String> {
+        let t = self.static_type(object)?;
+        let t = strip_refs(&t);
+        if !matches!(t, Type::Custom(_)) || crate::typing::core_surface::surface_type_name(t).is_some() {
+            return None;
+        }
+        crate::ir::receiver_type::type_to_struct_base(t)
+    }
+
+    /// `Type::member` by the type's identity (C3): the path the file imports the type from (`use crate::a::Mesh`), or
+    /// the file's own module, then the bare `Type::member` key. Two types named `Mesh` in two modules are two types.
+    pub(super) fn resolve_type_member(&self, type_name: &str, member: &str, arg_count: usize) -> Option<&FunctionSignature> {
+        let registry = self.registry?;
+        let base = type_name.split('<').next().unwrap_or(type_name);
+        let base = base.strip_prefix("crate::").unwrap_or(base);
+        let leaf = base.rsplit("::").next().unwrap_or(base);
+        let path = if base.contains("::") {
+            Some(base.to_string())
+        } else {
+            self.analyzed.imported_paths.get(leaf).cloned().or_else(|| {
+                (!self.analyzed.module_path.is_empty()).then(|| format!("{}::{leaf}", self.analyzed.module_path.join("::")))
+            })
+        };
+        let by_identity = path.and_then(|p| registry.member_of_type_path(&p, member));
+        let bare = self.resolve_callee_signature(&format!("{leaf}::{member}"), arg_count);
+        // The bare key is the converged view when it declares the same formals and result (C3 identity); a homonym type's
+        // method is not.
+        match (by_identity, bare) {
+            (Some(id), Some(b)) if (&b.formal_param_types, &b.return_type) != (&id.formal_param_types, &id.return_type) => Some(id),
+            (id, b) => b.or(id),
+        }
+    }
+
+    /// The declared return type of method `method` of a user type (a homonym with no unique signature: `None`).
+    pub(super) fn user_method_return(&self, receiver: &Type, method: &str, arg_count: usize) -> Option<Type> {
+        let base = crate::ir::receiver_type::type_to_struct_base(receiver)?;
+        let ret = self.resolve_type_member(&base, method, arg_count)?.return_type.clone()?;
+        let ret = match ret {
+            Type::Custom(n) if n == "Self" => Type::Custom(base),
+            other => other,
+        };
+        Some(ret).filter(|t| !contains_generic(t) && *t != Type::Infer)
+    }
+}
+
+fn strip_refs(t: &Type) -> &Type {
+    match t {
+        Type::Reference(i) | Type::MutableReference(i) => strip_refs(i),
+        other => other,
     }
 }
 
@@ -655,6 +807,18 @@ fn is_float_literal_tree(e: &Expression<'_>) -> bool {
 }
 
 /// A type with a part no receiver or turbofish fixed (a generic, or an inferred `_`).
+/// The element a `for` loop over a value of type `t` binds, when the type declares it fully (`Vec<T>`, `[T; N]`, a
+/// set or an `Iterator<T>`; through references).
+pub(super) fn sequence_element(t: &Type) -> Option<Type> {
+    let elem = match t {
+        Type::Reference(x) | Type::MutableReference(x) => return sequence_element(x),
+        Type::Vec(x) | Type::Array(x, _) => (**x).clone(),
+        Type::Parameterized(n, xs) if xs.len() == 1 && crate::typing::core_surface::is_element_container(n) => xs[0].clone(),
+        _ => return None,
+    };
+    Some(elem).filter(|e| !contains_unfixed(e))
+}
+
 pub(super) fn contains_unfixed(t: &Type) -> bool {
     match t {
         Type::Infer => true,

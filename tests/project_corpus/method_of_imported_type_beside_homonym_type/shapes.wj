@@ -1,0 +1,16 @@
+pub struct Mesh {
+    pub pts: Vec<f32>,
+    pub count: i32,
+}
+
+impl Mesh {
+    pub fn new() -> Mesh {
+        Mesh { pts: Vec::new(), count: 0 }
+    }
+    pub fn add(x: f32, y: f32, z: f32) {
+        self.pts.push(x)
+        self.pts.push(y)
+        self.pts.push(z)
+        self.count = self.count + 1
+    }
+}

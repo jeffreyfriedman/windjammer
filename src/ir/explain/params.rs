@@ -34,10 +34,13 @@ pub fn mode_label(m: OwnershipMode) -> &'static str {
 
 /// Spelling-insensitive form of a type label: the solver prints `Vec(I64)` (Debug) and the emitted
 /// Rust is `Vec<i64>`; they are the same type, so comparing them as raw strings reports a width
-/// disagreement that does not exist (D-WIDTH-OWNERS measured spelling, not width).
+/// disagreement that does not exist (D-WIDTH-OWNERS measured spelling, not width). A user type is printed
+/// `Custom("Cell")` by the solver and `Cell` in Rust.
 fn same_type_label(solver: &str, emitted: &str) -> bool {
     fn norm(s: &str) -> String {
-        s.chars()
+        s.replace("Custom(\"", "")
+            .replace("\")", "")
+            .chars()
             .filter(|c| !c.is_whitespace())
             .map(|c| if matches!(c, '(' | ')' | '<' | '>' | ',') { '_' } else { c.to_ascii_lowercase() })
             .collect()
@@ -450,4 +453,17 @@ pub fn clone_reports(
         });
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    /// The meter compares types, not spellings: a user type inside a `Vec` agrees with its Rust spelling, a
+    /// different width does not.
+    #[test]
+    fn same_type_label_ignores_spelling_only() {
+        assert!(super::same_type_label("Vec(Custom(\"Cell\"))", "Vec < Cell >"));
+        assert!(super::same_type_label("Vec(I64)", "Vec<i64>"));
+        assert!(!super::same_type_label("Vec(I64)", "Vec<i32>"));
+        assert!(!super::same_type_label("Vec(Custom(\"Cell\"))", "Vec<Cellar>"));
+    }
 }

@@ -1,0 +1,16 @@
+pub struct Corner {
+    pub w: f64,
+}
+
+pub struct Mesh {
+    pub corners: Vec<Corner>,
+}
+
+impl Mesh {
+    pub fn new() -> Mesh {
+        Mesh { corners: Vec::new() }
+    }
+    pub fn add(self) {
+        self.corners.push(Corner { w: 0.5 })
+    }
+}

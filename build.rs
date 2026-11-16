@@ -211,6 +211,17 @@ fn build_content_key() -> (String, String) {
     (build_key::content_key(root, &version, &env("TARGET"), &env("PROFILE"), &features), content_key::inputs_key(root))
 }
 
+/// macOS on Apple silicon: link `wj` with chained fixups, so dyld applies the binary's pointer fixups page by page as
+/// it maps them instead of rebasing every pointer before `main` (4.3M of the 27.5M instructions `wj -V` retired; the
+/// interpreter's startup ladder, ADR-0038 P2). Only the `wj` binary is linked differently: no dependency is rebuilt.
+fn link_wj_with_chained_fixups() {
+    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    if os == "macos" && arch == "aarch64" {
+        println!("cargo:rustc-link-arg-bin=wj=-Wl,-fixup_chains");
+    }
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     emit_toolchain_identity();
@@ -221,6 +232,7 @@ fn main() {
     // `generate_test_all_rs`); a test file added later is caught by tests/build_rerun_stability_test.rs.
     println!("cargo:rerun-if-changed=build_support");
     println!("cargo::rustc-check-cfg=cfg(tarpaulin)");
+    link_wj_with_chained_fixups();
 
     generate_test_all_rs();
 

@@ -1,0 +1,59 @@
+use std::ops::Add;
+use std::ops::Mul;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct P2 {
+    pub x: f32,
+    pub y: f32,
+}
+impl P2 {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.x.to_ne_bytes());
+        __bytes.extend_from_slice(&self.y.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Add for P2 {
+    type Output = P2;
+
+#[inline]
+fn add(self, o: P2) -> P2 {
+        P2 { x: self.x + o.x, y: self.y + o.y }
+}
+}
+
+impl Mul<f32> for P2 {
+    type Output = P2;
+
+#[inline]
+fn mul(self, s: f32) -> P2 {
+        P2 { x: self.x * s, y: self.y * s }
+}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub struct Vertex {
+    pub pos: P2,
+}
+
+#[inline]
+fn midpoint(verts: &Vec<Vertex>, a: usize, b: usize) -> P2 {
+    let mut pts = Vec::with_capacity(verts.len());
+    for i in 0_usize..verts.len() {
+        pts.push(verts[i].pos);
+    }
+    let pa = pts[a];
+    let pb = pts[b];
+    (pa + pb) * 0.5_f32
+}
+
+fn main() {
+    let vs = vec![Vertex { pos: P2 { x: 0.0_f32, y: 2.0_f32 } }, Vertex { pos: P2 { x: 4.0_f32, y: 6.0_f32 } }];
+    let m = midpoint(&vs, 0_usize, 1_usize);
+    println!("{} {}", m.x, m.y);
+}
+

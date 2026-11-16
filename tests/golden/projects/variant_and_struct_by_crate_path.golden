@@ -1,0 +1,99 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod shapes;
+
+// Re-export public items
+pub use shapes::*;
+// ==== main.rs ====
+mod shapes;
+#[inline]
+fn size(s: &crate::shapes::Shape) -> f32 {
+    let (a, b, c) = match s {
+        crate::shapes::Shape::Cube(e) => (e.x, e.y, e.z),
+        crate::shapes::Shape::Ball(r) => (*r * 1.0_f32, 0.0_f32, 0.0_f32),
+        crate::shapes::Shape::Pill(r, h) => (*r * 1.0_f32, *h * 1.0_f32, 0.0_f32),
+        crate::shapes::Shape::Hull(_) => (1.0_f32, 1.0_f32, 1.0_f32),
+    };
+    crate::shapes::total(a, b, c)
+}
+
+#[inline]
+fn heavy(items: &Vec<crate::shapes::Item>) -> i64 {
+    let mut n = 0_i64;
+    for m in items.iter().copied() {
+        if m.weight > 0.5_f32 {
+            n += 1;
+        }
+    }
+    n
+}
+
+fn main() {
+    let pill = crate::shapes::Shape::Pill(1.5_f32, 2.0_f32);
+    let ball = crate::shapes::Shape::Ball(0.5_f32);
+    let cube = crate::shapes::Shape::Cube(crate::shapes::V3 { x: 1.0_f32, y: 2.0_f32, z: 3.0_f32 });
+    println!("{} {} {}", size(&pill), size(&ball), size(&cube));
+    let items = vec![crate::shapes::Item { weight: 0.75_f32, kind: 1_i32 }, crate::shapes::Item { weight: 0.25_f32, kind: 2_i32 }];
+    println!("{}", heavy(&items));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod shapes;
+
+// Re-export public items
+pub use shapes::*;
+// ==== shapes.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct V3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+impl V3 {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(12);
+        __bytes.extend_from_slice(&self.x.to_ne_bytes());
+        __bytes.extend_from_slice(&self.y.to_ne_bytes());
+        __bytes.extend_from_slice(&self.z.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum Shape {
+    Cube(V3),
+    Ball(f32),
+    Pill(f32, f32),
+    Hull(i32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct Item {
+    pub weight: f32,
+    pub kind: i32,
+}
+impl Item {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.weight.to_ne_bytes());
+        __bytes.extend_from_slice(&self.kind.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[inline]
+pub fn total(x: f32, y: f32, z: f32) -> f32 {
+    x + y + z
+}
+

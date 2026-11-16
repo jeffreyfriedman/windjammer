@@ -29,8 +29,15 @@ fn run_toolchain(cmd: &Commands) {
     }
 }
 
-fn cmd_doctor(json: bool, expect_head: bool, strict: bool) -> Result<()> {
+fn cmd_doctor(json: bool, expect_head: bool, strict: bool, pin: bool) -> Result<()> {
     use windjammer::toolchain::doctor;
+    if pin {
+        match windjammer::toolchain::pin::pin_line(&windjammer::toolchain::identity::current()) {
+            Some(line) => println!("{line}"),
+            None => anyhow::bail!("this wj carries no source key"),
+        }
+        return Ok(());
+    }
     let path = windjammer::toolchain::env::get("PATH").unwrap_or_default();
     if expect_head {
         match doctor::expect_head(&path) {
@@ -99,7 +106,7 @@ fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
             let id = windjammer::toolchain::identity::current();
             Some(if *json { serde_json::to_string_pretty(&id.to_json()).map(|j| println!("{j}")).map_err(Into::into) } else { Ok(println!("{}", id.version_line())) })
         }
-        Commands::Doctor { json, expect_head, strict } => Some(cmd_doctor(*json, *expect_head, *strict)),
+        Commands::Doctor { json, expect_head, strict, pin } => Some(cmd_doctor(*json, *expect_head, *strict, *pin)),
         Commands::InstallDev { to, from, force, dry_run } => Some(cmd_install_dev(to.clone(), from.clone(), *force, *dry_run)),
         Commands::SelfInstall { dry_run } => Some(windjammer::cli::self_install::execute(*dry_run, &plugin_dirs_from_env())),
         _ => None,
@@ -181,6 +188,7 @@ pub fn run(cli: Cli) -> Result<()> {
             jit_debug,
             jit_mutant,
             no_lint, no_locals,
+            pair_list,
             deterministic_time,
             allow_network,
             mock_http,
@@ -201,6 +209,10 @@ pub fn run(cli: Cli) -> Result<()> {
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
+            if let Some(list) = pair_list {
+                let opts = windjammer::interpreter::runner::RunOptions { hash_seed, sched_seed, no_jit: no_jit || jit == "off", jit_loop_hot, caps_mode: caps, ..Default::default() };
+                std::process::exit(windjammer::interpreter::runner::run_pair_list(&list, opts));
+            }
             let output = output_of(error_format.as_deref());
             use windjammer::cli::run_dev::{execute, Mode, RunOptions};
             let (path, args) = split_path_and_args(path_and_args);

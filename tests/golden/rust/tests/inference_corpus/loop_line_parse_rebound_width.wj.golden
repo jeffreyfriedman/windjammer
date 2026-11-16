@@ -1,0 +1,16 @@
+fn main() {
+    let text: String = String::from("4\n17\nx");
+    let mut first_value = 0_i64;
+    let mut total = 0_i64;
+    let mut seen = false;
+    for line in text.lines() {
+        if !seen {
+            seen = true;
+            first_value = line.trim().parse::<i64>().unwrap_or(0_i64);
+            continue;
+        }
+        total += line.parse::<i64>().unwrap_or(0_i64);
+    }
+    println!("{} {}", first_value, total);
+}
+

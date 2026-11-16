@@ -82,7 +82,7 @@ impl FloatInference {
             .or_else(|| lookup_keys.first().cloned());
 
         if let Some(ref name) = func_name {
-            if (name == "assert_eq" || name == "assert_ne") && arguments.len() >= 2 {
+            if crate::intrinsics::Intrinsic::is_equality_assertion(name) && arguments.len() >= 2 {
                 for (_label, arg) in arguments.iter() {
                     self.collect_expression_constraints(arg, return_type);
                 }

@@ -1,0 +1,43 @@
+// A local bound to `Vec::new()` and filled with `push` of a declared user type: its element is that type, so
+// `(pts[a] + pts[b]) * 0.5` takes the operator impl's `f32` (the literal was emitted `0.5_f64`).
+use std::ops::Add
+use std::ops::Mul
+
+pub struct P2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Add for P2 {
+    type Output = P2
+    fn add(self, o: P2) -> P2 {
+        P2 { x: self.x + o.x, y: self.y + o.y }
+    }
+}
+
+impl Mul<f32> for P2 {
+    type Output = P2
+    fn mul(self, s: f32) -> P2 {
+        P2 { x: self.x * s, y: self.y * s }
+    }
+}
+
+pub struct Vertex {
+    pub pos: P2,
+}
+
+fn midpoint(verts: Vec<Vertex>, a: usize, b: usize) -> P2 {
+    let mut pts = Vec::new()
+    for i in 0..verts.len() {
+        pts.push(verts[i].pos)
+    }
+    let pa = pts[a]
+    let pb = pts[b]
+    (pa + pb) * 0.5
+}
+
+fn main() {
+    let vs = [Vertex { pos: P2 { x: 0.0, y: 2.0 } }, Vertex { pos: P2 { x: 4.0, y: 6.0 } }]
+    let m = midpoint(vs, 0, 1)
+    println("${m.x} ${m.y}")
+}

@@ -1,0 +1,42 @@
+// expect: 1
+// expect: 0
+// `let biased = if .. { f32 } else { f32 }` inside a function returning `i32`: the branches are the binding's value,
+// not the function's result, so they are not cast to the return width (`(c * (1.0 - h)) as i32` was emitted and
+// the later `f32` argument was rejected).
+struct Lod {
+    levels: Vec<f32>,
+    h: f32,
+}
+
+impl Lod {
+    fn pick(self, c: f32) -> i32 {
+        let mut i = 0i32
+        while (i as usize) < self.levels.len() {
+            if c >= self.levels[i as usize] {
+                return i
+            }
+            i = i + 1
+        }
+        (self.levels.len() - 1) as i32
+    }
+
+    fn pick_biased(self, c: f32, stable: i32) -> i32 {
+        let ideal = self.pick(c)
+        if ideal == stable {
+            return stable
+        }
+        let h = self.h
+        let biased = if ideal > stable {
+            c * (1.0 - h)
+        } else {
+            c * (1.0 + h)
+        }
+        self.pick(biased)
+    }
+}
+
+fn main() {
+    let l = Lod { levels: [0.5, 0.25], h: 0.1 }
+    println("${l.pick_biased(0.3, 0)}")
+    println("${l.pick_biased(0.6, 1)}")
+}

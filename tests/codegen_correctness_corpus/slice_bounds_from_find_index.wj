@@ -1,0 +1,15 @@
+// expect: right/left
+// expect: down/up
+// `k[0..idx]` is `k.slice(0, idx)`: its bounds are `usize` slots of the declared slice, so `idx` from
+// `k.find(" ").unwrap_or(0)` and its fallback literal are `usize` (the literal was emitted `0_i32`).
+fn main() {
+    let mut keys: Vec<string> = []
+    keys.push("left right")
+    keys.push("up down")
+    for k in keys {
+        let idx = k.find(" ").unwrap_or(0)
+        let head = k[0..idx]
+        let tail = k[idx + 1..k.len()]
+        println("${tail}/${head}")
+    }
+}

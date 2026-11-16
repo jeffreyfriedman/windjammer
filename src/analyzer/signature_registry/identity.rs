@@ -27,6 +27,14 @@ impl SignatureRegistry {
         })
     }
 
+    /// `member` of the type at module path `type_path` (`shapes::Mesh`, from the file's `use` or its own module): the
+    /// key registered for that type's identity, with or without `crate::`. C3: never a search over homonym types.
+    pub fn member_of_type_path(&self, type_path: &str, member: &str) -> Option<&FunctionSignature> {
+        [format!("{type_path}::{member}"), format!("crate::{type_path}::{member}")]
+            .into_iter()
+            .find_map(|key| self.layers().find_map(|reg| reg.signatures.get(&key)))
+    }
+
     /// True when the exact key `name` (on this layer or a layer below it) holds a method (`self` receiver):
     /// a trait or impl method registered under its bare name.
     pub fn key_holds_method(&self, name: &str) -> bool {

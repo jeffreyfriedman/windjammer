@@ -105,7 +105,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// when the solver fixed its width there is nothing to cast; otherwise the legacy W5 casts to the
     /// function's `int`/`i32` return width apply.
     pub(in crate::codegen::rust) fn cast_tail_to_return_int_width(&self, expr_str: &mut String, expr: &Expression<'ast>) {
-        if self.solver_operand_width(expr).is_some() {
+        // A branch of `let b = if .. { .. } else { .. }` is the binding's value, not the function's result.
+        if self.idiom.binding_value_depth > 0 || self.solver_operand_width(expr).is_some() {
             return;
         }
         let target = match &self.current_function_return_type {
@@ -189,5 +190,17 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The operand is an integer by a fact, not a guess: a cast to a declared integer type, or a value the solver gave an
+    /// integer width. Legacy float classes never apply to it (`whole * 10 + (b - 48) as i32` printed
+    /// `(whole * 10) as f32 + ..`).
+    pub(in crate::codegen::rust) fn is_declared_integer_operand(&self, expr: &Expression<'ast>) -> bool {
+        if let Expression::Cast { type_, .. } = expr {
+            return crate::ir::solver::is_integer_type(&crate::ir::node::parser_type_to_base_type(type_));
+        }
+        self.solver_operand_width(expr).is_some_and(|b| crate::ir::solver::is_integer_type(&b))
     }
 }

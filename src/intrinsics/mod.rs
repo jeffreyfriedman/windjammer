@@ -80,6 +80,11 @@ impl Intrinsic {
         })
     }
 
+    /// `assert_eq` / `assert_ne` (a call or a macro): the built-ins that compare two values of one type.
+    pub fn is_equality_assertion(name: &str) -> bool {
+        matches!(Self::from_call_name(name), Some(Intrinsic::AssertEq | Intrinsic::AssertNe))
+    }
+
     /// Intrinsic for a deprecated macro spelling `name!(..)`.
     pub fn from_macro_name(name: &str) -> Option<Intrinsic> {
         Some(match name {

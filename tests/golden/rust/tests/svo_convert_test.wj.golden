@@ -19,7 +19,7 @@ fn test_empty_grid_creates_empty_octree() {
     assert_eq!(svo.len(), 1, "Empty grid should have 1 node");
     let (material, is_leaf, _) = decode_node(svo[0].clone());
     assert!(is_leaf, "Root should be leaf for empty grid");
-    assert_eq!(material, 0, "Empty grid should have material 0");
+    assert_eq!(material, 0_u8, "Empty grid should have material 0");
 }
 
 #[test]
