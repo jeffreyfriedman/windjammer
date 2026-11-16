@@ -21,7 +21,7 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | 7a | Go and JavaScript backends do not consume the IR | Open | `let _ir = ...prepare_ir_context(...)` in both generators | Plan WP 11; [ADR-0007](adr/0007-target-tiers-conformance.md) |
 | 7b | Conformance suite runs only the Rust path | Partial | `tests/conformance/run_conformance_tests.sh` | ADR-0007 |
 | 7c | Stdlib is Rust-host-only; no portability tags | Open | `std/*.wj` over `windjammer-runtime` | [ADR-0008](adr/0008-stdlib-portability.md) |
-| 8 | Optimizer disabled; performance and economics claims unmeasured | Decision needed | `src/compiler_database.rs` `optimize_program`; no `wj optimize`/`wj economics` | [ADR-0006](adr/0006-optimizer-fate.md), [WJ-PERF-01](proposals/rfcs/WJ-PERF-01-economic-efficiency.md) |
+| 8 | Economic efficiency: defined and measured against Rust twins; two gated wins (interpreted verify loop 0.24x CPU, source ceremony 0.45x); losses with named fixes (cold dependency build, runtime size, six slow kernels) | Measured, in progress | `scripts/wj/economics.wj`, `bench/economics/`, `wj optimize`; `wj economics` not started | [economics/RESULTS.md](economics/RESULTS.md), [economics/PLAN.md](economics/PLAN.md), [ADR-0006](adr/0006-optimizer-fate.md) |
 | 9 | RFC features (comptime, const generics, `owned`) | Not started | No tokens/syntax; only `ConstEval::Comptime` IR scaffolding | [ADR-0003](adr/0003-owned-keyword.md), [WJ-LANG-02](proposals/rfcs/WJ-LANG-02-mojo-feature-analysis.md) |
 
 ## Language-surface questions the code and docs disagree on

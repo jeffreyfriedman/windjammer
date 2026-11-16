@@ -3,8 +3,9 @@ status: proposal
 ---
 # `wj economics` and `wj optimize`: command specification
 
-- **Status:** Specified. `wj optimize --explain` is the first slice to implement (PLAN.md step 3); everything else is
-  unimplemented, and none of it is in `docs/promises.toml` yet (an entry there must have acceptance cases; see below).
+- **Status:** `wj optimize` implemented (2026-11-16): `FILE`/`--explain`, `--pass`, `--json`, `--list`, with promise
+  entries in `docs/promises.toml` and cases in `tests/promises/optimize.toml`. `--diff` and all of `wj economics` are
+  specified, not implemented (the suite numbers come from `scripts/wj/economics.wj`).
 - **Related:** [DEFINITION.md](DEFINITION.md), [PASSES.md](../optimization/PASSES.md), `docs/promises.toml`,
   `tests/promises/*.toml`, `tests/promise_registry_test.rs`
 
