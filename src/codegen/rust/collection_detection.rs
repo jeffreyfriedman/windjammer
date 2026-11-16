@@ -537,7 +537,11 @@ impl CodeGenerator<'_> {
         collect_receiver: &Expression,
         explicit_target: Option<&Type>,
     ) -> (String, String) {
-        let iter_item = self.infer_iterator_item_type_at_expr(collect_receiver);
+        let iter_item = self.infer_iterator_item_type_at_expr(collect_receiver).or_else(|| match collect_receiver {
+            // an unknown receiver (`read_to_string(..).unwrap_or("")` lines): the declaration of the producer says the item
+            Expression::MethodCall { method, .. } => self.core_surface().unique_iterator_item(method),
+            _ => None,
+        });
         let target_ty = explicit_target.or(self.collect_target_type.as_ref()).or_else(|| {
             self.current_function_return_type
                 .as_ref()

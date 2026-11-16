@@ -341,7 +341,7 @@ A replay that asks for something the log does not have stops with `WJ0049` and s
 1. `println!("{}", x)`: macros do not exist. Write `println("${x}")` (W0007/W0008, ADR-0014).
 2. `vec![1, 2]`: write `[1, 2]`; `vec![0; n]` is `[0; n]`.
 3. `#[derive(Debug, Clone)]`: the lexer rejects `#`. Derives are inferred; no attribute needed.
-4. `&self`, `&mut self`, `&x` arguments: write `self`; ownership and borrows are inferred (W0001, W0004).
+4. `&self`, `&mut self`, `&x` arguments: write `self`; ownership and borrows are inferred (W0001, W0004). One exception: a trait method with no body declares its receiver, `&self` or `&mut self` (W0016), because there is no body to infer it from.
 5. `.iter()` / `.iter_mut()`: delete them (W0003, an error in `wj build`).
 6. `.unwrap()` / `.expect("..")`: use `match`, `?`, `unwrap_or`, `unwrap_or_default` (W0002).
 7. `"lit".to_string()`: a literal is already a `string` (W0006). `.clone()` is usually unnecessary (W0005).
