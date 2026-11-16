@@ -444,7 +444,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Expression::StructLiteral { fields, .. } => {
                 for (_, field_expr) in fields {
-                    self.emit_owned_for_stored_param_identifiers_inner(field_expr, true); self.emit_owned_for_moved_field(field_expr);
+                    self.emit_owned_for_stored_param_identifiers_inner(field_expr, true);
                 }
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
@@ -507,7 +507,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             if let Some(mode) = sig.param_ownership.get(param_idx).filter(|_| !self.link_recursive_formal(param_idx, arg_index, arg_var)) {
-                let own = self.ownership_mode_to_owned(*mode); if *mode == OwnershipMode::Owned { if let Some((_, a)) = arguments.get(arg_index) { self.emit_owned_for_moved_field(a); } }
+                let own = self.ownership_mode_to_owned(*mode);
                 self.cs.add_because(
                     Constraint::OwnershipIs(expected_var, own),
                     origin(
@@ -701,7 +701,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Vec::new()
         };
         if let Some(Statement::Expression { expr, .. }) = body.last().map(|s| &**s) {
-            self.type_wrapped_return_payload(expr); self.emit_owned_for_moved_field(expr);
+            self.type_wrapped_return_payload(expr);
         }
         for val_var in tails {
             self.cs.add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
@@ -829,7 +829,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Statement::Return { value, .. } => {
                 if let Some(val) = value {
                     let val_var = self.walk_expression(val);
-                    self.type_wrapped_return_payload(val); self.emit_owned_for_moved_field(val);
+                    self.type_wrapped_return_payload(val);
                     self.cs
                         .add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
                     self.cs.add_because(
