@@ -161,7 +161,8 @@ pub enum Commands {
 
         /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
         /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read
-        /// once for both runs; when no input arrives within 2 s it is taken as empty
+        /// once for both runs; when no input arrives within 2 s it is taken as empty. When the two runs agree it prints `wj verify: OK` (with the
+        /// program's own exit status) and exits 0, whatever that status is; a difference or a failed build exits non-zero
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
 

@@ -589,6 +589,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         value_str = self.copy_borrowed_text_into_owned_target(target, value, value_str);
+        // CLONE-USE-AFTER-MOVE for a partial move: `self.last = e2.text` with `e2` read again afterwards (returned,
+        // used whole) copies the field so `e2` stays whole; the IR (`field_copy_sites`) decides, this prints it.
+        if matches!(value, Expression::FieldAccess { .. }) {
+            value_str = self.copy_if_read_again(value, value_str);
+        }
 
         // Auto-clone when assigning one self field from another self field.
         // In Rust, `self.a = self.b` is E0507 when self is &mut self and b is non-Copy,

@@ -143,3 +143,22 @@ prompt wording is the wrong lever: the one command should be cheap (L5), not avo
 - **Kill criteria.** A model's runs stop when its projection breaks the cap. If pass rate is at the ceiling for every
   model and arm, the task set is too easy and is replaced before any conclusion. If V3 minus R cost stays above zero
   with an interval excluding zero, the next levers are L4 (compiler bugs) and L5 (one compact command).
+
+## Pilot 7 follow-up: compiler-side fixes (agent-dx stream)
+
+From `private-docs/pilot7-analysis.md`; each is gated.
+
+- **`wj run --verify` verdict (analysis fix 5).** When the interpreted and compiled runs agree (same stdout, same exit
+  status) it prints `wj verify: OK, the compiled run matches the interpreted run (stdout N bytes, program exit status C)` and
+  exits 0 whatever C is; a difference, a failed build or a refused program still exits non-zero (the interpreted status
+  when that is non-zero, else 1). 44% of recorded failing runs (51% in V3) were a correct program exiting 1 on purpose, and
+  the sheet said to re-run until it exits 0. Gates: `tests/run_verify_test.rs`, promise cases for `wj run --verify`.
+- **Sheet idioms (fix 6).** The six idioms agents looked up with `wj docs` before writing are one executed block in the
+  pilot-8 candidate sheets (`bench/agent-dx/packs/pilot8/`, run by `tests/agent_docs_test.rs`). The default sheet is
+  unchanged: its budget rises only with a measurement. The design, cost and decision rules are in
+  `bench/agent-dx/PILOT8_SHEET_AB.md` (not run).
+- **`mut self` (fix 9).** One diagnostic, WJ0011, in `wj check`, `wj run` and `wj build`, located at the `mut` token, with
+  a machine-applicable fix (`wj check --fix` deletes it); the parser recovers and the receiver is plain `self`.
+- **WJ0051 and partial moves (fix 10).** The agent format says where an insertion goes (`=> insert `mut ` at 2:9`), a
+  deletion by span. A field moved into an assignment (`self.last = e2.text`) while the struct is read again afterwards
+  is copied by the existing CLONE-USE-AFTER-MOVE rule (`field_copy_sites`); the assignment path did not apply it.

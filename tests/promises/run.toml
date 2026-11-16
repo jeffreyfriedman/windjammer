@@ -369,7 +369,7 @@ needs = "toolchain"
 files = { "m.wj" = "fn main() {\n    println(\"v ${6 * 7}\")\n}\n" }
 args = ["run", "--verify", "{w}/m.wj"]
 stdout_has = ["v 42"]
-stderr_has = ["wj verify: compiled build OK; the compiled run matches"]
+stderr_has = ["wj verify: OK, the compiled run matches the interpreted run"]
 
 [[case]]
 name = "run --verify cannot be combined with --compiled"
@@ -479,11 +479,31 @@ stdout_has = ["row 0;", "row 1;"]
 output_lacks = ["error"]
 
 [[case]]
-name = "run --verify shows the output printed before a panic and keeps the exit status"
+name = "run --verify shows the output printed before a panic; agreeing runs exit 0 and the line names the status"
 polarity = "negative"
 needs = "toolchain"
 files = { "m.wj" = "fn main() {\n    println(\"before-panic\")\n    panic(\"verify boom\")\n}\n" }
 args = ["run", "--verify", "{w}/m.wj"]
-exit = 101
+exit = 0
 stdout_has = ["before-panic"]
-stderr_has = ["verify boom"]
+stderr_has = ["verify boom", "program exit status 101"]
+
+[[case]]
+name = "run --verify: a correct program that exits 1 on purpose verifies OK and exits 0"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "use std::process\n\nfn main() {\n    println(\"error: bad command\")\n    process::exit(1)\n}\n" }
+args = ["run", "--verify", "{w}/m.wj"]
+exit = 0
+stdout_has = ["error: bad command"]
+stderr_has = ["wj verify: OK, the compiled run matches the interpreted run", "program exit status 1"]
+
+[[case]]
+name = "run --verify: a field moved into a collection and the whole struct returned afterwards compiles (partial move copies the field)"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "struct Edit {\n    idx: int,\n    text: string,\n}\n\nstruct Editor {\n    lines: Vec<string>,\n}\n\nimpl Editor {\n    fn forward(self, e: Edit) -> Edit {\n        let mut e2 = Edit { idx: e.idx, text: e.text }\n        if e2.idx == 0 {\n            self.lines.push(e2.text)\n        } else {\n            self.lines[0] = e2.text\n        }\n        e2\n    }\n}\n\nfn main() {\n    let mut ed = Editor { lines: [\"x\"] }\n    let e = ed.forward(Edit { idx: 1, text: \"y\" })\n    println(\"${ed.lines.len()} ${e.idx}\")\n}\n" }
+args = ["run", "--verify", "{w}/m.wj"]
+exit = 0
+stdout_has = ["1 1"]
+stderr_has = ["wj verify: OK"]

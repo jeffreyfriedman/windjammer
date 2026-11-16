@@ -9,7 +9,7 @@ pub mod effects;
 pub mod files;
 mod file_cache;
 mod fix;
-mod front;
+pub(crate) mod front;
 mod test_api;
 pub use test_api::compiler_identity_of;
 pub mod moves;

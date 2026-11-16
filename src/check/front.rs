@@ -118,6 +118,10 @@ pub fn parse(file: &str, text: &str, out: &mut Vec<Diagnostic>) -> Option<Parsed
 pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     let ix = SourceIndex::new(p.file.clone(), &p.text);
     for w in p.parser.warnings() {
+        if let Some(rest) = w.message.strip_prefix("WJ0011: ") {
+            out.push(mut_self_diagnostic(&ix, rest, w.line.unwrap_or(1), w.column.unwrap_or(1)));
+            continue;
+        }
         if let Some(rest) = w.message.strip_prefix("W0010: ") {
             let (l, c) = (w.line.unwrap_or(1), w.column.unwrap_or(1));
             let span = locate_type_word(&ix, l, c);
@@ -161,6 +165,25 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     }
     // No front-end mutability check: Windjammer infers `mut` for locals (the build accepts
     // `let x = 1` followed by `x = 2`), so the legacy MutabilityChecker would report false errors.
+}
+
+/// `mut self`: the span covers `mut` and the space after it; the fix deletes exactly that.
+pub(crate) fn mut_self_diagnostic(ix: &SourceIndex, msg: &str, l: usize, c: usize) -> Diagnostic {
+    let line = ix.text().lines().nth(l.saturating_sub(1)).unwrap_or("");
+    let tail: String = line.chars().skip(c.saturating_sub(1)).collect();
+    let word = if tail.starts_with("mut") { "mut" } else { "" };
+    let gap = tail[word.len()..].chars().take_while(|ch| ch.is_whitespace()).count();
+    let sp = ix.span_at(l, c, word.len() + gap);
+    let mut d = Diagnostic::error("WJ0011", msg.to_string()).at(sp.clone().with_label("remove `mut`"));
+    d = d.with_help("write `self`: Windjammer infers `&self`, `&mut self` or owned from how the body uses it; `let mut x` is for locals");
+    if !word.is_empty() {
+        d = d.with_fix(crate::diagnostics::Fix {
+            description: "remove `mut`".into(),
+            applicability: crate::diagnostics::Applicability::MachineApplicable,
+            edits: vec![crate::diagnostics::Edit { span: crate::diagnostics::Span { label: None, ..sp }, replacement: String::new() }],
+        });
+    }
+    d
 }
 
 fn locate_type_word(ix: &SourceIndex, l: usize, c: usize) -> crate::diagnostics::Span {

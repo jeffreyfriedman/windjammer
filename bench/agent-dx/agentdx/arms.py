@@ -51,6 +51,13 @@ LOOP_TEXT = {
         "`printf '<input>' | wj run --verify main.wj`: it runs the program at once, builds it with the production compiler "
         "(the final grade uses that build), runs the build on the same input and compares. Read what it reports, fix, and run "
         "it again. You are done when it exits 0 and the output is what the task asks for. No other build or run command is needed."),
+    # pilot 8: `wj run --verify` exits 0 whenever the interpreted and compiled runs agree, whatever the program's own status
+    "verify-ok": (
+        "Development loop: one command does everything. After writing `main.wj`, run "
+        "`printf '<input>' | wj run --verify main.wj`: it runs the program at once, builds it with the production compiler "
+        "(the final grade uses that build), runs the build on the same input and compares. Read what it reports, fix, and run "
+        "it again. You are done when it prints `wj verify: OK` (it exits 0 then, even if your program exits 1 on purpose: the line "
+        "names the program's status) and the output is what the task asks for. No other build or run command is needed."),
     "native-python": (
         "Development loop: run the program with `python3 main.py` (pass program input on stdin)."),
     "native-go": (
@@ -89,6 +96,11 @@ ARMS = {
     "V2": {"name": "interpreted-first+verify", "loop": "interpreted-verify", "pack_file": "pilot6/sheet_v2.md", "bash": "core+docs", "lang": "wj"},
     # pilot 7: V3 = the loop agents actually follow (one command, measured in pilot 6) with compact diagnostics (ADR-0037)
     "V3": {"name": "verify-one-command", "loop": "verify-one-command", "pack_file": "pilot7/sheet_v3.md", "bash": "core+docs", "lang": "wj",
+           "env": {"WJ_ERROR_FORMAT": "agent"}},
+    # pilot 8 (design: PILOT8_SHEET_AB.md, not run): idiom block (U8), idioms + sharper opening (U8s), verify exits 0 on agreement (V4)
+    "U8": {"name": "compiled-first+idioms", "loop": "compiled-first", "pack_file": "pilot8/sheet_u8.md", "bash": "core+docs", "lang": "wj"},
+    "U8s": {"name": "compiled-first+idioms+sharp-opening", "loop": "compiled-first", "pack_file": "pilot8/sheet_u8s.md", "bash": "core+docs", "lang": "wj"},
+    "V4": {"name": "verify-ok", "loop": "verify-ok", "pack_file": "pilot8/sheet_v4.md", "bash": "core+docs", "lang": "wj",
            "env": {"WJ_ERROR_FORMAT": "agent"}},
     "U7": {"name": "compiled-first", "loop": "compiled-first", "pack_file": "pilot7/sheet_u.md", "bash": "core+docs", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},

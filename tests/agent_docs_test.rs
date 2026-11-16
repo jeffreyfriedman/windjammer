@@ -75,9 +75,15 @@ fn extract(text: &str, file: &str) -> Vec<Block> {
     blocks
 }
 
+/// The pilot-8 candidate sheets (`bench/agent-dx/packs/pilot8/`): their idiom block is code an agent copies, so it runs here too.
+fn pilot8_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("bench/agent-dx/packs/pilot8")
+}
+
 fn all_blocks() -> Vec<Block> {
     let mut files = Vec::new();
     md_files(&docs_dir(), &mut files);
+    md_files(&pilot8_dir(), &mut files);
     files.sort();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     files
@@ -189,6 +195,32 @@ fn default_sheet_fits_its_ratchet_and_points_at_the_tools() {
         assert!(text.contains(needle), "default sheet must mention `{}`", needle);
     }
     assert!(!extract(&text, "sheet").is_empty(), "the sheet carries an executed example");
+}
+
+/// Shrink-only token budgets of the pilot-8 candidate sheets (bytes; 3.2 bytes per token). The pilot-7 sheets they extend are
+/// 1683 (U) and 1955 (V3) bytes; the idiom block (split+collect, exit status, trait objects, recursive enums, owned
+/// text, mutating through `self`) replaces the sheet's old example and adds 905 bytes (about 283 tokens). Lower these
+/// when the block shrinks; raise one only with a measurement (PILOT8_SHEET_AB.md).
+const PILOT8_BUDGET_BYTES: [(&str, usize); 3] = [("sheet_u8.md", 2_600), ("sheet_u8s.md", 2_640), ("sheet_v4.md", 3_000)];
+
+#[test]
+fn pilot8_sheets_are_executed_budgeted_and_state_the_verify_rule() {
+    let all = all_blocks();
+    for (name, budget) in PILOT8_BUDGET_BYTES {
+        let text = fs::read_to_string(pilot8_dir().join(name)).unwrap();
+        assert!(text.len() <= budget, "{name} is {} bytes; ratchet is {budget}", text.len());
+        assert!(all.iter().any(|b| b.file.ends_with(name) && b.kind == "windjammer"), "{name} carries an executed idiom block");
+        for needle in ["Box<E>", "Box<dyn Sh>", "process::exit", ".collect()", ".to_string()", "let mut"] {
+            assert!(text.contains(needle), "{name} must show `{needle}`");
+        }
+        assert!(!text.contains("until it exits 0"), "{name}: `--verify` exits 0 for a program that exits 1 on purpose, so \"until it exits 0\" is wrong");
+    }
+    let v4 = fs::read_to_string(pilot8_dir().join("sheet_v4.md")).unwrap();
+    assert!(v4.contains("wj verify: OK") && v4.contains("exits 0 when both runs agree"), "the verify sheet names the OK line");
+    // the sharper opening is the only difference between U8 and U8s
+    let (u8a, u8s) = (fs::read_to_string(pilot8_dir().join("sheet_u8.md")).unwrap(), fs::read_to_string(pilot8_dir().join("sheet_u8s.md")).unwrap());
+    let rest = |t: &str| t.lines().skip(3).collect::<Vec<_>>().join("\n");
+    assert_eq!(rest(&u8a), rest(&u8s), "U8 and U8s differ only in the opening paragraph");
 }
 
 #[test]

@@ -125,6 +125,16 @@ pub(crate) fn parse_wj_source(
 pub(crate) fn emit_parser_warnings(parser: &crate::parser::Parser) -> Result<()> {
     let mut has_errors = false;
     for w in parser.warnings() {
+        // a coded syntax diagnostic with a fix (`mut self`): the same one `wj check` reports, in the same layout
+        if let (Some(rest), Some(file)) = (w.message.strip_prefix("WJ0011: "), w.file.as_deref()) {
+            if let Ok(text) = std::fs::read_to_string(file) {
+                let ix = crate::diagnostics::SourceIndex::new(file.to_string(), &text);
+                let d = crate::check::front::mut_self_diagnostic(&ix, rest, w.line.unwrap_or(1), w.column.unwrap_or(1));
+                eprint!("{}", crate::diagnostics::render::render(&d, &|f| std::fs::read_to_string(f).ok()));
+                has_errors = true;
+                continue;
+            }
+        }
         let level = if w.is_error { "error" } else { "warning" };
         eprintln!(
             "{}: {} [{}:{}:{}]",

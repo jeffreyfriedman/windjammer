@@ -80,7 +80,9 @@ get:
 
 - `--verify` interprets, then builds the program and runs the compiled version too, and compares the two. The interpreted
   output streams as the program prints; the comparison comes at the end, on stderr. Standard input is read once and given
-  to both runs.
+  to both runs. When the two runs agree, `--verify` prints `wj verify: OK, ...` (naming the program's own exit status) and
+  exits 0, whatever that status is: a correct program that exits 1 on purpose verifies. A difference or a failed build exits
+  non-zero.
 - `--compiled` builds and runs the compiled program. A compiled run prints only your program's output and real
   diagnostics: the build's own progress lines stay out of the way.
 - `--error-format agent` (or `json`) changes how problems are reported, for tools that read them.
@@ -90,7 +92,7 @@ $ printf 'fn main() {\n    println("one")\n    println("two")\n}\n' > v.wj
 $ wj run --verify v.wj < /dev/null
 one
 two
-wj verify: compiled build OK; the compiled run matches
+wj verify: OK, the compiled run matches the interpreted run (stdout 8 bytes, program exit status 0)
 ```
 
 ### One line per problem, for programs that read them
