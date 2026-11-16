@@ -30,6 +30,7 @@ fn production_default(name: &str) -> bool {
         "inline_policy" => c.inline_policy,
         "dead_helpers" => c.dead_helpers,
         "scratch_reuse" => c.scratch_reuse,
+        "bounded_counter" => c.bounded_counter,
         other => panic!("pass `{other}` in the wj optimize table is not an OptimizationConfig switch"),
     }
 }
@@ -38,7 +39,7 @@ fn production_default(name: &str) -> bool {
 fn every_pass_has_a_soundness_section_and_the_true_default() {
     let doc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/optimization/PASSES.md")).unwrap();
     let anchors: Vec<String> = doc.lines().filter_map(|l| l.strip_prefix("## ")).map(anchor).collect();
-    assert_eq!(PASSES.len(), 9, "the optimizer has nine switches; update the wj optimize table with the new pass");
+    assert_eq!(PASSES.len(), 10, "the optimizer has ten switches; update the wj optimize table with the new pass");
     for p in PASSES {
         assert!(anchors.contains(&p.soundness.to_string()), "{}: no PASSES.md heading with anchor {} (have {:?})", p.name, p.soundness, anchors);
         assert_eq!(p.default_on, production_default(p.name), "{}: wj optimize reports the wrong default", p.name);

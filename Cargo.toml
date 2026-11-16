@@ -209,6 +209,16 @@ path = "tests/meta_scan_locality.rs"
 name = "lean_manifest"
 path = "tests/lean_manifest.rs"
 
+# Overflow-check clawback pass (PASSES.md P10): cargo test --release --test optimizer_bounded_counter
+[[test]]
+name = "optimizer_bounded_counter"
+path = "tests/optimizer_bounded_counter.rs"
+
+# wj optimize's pass table agrees with the optimizer and PASSES.md: cargo test --release --test optimize_cli
+[[test]]
+name = "optimize_cli"
+path = "tests/optimize_cli.rs"
+
 # Resolved engine vs the walker on every corpus program: cargo test --release --test engine_parity
 [[test]]
 name = "engine_parity"

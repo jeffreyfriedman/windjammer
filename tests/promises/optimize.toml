@@ -43,7 +43,7 @@ output_has = ["does not compile"]
 name = "optimize --list names every pass, scratch_reuse off"
 polarity = "positive"
 args = ["optimize", "--list"]
-stdout_has = ["temp_clone", "macro_arg_clone", "scratch_reuse    off", "soundness: docs/optimization/PASSES.md#p8"]
+stdout_has = ["temp_clone", "macro_arg_clone", "bounded_counter", "scratch_reuse    off", "soundness: docs/optimization/PASSES.md#p8"]
 
 [[case]]
 name = "optimize --list --json is machine readable"

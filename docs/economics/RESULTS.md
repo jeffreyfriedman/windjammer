@@ -186,6 +186,37 @@ Instructions retired of the run (macOS hardware counter, best of 3; the PC repea
 | interp/strings | 1.00 | 1.00 | 1.00 |
 | interp/structs | 1.14 | 1.16 | 1.14 |
 
+### Clawback: the bounded_counter pass (PASSES.md P10, measured)
+
+`economics.wj --clawback` (`bench/economics/results/mac-20261116-clawback.{json,md}`): each std-only kernel's
+generated Rust with the production optimizer with and without `bounded_counter`, built `-C opt-level=3` with overflow
+checks on, against the same code with checks off (the floor; never shipped). Instructions, best of 3:
+
+| kernel | pass edits | checks on, no pass | checks on, with pass | checks off | cost of the checks | recovered by the pass |
+|---|---:|---:|---:|---:|---:|---:|
+| interp/strings | 1 | 149.6M | 148.4M | 148.4M | 1.01x | all of it |
+| interp/nbody | 4 | 16.3M | 16.2M | 16.2M | 1.00x | 97% |
+| interp/sieve | 2 | 43.0M | 42.9M | 42.9M | 1.00x | 94% |
+| interp/hashmap | 3 | 54.0M | 53.2M | 52.8M | 1.02x | 72% |
+| interp/structs | 1 | 18.1M | 17.9M | 15.4M | 1.17x | 6% |
+| interp/closures | 1 | 12.6M | 12.6M | 11.6M | 1.09x | 3% |
+| interp/loop5m | 2 | 73.4M | 73.4M | 31.6M | 2.32x | 0% |
+| parity kernels (`for` ranges), fib30 | 0 | | | | 1.00x to 1.35x | 0% |
+
+Reading, plainly: the pass is sound (gate below) and removes every counter check it targets, but the checks that cost
+real time are not counter checks. In `loop5m` the 2.32x is the accumulator (`total += x`), in `fib`/`fib30` the
+additions of recursive results, in `collatz` `3n + 1`, in `vec_fill` and `histogram` the summations: values that can
+genuinely overflow for some input, so no proof removes them, and Windjammer keeps them by design (owner decision;
+`wrapping_*`/`checked_*` or the profile opt-out are the explicit ways out). LLVM already removes most bounded counter
+checks itself; the pass mostly helps where the counter feeds index arithmetic (`nbody`, `sieve`, `hashmap`). The next
+clawback with real yield is range facts from the numeric solver for values derived from inputs with declared bounds,
+not more syntactic patterns.
+
+Gate: `cargo test --release --test optimizer_bounded_counter`: rewrites and refusals on source; three programs whose
+overflow must still panic (a `u8` product reaching 258, a `<=` bound, a second write to the counter) panic before and
+after the pass; and each unsound variant (`CounterIgnoresTypeMax`, `CounterAcceptsLessEqual`,
+`CounterIgnoresOtherWrites`) turns one of them into a program that no longer panics, which the test detects.
+
 Owner decision (2026-11-16): overflow checks stay **on** by default in release builds (compiled output must match the
 interpreter, which panics on overflow). Every D5 number in this file states its setting: "same flags" rows are
 without checks on both sides; "shipped" rows are Windjammer with checks against the Rust twin without.

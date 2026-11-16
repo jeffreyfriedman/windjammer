@@ -19,7 +19,7 @@ pub struct PassInfo {
 
 const DOC: &str = "docs/optimization/PASSES.md";
 
-/// Every pass of `src/optimizer/passes`, in PASSES.md order. `tests/optimize_cli_test.rs` checks that each has a
+/// Every pass of `src/optimizer/passes`, in PASSES.md order. `tests/optimize_cli.rs` checks that each has a
 /// PASSES.md section and that `OptimizationConfig::production()` agrees with `default_on`.
 pub const PASSES: &[PassInfo] = &[
     PassInfo { name: "temp_clone", default_on: true, rewrite: "`E.clone()` -> `E` on a freshly built temporary", soundness: "#p1-temp_clone-on" },
@@ -30,6 +30,7 @@ pub const PASSES: &[PassInfo] = &[
     PassInfo { name: "inline_policy", default_on: true, rewrite: "remove `#[inline]` from tests, `main` and large functions", soundness: "#p6-inline_policy-on" },
     PassInfo { name: "dead_helpers", default_on: true, rewrite: "remove file-private `#[repr(C)]` and unreferenced `to_bytes` helpers", soundness: "#p7-dead_helpers-on" },
     PassInfo { name: "scratch_reuse", default_on: false, rewrite: "hoist a per-iteration `String::new()`/`Vec::new()` out of its loop and `clear()` it (WJ_AUTO_ARENA=1)", soundness: "#p8-scratch_reuse-off-auto-arena-adr-0025" },
+    PassInfo { name: "bounded_counter", default_on: true, rewrite: "`while i < B` counter arithmetic that provably cannot overflow -> `wrapping_*` (overflow checks stay on elsewhere)", soundness: "#p10-bounded_counter-on" },
     PassInfo { name: "macro_arg_clone", default_on: true, rewrite: "`format!(\"{}\", x.clone())` -> `format!(\"{}\", x)` in the format family", soundness: "#p9-macro_arg_clone-on" },
 ];
 

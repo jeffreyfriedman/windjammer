@@ -24,4 +24,10 @@ pub enum Mutant {
     ScratchIgnoresMoves,
     /// dead_helpers: remove repr(C) from structs in files using `unsafe`.
     ReprIgnoresUnsafe,
+    /// bounded_counter: skip the "fits the counter's type" check on affine uses.
+    CounterIgnoresTypeMax,
+    /// bounded_counter: accept `i <= B` (the increment can then reach `MAX + 1`).
+    CounterAcceptsLessEqual,
+    /// bounded_counter: accept a loop body with other writes to the counter.
+    CounterIgnoresOtherWrites,
 }

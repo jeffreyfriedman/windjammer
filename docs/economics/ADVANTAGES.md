@@ -34,7 +34,7 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 | C12 | Single-file build reads only reached peers' metadata | D2 compiled, D3 | **measured**: 1.26 s CPU inside this repository vs 0.09 s for the same file alone (docs/known-issues/build-scans-enclosing-tree-for-metadata.md) | location-independent | 1 agent-day | quick fix |
 | C8 | Defer-drop of large values | D5 latency | live (`--defer-drop auto`, 100 KB) | latency only; no instruction win | - | keep, not a headline |
 | C9 | Small-string / arena types chosen by ownership facts | D5, D4 | not started | unknown | weeks | research |
-| C10 | Overflow-check elimination from solver ranges | D5 | shipped binaries keep overflow checks (spec) | the twin has none in release, so this is a loss to close | 3+ agent-days | after C3 |
+| C10 | Overflow-check clawback (provably safe checks only; checks stay on by owner decision) | D5 | **measured**: checks cost 1.00x to 2.32x per kernel; the bounded_counter pass (P10, gated) recovers 72-100% on 4 small kernels and 0-6% where the cost is (accumulators, recursive sums) | range facts from the numeric solver for values with declared bounds | 3+ agent-days | P10 landed; next rung needs solver ranges |
 
 ## C1 Interpreter-first verify loop
 
