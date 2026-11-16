@@ -19,7 +19,7 @@ counting the ones that run only in the interpreter:
 hand from the stated semantics, never copied from an implementation. The number of example files:
 
 <!-- wj:gen name=metric key=spec.example_files -->
-297
+299
 <!-- wj:end -->
 
 **The conformance corpus.** A set of programs is run on every backend and the outputs compared. The number of programs, with

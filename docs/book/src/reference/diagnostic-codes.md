@@ -23,6 +23,8 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0161` | `std::arena` is unstable | Proven |  | Arenas (ADR-0025) are behind the compiler feature `unstable_arenas` |
 | `WJ0190` | Task is never waited on | HighConfidence |  | Every task (`spawn`, `async`, or a call returning `Task<T>`) is waited on: inside a `scope { }`, which waits for it, or through `.wait()` (ADR-0004) |
 | `WJ0191` | Removed concurrency syntax | Proven |  | `thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them |
+| `WJ0192` | Task changes a captured variable | HighConfidence |  | A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004) |
+| `WJ0193` | Value cannot move to another thread | HighConfidence |  | A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004) |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

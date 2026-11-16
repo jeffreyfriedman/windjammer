@@ -73,8 +73,9 @@ fn every_core_surface_entry_typechecks_in_rustc() {
     );
     // `Task<T>` is the runtime's (ADR-0004): its module depends on `std` only, so rustc checks the entries against it.
     src.push_str(&format!(
-        "#[path = {:?}]\nmod task;\nuse task::Task;\n",
-        concat!(env!("CARGO_MANIFEST_DIR"), "/crates/windjammer-runtime/src/task.rs")
+        "#[path = {:?}]\nmod task;\nuse task::Task;\n#[path = {:?}]\nmod sync;\nuse sync::{{Receiver, Sender}};\n",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/crates/windjammer-runtime/src/task.rs"),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/crates/windjammer-runtime/src/sync.rs")
     ));
     let surface = CoreSurface::parse();
     let entries = surface.entries();
@@ -88,7 +89,11 @@ fn every_core_surface_entry_typechecks_in_rustc() {
             let args: Vec<String> = params.iter().map(|p| format!("arg::<{}>()", rust(p, false))).collect();
             let ret_ty = ret.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into());
             // The `Thread` trait declares the `std::thread` module's functions.
-            let path = if ty == "Thread" { "thread".to_string() } else { receiver(ty, &generics, false).replacen('<', "::<", 1) };
+            let path = match ty.as_str() {
+                "Thread" => "thread".to_string(),
+                "Sync" => "sync".to_string(),
+                _ => receiver(ty, &generics, false).replacen('<', "::<", 1),
+            };
             src.push_str(&format!("fn e{i}() {{ let _x: {ret_ty} = {path}::{method}({}); }}\n", args.join(", ")));
             continue;
         }

@@ -1247,13 +1247,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::Select { arms, .. } => {
+                // the value of a `select` is the chosen arm's: every arm has the select's type
+                let result = self.cs.fresh_var();
                 for a in arms {
                     if let Some(s) = a.source {
                         self.walk_expression(s);
                     }
-                    self.walk_expression(a.body);
+                    let body = self.walk_expression(a.body);
+                    self.cs.add_because(Constraint::TypeEquals(result, body), tagged("TY-UNIFY"));
                 }
-                self.cs.fresh_var()
+                result
             }
 
             Expression::Block { statements, .. } => {

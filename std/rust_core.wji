@@ -211,6 +211,22 @@ pub trait Task<T> {
     fn is_finished(self) -> bool;
 }
 
+// ADR-0004 channel ends (`windjammer_runtime::sync`): the value received is the value sent.
+pub trait Sender<T> {
+    fn send(self, value: T);
+    fn clone(self) -> Sender<T>;
+}
+
+pub trait Receiver<T> {
+    fn recv(self) -> T;
+    fn clone(self) -> Receiver<T>;
+}
+
+// The `std::sync` channel constructor, declared on `Sync` (the module's name, like `Thread` for `thread`).
+pub trait Sync {
+    fn channel<T>() -> (Sender<T>, Receiver<T>);
+}
+
 // The `std::thread` functions (`thread::spawn(move || work())` is a handle to the closure's result type), declared on
 // `Thread` because `thread` is a keyword.
 pub trait Thread {
