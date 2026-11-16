@@ -95,6 +95,23 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | P5 | geometric mean, net vs Node (V8) | 2.5 to 2.8 (V8's own count varies by run) | <= 1.0 (JIT class) | `--refs` |
 | P6 | a kernel suite of real programs (JSON, regex, a game tick, a parser) | not yet | added, counted, P1-P5 apply | new kernels in `bench/interp/` |
 
+Against Node, per kernel (owner rule: every performance report carries this table). Two measurements, never mixed:
+`instr` is the net instruction ratio from `interp_instr.wj --refs` (retired, macOS, measured on the round-6 head
+81cc30963, 2026-11-13); `cpu` is the CPU-seconds ratio from `bench/interp/compare.json` (carried from the 2026-11-03
+record, load 12.6; the PC re-records it on a quiet box). Below 1.0 means Windjammer is cheaper than V8. Targets: the
+rung each kernel must reach before P5 can close.
+
+| Kernel | vs Node, instr (2026-11-13) | vs Node, cpu (2026-11-03) | vs CPython, instr | vs CPython, cpu | Node target (next rung, then P5) |
+|---|---|---|---|---|---|
+| closures | 4.55 | 2.04 | 2.09 | 1.94 | 2.0 (fused iterator loop), then 1.0 |
+| fib30 | 0.78 | 0.72 | 0.09 | 0.21 | stays below 1.0 |
+| hashmap | 2.94 | 2.01 | 0.27 | 1.42 | 1.5 (integer keys in machine code), then 1.0 |
+| loop5m | 1.89 | 0.85 | 0.02 | 0.04 | 1.0 |
+| nbody | 5.67 | 2.42 | 0.46 | 0.89 | 2.5 (no island per `advance` call), then 1.0 |
+| sieve | 3.71 | 1.05 | 0.10 | 0.17 | 1.5, then 1.0 |
+| strings | 6.54 | 1.32 | 0.42 | 0.63 | 2.5 (string loops in machine code), then 1.0 |
+| structs | 1.38 | 0.73 | 0.04 | 0.16 | 1.0 |
+
 ## Ladder 2: correctness (the compiled program is the oracle)
 
 | Rung | Metric | Now | Target | Gate |
