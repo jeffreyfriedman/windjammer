@@ -75,7 +75,13 @@ impl Interpreter {
         if self.virtual_cwd.is_none() {
             return args;
         }
-        let Some((_, positions)) = PATH_ARGS.iter().find(|(n, _)| *n == builtin) else { return args };
+        // a builtin is spelled `fs::write`, `std::fs::write` or `a::b::write`: the module and function name decide
+        let mut tail = builtin.rsplit("::");
+        let spelled = match (tail.next(), tail.next()) {
+            (Some(f), Some(m)) => format!("{m}::{f}"),
+            _ => return args,
+        };
+        let Some((_, positions)) = PATH_ARGS.iter().find(|(n, _)| *n == spelled) else { return args };
         for &i in *positions {
             if let Some(Value::Str(s)) = args.get(i) {
                 let p = Path::new(s.as_str());

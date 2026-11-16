@@ -108,16 +108,22 @@ mod tests {
 
 static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-thread_local! {
-    static HELD: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-}
+/// Which thread holds the lock, and how many guards it has (the lock is re-entrant on one thread).
+static OWNER: std::sync::Mutex<Option<(std::thread::ThreadId, u32)>> = std::sync::Mutex::new(None);
 
 /// The working-directory lock, held. Re-entrant on one thread (a test that holds it may call `in_dir`).
 pub struct CwdGuard(Option<std::sync::MutexGuard<'static, ()>>);
 
 impl Drop for CwdGuard {
     fn drop(&mut self) {
-        HELD.with(|h| h.set(h.get() - 1));
+        let mut owner = OWNER.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, n)) = owner.as_mut() {
+            *n -= 1;
+            if *n == 0 {
+                *owner = None;
+            }
+        }
+        drop(owner);
         self.0.take();
     }
 }
@@ -125,10 +131,19 @@ impl Drop for CwdGuard {
 /// Hold the working-directory lock without changing the directory: a test that watches the process directory (or a
 /// process-wide store) holds it so another test's `in_dir` cannot interfere meanwhile.
 pub fn hold_cwd() -> CwdGuard {
-    let nested = HELD.with(|h| h.get() > 0);
-    let guard = if nested { None } else { Some(CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner())) };
-    HELD.with(|h| h.set(h.get() + 1));
-    CwdGuard(guard)
+    let me = std::thread::current().id();
+    {
+        let mut owner = OWNER.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((t, n)) = owner.as_mut() {
+            if *t == me {
+                *n += 1;
+                return CwdGuard(None);
+            }
+        }
+    }
+    let guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    *OWNER.lock().unwrap_or_else(|e| e.into_inner()) = Some((me, 1));
+    CwdGuard(Some(guard))
 }
 
 /// Run `f` with `dir` as the working directory. The working directory is process-wide, so every test that changes

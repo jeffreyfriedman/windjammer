@@ -81,11 +81,11 @@ pub fn generate_single_file_cargo_toml_with_config(
     // Multi-file CLI: keep domain in [lib] and wire src/main.wj as [[bin]].
     let lib_or_bin_section = if has_lib_rs && has_main_rs {
         format!(
-            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
-            lib_name, project_name
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n{}",
+            lib_name, project_name, crate::cargo_integration::extra_bin_sections(output_dir)
         )
     } else if has_lib_rs {
-        format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n", lib_name)
+        format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n{}", lib_name, crate::cargo_integration::extra_bin_sections(output_dir))
     } else if has_mod_rs && has_main_rs {
         format!(
             "[lib]\nname = \"{}\"\npath = \"mod.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",

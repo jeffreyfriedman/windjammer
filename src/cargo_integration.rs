@@ -42,7 +42,7 @@ pub fn detect_rust_file_type(path: &Path) -> RustFileType {
 
 /// `[[bin]]` sections for the executables beside `lib.rs`: each root-level generated file with a `fn main`
 /// (not `main.rs`, which has its own section), named after the file, in file-name order.
-fn extra_bin_sections(output_dir: &Path) -> String {
+pub(crate) fn extra_bin_sections(output_dir: &Path) -> String {
     let mut names: Vec<String> = std::fs::read_dir(output_dir)
         .into_iter()
         .flatten()

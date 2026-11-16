@@ -396,7 +396,6 @@ mod tests {
     /// reason (or routed through the port): this is the audit behind the E3 gate "replay is bit-exact".
     const COVERED: &[(&str, &str, &str)] = &[
         ("builtins/time.rs", "SystemTime::now()", "real wall base, read through clock_reading (logged, replayed)"),
-        ("engine.rs", "Instant::now()", "origin of the monotonic clock; readings are elapsed() through clock_reading"),
         ("builtins/std_sys.rs", "from_entropy", "default random stream; record and replay seed it from the header, simulate from the seed"),
         ("builtins/std_sys.rs", "process::id()", "OBSERVED process::pid"),
         ("virtual_cwd.rs", "env::current_dir", "the process directory behind the OBSERVED fs::/path::/env::current_dir of a program that never changed directory"),
