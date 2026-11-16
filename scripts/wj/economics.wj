@@ -581,7 +581,7 @@ fn main() {
     let shipped = !has_long_flag(args, "no-shipped")
     let label = long_flag_value_or(args, "label", "latest")
     let flag = counter_flag()
-    let scratch = strings.trim(run_sh("mktemp -d -t wj-econ.XXXXXX")).to_string()
+    let scratch = strings.trim(run_sh("mktemp -d /tmp/wj-econ.XXXXXX")).to_string()
     let _ = run_sh("mkdir -p " + quote(out_dir) + (if target == "" { "" } else { " " + quote(target) }))
 
     let mut env_doc = object()
