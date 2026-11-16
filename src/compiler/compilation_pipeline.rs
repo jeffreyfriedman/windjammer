@@ -130,7 +130,7 @@ pub fn build_project_with_config(
     external_metadata: &[(&str, &Path)],
     config: &CompilerConfig,
 ) -> Result<()> {
-    let wj_files = find_wj_files(path)?;
+    let wj_files = super::dependency_resolution::with_sibling_imports(path, find_wj_files(path)?);
     if wj_files.is_empty() {
         return Ok(());
     }

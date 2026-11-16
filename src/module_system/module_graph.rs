@@ -69,6 +69,14 @@ pub fn source_has_top_level_main(source: &str) -> bool {
     })
 }
 
+/// The crate's binary entry: `main.wj` or any other file with its own top-level `fn main`, directly in `root`
+/// (a runner or script beside the library modules; it builds as its own `[[bin]]`).
+pub fn is_bin_entry_file(file: &Path, root: &Path) -> bool {
+    file.parent() == Some(root)
+        && (file.file_name().and_then(|n| n.to_str()) == Some("main.wj")
+            || fs::read_to_string(file).is_ok_and(|t| source_has_top_level_main(&t)))
+}
+
 /// Recursively discover modules in a directory
 fn discover_modules_recursive(dir_path: &Path, is_root: bool) -> Result<Vec<Module>> {
     let mut modules = Vec::new();

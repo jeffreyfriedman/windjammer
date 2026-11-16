@@ -100,7 +100,7 @@ fn build_project_single_crate(
     println!("Target: {:?}", target);
 
     // Find all .wj files
-    let wj_files = with_sibling_imports(path, find_wj_files(path)?);
+    let wj_files = find_wj_files(path)?;
 
     if wj_files.is_empty() {
         println!("{} No .wj files found", "Warning:".yellow().bold());
@@ -441,7 +441,7 @@ fn build_project_single_crate(
             } else {
                 path
             };
-            generate_modules_for_build(path, source_dir, output)?;
+            build_utils::generate_nested_module_structure(source_dir, output)?;
 
             // CLEANUP: Remove stale .rs files that conflict with generated directory modules
             // Example: If lighting/ directory exists with mod.rs, remove lighting.rs (stale FFI file)
@@ -543,67 +543,6 @@ fn build_project_single_crate(
 }
 
 #[allow(dead_code)]
-/// A build of one file includes the sibling modules it imports (`use name::...` with `name.wj` or `name/mod.wj`
-/// beside it), transitively: a program with imports has no other compiled form.
-fn with_sibling_imports(path: &Path, mut files: Vec<PathBuf>) -> Vec<PathBuf> {
-    if !path.is_file() || files.len() != 1 || path.file_name().and_then(|n| n.to_str()) == Some("mod.wj") {
-        return files;
-    }
-    let Some(dir) = path.parent().map(|d| if d.as_os_str().is_empty() { Path::new(".") } else { d }) else { return files };
-    let mut queue = vec![path.to_path_buf()];
-    while let Some(file) = queue.pop() {
-        let Ok(text) = std::fs::read_to_string(&file) else { continue };
-        for line in text.lines() {
-            let l = line.trim_start();
-            let Some(rest) = l.strip_prefix("use ").or_else(|| l.strip_prefix("pub use ")) else { continue };
-            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-            if name.is_empty() {
-                continue;
-            }
-            let found = [dir.join(format!("{name}.wj")), dir.join(&name).join("mod.wj")].into_iter().find(|p| p.is_file());
-            if let Some(f) = found {
-                if !files.contains(&f) {
-                    files.push(f.clone());
-                    queue.push(f);
-                }
-            }
-        }
-    }
-    files.sort();
-    files
-}
-
-/// The library's module declarations for this build; a build of one file declares only the modules it imported.
-fn generate_modules_for_build(path: &Path, source_dir: &Path, output: &Path) -> Result<()> {
-    build_utils::generate_nested_module_structure(source_dir, output)?;
-    if path.is_file() {
-        for f in ["lib.rs", "mod.rs"] {
-            drop_undeclared_modules(&output.join(f), output);
-        }
-    }
-    Ok(())
-}
-
-/// Drop `mod`/`pub use` lines of `lib_file` that name a module this build did not produce (a file build declares
-/// only the modules it imported, not every sibling of the directory).
-fn drop_undeclared_modules(lib_file: &Path, output: &Path) {
-    let Ok(text) = std::fs::read_to_string(lib_file) else { return };
-    let produced = |name: &str| output.join(format!("{name}.rs")).is_file() || output.join(name).is_dir();
-    let kept: Vec<&str> = text
-        .lines()
-        .filter(|l| {
-            let t = l.trim();
-            let name = t
-                .strip_prefix("pub mod ")
-                .or_else(|| t.strip_prefix("mod "))
-                .and_then(|r| r.strip_suffix(';'))
-                .or_else(|| t.strip_prefix("pub use ").and_then(|r| r.strip_suffix("::*;")));
-            name.is_none_or(produced)
-        })
-        .collect();
-    let _ = std::fs::write(lib_file, kept.join("\n") + "\n");
-}
-
 pub fn find_wj_files(path: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
 
