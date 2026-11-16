@@ -29,7 +29,34 @@ pub fn lint(d: &LintDiagnostic, ix: &SourceIndex) -> Option<Diagnostic> {
     if let Some(n) = &d.note {
         out = out.with_note(n.clone());
     }
+    if let Some(fix) = out.primary_span.as_ref().and_then(|sp| lint_fix(code, sp, ix)) {
+        out = out.with_fix(fix);
+    }
     Some(out)
+}
+
+/// The exact edit for a lint whose fix is mechanical: delete the call the lint names (`"x".to_string()`, `.iter()`), or
+/// spell a bodyless trait method's receiver `&self`.
+fn lint_fix(code: &str, sp: &super::model::Span, ix: &SourceIndex) -> Option<Fix> {
+    let text = ix.text();
+    let (start, end) = (sp.byte_start, sp.byte_end);
+    let word = text.get(start..end)?;
+    match code {
+        "W0006" | "W0003" if matches!(word, "to_string" | "iter" | "iter_mut") && start > 0 && text[..start].ends_with('.') && text[end..].starts_with("()") => {
+            let (from, to) = (start - 1, end + 2);
+            Some(Fix {
+                description: format!("remove `{}`", &text[from..to]),
+                applicability: Applicability::MachineApplicable,
+                edits: vec![Edit { span: ix.span(from, to), replacement: String::new() }],
+            })
+        }
+        "W0016" if word == "self" && !text[..start].ends_with('&') => Some(Fix {
+            description: "declare the receiver `&self` (`&mut self` when an implementation changes it)".to_string(),
+            applicability: Applicability::MaybeIncorrect,
+            edits: vec![Edit { span: ix.span(start, end), replacement: "&self".to_string() }],
+        }),
+        _ => None,
+    }
 }
 
 /// A W0007/W0008 finding, with the exact rewrite as a machine-applicable fix.
