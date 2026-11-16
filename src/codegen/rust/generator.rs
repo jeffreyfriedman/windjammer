@@ -1897,7 +1897,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// local of that name (`accept: fn(int) -> bool`) shadows every function: no registry signature then.
     pub(crate) fn resolve_bare_free_call_signature(&self, name: &str, n: usize) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
         let shadowed = !name.contains("::") && (self.current_function_params.iter().any(|p| p.name == name) || self.local_variable_scopes.iter().any(|s| s.contains(name)));
-        self.resolve_call_signature_with_global(name, None, n).filter(|r| !shadowed && (name.contains("::") || !r.sig.has_self_receiver))
+        let own = if shadowed { None } else { self.own_file_definition(name) };
+        self.resolve_call_signature_of(name, None, n, own.as_ref()).filter(|r| !shadowed && (name.contains("::") || !r.sig.has_self_receiver))
     }
 
     pub(crate) fn resolve_call_signature_with_global(
@@ -1906,6 +1907,21 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type: Option<&str>,
         arg_count: usize,
     ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
+        self.resolve_call_signature_of(func_name, receiver_type, arg_count, None)
+    }
+
+    /// `own`: the declaration a bare call names lexically (this file's function). A global entry that declares a
+    /// different function is a same-named function of another module: it is never read, not even for metadata.
+    fn resolve_call_signature_of(
+        &self,
+        func_name: &str,
+        receiver_type: Option<&str>,
+        arg_count: usize,
+        own: Option<&crate::analyzer::FunctionSignature>,
+    ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
+        let same_function = |r: &crate::codegen::rust::call_signature_resolution::ResolvedSignature| {
+            own.is_none_or(|o| o.declares_same_function(&r.sig))
+        };
         let owned_name = self.imported_runtime_qualified_callee(func_name);
         let import_qualified = self.import_fn_alias_map.get(func_name).cloned();
         let resolved_callee = import_qualified
@@ -1931,7 +1947,7 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.import_fn_alias_map,
                 caller_module.as_deref(),
             )
-        });
+        }).filter(same_function);
         let codegen_refresh_source = global
             .clone()
             .filter(|r| r.sig.emitted_rust_ref_params.is_some())
@@ -1958,6 +1974,7 @@ impl<'ast> CodeGenerator<'ast> {
                             &self.import_fn_alias_map,
                             caller_module.as_deref(),
                         )
+                        .filter(same_function)
                     {
                         if !crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
                             &global_only.sig,

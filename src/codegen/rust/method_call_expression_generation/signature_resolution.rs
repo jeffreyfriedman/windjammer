@@ -587,11 +587,16 @@ impl<'ast> CodeGenerator<'ast> {
                     return None;
                 }
                 let suffix = format!("::{method}");
+                // A receiver of known type (inferred, or built by `Type::f(..)`) calls `Type::method` or a trait's method.
+                let receiver_known = receiver_type_name.clone().or_else(|| self.receiver_static_call_type(object));
                 let mut candidates: Vec<Option<FunctionSignature>> = Vec::new();
                 let push = |reg: &crate::analyzer::SignatureRegistry,
                             out: &mut Vec<Option<FunctionSignature>>| {
                     for (key, sig) in &reg.signatures {
-                        if key.ends_with(&suffix) && validate_arg_count(sig, arguments.len()) {
+                        if key.ends_with(&suffix)
+                            && validate_arg_count(sig, arguments.len())
+                            && reg.key_may_name_method_of(key, receiver_known.as_deref(), method)
+                        {
                             out.push(Some(sig.clone()));
                         }
                     }

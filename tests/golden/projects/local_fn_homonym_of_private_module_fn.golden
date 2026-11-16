@@ -1,0 +1,65 @@
+// ==== docs.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Doc {
+    pub a: String,
+    pub b: String,
+}
+
+#[inline]
+pub fn draft(a: String, b: String) -> Doc {
+    Doc { a, b }
+}
+
+#[inline]
+pub fn make(a: String) -> Doc {
+    draft(a, String::from("x"))
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod docs;
+
+// Re-export public items
+pub use docs::*;
+// ==== main.rs ====
+use self::docs::make;
+mod docs;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Pair {
+    pub a: i64,
+    pub b: i64,
+}
+impl Pair {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(16);
+        __bytes.extend_from_slice(&self.a.to_ne_bytes());
+        __bytes.extend_from_slice(&self.b.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[inline]
+fn draft(a: i64, b: i64) -> Pair {
+    Pair { a, b }
+}
+
+fn main() {
+    let p = draft(4294967296_i64, -8589934592_i64);
+    println!("{} {} {}", p.a, p.b, make("q".to_string()).a);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod docs;
+
+// Re-export public items
+pub use docs::*;

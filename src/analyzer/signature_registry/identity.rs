@@ -88,4 +88,45 @@ impl SignatureRegistry {
         let base = name.split('<').next().unwrap_or(name);
         self.is_inherent_method_key(&format!("{base}::{method}"))
     }
+
+    /// Whether `key` can name the method a receiver of known type calls when `Type::method` itself is not registered:
+    /// only a trait's method can (through a bound or a trait object). An inherent method or a free function of the
+    /// same bare name (`Tabs::active` for a `RailItem` receiver) belongs to something else.
+    pub fn key_may_name_method_of_known_receiver(&self, key: &str) -> bool {
+        self.is_trait_method_key(key) || self.is_trait_impl_method_key(key)
+    }
+
+    /// [`Self::key_may_name_method_of_known_receiver`] for a receiver of type `receiver_type`, or any key when the
+    /// receiver's type is unknown: the receiver type's own `Type::method` key, or a trait's method.
+    pub fn key_may_name_method_of(&self, key: &str, receiver_type: Option<&str>, method: &str) -> bool {
+        let Some(rt) = receiver_type else { return true };
+        let base = rt.split('<').next().unwrap_or(rt);
+        let own = format!("{base}::{method}");
+        key == own || key.ends_with(&format!("::{own}")) || self.key_may_name_method_of_known_receiver(key)
+    }
+
+    /// True when `sig` is `method` of an inherent impl of a type other than `receiver_type`: a same-named method of
+    /// another type (`Tabs::active` for a `RailItem` receiver), never the method the call names.
+    pub fn is_inherent_method_of_another_type(&self, method: &str, sig: &FunctionSignature, receiver_type: &str) -> bool {
+        let leaf = |t: &str| {
+            let base = t.split('<').next().unwrap_or(t);
+            base.rsplit("::").next().unwrap_or(base).to_string()
+        };
+        let owner = match sig.param_types.first().filter(|_| sig.has_self_receiver) {
+            Some(crate::parser::Type::Reference(inner) | crate::parser::Type::MutableReference(inner)) => inner.as_ref(),
+            Some(other) => other,
+            None => return false,
+        };
+        let crate::parser::Type::Custom(owner) = owner else { return false };
+        leaf(owner) != leaf(receiver_type) && self.is_inherent_method_of(method, sig)
+    }
+}
+
+impl FunctionSignature {
+    /// True when `self` and `other` can be views of one function (C3 identity): they declare the same formal
+    /// parameter types and return type. Converged views of a function differ in ownership and emission flags,
+    /// never in what the source declares; a same-named function of another module may differ in both.
+    pub fn declares_same_function(&self, other: &FunctionSignature) -> bool {
+        self.formal_param_types == other.formal_param_types && self.return_type == other.return_type
+    }
 }
