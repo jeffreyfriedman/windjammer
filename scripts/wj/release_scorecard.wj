@@ -1048,11 +1048,15 @@ fn main() {
         return
     }
     let siblings = discover_siblings(root)
+    // The ecosystem is the checkout WJ_ECOSYSTEM names (any directory name), else <root>/windjammer-ecosystem: never recognised by its folder name.
+    let eco_env = env.get_or("WJ_ECOSYSTEM", "")
     let mut eco = ""
-    for s in siblings {
-        if strings.ends_with(s, "windjammer-ecosystem") {
-            eco = s
+    if eco_env != "" {
+        if fs.is_dir(eco_env) {
+            eco = eco_env
         }
+    } else if fs.is_dir(root + "/windjammer-ecosystem") {
+        eco = root + "/windjammer-ecosystem"
     }
     let c = Ctx { root: root, results: flag(args, "--results", root + "/results"), now: now, max_age: flag(args, "--max-age", "8").parse::<f64>().unwrap_or(8.0), eco: eco, siblings: siblings }
     let ms = collect(c)
