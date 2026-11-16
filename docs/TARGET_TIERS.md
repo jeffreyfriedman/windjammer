@@ -169,7 +169,7 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ## Not measured
 
-- `wasm`: `wj build -t wasm` emits a browser library (a wasm-bindgen cdylib crate), not a program with a `main`, so the conformance programs have nothing to run on until a headless runner exists. The Rust backend's output built for `wasm32-wasip1` and run under wasmtime would measure the platform, not this backend; it is the first step on the PC.
+- `wasm`: measured as the Rust backend's output built for `wasm32-wasip1` and run under `wasmtime` (the WebAssembly platform). A machine with `wasmtime` and `rustup target add wasm32-wasip1` runs it; any other machine records `not-run`. `wj build -t wasm` itself emits a browser library (a wasm-bindgen cdylib crate) that has no headless runner, so that target is not covered by this row.
 
 ## Measured with
 
@@ -181,4 +181,4 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ## Filling in what this machine could not run
 
-A machine with the toolchains runs `wj run scripts/wj/target_tiers.wj run <wj-binary> --backend <name>` (names: rust, javascript, typescript, go, wasm, interpreter; needs rustc, node >= 22.6, go, wasm-pack respectively), commits `tests/conformance/backend_results.tsv` and `docs/TARGET_TIERS.md`, and adds a ledger line with a reason for every failure.
+A machine with the toolchains runs `wj run scripts/wj/target_tiers.wj run <wj-binary> --backend <name>` (names: rust, javascript, typescript, go, wasm, interpreter; needs rustc, node >= 22.6, go, wasmtime plus the wasm32-wasip1 target respectively), commits `tests/conformance/backend_results.tsv` and `docs/TARGET_TIERS.md`, and adds a ledger line with a reason for every failure.

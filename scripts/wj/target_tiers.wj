@@ -67,8 +67,25 @@ fn toolchain(backend: string) -> string {
 
 fn have_tool(backend: string) -> string {
     if backend == "wasm" {
-        // `wj build -t wasm` emits a wasm-bindgen cdylib for the browser (Cargo.toml + lib), not a program with a `main`
-        return "`-t wasm` emits a browser library (wasm-bindgen cdylib); there is no headless runner for the conformance programs yet"
+        // the Rust backend's output built for `wasm32-wasip1` and run under wasmtime: it measures the WebAssembly platform
+        // (`wj build -t wasm` itself emits a browser library, a wasm-bindgen cdylib, which has no headless runner)
+        match sh("command -v wasmtime") {
+            Ok(r) => {
+                if r.status != 0 {
+                    return "wasmtime is not installed"
+                }
+            },
+            Err(_) => { return "cannot look for wasmtime" },
+        }
+        match sh("rustc --print target-libdir --target wasm32-wasip1 >/dev/null 2>&1 && test -d \"$(rustc --print target-libdir --target wasm32-wasip1)\"") {
+            Ok(r) => {
+                if r.status != 0 {
+                    return "the rust target wasm32-wasip1 is not installed (rustup target add wasm32-wasip1)"
+                }
+            },
+            Err(_) => { return "cannot look for the wasm32-wasip1 target" },
+        }
+        return ""
     }
     let tool = toolchain(backend)
     if tool == "" {
@@ -278,8 +295,8 @@ fn run_one(wj: string, backend: string, p: Program, scratch: string) -> string {
         build = "${w} build --no-lint ${quote(src)} -t go -o ${quote(out)} && cd ${quote(out)} && go vet ./... && go build -o ${quote(dir)}/prog ."
         exec = "${quote(dir)}/prog"
     } else if backend == "wasm" {
-        build = "${w} build --no-lint ${quote(src)} -t wasm -o ${quote(out)}"
-        exec = "false"
+        build = "${w} build --no-lint ${quote(src)} -o ${quote(out)} --no-cargo && test -f ${quote(out)}/${n}.rs && rustc --target wasm32-wasip1 --edition 2021 -A warnings --crate-name conf -o ${quote(dir)}/prog.wasm ${quote(out)}/${n}.rs"
+        exec = "wasmtime run ${quote(dir)}/prog.wasm"
     } else {
         build = "true"
         exec = "${w} run --interpret --no-lint ${quote(src)}"
@@ -474,7 +491,7 @@ fn render(rows: Vec<Row>, ledger: Vec<Entry>, measured: Vec<string>) -> string {
         s = s + "\nNo backend has a failing program.\n"
     }
     s = s + "\n## Not measured\n\n"
-    s = s + "- `wasm`: `wj build -t wasm` emits a browser library (a wasm-bindgen cdylib crate), not a program with a `main`, so the conformance programs have nothing to run on until a headless runner exists. The Rust backend's output built for `wasm32-wasip1` and run under wasmtime would measure the platform, not this backend; it is the first step on the PC.\n"
+    s = s + "- `wasm`: measured as the Rust backend's output built for `wasm32-wasip1` and run under `wasmtime` (the WebAssembly platform). A machine with `wasmtime` and `rustup target add wasm32-wasip1` runs it; any other machine records `not-run`. `wj build -t wasm` itself emits a browser library (a wasm-bindgen cdylib crate) that has no headless runner, so that target is not covered by this row.\n"
     s = s + "\n## Measured with\n\n"
     if measured.len() == 0 {
         s = s + "nothing yet (run `target_tiers.wj run`)\n"
@@ -484,7 +501,7 @@ fn render(rows: Vec<Row>, ledger: Vec<Entry>, measured: Vec<string>) -> string {
     }
     s = s + "\n## Filling in what this machine could not run\n\n"
     s = s + "A machine with the toolchains runs `wj run scripts/wj/target_tiers.wj run <wj-binary> --backend <name>` (names: rust, javascript, typescript, go, wasm, interpreter; "
-    s = s + "needs rustc, node >= 22.6, go, wasm-pack respectively), commits `tests/conformance/backend_results.tsv` and `docs/TARGET_TIERS.md`, and adds a ledger line with a reason for every failure.\n"
+    s = s + "needs rustc, node >= 22.6, go, wasmtime plus the wasm32-wasip1 target respectively), commits `tests/conformance/backend_results.tsv` and `docs/TARGET_TIERS.md`, and adds a ledger line with a reason for every failure.\n"
     s
 }
 
