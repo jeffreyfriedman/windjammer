@@ -23,6 +23,9 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
 | `wj check` | Type check without building |
 | `wj add` | Add a dependency to wj.toml |
+| `wj lock` | Resolve dependencies and write or verify wj.lock (exact revisions and content hashes) |
+| `wj lock update` | Re-resolve every path and git dependency, in dependency order, and write wj.lock |
+| `wj lock check` | Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not |
 | `wj remove` | Remove a dependency from wj.toml |
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
@@ -96,6 +99,7 @@ Usage: wj build [OPTIONS] <FILE>
 | `--metadata` | NAME=PATH |  | External crate metadata for cross-crate type inference (NAME=PATH, repeatable) |
 | `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
 | `--ir-shadow-validate` | IR_SHADOW_VALIDATE |  | Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate) |
+| `--locked` | LOCKED |  | Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds) |
 
 ## `wj run`
 
@@ -128,6 +132,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--jit-mutant` | NAME |  | Interpreted runs (debug builds only): leave one machine-code check out (mutation tests) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--no-locals` | NO_LOCALS |  | Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether) |
+| `--pair-list` | FILE |  | Interpreted runs (internal, hidden from help): run every program listed in FILE (one path per line) under the tree walker and the resolved engine in this one process and print a JSON line per program and engine (exit status, stdout, stderr); the drift fuzz step's batch mode (ADR-0038 C4) |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
 | `--record` | FILE |  | Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings) to FILE, a replayable log (ADR-0021) |
 | `--replay` | FILE |  | Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and none is performed; seeds, arguments and the time mode come from the log (ADR-0021) |
@@ -337,6 +342,38 @@ Usage: wj add [OPTIONS] <PACKAGE>
 | `<PACKAGE>` | PACKAGE |  | Package name |
 | `-f`, `--features` | FEATURES |  | Comma-separated list of features |
 | `-p`, `--path` | PATH |  | Local path dependency |
+
+## `wj lock`
+
+Resolve dependencies and write or verify wj.lock (exact revisions and content hashes)
+
+```text
+Usage: wj lock <COMMAND>
+```
+
+## `wj lock update`
+
+Re-resolve every path and git dependency, in dependency order, and write wj.lock
+
+```text
+Usage: wj lock update [DIR]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<DIR>` | DIR |  | Project directory (default: the current directory) |
+
+## `wj lock check`
+
+Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not
+
+```text
+Usage: wj lock check [DIR]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<DIR>` | DIR |  | Project directory (default: the current directory) |
 
 ## `wj remove`
 
@@ -627,6 +664,7 @@ Usage: wj doctor [OPTIONS]
 | `--json` | JSON |  | Machine-readable output |
 | `--expect-head` | EXPECT_HEAD |  | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) |
 | `--strict` | STRICT |  | Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout |
+| `--pin` | PIN |  | Print the toolchain pin line for this wj (its source key), ready to paste under `[toolchain]` in wj.toml |
 
 ## `wj install-dev`
 

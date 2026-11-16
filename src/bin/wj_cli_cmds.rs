@@ -148,15 +148,12 @@ pub fn run(cli: Cli) -> Result<()> {
             locked,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
-            if locked {
-                windjammer::cli::build::require_locked(&path)?;
-            }
             windjammer::cli::build::execute(
                 &path,
                 output.as_deref(),
                 release,
                 &target,
-                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic },
+                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic, locked },
                 check,
                 raw_errors,
                 fix,
@@ -375,18 +372,12 @@ pub fn run(cli: Cli) -> Result<()> {
                 path.as_deref(),
             )?;
         }
-        Commands::Lock { command } => match command {
-            LockCommand::Update { dir } => windjammer::cli::lock::update(dir.as_deref())?,
-            LockCommand::Check { dir } => windjammer::cli::lock::check(dir.as_deref())?,
-        },
+        Commands::Lock { command: LockCommand::Update { dir } } => windjammer::cli::lock::update(dir.as_deref())?,
+        Commands::Lock { command: LockCommand::Check { dir } } => windjammer::cli::lock::check(dir.as_deref())?,
 
-        Commands::Remove { package } => {
-            windjammer::cli::remove::execute(&package)?;
-        }
+        Commands::Remove { package } => windjammer::cli::remove::execute(&package)?,
 
-        Commands::Update { check, force } => {
-            windjammer::cli::update::execute(check, force)?;
-        }
+        Commands::Update { check, force } => windjammer::cli::update::execute(check, force)?,
         Commands::Stats { clear, verbose } => {
             if clear {
                 let mut stats = windjammer::error_statistics::load_or_create_stats();

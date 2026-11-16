@@ -68,8 +68,8 @@ fn a_finding_names_the_source_the_sink_and_the_remedy() {
     let d = d.iter().find(|d| d.code == "WJ0173").expect("a finding");
     assert!(d.is_error());
     assert!(d.message.contains("file contents") && d.message.contains("command"), "{}", d.message);
-    assert_eq!(d.primary_span.as_ref().unwrap().line_start, 8, "the span is on the sink call");
-    assert!(d.secondary_spans.iter().any(|s| s.line_start == 7), "the second span is the source call: {:?}", d.secondary_spans);
+    assert_eq!(d.primary_span.as_ref().unwrap().line_start, 7, "the span is on the sink call");
+    assert!(d.secondary_spans.iter().any(|s| s.line_start == 6), "the second span is the source call: {:?}", d.secondary_spans);
     let help = d.help.join(" ");
     assert!(help.contains("fs::read_to_string") && help.contains("run_with_args") && help.contains("sanitizer"), "help: {help}");
 }

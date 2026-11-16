@@ -86,11 +86,6 @@ fn follow_lock(path: &Path, strict: bool) -> Result<()> {
     }
 }
 
-/// `wj build --locked`: the same check, with changed path dependencies and a missing lock as errors.
-pub fn require_locked(path: &Path) -> Result<()> {
-    follow_lock(path, true)
-}
-
 /// The compiler configuration of a build of `path`: `config` plus what the project's effects decide (ADR-0021).
 /// Shared with the in-process generator of the predictions (`cli::widths_gate`), which must build as `wj build` does.
 pub(crate) fn with_project_facts(config: crate::compiler_config::CompilerConfig, path: &Path, library: bool) -> Result<crate::compiler_config::CompilerConfig> {
@@ -106,6 +101,8 @@ pub struct BuildOptions {
     pub tree_shake: bool,
     pub source_maps: bool,
     pub unchecked_arithmetic: bool,
+    /// `wj build --locked`: wj.lock must exist and match, path dependencies included.
+    pub locked: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -153,7 +150,7 @@ pub fn execute(
     stop_on_rust_crate_errors(path)?;
     report_local_mutability(path)?;
     stop_on_taint(path)?;
-    follow_lock(path, false)?;
+    follow_lock(path, options.locked)?;
     let config = with_project_facts(config, path, library)?;
 
     if target_str.eq_ignore_ascii_case("rust") {
