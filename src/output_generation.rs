@@ -109,8 +109,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         let mut generator_signatures = module_compiler.global_signatures.clone();
         generator_signatures.merge(signatures);
 
-        let is_crate_root_main = input_path.file_name().and_then(|n| n.to_str()) == Some("main.wj")
-            && input_path.parent() == Some(source_root);
+        let is_crate_root_main = is_bin_entry(input_path, source_root, source);
 
         let mut generator = if is_multi_file_project && !is_crate_root_main {
             codegen::CodeGenerator::new_for_module(generator_signatures, target)
@@ -178,8 +177,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         &mut generator_signatures,
         &import_aliases,
     );
-    let is_crate_root_main = input_path.file_name().and_then(|n| n.to_str()) == Some("main.wj")
-        && input_path.parent() == Some(source_root);
+    let is_crate_root_main = is_bin_entry(input_path, source_root, source);
     let mut generator = if is_multi_file_project && !is_crate_root_main {
         codegen::CodeGenerator::new_for_module(generator_signatures, target)
     } else {
@@ -259,6 +257,14 @@ pub(crate) fn generate_main_rust_code<'ast>(
     codegen::rust::source_map_align::write_if_enabled(module_compiler.config.emit_source_maps, input_path, source, &output_file_path, &result);
 
     Ok(MainCodegenOutcome::RustCode(result))
+}
+
+/// The crate's binary entry: the root `main.wj`, or any other root-level file with its own `fn main` (a runner or
+/// script that lives beside the library modules; it builds as its own `[[bin]]`).
+fn is_bin_entry(input_path: &Path, source_root: &Path, source: &str) -> bool {
+    input_path.parent() == Some(source_root)
+        && (input_path.file_name().and_then(|n| n.to_str()) == Some("main.wj")
+            || crate::module_system::module_graph::source_has_top_level_main(source))
 }
 
 fn rewrite_bin_crate_imports(code: String, source_root: &Path, is_crate_root_main: bool) -> String {
