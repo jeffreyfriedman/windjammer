@@ -21,7 +21,7 @@ fs.read = ["./**", "../../**", "/tmp/**"]
 # generated sources and manifests are named by suffix (`*.wj`, `wj.toml`): the pattern says so out loud, a bare `**` never reaches them
 # `add_missing_mut.wj` edits the repository's sources in place (`../../**/*.wj`)
 fs.write = ["./**", "../../**", "/tmp/**", "../../tests/check_negative/mutants/*.wj", "../../**/*.wj", "/tmp/**/*.wj", "/tmp/**/wj.toml"]
-process = ["bash", "cargo", "sh"]
+process = ["bash", "cargo", "sh", "git"]
 env.read = ["*"]
 
 # Packages get their own, narrower grants.

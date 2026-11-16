@@ -1,0 +1,353 @@
+// Count every removed std form of docs/std_surface.toml (ADR-0039) across the corpora, and check that the removal
+// list and the canonical surface together cover every name the interpreter and the agent index know today.
+//
+//   wj run --interpret scripts/wj/std_inventory.wj [--eco <windjammer-ecosystem checkout>] [--write]
+//
+// Run from the repository root. The ecosystem column is filled from --eco, else from $WJ_ECOSYSTEM, else left "-".
+// --write stores the table as docs/generated/std_removal_inventory.tsv (the shrink-only migration ledger).
+// --surface prints the canonical surface as a Markdown table and exits.
+// --check fails (exit 1) when any count rose above that ledger or a known name is neither canonical nor removed.
+// Counts are lexical (`git grep -o -P` over tracked files): a match inside a string or a comment counts. Rust test
+// files (tests/*.rs) embed Windjammer sources in string literals and are not counted (they are mostly Rust).
+use std::env
+use std::fs
+use std::process
+
+const SURFACE: string = "docs/std_surface.toml"
+const LEDGER: string = "tests/ledgers/agent_index_unlisted_methods.txt"
+const BUILTINS: string = "agent_index/builtins.txt"
+const OUT: string = "docs/generated/std_removal_inventory.tsv"
+
+struct Removed {
+    id: string,
+    form: string,
+    pattern: string,
+    replacement: string,
+    action: string,
+    fix: string,
+}
+
+struct Area {
+    name: string,
+    root: string,
+    specs: Vec<string>,
+}
+
+// The value of `key = "..."` or `key = '...'` on one inline-table line, or "" when absent.
+fn field(line: string, key: string) -> string {
+    let needle = key + " = "
+    let mut at = 0
+    let mut found = false
+    // the key must start the line's field list or follow `{ ` or `, ` (so `form` does not match inside `platform`)
+    for lead in ["{ ", ", "] {
+        match line.find(lead + needle) {
+            Some(i) => {
+                if !found {
+                    at = i + lead.len() + needle.len()
+                    found = true
+                }
+            },
+            None => {},
+        }
+    }
+    if !found {
+        return ""
+    }
+    let cs: Vec<char> = line[at..].chars().collect()
+    if cs.len() == 0 {
+        return ""
+    }
+    let quote = cs[0]
+    let mut out = ""
+    let mut i = 1
+    while i < cs.len() {
+        let c = cs[i]
+        if quote == '"' && c == '\\' && i + 1 < cs.len() {
+            out += cs[i + 1]
+            i = i + 2
+            continue
+        }
+        if c == quote {
+            return out
+        }
+        out += c
+        i = i + 1
+    }
+    out
+}
+
+// The rows of the array `name = [ ... ]` (one inline table per line).
+fn rows(text: string, name: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut inside = false
+    for line in text.lines() {
+        let t = line.trim()
+        if t == name + " = [" {
+            inside = true
+            continue
+        }
+        if inside && t == "]" {
+            inside = false
+            continue
+        }
+        if inside && t.starts_with("{ ") {
+            out.push(t)
+        }
+    }
+    out
+}
+
+fn removed_rows(text: string) -> Vec<Removed> {
+    let mut out: Vec<Removed> = Vec::new()
+    for line in rows(text, "removed") {
+        out.push(Removed {
+            id: field(line, "id"),
+            form: field(line, "form"),
+            pattern: field(line, "pattern"),
+            replacement: field(line, "replacement"),
+            action: field(line, "action"),
+            fix: field(line, "fix"),
+        })
+    }
+    out
+}
+
+// Number of matches of a PCRE pattern in the tracked files of `root` selected by `specs`.
+fn count(root: string, pattern: string, specs: Vec<string>) -> int {
+    if pattern == "" || root == "" {
+        return -1
+    }
+    let mut args = ["-C", root, "grep", "-o", "-h", "-I", "-P", "-e", pattern, "--"]
+    for s in specs {
+        args.push(s)
+    }
+    match process.run_with_args("git", args) {
+        Ok(out) => out.lines().count() as int,
+        Err(e) => {
+            if e.trim() != "" {
+                stderr.println("std_inventory: git grep failed for /${pattern}/: ${e.trim()}")
+            }
+            0
+        },
+    }
+}
+
+fn areas(eco: string) -> Vec<Area> {
+    let not_adr = ":(exclude)docs/adr/0039-stdlib-one-way.md"
+    [
+        Area { name: "std", root: ".", specs: [":(glob)std/**/*.wj", ":(glob)std/**/*.wji"] },
+        Area { name: "tests", root: ".", specs: [":(glob)tests/**/*.wj"] },
+        Area { name: "examples", root: ".", specs: [":(glob)examples/**/*.wj"] },
+        Area { name: "golden", root: ".", specs: [":(glob)bench/agent-dx/solutions/**/*.wj"] },
+        Area { name: "bench", root: ".", specs: [":(glob)bench/**/*.wj", ":(glob)benchmarks/**/*.wj", ":(exclude,glob)bench/agent-dx/solutions/**"] },
+        Area { name: "scripts", root: ".", specs: [":(glob)scripts/**/*.wj"] },
+        Area { name: "docs", root: ".", specs: [":(glob)**/*.md", not_adr] },
+        Area { name: "eco", root: eco, specs: [":(glob)**/*.wj"] },
+        Area { name: "eco_docs", root: eco, specs: [":(glob)**/*.md"] },
+    ]
+}
+
+fn cell(n: int) -> string {
+    if n < 0 { "-" } else { "${n}" }
+}
+
+// Names the removal list mentions: every identifier after a `.` in a `form`, plus bare names in it.
+fn removed_names(rs: Vec<Removed>) -> Vec<string> {
+    let mut names: Vec<string> = Vec::new()
+    for r in rs {
+        let mut word = ""
+        for c in (r.form + " ").chars() {
+            if c.is_alphanumeric() || c == '_' {
+                word += c
+            } else {
+                if word.len() > 0 {
+                    names.push(word)
+                }
+                word = ""
+            }
+        }
+    }
+    names
+}
+
+fn contains_name(xs: Vec<string>, name: string) -> bool {
+    for x in xs {
+        if x == name {
+            return true
+        }
+    }
+    false
+}
+
+// Every (type, method) the ledger or builtins.txt names must be canonical or removed.
+fn coverage(text: string, rs: Vec<Removed>) -> int {
+    let mut canonical: Vec<string> = Vec::new()
+    for line in rows(text, "methods") {
+        canonical.push(field(line, "name"))
+        // `aka`: the name the hand-written agent index used for this row before it was generated
+        let aka = field(line, "aka")
+        if aka != "" {
+            canonical.push(aka)
+        }
+    }
+    let gone = removed_names(rs)
+    let mut missing = 0
+    let mut pairs: Vec<string> = Vec::new()
+    let ledger = fs.read_to_string(LEDGER) ?? ""
+    for line in ledger.lines() {
+        let t = line.trim()
+        if t == "" || t.starts_with("#") {
+            continue
+        }
+        pairs.push(t)
+    }
+    let index = fs.read_to_string(BUILTINS) ?? ""
+    for line in index.lines() {
+        if line.starts_with("#") {
+            continue
+        }
+        let parts: Vec<string> = line.split("|").map(|p| p.trim()).collect()
+        if parts.len() >= 2 {
+            pairs.push(parts[0] + " " + parts[1])
+        }
+    }
+    for p in pairs {
+        let name = match p.split_once(" ") {
+            Some((_, n)) => n.trim(),
+            None => p,
+        }
+        if contains_name(canonical, name) || contains_name(gone, name) {
+            continue
+        }
+        println("uncovered: ${p}")
+        missing = missing + 1
+    }
+    missing
+}
+
+fn main() {
+    let args = env.args()
+    let mut eco = env.get("WJ_ECOSYSTEM") ?? ""
+    let mut write = false
+    let mut check = false
+    let mut surface = false
+    let mut i = 1
+    while i < args.len() {
+        if args[i] == "--eco" && i + 1 < args.len() {
+            eco = args[i + 1]
+            i = i + 1
+        } else if args[i] == "--write" {
+            write = true
+        } else if args[i] == "--surface" {
+            surface = true
+        } else if args[i] == "--check" {
+            check = true
+        }
+        i = i + 1
+    }
+    let text = match fs.read_to_string(SURFACE) {
+        Ok(t) => t,
+        Err(e) => {
+            stderr.println("std_inventory: cannot read ${SURFACE} (run from the repository root): ${e}")
+            process.exit(2)
+            ""
+        },
+    }
+    if surface {
+        print_surface(text)
+        return
+    }
+    let rs = removed_rows(text)
+    let canonical_rows = rows(text, "methods").len()
+    let cols = areas(eco)
+    let mut header = "id\taction\tfix"
+    for a in cols {
+        header += "\t" + a.name
+    }
+    header += "\tcode_total\tform"
+    let mut tsv = header + "\n"
+    println("| id | action | fix | std | tests | examples | golden | bench | scripts | docs | eco | eco_docs | code total | form | replacement |")
+    println("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|")
+    let mut grand = 0
+    let mut grand_docs = 0
+    for r in rs {
+        let mut line = "| ${r.id} | ${r.action} | ${r.fix} |"
+        let mut row = "${r.id}\t${r.action}\t${r.fix}"
+        let mut code_total = 0
+        for a in cols {
+            let n = count(a.root, r.pattern, a.specs)
+            line += " ${cell(n)} |"
+            row += "\t${cell(n)}"
+            if n > 0 {
+                if a.name == "docs" || a.name == "eco_docs" {
+                    grand_docs = grand_docs + n
+                } else {
+                    code_total = code_total + n
+                }
+            }
+        }
+        grand = grand + code_total
+        let shown = r.form.replace("|", "\\|")
+        let instead = r.replacement.replace("|", "\\|")
+        println(line + " ${code_total} | `${shown}` | ${instead} |")
+        tsv += row + "\t${code_total}\t${r.form}\n"
+    }
+    println("")
+    println("removed rows: ${rs.len()}, canonical rows: ${canonical_rows}, occurrences in code: ${grand}, in docs: ${grand_docs}")
+    let uncovered = coverage(text, rs)
+    println("names in the agent index or the unlisted ledger that are neither canonical nor removed: ${uncovered}")
+    if write {
+        match fs.write(OUT, tsv) {
+            Ok(_) => println("wrote ${OUT}"),
+            Err(e) => stderr.println("std_inventory: cannot write ${OUT}: ${e}"),
+        }
+    }
+    if check {
+        let grew = grown_cells(fs.read_to_string(OUT) ?? "", tsv)
+        if grew > 0 || uncovered > 0 {
+            stderr.println("std_inventory --check: ${grew} count(s) rose above ${OUT}, ${uncovered} name(s) uncovered")
+            process.exit(1)
+        }
+        println("std_inventory --check: no removed form grew")
+    }
+}
+
+// Cells (id, area) whose current count exceeds the stored ledger; a "-" (area not scanned) never fails.
+fn grown_cells(stored: string, current: string) -> int {
+    let old: Vec<string> = stored.lines().collect()
+    let mut grew = 0
+    for line in current.lines() {
+        if line.starts_with("id\t") {
+            continue
+        }
+        let cur: Vec<string> = line.split("\t").collect()
+        for o in old {
+            let prev: Vec<string> = o.split("\t").collect()
+            if prev.len() != cur.len() || prev[0] != cur[0] {
+                continue
+            }
+            let mut k = 3
+            while k + 2 < cur.len() {
+                let now = cur[k].parse::<int>() ?? -1
+                let was = prev[k].parse::<int>() ?? -1
+                if now > 0 && was >= 0 && now > was {
+                    println("grew: ${cur[0]} column ${k}: ${was} -> ${now}")
+                    grew = grew + 1
+                }
+                k = k + 1
+            }
+        }
+    }
+    grew
+}
+
+// The canonical surface as a Markdown table (the snapshot ADR-0039 embeds).
+fn print_surface(text: string) {
+    println("| type | method | signature | notes |")
+    println("|---|---|---|---|")
+    for line in rows(text, "methods") {
+        let sig = field(line, "sig").replace("|", "\\|")
+        let note = field(line, "summary").replace("|", "\\|")
+        println("| ${field(line, "type")} | `${field(line, "name").replace("|", "\\|")}` | `${sig}` | ${note} |")
+    }
+}
