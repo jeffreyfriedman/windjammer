@@ -527,6 +527,7 @@ impl Interpreter {
     }
 
     pub(crate) fn call_builtin_fn(&mut self, path: &str, args: Vec<Value>) -> R {
+        let args = self.in_program_cwd(path, args);
         if self.crate_host.is_some() && self.is_crate_fn(path) {
             return self.call_crate_fn(path, args); // ADR-0031: a surfaced Rust crate function
         }

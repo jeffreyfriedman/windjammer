@@ -108,11 +108,34 @@ mod tests {
 
 static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+thread_local! {
+    static HELD: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// The working-directory lock, held. Re-entrant on one thread (a test that holds it may call `in_dir`).
+pub struct CwdGuard(Option<std::sync::MutexGuard<'static, ()>>);
+
+impl Drop for CwdGuard {
+    fn drop(&mut self) {
+        HELD.with(|h| h.set(h.get() - 1));
+        self.0.take();
+    }
+}
+
+/// Hold the working-directory lock without changing the directory: a test that watches the process directory (or a
+/// process-wide store) holds it so another test's `in_dir` cannot interfere meanwhile.
+pub fn hold_cwd() -> CwdGuard {
+    let nested = HELD.with(|h| h.get() > 0);
+    let guard = if nested { None } else { Some(CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner())) };
+    HELD.with(|h| h.set(h.get() + 1));
+    CwdGuard(guard)
+}
+
 /// Run `f` with `dir` as the working directory. The working directory is process-wide, so every test that changes
 /// it goes through here (one lock for the whole test binary, however many modules include a helper); the previous
 /// directory is restored even when `f` panics, and falls back to the manifest dir when it was removed meanwhile.
 pub fn in_dir<T>(dir: &std::path::Path, f: impl FnOnce() -> T) -> T {
-    let _g = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = hold_cwd();
     let prev = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
     std::env::set_current_dir(dir).unwrap();
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));

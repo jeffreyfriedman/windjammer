@@ -19,13 +19,17 @@ static INSTALL: Mutex<()> = Mutex::new(());
 /// A store that counts the lookups that found an entry.
 struct Dir(AnalysisStore);
 
-static FOUND: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+// Lookups that found an entry, per thread: a check another test runs on its own thread while a store is installed
+// (the configuration is process-wide) must not count as this test's hit.
+thread_local! {
+    static FOUND: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 impl SharedStore for Dir {
     fn get(&self, key: &str) -> Option<String> {
         let got = self.0.get(key);
         if got.is_some() {
-            FOUND.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            FOUND.with(|f| f.set(f.get() + 1));
         }
         got
     }
@@ -34,7 +38,9 @@ impl SharedStore for Dir {
     }
 }
 
-struct Installed<'a>(#[allow(dead_code)] std::sync::MutexGuard<'a, ()>);
+// The installing test also holds the working-directory lock, so the checks other tests run through `in_dir` do not
+// read or fill this store meanwhile (its entry counts stay the test's own).
+struct Installed<'a>(#[allow(dead_code)] std::sync::MutexGuard<'a, ()>, #[allow(dead_code)] windjammer::test_utils::CwdGuard);
 
 impl Drop for Installed<'_> {
     fn drop(&mut self) {
@@ -44,8 +50,9 @@ impl Drop for Installed<'_> {
 
 fn install(dir: &Path, compiler: &str) -> Installed<'static> {
     let g = INSTALL.lock().unwrap_or_else(|e| e.into_inner());
+    let cwd = windjammer::test_utils::hold_cwd();
     shared_cache::install_for(Arc::new(Dir(AnalysisStore { dir: dir.to_path_buf() })), compiler.to_string());
-    Installed(g)
+    Installed(g, cwd)
 }
 
 const TOML: &str = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n";
@@ -57,7 +64,7 @@ fn project(main: &str) -> tempfile::TempDir {
 }
 
 fn hits() -> usize {
-    FOUND.load(std::sync::atomic::Ordering::Relaxed)
+    FOUND.with(|f| f.get())
 }
 
 fn entry_count(dir: &Path) -> usize {

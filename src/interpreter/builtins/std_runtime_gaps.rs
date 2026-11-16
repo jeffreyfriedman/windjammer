@@ -116,8 +116,8 @@ fn register_path_and_aliases(r: &mut Registry) {
     alias!(r, "path::file_name_path" => "path::file_name");
     alias!(r, "path::join_path" => "path::join");
     alias!(r, "path::canonicalize" => "fs::canonicalize");
-    r.func("path::current_dir", |_, _| {
-        Ok(match std::env::current_dir() {
+    r.func("path::current_dir", |it, _| {
+        Ok(match it.current_dir_io() {
             Ok(p) => Value::ok(s(&p.to_string_lossy())),
             Err(e) => Value::err(s(&format!("Failed to get current directory: {e}"))),
         })
@@ -269,7 +269,9 @@ fn register_misc(r: &mut Registry) {
             .filter_map(|v| if let Value::Str(x) = v { Some((**x).clone()) } else { None })
             .collect();
         it.flush();
-        Ok(match std::process::Command::new(arg_str(&a, 0, "run_inherit")?.as_str()).args(&args).status() {
+        let mut cmd = std::process::Command::new(arg_str(&a, 0, "run_inherit")?.as_str());
+        it.start_in_cwd(&mut cmd);
+        Ok(match cmd.args(&args).status() {
             Ok(st) => Value::ok(Value::Int(st.code().unwrap_or(-1) as i128, IntTy::I32)),
             Err(e) => Value::err(s(&e.to_string())),
         })
@@ -281,7 +283,9 @@ fn register_misc(r: &mut Registry) {
             .iter()
             .filter_map(|v| if let Value::Str(x) = v { Some((**x).clone()) } else { None })
             .collect();
-        Ok(match std::process::Command::new(arg_str(&a, 0, "run_with_output")?.as_str()).args(&args).output() {
+        let mut cmd = std::process::Command::new(arg_str(&a, 0, "run_with_output")?.as_str());
+        it.start_in_cwd(&mut cmd);
+        Ok(match cmd.args(&args).output() {
             Ok(o) => Value::ok(Value::Struct(Rc::new(StructVal {
                 name: Rc::from("ProcessOutput"),
                 fields: vec![
