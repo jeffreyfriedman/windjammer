@@ -105,3 +105,17 @@ mod tests {
         }
     }
 }
+
+static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Run `f` with `dir` as the working directory. The working directory is process-wide, so every test that changes
+/// it goes through here (one lock for the whole test binary, however many modules include a helper); the previous
+/// directory is restored even when `f` panics, and falls back to the manifest dir when it was removed meanwhile.
+pub fn in_dir<T>(dir: &std::path::Path, f: impl FnOnce() -> T) -> T {
+    let _g = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let prev = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+    std::env::set_current_dir(dir).unwrap();
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    std::env::set_current_dir(&prev).unwrap_or_else(|_| std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap());
+    r.unwrap_or_else(|e| std::panic::resume_unwind(e))
+}
