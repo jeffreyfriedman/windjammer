@@ -33,6 +33,7 @@ pub use function_metadata::{
 pub use type_metadata::infer_copy_from_metadata_structs_pub;
 
 mod sidecar_policy;
+pub mod scan_stats;
 mod sorted_serde;
 
 /// Metadata for a single Windjammer module
@@ -391,6 +392,7 @@ fn merge_wj_meta_signatures_from_dir_inner(
         return;
     }
 
+    crate::metadata::scan_stats::dir_listed();
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
@@ -511,6 +513,13 @@ fn merge_single_wj_meta_file(
     if OWN_META_PATHS.with(|c| c.borrow().iter().any(|own| same_file(own, path))) {
         return;
     }
+    // Reachability is decided by the file name (the module it describes), so a peer the build does not reach is
+    // never opened: a single-file build reads only the metadata of modules it names, however large the project's
+    // cache is (docs/economics C12; gate: tests/meta_scan_locality.rs).
+    if !PEER_SCOPE.with(|c| c.borrow().as_ref().is_none_or(|scope| scope.reaches(path))) {
+        return;
+    }
+    scan_stats::meta_file_read();
     let Ok(text) = std::fs::read_to_string(path) else {
         return;
     };
@@ -518,9 +527,6 @@ fn merge_single_wj_meta_file(
         return;
     };
     if !wj_meta_is_current(path, cache_root, &mod_meta) {
-        return;
-    }
-    if !PEER_SCOPE.with(|c| c.borrow().as_ref().is_none_or(|scope| scope.reaches(path))) {
         return;
     }
     let mut mod_meta = mod_meta;

@@ -199,6 +199,11 @@ path = "tests/diag_hints_corpus.rs"
 name = "all"
 path = "tests/all.rs"
 
+# Single-file builds read the same metadata whatever surrounds the file (C12): cargo test --release --test meta_scan_locality
+[[test]]
+name = "meta_scan_locality"
+path = "tests/meta_scan_locality.rs"
+
 # Resolved engine vs the walker on every corpus program: cargo test --release --test engine_parity
 [[test]]
 name = "engine_parity"

@@ -370,6 +370,7 @@ pub(crate) fn find_dependency_metadata_roots(
 
         // Peer `src/` trees within the same crate only (e.g. cross-module `.wj.meta`).
         if current.starts_with(&root) && current != root {
+            crate::metadata::scan_stats::dir_listed();
             if let Ok(entries) = std::fs::read_dir(parent) {
                 for entry in entries.flatten() {
                     let p = entry.path();
@@ -383,6 +384,7 @@ pub(crate) fn find_dependency_metadata_roots(
                     if src_dir.is_dir() {
                         roots.push(src_dir);
                     }
+                    crate::metadata::scan_stats::dir_listed();
                     if let Ok(sub_entries) = std::fs::read_dir(&p) {
                         for sub_entry in sub_entries.flatten() {
                             let sub = sub_entry.path();

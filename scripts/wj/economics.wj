@@ -714,7 +714,7 @@ fn main() {
         Some(t) => t,
         None => {
             if !static_only && !has_long_flag(args, "selftest") {
-                eprintln("usage: economics.wj (--target DIR | --static | --selftest) [--meter auto|time|rusage|wall] [--instr auto|callgrind|none] [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S] [--no-shipped] [--label NAME]")
+                eprintln("usage: economics.wj (--target DIR | --static | --selftest) [--meter auto|time|rusage|wall] [--instr none|callgrind] [--out DIR] [--wj BIN] [--runs N] [--only id,id] [--suite S] [--no-shipped] [--label NAME]")
                 process.exit(2)
             }
             ""
@@ -729,8 +729,8 @@ fn main() {
     let label = long_flag_value_or(args, "label", "latest")
     let scratch = strings.trim(run_sh("mktemp -d /tmp/wj-econ.XXXXXX")).to_string()
     let meter = choose_meter(long_flag_value_or(args, "meter", "auto"), scratch)
-    let want_cg = long_flag_value_or(args, "instr", "auto")
-    let callgrind = want_cg == "callgrind" || (want_cg == "auto" && !meter.contains("perf") && meter != "-l" && run_sh("command -v valgrind").len() > 0 && !static_only)
+    // callgrind is opt-in: it multiplies the run time of every measured command (the interpreter kernels by ~50)
+    let callgrind = long_flag_value_or(args, "instr", "none") == "callgrind"
     if has_long_flag(args, "selftest") {
         let code = selftest(scratch)
         let _ = run_sh("rm -rf " + quote(scratch))

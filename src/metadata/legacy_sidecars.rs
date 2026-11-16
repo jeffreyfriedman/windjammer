@@ -21,6 +21,7 @@ pub fn find(root: &Path) -> Vec<PathBuf> {
 }
 
 fn walk(dir: &Path, budget: &mut usize, out: &mut Vec<PathBuf>) {
+    crate::metadata::scan_stats::dir_listed();
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for e in entries.flatten() {
         if *budget == 0 {

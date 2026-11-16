@@ -123,7 +123,7 @@ No root or package installs needed. `economics.wj` picks the best measuring path
 | `-v` | GNU `time`, no perf | CPU, peak RSS |
 | `rusage` | no GNU `time` | `bench/economics/rusage_helper.rs` (built with rustc, no crates): CPU and peak RSS of all waited-for children via getrusage |
 | `wall` | nothing else | wall clock only, median of the runs |
-| `+ callgrind` | `--instr callgrind`, or automatically when valgrind is installed and neither perf nor macOS counters are | one extra run per command under `valgrind --tool=callgrind --trace-children=yes` for instructions |
+| `+ callgrind` | `--instr callgrind` (opt-in: slow) | one extra run per command under `valgrind --tool=callgrind --trace-children=yes` for instructions |
 
 Results from different paths are not compared with each other; ratios inside one run always are.
 

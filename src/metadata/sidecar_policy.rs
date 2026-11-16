@@ -174,6 +174,7 @@ fn collect_metas(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     if depth > 12 {
         return;
     }
+    crate::metadata::scan_stats::dir_listed();
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         let p = e.path();
