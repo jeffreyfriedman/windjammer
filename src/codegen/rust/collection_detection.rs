@@ -381,6 +381,10 @@ impl CodeGenerator<'_> {
             Expression::Scope { body, .. } => {
                 Self::expr_references_collection(body, type_name)
             }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::expr_references_collection(s, type_name))
+                    || Self::expr_references_collection(a.body, type_name)
+            }),
             Expression::MacroInvocation { args, .. } => args
                 .iter()
                 .any(|e| Self::expr_references_collection(e, type_name)),

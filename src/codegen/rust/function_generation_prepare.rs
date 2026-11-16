@@ -10512,6 +10512,14 @@ impl<'ast> CodeGenerator<'ast> {
             | Expression::Scope { body: operand, .. } => {
                 self.expression_visit_explicit_user_clone_of_param(operand, param_name, found);
             }
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.expression_visit_explicit_user_clone_of_param(s, param_name, found);
+                    }
+                    self.expression_visit_explicit_user_clone_of_param(a.body, param_name, found);
+                }
+            }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
                 for e in elements {
                     self.expression_visit_explicit_user_clone_of_param(e, param_name, found);

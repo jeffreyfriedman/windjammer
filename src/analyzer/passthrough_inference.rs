@@ -878,6 +878,7 @@ impl<'ast> Analyzer<'ast> {
             | Expression::Scope { body: operand, .. } => {
                 Self::expr_has_field_move_from_param(param_name, operand, true)
             }
+            Expression::Select { arms, .. } => arms.iter().any(|a| a.source.is_some_and(|s| Self::expr_has_field_move_from_param(param_name, s, false)) || Self::expr_has_field_move_from_param(param_name, a.body, true)),
             _ => false,
         }
     }

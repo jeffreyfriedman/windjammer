@@ -794,6 +794,10 @@ impl AutoCloneAnalysis {
             | Expression::Scope { body: expr, .. } => {
                 Self::expression_uses_binding(expr, name)
             }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::expression_uses_binding(s, name))
+                    || Self::expression_uses_binding(a.body, name)
+            }),
             Expression::MacroInvocation { args, .. } => {
                 args.iter().any(|e| Self::expression_uses_binding(e, name))
             }
@@ -1334,6 +1338,20 @@ impl AutoCloneAnalysis {
                     map,
                     registry,
                 );
+            }
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    for e in a.source.into_iter().chain(std::iter::once(a.body)) {
+                        Self::collect_usages_from_expression(
+                            e,
+                            idx,
+                            UsageKind::Read,
+                            in_loop,
+                            map,
+                            registry,
+                        );
+                    }
+                }
             }
             Expression::MacroInvocation { name, args, .. } => {
                 Self::collect_macro_arg_usages(name, args, idx, in_loop, map, registry)

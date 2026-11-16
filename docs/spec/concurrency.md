@@ -104,7 +104,7 @@ early
 
 ## Channels
 
-**SPEC-CONC-004** Channels are library values with methods: `tx.send(x)` sends, `rx.recv()` waits for a value and returns it (and panics on a channel whose senders are all gone and which is empty). Values from one sender arrive in the order they were sent. `select { }` stays in the language and is specified with stage 2a of the plan.
+**SPEC-CONC-004** Channels are library values with methods: `tx.send(x)` sends, `rx.recv()` waits for a value and returns it (and panics on a channel whose senders are all gone and which is empty). Values from one sender arrive in the order they were sent.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-004.wj -->
 ```windjammer
@@ -118,6 +118,34 @@ fn main() {
 Output:
 ```text
 5
+```
+
+## select
+
+**SPEC-CONC-010** `select { arms }` waits until one arm's source is ready and evaluates that arm; its value is the arm's value. An arm is `pattern = rx.recv() => expr` (a value is queued), `pattern = t.wait() => expr` (the task has finished; its panic is re-raised), `_ = timeout(d) => expr` (`d` has passed since the `select` started) or `else => expr` (nothing is ready; the `select` never waits). Sources are evaluated once, in order. Among ready arms the first in source order wins. A closed, empty channel is never ready; a `select` that can never become ready panics.
+
+<!-- example: tests/spec/concurrency/SPEC-CONC-010.wj -->
+```windjammer
+use std::sync
+fn main() {
+    let (a_tx, a_rx) = sync::channel()
+    let (b_tx, b_rx) = sync::channel()
+    b_tx.send(2)
+    select {
+        x = a_rx.recv() => println("a ${x}"),
+        y = b_rx.recv() => println("b ${y}"),
+    }
+    select {
+        x = a_rx.recv() => println("a ${x}"),
+        else => println("nothing ready"),
+    }
+    a_tx.send(0)
+}
+```
+Output:
+```text
+b 2
+nothing ready
 ```
 
 ## Removed forms

@@ -30,6 +30,11 @@ impl<'ast> CodeGenerator<'ast> {
         "compile_error!(\"`spawn` tasks are not lowered for the Rust backend yet (ADR-0004 stage 2, docs/concurrency/PLAN.md); run the program with `wj run --interpret`\")".to_string()
     }
 
+    /// `select { .. }` is not lowered for the Rust backend yet (ADR-0004 stage 2): emit a compile error.
+    pub(in crate::codegen::rust) fn generate_select(&mut self) -> String {
+        "compile_error!(\"`select` is not lowered for the Rust backend yet (ADR-0004 stage 2, docs/concurrency/PLAN.md); run the program with `wj run --interpret`\")".to_string()
+    }
+
     /// `scope { .. }` is not lowered for the Rust backend yet (ADR-0004 stage 2): emit a compile error.
     pub(in crate::codegen::rust) fn generate_scope(
         &mut self,

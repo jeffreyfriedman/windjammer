@@ -87,6 +87,8 @@ pub(crate) enum Wait {
     Barrier(Rc<super::builtins::sync::BarrierState>, u64),
     /// Until the condition holds or the deadline passes (a socket of the simulated network, ADR-0032).
     Poll(Rc<dyn Fn() -> bool>, Option<u64>),
+    /// Until any of these holds (`select { }`, ADR-0004).
+    Any(Vec<Wait>),
 }
 
 pub(crate) struct Task {
@@ -191,6 +193,7 @@ impl Sched {
             Wait::Cond(cv, ticket, dl) => cv.woken(*ticket) || dl.map_or(false, |d| self.clock >= d),
             Wait::Barrier(b, gen) => b.generation() > *gen,
             Wait::Poll(f, dl) => f() || dl.map_or(false, |d| self.clock >= d),
+            Wait::Any(ws) => ws.iter().any(|w| self.ready(w)),
         }
     }
 
@@ -198,6 +201,7 @@ impl Sched {
         match w {
             Wait::Sleep(u) => Some(*u),
             Wait::Recv(_, d) | Wait::Cond(_, _, d) | Wait::Poll(_, d) => *d,
+            Wait::Any(ws) => ws.iter().filter_map(Self::deadline).min(),
             _ => None,
         }
     }

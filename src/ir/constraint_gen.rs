@@ -1246,6 +1246,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 result
             }
 
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.walk_expression(s);
+                    }
+                    self.walk_expression(a.body);
+                }
+                self.cs.fresh_var()
+            }
+
             Expression::Block { statements, .. } => {
                 let tails = self.walk_scoped_block_value(statements);
                 let result = self.cs.fresh_var();

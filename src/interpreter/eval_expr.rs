@@ -33,6 +33,7 @@ pub(crate) fn expr_loc(e: &'static Expression<'static>) -> Option<&'static Locat
         | AsyncCall { location, .. }
         | SpawnCall { location, .. }
         | Scope { location, .. }
+        | Select { location, .. }
         | Block { location, .. } => location.as_ref(),
     }
 }
@@ -341,6 +342,10 @@ impl Interpreter {
                 super::builtins::thread::start_task(self, body)
             }
 
+            Expression::Select { arms, location } => {
+                self.mark(location.as_ref());
+                super::builtins::thread::run_select(self, arms)
+            }
             Expression::Scope { body, location } => {
                 self.mark(location.as_ref());
                 super::builtins::thread::run_scope(self, body, location.as_ref())

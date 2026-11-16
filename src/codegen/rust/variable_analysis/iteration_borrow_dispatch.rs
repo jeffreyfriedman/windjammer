@@ -558,6 +558,11 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Scope { body, .. } => {
                 self.expr_contains_mut_dispatch_on_var(body, loop_var, elem)
             }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source
+                    .is_some_and(|s| self.expr_contains_mut_dispatch_on_var(s, loop_var, elem))
+                    || self.expr_contains_mut_dispatch_on_var(a.body, loop_var, elem)
+            }),
             _ => false,
         }
     }

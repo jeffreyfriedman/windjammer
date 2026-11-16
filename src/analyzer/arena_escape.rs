@@ -102,6 +102,7 @@ fn expr_line(e: &Expression) -> usize {
         | Expression::AsyncCall { location, .. }
         | Expression::SpawnCall { location, .. }
         | Expression::Scope { location, .. }
+        | Expression::Select { location, .. }
         | Expression::Block { location, .. } => line_of(location),
     }
 }

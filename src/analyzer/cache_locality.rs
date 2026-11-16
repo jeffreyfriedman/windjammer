@@ -455,6 +455,9 @@ fn expr_indexes_ident(iterable: &str, expr: &Expression<'_>) -> bool {
             .iter()
             .any(|(k, v)| expr_indexes_ident(iterable, k) || expr_indexes_ident(iterable, v)),
         Expression::Scope { body, .. } => expr_indexes_ident(iterable, body),
+        Expression::Select { arms, .. } => arms.iter().any(|a| {
+            a.source.is_some_and(|s| expr_indexes_ident(iterable, s)) || expr_indexes_ident(iterable, a.body)
+        }),
         _ => false,
     }
 }
@@ -648,6 +651,14 @@ fn count_field_accesses_expr(loop_var: &str, expr: &Expression<'_>, m: &mut Hash
         }
         Expression::Scope { body, .. } => {
             count_field_accesses_expr(loop_var, body, m);
+        }
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    count_field_accesses_expr(loop_var, s, m);
+                }
+                count_field_accesses_expr(loop_var, a.body, m);
+            }
         }
         _ => {}
     }

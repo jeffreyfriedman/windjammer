@@ -198,6 +198,10 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Scope { body, .. } => {
                 Self::variable_used_in_expression(body, var_name)
             }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::variable_used_in_expression(s, var_name))
+                    || Self::variable_used_in_expression(a.body, var_name)
+            }),
         }
     }
 }

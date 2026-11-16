@@ -3765,6 +3765,9 @@ impl<'ast> CodeGenerator<'ast> {
                     args.iter().any(|a| expr_compares(param, a))
                 }
                 Expression::Scope { body, .. } => expr_compares(param, body),
+                Expression::Select { arms, .. } => arms.iter().any(|a| {
+                    a.source.is_some_and(|s| expr_compares(param, s)) || expr_compares(param, a.body)
+                }),
                 Expression::Literal { .. } | Expression::Identifier { .. } => false,
             }
         }

@@ -225,6 +225,13 @@ loop_expr    = [ label ] "loop" block ;
 (* ADR-0004: a task (`Task<T>`) or a scope that waits for the tasks started inside it. `spawn` and `scope` are
    soft keywords: a prefix only before a name, `self` or `{` on the same line. *)
 task_expr    = ( "spawn" | "async" ) ( call_expr | block ) | "scope" block ;
+(* `select { }` (SPEC-CONC-010): an arm's source must be `rx.recv()`, `t.wait()` or `timeout(d)` and at most one arm
+   is `else`, which a context-free derivation cannot express, so the production is informative (the spec example and
+   tests/conformance/concurrency/select.wj exercise it). *)
+(*@status informative *)
+select_expr  = "select" "{" { select_arm } "}" ;
+(*@status informative *)
+select_arm   = ( pattern "=" postfix_expr | "else" ) "=>" ( expression "," | block ) ;
 (* ADR-0004 removed these forms: the parser rejects each with WJ0191 and `wj fix` rewrites them
    (`spawn { }`, `ch.send(v)`, `ch.recv()`). *)
 (*@status unparsed *)

@@ -269,3 +269,88 @@ impl Native for ThreadIdObj {
         format!("ThreadId({})", self.0)
     }
 }
+
+/// `select { }` (ADR-0004, docs/concurrency/PLAN.md stage 2a): evaluate the arms' sources once, then run the first
+/// ready arm in source order (also under a schedule seed: the choice is part of the semantics, SPEC-CONC-010), or
+/// `else` when none is ready; wait
+/// on all of them otherwise. A closed, empty channel is never ready; when nothing can become ready the select panics.
+pub(crate) fn run_select(it: &mut Interpreter, arms: &'static [crate::parser::SelectArm<'static>]) -> R {
+    use crate::parser::SelectKind as K;
+    enum Src {
+        Chan(Rc<super::channel::Chan>),
+        Task(usize),
+        Until(u64),
+        Else,
+    }
+    let mut srcs = Vec::with_capacity(arms.len());
+    for a in arms {
+        srcs.push(match (a.kind, a.source) {
+            (K::Recv, Some(e)) => {
+                let v = it.eval(e)?;
+                Src::Chan(super::channel::chan_of(&v)?.0)
+            }
+            (K::Wait, Some(e)) => {
+                let v = it.eval(e)?;
+                Src::Task(downcast::<TaskObj>(&v).map(|t| t.0).ok_or_else(|| semantic("`select`: `.wait()` on a value that is not a Task"))?)
+            }
+            (K::Timeout, Some(e)) => {
+                let d = it.eval(e)?;
+                let ns = super::time::duration_ns(&d)?.max(0) as u64;
+                Src::Until(it.sched.clock.saturating_add(ns))
+            }
+            _ => Src::Else,
+        });
+    }
+    it.preempt()?;
+    loop {
+        let ready: Vec<usize> = srcs
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| match s {
+                Src::Chan(c) => c.has_message(),
+                Src::Task(t) => it.sched.tasks[*t].done,
+                Src::Until(u) => it.sched.clock >= *u,
+                Src::Else => false,
+            })
+            .map(|(i, _)| i)
+            .collect();
+        if let Some(&first) = ready.first() {
+            let i = first;
+            let v = match &srcs[i] {
+                Src::Chan(c) => it.chan_recv_item(c, true)?.unwrap_or(Value::Unit),
+                Src::Task(t) => wait_task(it, *t)?,
+                _ => Value::Unit,
+            };
+            return select_arm(it, &arms[i], v);
+        }
+        if let Some(i) = srcs.iter().position(|s| matches!(s, Src::Else)) {
+            return select_arm(it, &arms[i], Value::Unit);
+        }
+        let waits: Vec<Wait> = srcs
+            .iter()
+            .filter_map(|s| match s {
+                Src::Chan(c) if c.senders_alive() => Some(Wait::Recv(c.clone(), None)),
+                Src::Task(t) => Some(Wait::Join(*t)),
+                Src::Until(u) => Some(Wait::Sleep(*u)),
+                _ => None,
+            })
+            .collect();
+        if waits.is_empty() {
+            return Err(panic_ctl("every channel of this `select` is closed"));
+        }
+        it.block_on(Wait::Any(waits))?;
+    }
+}
+
+fn select_arm(it: &mut Interpreter, arm: &'static crate::parser::SelectArm<'static>, v: Value) -> R {
+    it.push_scope();
+    let mut binds = Vec::new();
+    if !it.match_pattern(&arm.pattern, &v, None, false, &mut binds) {
+        return it.pop_scope(Err(semantic("`select`: the arm's pattern does not match the value")));
+    }
+    for (n, b) in binds {
+        it.define(n, b);
+    }
+    let r = it.eval(arm.body);
+    it.pop_scope(r)
+}

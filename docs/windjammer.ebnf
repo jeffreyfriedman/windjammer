@@ -200,7 +200,9 @@ primary         = literal
                 | task_expr ;
 
 (* ADR-0004 tasks: a Task<T>, waited on with .wait() (or .await); scope waits for every task started inside. *)
-task_expr       = ( "spawn" | "async" ) ( postfix | block ) | "scope" block ;
+task_expr       = ( "spawn" | "async" ) ( postfix | block ) | "scope" block | select_expr ;
+select_expr     = "select" "{" { select_arm } "}" ;     (* waits for the first ready arm; "else" when none is *)
+select_arm      = ( pattern "=" postfix | "else" ) "=>" ( expression "," | block ) ;   (* postfix: rx.recv(), t.wait(), timeout(d) *)
 
 unsafe_block    = "unsafe" block ;
 

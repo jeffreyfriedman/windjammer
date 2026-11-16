@@ -30,6 +30,6 @@ pub use types::*;
 // Expression ↔ Statement ↔ Pattern
 pub use core::{
     Decorator, EnumDecl, EnumPatternBinding, EnumVariant, EnumVariantData, Expression,
-    FunctionDecl, ImplBlock, Item, MatchArm, Parameter, Pattern, Program, Statement, StructDecl,
+    FunctionDecl, ImplBlock, Item, MatchArm, Parameter, Pattern, Program, SelectArm, SelectKind, Statement, StructDecl,
     StructField, TraitDecl, TraitMethod,
 };

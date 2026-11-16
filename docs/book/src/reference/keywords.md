@@ -69,6 +69,7 @@ Generated from `src/lexer/keywords.rs` (pinned to the lexer by unit tests) and f
 | `bound` | `bound Alias = Trait + ...` item (identifier elsewhere) |
 | `spawn` | `spawn f()` / `spawn { }`: a task that runs in parallel (identifier elsewhere) |
 | `scope` | `scope { }`: waits for every task started inside (identifier elsewhere) |
+| `select` | `select { x = rx.recv() => .., else => .. }`: waits for the first ready arm (identifier elsewhere) |
 
 ## Operators and punctuation
 

@@ -148,6 +148,15 @@ pub fn walk_expr<V: Visitor>(v: &mut V, e: &Expression<'_>) {
         | Expression::AsyncCall { expr, .. }
         | Expression::SpawnCall { expr, .. }
         | Expression::Scope { body: expr, .. } => walk_expr(v, expr),
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    walk_expr(v, s);
+                }
+                walk_pattern(v, &a.pattern);
+                walk_expr(v, a.body);
+            }
+        }
         Expression::Index { object, index, .. } => {
             walk_expr(v, object);
             walk_expr(v, index);

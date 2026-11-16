@@ -207,6 +207,14 @@ fn visit_expr(e: &Expression<'_>, esc: &mut Escapes, allowed: bool) {
             }
         }
         Expression::Scope { body, .. } => visit_expr(body, esc, false),
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    visit_expr(s, esc, false);
+                }
+                visit_expr(a.body, esc, false);
+            }
+        }
         Expression::Block { statements, .. } => visit_stmts(statements, esc),
     }
 }

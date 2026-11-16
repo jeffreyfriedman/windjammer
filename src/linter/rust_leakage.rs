@@ -509,6 +509,14 @@ impl<'ast> RustLeakageLinter<'ast> {
                 self.check_expression(expr, file)
             }
             Expression::Scope { body, .. } => self.check_expression(body, file),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.check_expression(s, file);
+                    }
+                    self.check_expression(a.body, file);
+                }
+            }
             Expression::MacroInvocation { args, .. } => {
                 for arg in args {
                     self.check_expression(arg, file);

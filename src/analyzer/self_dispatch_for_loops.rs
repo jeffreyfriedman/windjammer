@@ -486,6 +486,11 @@ impl<'ast> Analyzer<'ast> {
             Expression::Scope { body, .. } => {
                 self.expr_calls_mut_dispatch_on_var(body, loop_var, elem, registry)
             }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source
+                    .is_some_and(|s| self.expr_calls_mut_dispatch_on_var(s, loop_var, elem, registry))
+                    || self.expr_calls_mut_dispatch_on_var(a.body, loop_var, elem, registry)
+            }),
             _ => false,
         }
     }

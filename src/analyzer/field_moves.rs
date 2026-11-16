@@ -58,6 +58,14 @@ impl<'ast> Analyzer<'ast> {
             | Expression::AsyncCall { expr: operand, .. }
             | Expression::SpawnCall { expr: operand, .. }
             | Expression::Scope { body: operand, .. } => each(operand, true),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        each(s, false);
+                    }
+                    each(a.body, true);
+                }
+            }
             _ => {}
         }
     }

@@ -77,6 +77,7 @@ pub const KEYWORDS: &[KeywordInfo] = &[
     k("bound", S, "`bound Alias = Trait + ...` item (identifier elsewhere)"),
     k("spawn", S, "`spawn f()` / `spawn { }`: a task that runs in parallel (identifier elsewhere)"),
     k("scope", S, "`scope { }`: waits for every task started inside (identifier elsewhere)"),
+    k("select", S, "`select { x = rx.recv() => .., else => .. }`: waits for the first ready arm (identifier elsewhere)"),
 ];
 
 #[cfg(test)]

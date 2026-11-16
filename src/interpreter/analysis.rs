@@ -280,6 +280,14 @@ fn scan_expr(it: &mut Interpreter, module: usize, e: &'static Expression<'static
         | Expression::AsyncCall { expr, .. }
         | Expression::SpawnCall { expr, .. }
         | Expression::Scope { body: expr, .. } => scan_expr(it, module, expr, out),
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    scan_expr(it, module, s, out);
+                }
+                scan_expr(it, module, a.body, out);
+            }
+        }
         Expression::Index { object, index, .. } => {
             scan_expr(it, module, object, out);
             scan_expr(it, module, index, out);

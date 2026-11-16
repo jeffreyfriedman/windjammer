@@ -268,6 +268,7 @@ impl<'a> Ctx<'a> {
             AsyncCall { .. } => self.starts(f, kind, me, &["async"]),
             SpawnCall { .. } => self.starts(f, kind, me, &["spawn"]),
             Scope { .. } => self.starts(f, kind, me, &["scope"]),
+            Select { .. } => self.starts(f, kind, me, &["select"]),
             _ => {}
         }
         let mut prev: Option<ByteRange> = None;
@@ -351,6 +352,14 @@ impl<'a> Ctx<'a> {
                 }
             }
             Scope { body, .. } => child(body, f, &mut prev),
+            Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        child(s, f, &mut prev);
+                    }
+                    child(a.body, f, &mut prev);
+                }
+            }
             Block { statements, .. } => {
                 for s in statements {
                     self.stmt(s, f, me, &mut prev);
@@ -541,6 +550,7 @@ fn expr_kind(e: &Expression) -> &'static str {
         AsyncCall { .. } => "AsyncCall",
         SpawnCall { .. } => "SpawnCall",
         Scope { .. } => "Scope",
+        Select { .. } => "Select",
         Block { .. } => "Block",
     }
 }

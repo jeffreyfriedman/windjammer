@@ -440,6 +440,17 @@ impl<'f> Walker<'f> {
                 self.expr(right);
             }
             Expression::FieldAccess { object, .. } | Expression::Cast { expr: object, .. } | Expression::TryOp { expr: object, .. } | Expression::Await { expr: object, .. } | Expression::AsyncCall { expr: object, .. } | Expression::SpawnCall { expr: object, .. } | Expression::Scope { body: object, .. } => self.expr(object),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.expr(s);
+                    }
+                    self.scopes.push(Vec::new());
+                    self.bind_pattern(&a.pattern, None, Kind::Other, false, &None);
+                    self.expr(a.body);
+                    self.scopes.pop();
+                }
+            }
             Expression::Index { object, index, .. } => {
                 self.expr(object);
                 self.expr(index);

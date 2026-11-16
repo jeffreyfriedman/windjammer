@@ -321,6 +321,14 @@ impl<'i> Walker<'i> {
             | Expression::AsyncCall { expr, .. }
             | Expression::SpawnCall { expr, .. }
             | Expression::Scope { body: expr, .. } => self.expr(expr, None, env),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.expr(s, None, env);
+                    }
+                    self.expr(a.body, None, env);
+                }
+            }
             Expression::MapLiteral { pairs, .. } => {
                 for (k, v) in pairs {
                     self.expr(k, None, env);

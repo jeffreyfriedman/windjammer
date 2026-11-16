@@ -13,7 +13,7 @@ current executor (overlap, no parallelism). Both evaluate to one handle type, `T
 started inside it (also by those tasks), even when the block ends early, and a task's panic propagates out of the
 scope; outside a scope a task must be kept and waited on, and a dropped task is a compile error (WJ0190). Channels are
 values with methods (`tx.send(v)`, `rx.recv()`); `thread { }` and the `<-` operators are removed (WJ0191, migrated by
-`wj fix`). `select { }` stays and is designed in stage 2. Functions are not coloured: there is no `async` on a
+`wj fix`). `select { }` waits for the first ready arm (SPEC-CONC-010). Functions are not coloured: there is no `async` on a
 declaration in the target surface (`async fn` stays until stage 2b removes it with a `wj fix`). `Send`/`Sync` never
 appear in source: the solver decides them.
 
@@ -25,7 +25,7 @@ the interpreter's deterministic scheduler is the reference semantics every backe
 | Stage | Delivers | Backends | Estimate (focused agent-days) | Gate |
 |---|---|---|---|---|
 | 1 (this branch) | Parser forms, AST nodes, WJ0190/WJ0191 with fixes, `wj fix` migration, interpreter semantics (per-task scopes), `Task`/channel rows in the std surface, conformance corpus, spec text | interpreter (thread and one-thread modes) | 4 (done) | `tests/concurrency_surface_test.rs`, promises, diagnostics suite |
-| 2a | `select { }` (parser, interpreter, spec); timeouts (`rx.recv_timeout`, `t.wait_timeout`); scope cancellation on first failure (cooperative: `sleep`, `recv`, `wait` are cancellation points) | interpreter | 4 | conformance `select_*.wj`, seed sweeps |
+| 2a | `select { }` (parser, interpreter, spec: **done on this branch**, `tests/conformance/concurrency/select.wj`); remaining: `t.wait_timeout(d)`, scope cancellation on first failure (cooperative: `sleep`, `recv`, `wait` are cancellation points), a run-time report of tasks never waited on at program exit | interpreter | 3 (1 done) | conformance programs, seed sweeps |
 | 2b | Rust backend: tasks, scopes, channels, select on OS threads; `Send` inference in the solver; remove `async fn` with a `wj fix` (variants on demand, below) | Rust | 12 | the stage-1 conformance programs compiled, byte-identical to the interpreter under `wj run --verify` |
 | 3 | JS/WASM backend: `async` on the event loop (promises), `spawn` on the same loop by default (single-threaded engine principle) and Web Workers when the solver proves message-only sharing | JS, WASM | 10 | conformance on node + headless browser |
 | 4 | Go backend: goroutines, `sync.WaitGroup` scopes, channels, `select` | Go | 5 | conformance through `go run` |
@@ -52,7 +52,8 @@ the solver) and record the cost; if the JS worker path cannot pass conformance w
 | JS/Go backends | `src/codegen/portable/lower/expr.rs` | explicit unsupported error, as before |
 | Std surface | `docs/std_surface.toml` rows (types `Task`, `Sender`, `Receiver`; the std surface redesign) | rows added; the gate lives on the std-redesign branch |
 | Conformance corpus | `tests/conformance/concurrency/*.wj` | expected output in each header; run under six schedules |
-| Spec | `docs/spec/concurrency.md` SPEC-CONC-001..008 | examples executable |
+| `select { }` (stage 2a, pulled forward) | `task_prefix.rs` (`Expression::Select`, `SelectArm`), `builtins/thread.rs` `run_select`, `sched.rs` `Wait::Any` | first ready arm in source order, `else`, `timeout(d)`, panics when nothing can become ready |
+| Spec | `docs/spec/concurrency.md` SPEC-CONC-001..010 | examples executable |
 
 Mutation check (2026-11-16, one mutant build with three planted bugs, then restored): (1) WJ0190 never reported
 (`scope_depth == usize::MAX`): `an_unwaited_task_is_refused_by_check_run_and_build` fails (check exits 0);
@@ -81,7 +82,7 @@ select {
 
 Arms are `pattern = source => body`; a source is `rx.recv()`, `t.wait()` or `timeout(d)` (any other expression is a
 compile error naming the three forms). Sources are evaluated once, in order, before waiting. The first ready arm wins
-(source order; with a schedule seed the interpreter picks among ready arms, so tests can sweep the choice); `else`
+(source order, also under a schedule seed: the choice is part of the semantics, so every backend can match it); `else`
 runs when nothing is ready (never waits). A closed, empty channel is never ready; when no arm can ever become ready
 the `select` panics ("every channel of this select is closed") instead of hanging. Interpreter: one `Wait::Any` over
 the arms' waits, so the virtual clock and deadlock detection cover `select`. A `select` is an expression (the chosen

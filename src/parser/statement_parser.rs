@@ -252,6 +252,10 @@ impl Parser {
             return None;
         }
         if let Token::Lifetime(name) = self.current_token().clone() {
+            // `break 'a: loop { .. }`: the label starts a labeled loop (the break's value), not the jump's target
+            if self.peek(1) == Some(&Token::Colon) {
+                return None;
+            }
             self.advance();
             Some(name)
         } else {

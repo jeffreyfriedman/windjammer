@@ -307,3 +307,23 @@ fn scopes_are_per_task_under_interleaving() {
         assert_eq!(r.stdout, "[1, 2, 3]\n", "schedule {seed}: {}", r.stderr);
     }
 }
+
+#[test]
+fn select_takes_the_first_ready_arm_and_panics_when_nothing_can_become_ready() {
+    let dir = TempDir::new().unwrap();
+    let src = "use std::sync\n\nfn make() -> sync::Receiver<int> {\n    let (tx, rx) = sync::channel()\n    tx.send(1)\n    rx\n}\n\nfn main() {\n    let rx = make()\n    select {\n        x = rx.recv() => println(\"got ${x}\"),\n    }\n    select {\n        x = rx.recv() => println(\"again ${x}\"),\n    }\n}\n";
+    let f = write(&dir, src);
+    let r = wj(&["run", "--interpret", f.to_str().unwrap()], dir.path());
+    assert_eq!(r.stdout, "got 1\n", "{}", r.stderr);
+    assert_eq!(r.exit, 101, "{}", r.stderr);
+    assert!(r.stderr.contains("every channel of this `select` is closed"), "{}", r.stderr);
+}
+
+#[test]
+fn a_select_arm_must_wait_on_recv_wait_or_timeout() {
+    let dir = TempDir::new().unwrap();
+    let f = write(&dir, "fn f() -> int {\n    1\n}\n\nfn main() {\n    select {\n        x = f() => println(\"${x}\"),\n    }\n}\n");
+    let r = wj(&["run", "--interpret", f.to_str().unwrap()], dir.path());
+    assert_ne!(r.exit, 0);
+    assert!(r.stderr.contains("a `select` arm waits on `rx.recv()`, `t.wait()` or `timeout(d)`"), "{}", r.stderr);
+}

@@ -354,7 +354,7 @@ digraph deps {
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="4"];
-  "interpreter" -> "parser" [label="138"];
+  "interpreter" -> "parser" [label="141"];
   "interpreter" -> "resolve" [label="13"];
   "interpreter" -> "source_map" [label="17"];
   "interpreter" -> "stdlib_surface" [label="1"];

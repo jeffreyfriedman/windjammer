@@ -116,6 +116,7 @@ fn positions_are_exhaustive(e: &Expression<'_>, s: &Statement<'_>) -> (&'static 
         Expression::AsyncCall { .. } => "(async: below)",
         Expression::SpawnCall { .. } => "spawn",
         Expression::Scope { .. } => "(scope: below)",
+        Expression::Select { .. } => "(no case: select)",
         Expression::Block { .. } => "block, unsafe-block, match-arm-block",
     };
     let st = match s {

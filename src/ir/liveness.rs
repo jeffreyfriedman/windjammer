@@ -386,6 +386,20 @@ impl Collector {
             // `vec![..]` / `format!(..)` build owned values from their arguments.
             Expression::MacroInvocation { args, .. } => self.without_sources(|c| args.iter().for_each(|x| c.expr(x))),
             Expression::Scope { body, .. } => self.expr(body),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.expr(s);
+                    }
+                }
+                let g = self.new_group();
+                for (i, a) in arms.iter().enumerate() {
+                    self.in_arm(g, i, |c| {
+                        c.declare_pattern(&a.pattern);
+                        c.expr(a.body);
+                    });
+                }
+            }
         }
     }
 }

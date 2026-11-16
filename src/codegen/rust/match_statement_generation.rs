@@ -113,6 +113,10 @@ impl<'ast> CodeGenerator<'ast> {
             | Expression::Scope { body: expr, .. } => {
                 Self::match_arm_body_uses_binding(expr, name)
             }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::match_arm_body_uses_binding(s, name))
+                    || Self::match_arm_body_uses_binding(a.body, name)
+            }),
             Expression::MacroInvocation { args, .. } => args
                 .iter()
                 .any(|e| Self::match_arm_body_uses_binding(e, name)),

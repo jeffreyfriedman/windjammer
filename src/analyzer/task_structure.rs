@@ -308,6 +308,7 @@ fn children<'a, 'ast>(e: &'a Expression<'ast>) -> Vec<&'a Expression<'ast>> {
             elements.to_vec()
         }
         Expression::MacroInvocation { args, .. } => args.to_vec(),
+        Expression::Select { arms, .. } => arms.iter().flat_map(|a| a.source.into_iter().chain(std::iter::once(a.body))).collect(),
         Expression::Block { .. } => vec![],
     }
 }

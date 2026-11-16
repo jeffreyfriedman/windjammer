@@ -461,6 +461,15 @@ impl Pass<'_, '_> {
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements.iter().for_each(|x| self.expr(x)),
             Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| self.expr(x)),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.expr(s);
+                    }
+                    self.bind(&a.pattern);
+                    self.expr(a.body);
+                }
+            }
             Expression::Literal { .. } | Expression::Identifier { .. } => {}
         }
     }

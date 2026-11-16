@@ -266,6 +266,17 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
             }
             Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| self.expr(x)),
             Expression::Scope { body, .. } => self.expr(body),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.expr(s);
+                    }
+                    self.scoped(|w| {
+                        w.bind_pattern(&a.pattern);
+                        w.expr(a.body);
+                    });
+                }
+            }
             _ => {}
         }
     }

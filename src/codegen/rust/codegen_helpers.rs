@@ -240,6 +240,9 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             expr_may_need_generic_clone_bound(start) || expr_may_need_generic_clone_bound(end)
         }
         Expression::Scope { body, .. } => expr_may_need_generic_clone_bound(body),
+        Expression::Select { arms, .. } => arms.iter().any(|a| {
+            a.source.is_some_and(expr_may_need_generic_clone_bound) || expr_may_need_generic_clone_bound(a.body)
+        }),
         _ => false,
     }
 }

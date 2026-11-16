@@ -86,6 +86,7 @@ impl<'e> Lowerer<'e> {
             }
             Expression::Await { .. } | Expression::AsyncCall { .. } | Expression::SpawnCall { .. } => self.err("async/await/spawn"),
             Expression::Scope { .. } => self.err("scope blocks"),
+            Expression::Select { .. } => self.err("select"),
         }
     }
 

@@ -1798,6 +1798,10 @@ pub fn expression_accesses_fields(ctx: &AnalysisContext, expr: &Expression) -> b
             expression_accesses_fields(ctx, start) || expression_accesses_fields(ctx, end)
         }
         Expression::Scope { body, .. } => expression_accesses_fields(ctx, body),
+        Expression::Select { arms, .. } => arms.iter().any(|a| {
+            a.source.is_some_and(|s| expression_accesses_fields(ctx, s))
+                || expression_accesses_fields(ctx, a.body)
+        }),
         Expression::Block { statements, .. } => {
             // Check if any statement in the block accesses fields
             statements.iter().any(|s| statement_accesses_fields(ctx, s))

@@ -99,6 +99,9 @@ fn expr_has_spawn_capture(name: &str, expr: &Expression<'_>) -> bool {
         }
         Expression::SpawnCall { expr, .. } => mentions(name, expr),
         Expression::Scope { body, .. } => expr_has_spawn_capture(name, body),
+        Expression::Select { arms, .. } => arms.iter().any(|a| {
+            a.source.is_some_and(|s| expr_has_spawn_capture(name, s)) || expr_has_spawn_capture(name, a.body)
+        }),
         _ => false,
     }
 }

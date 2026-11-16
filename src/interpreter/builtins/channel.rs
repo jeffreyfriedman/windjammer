@@ -119,7 +119,7 @@ fn make_channel(cap: Option<usize>, wj: bool) -> Value {
     Value::tuple(vec![tx, rx])
 }
 
-fn chan_of(v: &Value) -> R<(Rc<Chan>, bool)> {
+pub(crate) fn chan_of(v: &Value) -> R<(Rc<Chan>, bool)> {
     if let Some(s) = downcast::<SenderObj>(v) {
         return Ok((s.chan.clone(), true));
     }

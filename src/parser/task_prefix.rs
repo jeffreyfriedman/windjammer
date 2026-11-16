@@ -2,6 +2,7 @@
 //   spawn f(x) / spawn { ... }   -> Expression::SpawnCall   (a `Task<T>`)
 //   async f(x) / async { ... }   -> Expression::AsyncCall   (a `Task<T>`)
 //   scope { ... }                -> Expression::Scope       (waits for every task started inside)
+//   select { pat = rx.recv() => .., else => .. }  -> Expression::Select
 // `spawn` and `scope` are contextual: only followed by a name, `self` or `{` on the same line.
 //
 // Removed forms (WJ0191, SPEC-CONC-007): `thread { }`, `ch <- v` and `<-ch`. The parser reports each with a
@@ -48,7 +49,7 @@ impl Parser {
     /// the next token on the same line.
     pub(in crate::parser) fn task_prefix_follows(&self) -> bool {
         let kw = match self.current_token() {
-            Token::Ident(n) if n == "spawn" || n == "scope" => n.as_str(),
+            Token::Ident(n) if n == "spawn" || n == "scope" || n == "select" => n.as_str(),
             Token::Async => "async",
             _ => return false,
         };
@@ -86,6 +87,10 @@ impl Parser {
     fn parse_task_form(&mut self, kw: &str) -> Result<&'static Expression<'static>, String> {
         let location = self.current_location();
         self.advance(); // the prefix
+        if kw == "select" {
+            let arms = self.parse_select_arms()?;
+            return Ok(self.alloc_expr(Expression::Select { arms, location }));
+        }
         let operand = if self.current_token() == &Token::LBrace {
             self.span_enter();
             let block = self.parse_task_block();
@@ -99,6 +104,48 @@ impl Parser {
             "async" => self.alloc_expr(Expression::AsyncCall { expr: operand, location }),
             _ => self.alloc_expr(Expression::Scope { body: operand, location }),
         })
+    }
+
+    /// `{ pat = rx.recv() => body, pat = t.wait() => body, _ = timeout(d) => body, else => body }` (commas optional).
+    fn parse_select_arms(&mut self) -> Result<Vec<SelectArm<'static>>, String> {
+        self.expect(Token::LBrace)?;
+        let mut arms = Vec::new();
+        loop {
+            while matches!(self.current_token(), Token::Newline | Token::Comma) {
+                self.advance();
+            }
+            if self.current_token() == &Token::RBrace {
+                self.advance();
+                break;
+            }
+            let (kind, pattern, source) = if self.current_token() == &Token::Else {
+                self.advance();
+                (SelectKind::Else, Pattern::Wildcard, None)
+            } else {
+                let pattern = self.parse_pattern()?;
+                self.expect(Token::Assign)?;
+                let at = self.pos_desc();
+                let e = self.parse_expression()?;
+                let (kind, source) = select_source(e).ok_or_else(|| {
+                    format!("a `select` arm waits on `rx.recv()`, `t.wait()` or `timeout(d)` (at {at})")
+                })?;
+                (kind, pattern, Some(source))
+            };
+            self.expect(Token::FatArrow)?;
+            let body = if self.current_token() == &Token::LBrace {
+                self.span_enter();
+                let block = self.parse_task_block();
+                self.span_exit();
+                block?
+            } else {
+                self.parse_expression()?
+            };
+            arms.push(SelectArm { kind, pattern, source, body });
+        }
+        if arms.iter().filter(|a| a.kind == SelectKind::Else).count() > 1 {
+            return Err(self.with_position("a `select` has at most one `else` arm".to_string()));
+        }
+        Ok(arms)
     }
 
     fn parse_task_block(&mut self) -> Result<&'static Expression<'static>, String> {
@@ -192,5 +239,18 @@ impl Parser {
             help: "channels are values with methods: `ch.send(v)` sends, `ch.recv()` receives; to compare with a negative number write `x < -1`".into(),
             edits,
         })
+    }
+}
+
+/// The source of a `select` arm: `x.recv()`, `x.wait()` / `x.await`, `timeout(d)`.
+fn select_source(e: &'static Expression<'static>) -> Option<(SelectKind, &'static Expression<'static>)> {
+    match e {
+        Expression::MethodCall { object, method, arguments, .. } if arguments.is_empty() && method == "recv" => Some((SelectKind::Recv, *object)),
+        Expression::MethodCall { object, method, arguments, .. } if arguments.is_empty() && method == "wait" => Some((SelectKind::Wait, *object)),
+        Expression::Await { expr, .. } => Some((SelectKind::Wait, *expr)),
+        Expression::Call { function: Expression::Identifier { name, .. }, arguments, .. } if name == "timeout" && arguments.len() == 1 => {
+            Some((SelectKind::Timeout, arguments[0].1))
+        }
+        _ => None,
     }
 }

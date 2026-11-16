@@ -93,6 +93,14 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
             Expression::Scope { body, .. } => {
                 check_expr(body)?;
             }
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        check_expr(s)?;
+                    }
+                    check_expr(a.body)?;
+                }
+            }
             Expression::Block { statements, .. } => {
                 for stmt in statements {
                     check_stmt(stmt)?;

@@ -251,6 +251,30 @@ pub struct MatchArm<'ast> {
     pub body: &'ast Expression<'ast>,
 }
 
+/// What a `select` arm waits on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SelectKind {
+    /// `pat = rx.recv()`: `source` is the receiver.
+    Recv,
+    /// `pat = t.wait()`: `source` is the task.
+    Wait,
+    /// `_ = timeout(d)`: `source` is the duration.
+    Timeout,
+    /// `else`: runs when no arm is ready; `source` is `None`.
+    Else,
+}
+
+/// One arm of `select { }`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SelectArm<'ast> {
+    pub kind: SelectKind,
+    /// Bound to the received value / the task's value (`_` for a timeout); `Wildcard` for `else`.
+    pub pattern: Pattern<'ast>,
+    /// The receiver, task or duration expression (`None` for `else`).
+    pub source: Option<&'ast Expression<'ast>>,
+    pub body: &'ast Expression<'ast>,
+}
+
 // ============================================================================
 // PATTERNS
 // ============================================================================
@@ -397,6 +421,12 @@ pub enum Expression<'ast> {
         body: &'ast Expression<'ast>,
         location: SourceLocation,
     },
+    /// ADR-0004 `select { pat = rx.recv() => .., pat = t.wait() => .., _ = timeout(d) => .., else => .. }`: waits until
+    /// one arm's source is ready and evaluates that arm (the first ready one in source order).
+    Select {
+        arms: Vec<SelectArm<'ast>>,
+        location: SourceLocation,
+    },
     Block {
         statements: Vec<&'ast Statement<'ast>>,
         is_unsafe: bool,
@@ -429,6 +459,7 @@ impl<'ast> Expression<'ast> {
             Expression::AsyncCall { location, .. } => location.clone(),
             Expression::SpawnCall { location, .. } => location.clone(),
             Expression::Scope { location, .. } => location.clone(),
+            Expression::Select { location, .. } => location.clone(),
             Expression::Block { location, .. } => location.clone(),
         }
     }
