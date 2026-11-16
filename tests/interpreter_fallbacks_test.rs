@@ -135,6 +135,6 @@ fn each_counter_counts_on_a_program_that_takes_its_path() {
     let _ = std::fs::remove_dir_all(&dir);
     let nbody = counts(&root().join("bench/interp/nbody.wj"), &[]);
     assert!(nbody[0] > 0, "the nbody main loop's call runs as an island today; island did not count: {nbody:?}");
-    let hashmap = counts(&root().join("bench/interp/hashmap.wj"), &[]);
-    assert!(hashmap[3] > 0, "hashmap's loops are refused by machine code today; jitrefused did not count: {hashmap:?}");
+    let closures = counts(&root().join("bench/interp/closures.wj"), &[]);
+    assert!(closures[3] > 0, "closures' iterator-chain loop is refused by machine code today; jitrefused did not count: {closures:?}");
 }

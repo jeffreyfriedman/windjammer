@@ -131,11 +131,9 @@ pub fn analyze_source(source: &str, options: IdeAnalysisOptions) -> IdeAnalysisR
 
     let mut global_signatures = SignatureRegistry::new();
     let file_parent = file.parent().unwrap_or(Path::new("."));
-    crate::metadata::merge_wj_meta_signatures_and_copy_structs_multi(
-        &[file_parent],
-        &mut global_signatures,
-        &mut analyzer,
-    );
+    crate::metadata::with_peers_reached_by(file_parent, &program, || {
+        crate::metadata::merge_wj_meta_signatures_and_copy_structs_multi(&[file_parent], &mut global_signatures, &mut analyzer)
+    });
 
     if let Err(e) = analyzer
         .analyze_program_with_global_signatures(&program, &global_signatures)

@@ -17,8 +17,10 @@ static STDLIB_TRAITS_BOOTSTRAP: OnceLock<StdlibTraitsBootstrap> = OnceLock::new(
 
 fn stdlib_traits_bootstrap() -> &'static StdlibTraitsBootstrap {
     STDLIB_TRAITS_BOOTSTRAP.get_or_init(|| {
+        crate::debug_env::phase("bootstrap-start");
         let mut analyzer: Analyzer<'static> = Analyzer::new_empty(HashSet::new());
         build_stdlib_trait_definitions(&mut analyzer.trait_definitions);
+        crate::debug_env::phase("bootstrap-traits");
         analyzer
             .hydrate_prelude_trait_method_signatures()
             .expect("prelude trait method analysis (Drop, etc.)");

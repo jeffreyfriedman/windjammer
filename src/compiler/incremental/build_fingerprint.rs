@@ -26,31 +26,11 @@ pub fn hash_output(output: &str) -> u64 {
     hash_source(output)
 }
 
-/// Unique identity for this compiler build (version + binary hash).
-/// Used in stamps and `.wj.meta` fingerprints so rebuilds invalidate stale caches.
+/// Identity of this compiler build for stamps and `.wj.meta` fingerprints: [`crate::compiler_config::compiler_key`]
+/// (content of all build inputs, baked in at build time). A copy of the binary is the same compiler; a rebuild from
+/// different inputs is not.
 pub fn compiler_build_identity() -> String {
-    let mut hasher = DefaultHasher::new();
-    env!("CARGO_PKG_VERSION").hash(&mut hasher);
-    if let Ok(exe) = std::env::current_exe() {
-        if let Ok(meta) = std::fs::metadata(&exe) {
-            if let Ok(mtime) = meta.modified() {
-                mtime.hash(&mut hasher);
-            }
-            meta.len().hash(&mut hasher);
-        }
-        if let Ok(mut file) = std::fs::File::open(&exe) {
-            use std::io::Read;
-            let mut buf = [0u8; 65536];
-            loop {
-                match file.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => buf[..n].hash(&mut hasher),
-                    Err(_) => break,
-                }
-            }
-        }
-    }
-    format!("{}:{:016x}", env!("CARGO_PKG_VERSION"), hasher.finish())
+    crate::compiler_config::compiler_key().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
 }
 
 /// Check whether `.wj-compiler-stamp` in `output` matches this compiler binary.

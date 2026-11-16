@@ -1,6 +1,10 @@
 //! Gates: `wj doctor` finds every `wj` on PATH, resolves symlinks, flags duplicates with different commits,
 //! stale binaries and a missing shared cache, prints the fix commands and exits non-zero; `--json` mirrors it.
 
+#[allow(dead_code)]
+#[path = "../build_support/content_key.rs"]
+mod content_key;
+
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -92,10 +96,12 @@ fn healthy_path_exits_zero() {
     let e = env(true);
     let bin = tempfile::tempdir().unwrap();
     let c = current();
-    let l = c["commit"]
-        .as_str()
-        .map(|h| line(&h[..12], ts()))
-        .unwrap_or_else(|| line("unknown", ts()));
+    let l = match (c["commit"].as_str(), c["inputs_key"].as_str()) {
+        (Some(h), _) => line(&h[..12], ts()),
+        // an unstamped build names its sources by key
+        (None, Some(k)) => line("unknown", ts()).replacen("wj 0.50.0 ", &format!("wj 0.50.0+{} ", &k[..10]), 1),
+        (None, None) => line("unknown", ts()),
+    };
     fake(bin.path(), &l);
     let o = doctor(&e, &[bin.path()], Some(ts() + DAY), &[]);
     let text = String::from_utf8_lossy(&o.stdout);
@@ -275,6 +281,26 @@ fn expect_head_accepts_only_a_wj_built_from_the_checkout_head() {
     assert_eq!(o.status.code(), Some(1));
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("HEAD") && err.contains("install-dev"), "{err}");
+}
+
+#[test]
+fn expect_head_compares_an_unstamped_build_by_its_source_key() {
+    // A dev build names no commit (build.rs never queries git); `--expect-head` compares the content key of the
+    // sources it was built from with the checkout's.
+    let (co, _) = checkout_with_head();
+    let key = content_key::inputs_key(co.path());
+    let unstamped = |k: &str| format!("wj 0.50.0+{k} (commit unknown unknown, clean, release, built {}T00:00:00Z)", date(ts()));
+    let (good, bad) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    fake(good.path(), &unstamped(&key[..10]));
+    fake(bad.path(), &unstamped("0123456789"));
+    let e = Env { cache: tempfile::tempdir().unwrap(), work: co };
+    let sys = [Path::new("/usr/bin"), Path::new("/bin")];
+    let o = doctor(&e, &[good.path(), bad.path(), sys[0], sys[1]], None, &["--expect-head"]);
+    assert_eq!(o.status.code(), Some(0), "{}", String::from_utf8_lossy(&o.stderr));
+    let o = doctor(&e, &[bad.path(), good.path(), sys[0], sys[1]], None, &["--expect-head"]);
+    assert_eq!(o.status.code(), Some(1));
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("sources 0123456789") && err.contains("install-dev"), "{err}");
 }
 
 /// The merge gate must prove, right after building, that the first `wj` on PATH is the fresh build.

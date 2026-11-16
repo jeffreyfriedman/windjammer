@@ -149,14 +149,9 @@ impl FloatInference {
                 // Analysis metadata lives in the cache only; colocated sidecars are never read.
                 let mut found_metadata = false;
                 for candidate in &candidates {
-                    let full_meta_path = if let Some(ref root) = self.source_root {
-                        crate::metadata::meta_cache_root(root).join(candidate)
-                    } else {
-                        std::path::PathBuf::from(".wj-cache").join(candidate)
-                    };
-
-                    if let Ok(meta_json) = std::fs::read_to_string(&full_meta_path) {
-                        if let Ok(meta) = serde_json::from_str::<ModuleMetadata>(&meta_json) {
+                    // only a current entry (fingerprinted by this compiler, its source unchanged) feeds inference
+                    if let Some(meta) = crate::metadata::read_current_cached_meta(self.source_root.as_deref(), candidate) {
+                        {
                             // Load all function signatures from metadata
                             for (func_name, sig) in meta.functions {
                                 // Convert serialized types back to Type enum

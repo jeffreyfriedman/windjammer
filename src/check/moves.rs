@@ -32,6 +32,12 @@ fn remember(file: &str, source: &str, rust: &Option<String>) {
     }
 }
 
+/// A file whose generated Rust nothing needs to read (`project::nothing_to_predict`): remembered as "no Rust", so the
+/// width trigger of the same run does not generate it either.
+pub fn skip(file: &str, source: &str) {
+    remember(file, source, &None);
+}
+
 /// The Rust `predict` generated for exactly this file text, if this run did (`Some(None)`: it tried and failed).
 pub fn take_generated(file: &str, source: &str) -> Option<Option<String>> {
     let mut kept = GENERATED.lock().unwrap_or_else(|e| e.into_inner());

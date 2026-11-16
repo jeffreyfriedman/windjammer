@@ -599,6 +599,19 @@ where
     }
 }
 
+/// A route as axum 0.8 spells it: the `:name` and `*name` segments Windjammer programs write (the interpreter's
+/// router reads them too) become `{name}` and `{*name}`; axum 0.8 panics on the old spelling.
+fn axum_path(path: &str) -> String {
+    path.split('/')
+        .map(|seg| match (seg.strip_prefix(':'), seg.strip_prefix('*')) {
+            (Some(n), _) => format!("{{{n}}}"),
+            (_, Some(n)) => format!("{{*{n}}}"),
+            _ => seg.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 impl Router {
     /// Create a new router
     pub fn new() -> Self {
@@ -612,7 +625,7 @@ impl Router {
     where
         F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
-        let path = path.to_string();
+        let path = axum_path(path);
         Self {
             inner: self.inner.route(
                 &path,
@@ -632,7 +645,7 @@ impl Router {
     where
         F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
-        let path = path.to_string();
+        let path = axum_path(path);
         Self {
             inner: self.inner.route(
                 &path,
@@ -652,7 +665,7 @@ impl Router {
     where
         F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
-        let path = path.to_string();
+        let path = axum_path(path);
         Self {
             inner: self.inner.route(
                 &path,
@@ -672,7 +685,7 @@ impl Router {
     where
         F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
-        let path = path.to_string();
+        let path = axum_path(path);
         Self {
             inner: self.inner.route(
                 &path,
@@ -692,7 +705,7 @@ impl Router {
     where
         F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
-        let path = path.to_string();
+        let path = axum_path(path);
         Self {
             inner: self.inner.route(
                 &path,
@@ -779,7 +792,10 @@ where
     F: Fn(&Request) -> ServerResponse + Clone + Send + Sync + 'static,
 {
     crate::caps::net_listen(addr);
-    let router = Router::new().get("/*path", move |req: Request| handler(&req));
+    // axum 0.8 spells a catch-all `{*path}` (it panics on `/*path`), and the catch-all needs a non-empty tail: `/` is
+    // its own route, so the handler sees every path (a file server's index)
+    let root = handler.clone();
+    let router = Router::new().get("/", move |req: Request| root(&req)).get("/{*path}", move |req: Request| handler(&req));
     serve(addr, router)
 }
 

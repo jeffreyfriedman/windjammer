@@ -784,6 +784,10 @@ id = "wj run --jit-mutant"
 statement = "Interpreted runs (internal, hidden from help; env WJ_JIT_MUTANT): in debug builds, leave one machine-code check out for the mutation gate; release builds ignore it"
 
 [[promise]]
+id = "wj run --pair-list"
+statement = "Interpreted runs (internal, hidden from help): run every program listed in FILE under the tree walker and the resolved engine in one process, without the check, and print a JSON line per program and engine (exit status, stdout, stderr); the drift fuzz step's batch mode (ADR-0038 C4)"
+
+[[promise]]
 id = "wj run --engine"
 statement = "Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics)"
 
@@ -880,6 +884,10 @@ statement = "Only check that the wj PATH resolves first was built from HEAD of t
 [[promise]]
 id = "wj doctor --strict"
 statement = "Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout"
+
+[[promise]]
+id = "wj doctor --pin"
+statement = "Print the toolchain pin line for this wj (its source key), ready to paste under `[toolchain]` in wj.toml"
 
 [[promise]]
 id = "wj doctor --json"

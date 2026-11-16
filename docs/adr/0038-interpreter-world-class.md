@@ -65,8 +65,17 @@ CPython 136, Node 214.
 
 The first rungs of this ADR's own work moved nbody: loop entry checks the cached classification in place, and a
 call with an inferred `&mut` parameter is compiled instead of running as a walker island. nbody 905M -> 728M
-instructions, net 0.63 vs QuickJS and 1.03 vs Lua; kernel islands 21,304 -> 1,304 (geometric means 0.33 vs
-QuickJS, 0.66 vs Lua).
+retired instructions (-19.6%, macOS counter); the PC's callgrind counts 763.7M -> 624.4M (-18.2%) for the same
+commits. Kernel islands 21,304 -> 1,304. The second round put map lookups and inserts into machine code (hashmap
+537M -> 315M, -41%; net 0.76 vs QuickJS, was 1.49) and took the local-mut analysis off programs without bindings
+(startup 120M -> 105M). Geometric means at the second round's head: 0.33 vs QuickJS, 0.66 vs Lua, 0.17 vs CPython.
+The fourth round stored the registry's runtime layer as bincode (startup 76.8M -> 69.1M), hashed map keys a word
+per round (hashmap -3.9%) and gave call-free closures a copy of their free names instead of a reference per name
+per call (closures -11.4%; the third round's attempt to reuse the references cost +3.2% and was not kept).
+The third round took startup to 76.8M (no generated Rust for a file with nothing to predict, -20M; chained fixups,
+-4M before `main`) and created closures without a walker island (kernel islands 1,304 -> 404).
+Net ratios subtract each side's own startup; a startup gain that the kernels do not share (they all bind names)
+raises their net ratios slightly, which is why some moved up by a few hundredths.
 
 The integer kernels (fib30, loop5m, structs) already run as machine code and beat every interpreter; the gaps are
 the kernels whose hot loops still leave machine code: closures (a walker island per iterator chain), hashmap (both
@@ -75,11 +84,11 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | Rung | Metric | Now | Target | Gate |
 |---|---|---|---|---|
 | P0 | every kernel and startup counted, outputs checked, fallbacks ledgered | done | stays done | `interp_instr.wj --check` (+3%), `cargo test --release --test fallbacks` |
-| P1 | worst kernel, net vs QuickJS | 1.47 (hashmap) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
-| P2 | startup instructions | 119M | <= 60M, then <= 25M | `instr_baseline.json` `startup` |
-| P3 | worst kernel, net vs Lua 5.5 | 6.89 (hashmap) | <= 1.0 | `--refs` |
-| P4 | islands and refused loops in kernels | 1,304 islands (was 21,304), 6 refused loops | 0 in any hot loop | `bench/interp/fallbacks.tsv` (exact) |
-| P5 | geometric mean, net vs Node (V8) | 2.49 | <= 1.0 (JIT class) | `--refs` |
+| P1 | worst kernel, net vs QuickJS | 1.12 (closures: 1.24 -> 1.12 after copying call-free closures' free names; hashmap 1.49 -> 0.76) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
+| P2 | startup instructions (`hello`) | per counter: retired (macOS) 69.1M (was 119M, 104.6M, 76.8M); callgrind (PC) 83.3M at the second round. By phase (`WJ_PHASES=1`, retired): before main 24.6M (a trivial Rust binary 8.3M; CoreFoundation 6.5M), registry 11.8M (runtime layer 5.8M, binary since the fourth round, was 13.7M as JSON; stdlib meta 4.0M, mostly merging, not parsing: caching it parsed saved 1M and was not kept), numeric 5.7M, analyzer 5.1M, calls 4.6M, moves 3.8M, the interpreter 2.6M | <= 60M (next: CoreFoundation off the run path, a dependency decision for chrono/notify/reqwest; then the numeric and calls checks' fixed setup), then <= 25M |   |
+| P3 | worst kernel, net vs Lua 5.5 | 3.53 (hashmap, was 6.89) | <= 1.0 | `--refs` |
+| P4 | islands and refused loops in kernels | 404 islands (was 21,304, then 1,304), 3 refused loops | 0 in any hot loop | `bench/interp/fallbacks.tsv` (exact) |
+| P5 | geometric mean, net vs Node (V8) | 2.5 to 2.8 (V8's own count varies by run) | <= 1.0 (JIT class) | `--refs` |
 | P6 | a kernel suite of real programs (JSON, regex, a game tick, a parser) | not yet | added, counted, P1-P5 apply | new kernels in `bench/interp/` |
 
 ## Ladder 2: correctness (the compiled program is the oracle)
@@ -87,12 +96,12 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | Rung | Metric | Now | Target | Gate |
 |---|---|---|---|---|
 | C0 | drift fast gate: fuzz, corpus (walker, resolved, recorded compiled), spec oracle | fuzz 154 cases 0 divergent; corpus 3047 cases, all divergences ledgered; spec 229 cases, all ledgered | clean on every merge | `scripts/wj/drift_gate.wj --fast` |
-| C1 | known divergences in the drift ledger | 90 (ceiling 90) | 0 | `tests/drift_corpus/known_divergences.txt` shrink-only, `ledger_ceiling.txt` |
+| C1 | known divergences in the drift ledger | 89 (ceiling 89; was 90) | 0 | `tests/drift_corpus/known_divergences.txt` shrink-only, `ledger_ceiling.txt` |
 | C2 | spec-oracle known divergences | 14 | 0 | `tests/spec_oracle/known_divergences.txt` shrink-only |
 | C3 | fuzz divergences | 0 | 0 | `tests/drift_corpus/fuzz_divergences.txt` |
-| C4 | fuzz throughput (generated cases checked, walker vs resolved) | 154 cases in 14 s wall at load 50 (about 11 per second) | 10x, so the long seed range (`--fuzz-long`) runs on every merge | `drift_gate.wj` step `fuzz` |
+| C4 | fuzz throughput (generated cases checked, walker vs resolved) | both engines on every program in one `wj run --pair-list` process: the long seed range (2234 rows) in 12.9 s wall / 11.3 s CPU, was 99.6 s / 71.5 s (7.8x wall, 6.3x CPU), byte-identical rows; the gate runs the long range by default | 10x CPU (the rest is generating programs in interpreted Windjammer), then a fuzz budget of 10k programs per merge | `drift_gate.wj` step `fuzz` |
 | C5 | readiness R2 (no silent divergence) and R5 (diagnostics agree) | 98.5% and 95.1% | 100% | `docs/generated/interp_readiness.json` |
-| C6b | integer widths: an unsuffixed literal gets the width the numeric solver gives it in the compiled program (ADR-0028 `literal_widths`), so a `usize` counter underflows interpreted exactly where it panics compiled | the interpreter keeps a literal's width open (`IntTy::Lit`); a countdown `while i >= 0 && ..` that indexes a `Vec` ends at -1 interpreted and panics compiled | the interpreter reads the solver's per-function `literal_widths` (needs `crate::ir` among its allowed imports and the solver in `wj run`'s check, paid in startup instructions, P2) | a drift corpus case per width class; `interp_instr.wj` for the startup cost |
+| C6b | integer widths: an unsuffixed literal gets the width the numeric solver gives it in the compiled program (ADR-0028 `literal_widths`), so a `usize` countdown underflows interpreted exactly where it panics compiled | done: `compiled_facts.rs` adopts the solver's non-`int` literal widths in the walker, the resolved engine and machine code; a program pays for the analysis only when its AST can give a literal another width (an index, a cast, a `usize` std method, a declared narrow type): 0 instructions for `hello`, +9M to +20M on the kernels that qualify; the drift ledger lost one line (`literal_out_of_range`), and `repros/index_countdown_usize_underflow.wj` holds it | every literal width from the solver at no measurable cost: reuse the widths `wj check` already computed in the same process | drift corpus case; `interp_instr.wj` for the cost |
 | C6 | engines agree with each other | walker == resolved == machine code on every corpus program | stays | `engine_parity`, `fast_paths`, `fallbacks`, jit differential tests |
 
 ## Ladder 3: developer experience
@@ -138,6 +147,9 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 ## Consequences
 
 - `interp_instr.wj --check` and the `fallbacks` test join the interpreter's merge checks; the PC (Linux, callgrind)
-  records its own table in `instr_baseline.json`.
+  records its own table in `instr_baseline.json`. Counts from different counters are never compared: the macOS
+  hardware counter reports 119M instructions for startup where the PC's callgrind reports 79M for the same program
+  (the counters disagree on what they count, not on the program), so each counter keeps its own baseline table and
+  every quoted number names its counter.
 - The reference tools (`qjs`, `lua`) are optional: `--refs` skips a tool that is not installed.
 - The ladders are re-measured, not edited: a table here is updated together with the commit that moved it.

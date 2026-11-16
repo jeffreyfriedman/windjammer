@@ -1,6 +1,11 @@
-//! Project toolchain pin: `[toolchain] wj = "<commit-prefix or version>"` in `wj.toml`, or `WJ_COMMIT=<sha>` in a
-//! compiler-pin file ([`PIN_FILE`]) found in an ancestor directory. A mismatch with the running `wj` is an error for
-//! build/run/test/check, overridable with `WJ_ALLOW_TOOLCHAIN_MISMATCH=1`.
+//! Project toolchain pin: `[toolchain] wj = "<source key, commit prefix or version>"` in `wj.toml`, or
+//! `WJ_COMMIT=<key or sha>` in a compiler-pin file ([`PIN_FILE`]) found in an ancestor directory. A mismatch with the
+//! running `wj` is an error for build/run/test/check, overridable with `WJ_ALLOW_TOOLCHAIN_MISMATCH=1`.
+//!
+//! The source key (the ten hex digits after `+` in `wj --version`, printed by `wj doctor --pin`) names the compiler's
+//! sources by content: it survives history rewrites, copies and any checkout location, so it is the preferred form.
+//! `+<key>` pins the key only; bare hex matches either the key or, for a build that stamped one (`WJ_GIT_HASH`),
+//! the commit.
 
 use super::identity::Identity;
 use std::path::{Path, PathBuf};
@@ -66,51 +71,93 @@ fn read_pin_md(file: &Path) -> Option<Pin> {
     })
 }
 
-fn is_commit_spec(spec: &str) -> bool {
+fn is_hex_spec(spec: &str) -> bool {
     spec.len() >= 7 && spec.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Does this binary satisfy the pin? Hex specs (7+ chars) are commit prefixes; dotted specs are versions
-/// (`0.50` matches `0.50.0`).
-pub fn satisfies(spec: &str, id: &Identity) -> bool {
-    let spec = spec.trim().trim_start_matches('v');
-    if is_commit_spec(spec) {
-        let spec = spec.to_ascii_lowercase();
-        return id.commit.as_deref().is_some_and(|c| {
-            c.to_ascii_lowercase().starts_with(&spec)
-                || spec.starts_with(&c.to_ascii_lowercase()) && c.len() >= 7
-        });
+/// The forms a hex pin can take.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinForm {
+    /// `+<hex>`: the source key only.
+    Key,
+    /// Bare hex: the source key, or the commit of a stamped build.
+    KeyOrCommit,
+    /// A version (`0.50`, `v0.50.0`).
+    Version,
+}
+
+pub fn form(spec: &str) -> PinForm {
+    let spec = spec.trim();
+    if spec.strip_prefix('+').is_some_and(is_hex_spec) {
+        PinForm::Key
+    } else if is_hex_spec(spec) {
+        PinForm::KeyOrCommit
+    } else {
+        PinForm::Version
     }
-    id.version == spec
-        || id
-            .version
-            .strip_prefix(spec)
-            .is_some_and(|r| r.starts_with('.'))
+}
+
+fn hex_prefix_match(full: &str, spec: &str) -> bool {
+    let (full, spec) = (full.to_ascii_lowercase(), spec.to_ascii_lowercase());
+    full.starts_with(&spec) || spec.starts_with(&full) && full.len() >= 7
+}
+
+/// Does this binary satisfy the pin? `+<hex>` is a source-key prefix; bare hex (7+ chars) is a source-key or commit
+/// prefix (a dev build carries no commit: build.rs never queries git, so only a build that stamped one with
+/// `WJ_GIT_HASH` matches by commit); dotted specs are versions (`0.50` matches `0.50.0`).
+pub fn satisfies(spec: &str, id: &Identity) -> bool {
+    let spec = spec.trim();
+    let key_matches = |hex: &str| id.key.as_deref().is_some_and(|k| hex_prefix_match(k, hex));
+    match form(spec) {
+        PinForm::Key => key_matches(&spec[1..]),
+        PinForm::KeyOrCommit => key_matches(spec) || id.commit.as_deref().is_some_and(|c| hex_prefix_match(c, spec)),
+        PinForm::Version => {
+            let spec = spec.trim_start_matches('v');
+            id.version == spec || id.version.strip_prefix(spec).is_some_and(|r| r.starts_with('.'))
+        }
+    }
 }
 
 /// The command that installs the pinned compiler.
 pub fn install_command(pin: &Pin) -> String {
     let spec = pin.spec.trim().trim_start_matches('v');
-    if is_commit_spec(spec) {
-        format!(
-            "cargo install --git {} --rev {} --bin wj --locked --force",
-            pin.repo.as_deref().unwrap_or(DEFAULT_REPO),
-            spec
-        )
-    } else {
-        format!("cargo install windjammer --version {spec} --bin wj --locked --force")
+    match form(spec) {
+        PinForm::Key => format!(
+            "build wj from the compiler sources whose `wj --version` shows +{} (cargo build --release --bin wj && target/release/wj install-dev)",
+            &spec[1..]
+        ),
+        PinForm::KeyOrCommit => format!(
+            "build wj from the compiler sources whose `wj --version` shows +{spec} (cargo build --release --bin wj && target/release/wj install-dev), or a stamped release: cargo install --git {} --rev {spec} --bin wj --locked --force",
+            pin.repo.as_deref().unwrap_or(DEFAULT_REPO)
+        ),
+        PinForm::Version => format!("cargo install windjammer --version {spec} --bin wj --locked --force"),
     }
 }
 
 pub fn mismatch_message(pin: &Pin, id: &Identity) -> String {
+    let pinned = match form(&pin.spec) {
+        PinForm::Key => "a source key",
+        PinForm::KeyOrCommit => "a source key or commit",
+        PinForm::Version => "a version",
+    };
+    let actual = match (id.short_key(), &id.commit) {
+        (Some(k), Some(_)) => format!("{}+{k}, commit {}", id.version, id.short()),
+        (Some(k), None) => format!("{}+{k}", id.version),
+        (None, _) => format!("{} (commit {})", id.version, id.short()),
+    };
     format!(
-        "this project pins wj `{}` ({}), but the running wj is {} (commit {}).\n  fix:      {}\n  override: WJ_ALLOW_TOOLCHAIN_MISMATCH=1 (warns instead of failing)\n  diagnose: wj doctor",
+        "this project pins wj `{}` ({pinned}, {}), but the running wj is {actual}.\n  expected: {}\n  actual:   {}\n  fix:      {}\n  override: WJ_ALLOW_TOOLCHAIN_MISMATCH=1 (warns instead of failing)\n  diagnose: wj doctor",
         pin.spec,
         pin.file.display(),
-        id.version,
-        id.short(),
+        pin.spec.trim().trim_start_matches('+'),
+        id.short_key().map(str::to_string).or_else(|| id.commit.clone()).unwrap_or_else(|| id.version.clone()),
         install_command(pin)
     )
+}
+
+/// The pin line for the running build (`wj doctor --pin`): its source key, ready to paste under `[toolchain]`.
+pub fn pin_line(id: &Identity) -> Option<String> {
+    id.short_key().map(|k| format!("wj = \"{k}\""))
 }
 
 pub enum Outcome {
@@ -157,6 +204,7 @@ mod tests {
 
     fn id(commit: &str, version: &str) -> Identity {
         Identity {
+            key: None,
             version: version.into(),
             commit: Some(commit.into()),
             commit_ts: None,
@@ -176,6 +224,20 @@ mod tests {
         assert!(!satisfies("0.5", &i) && !satisfies("0.51.0", &i));
         let unknown = Identity { commit: None, ..i };
         assert!(!satisfies("2b6db23", &unknown));
+    }
+
+    #[test]
+    fn source_key_pins() {
+        let keyed = Identity { key: Some("3fa91c20d4ffffffffff".into()), commit: None, ..id("x", "0.50.0") };
+        assert!(satisfies("3fa91c20d4", &keyed) && satisfies("+3fa91c20d4", &keyed) && satisfies("3FA91C2", &keyed));
+        assert!(!satisfies("3fa91c20d5", &keyed) && !satisfies("+2b6db230c4", &keyed));
+        // `+` pins the key only: a stamped commit with the same digits does not satisfy it
+        let stamped = Identity { key: Some("aaaaaaaaaa".into()), ..id("3fa91c20d4ffff", "0.50.0") };
+        assert!(!satisfies("+3fa91c20d4", &stamped) && satisfies("3fa91c20d4", &stamped));
+        let pin = Pin { spec: "+0123456789".into(), file: "wj.toml".into(), repo: None };
+        let m = mismatch_message(&pin, &keyed);
+        assert!(m.contains("a source key") && m.contains("expected: 0123456789") && m.contains("actual:   3fa91c20d4"), "{m}");
+        assert_eq!(pin_line(&keyed).as_deref(), Some("wj = \"3fa91c20d4\""));
     }
 
     #[test]

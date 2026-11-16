@@ -1,5 +1,7 @@
-#[path = "build_support/identity_key.rs"]
-mod identity_key;
+#[path = "build_support/content_key.rs"]
+mod content_key;
+#[path = "build_support/build_key.rs"]
+mod build_key;
 #[path = "build_support/stable_build.rs"]
 mod stable_build;
 #[path = "build_support/test_modules.rs"]
@@ -148,53 +150,22 @@ fn generate_embedded_assets() {
         .expect("write embedded assets table");
 }
 
-/// Run `git <args>` in the manifest dir; `None` when git or the repository is unavailable.
-fn git_output(args: &[&str]) -> Option<String> {
-    let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
-    let out = stable_build::git_command(std::path::Path::new(&dir), args).output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
-
-/// Toolchain identity (`wj --version`, `wj doctor`): commit hash, commit date, dirty flag, profile, build date.
-/// Commit date (not wall-clock time) is the only time value that may reach generated output; the wall-clock
-/// build date is read by `toolchain::identity` for `--version` alone (gate: tests/toolchain_identity_test.rs).
-/// The build date is kept in OUT_DIR so it only changes when the commit or dirty flag does.
-/// A rerun of this script recompiles the library (cargo treats a rerun as a changed dependency), so what it
-/// watches is kept narrow: not `.git/index` (`git status` rewrites it), not the whole `tests/` tree.
+/// Toolchain identity (`wj --version`, `wj doctor`): the content keys, profile and build date; a commit only when
+/// the build passes one. No git query and no `.git` path is watched: a commit, checkout or `git status` never reruns
+/// this script, so a no-op rebuild after a commit is Fresh. Release/CI builds may set `WJ_GIT_HASH` (and
+/// `WJ_GIT_TS`, unix seconds) in the environment to stamp a commit; they are read only when set.
+/// The wall-clock build date is read by `toolchain::identity` for `--version` alone (gate:
+/// tests/toolchain_identity_test.rs); it is kept in OUT_DIR so it only changes when the build key does.
 fn emit_toolchain_identity() {
     use std::fs;
     use std::path::Path;
-    // Not `index`: `git status` rewrites it, and the dirty state is already tracked through `src`, `std` and the test modules.
-    for rel in ["HEAD", "packed-refs"] {
-        if let Some(p) = git_output(&["rev-parse", "--git-path", rel]) {
-            println!("cargo:rerun-if-changed={p}");
-        }
+    for var in ["WJ_GIT_HASH", "WJ_GIT_TS"] {
+        println!("cargo:rerun-if-env-changed={var}");
     }
-    if let Some(r) = git_output(&["symbolic-ref", "-q", "HEAD"]) {
-        if let Some(p) = git_output(&["rev-parse", "--git-path", &r]) {
-            println!("cargo:rerun-if-changed={p}");
-        }
-    }
-    println!("cargo:rerun-if-changed=src");
-    println!("cargo:rerun-if-changed=std");
-    let hash = git_output(&["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".into());
-    let commit_ts: i64 = git_output(&["log", "-1", "--format=%ct"]).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let dirty = git_output(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
+    let hash = std::env::var("WJ_GIT_HASH").ok().filter(|h| !h.trim().is_empty()).unwrap_or_else(|| "unknown".into());
+    let commit_ts: i64 = std::env::var("WJ_GIT_TS").ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".into());
-    // Uncommitted changes are part of the identity: two dirty builds of one commit are different binaries.
-    let diff = if dirty { git_output(&["diff-index", "-p", "HEAD"]).unwrap_or_default() } else { String::new() };
-    let untracked: Vec<(String, Vec<u8>)> = git_output(&["ls-files", "--others", "--exclude-standard", "--", "src", "std", "build.rs", "Cargo.toml"])
-        .unwrap_or_default()
-        .lines()
-        .filter_map(|f| {
-            let root = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
-            Some((f.to_string(), std::fs::read(Path::new(&root).join(f)).ok()?))
-        })
-        .collect();
-    let key = identity_key::identity_key(&hash, dirty, identity_key::dirty_digest(&diff, &untracked), &profile);
+    let (key, inputs) = build_content_key();
     let stamp = Path::new(&std::env::var("OUT_DIR").unwrap_or_else(|_| "target".into())).join("toolchain_identity.stamp");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -210,13 +181,45 @@ fn emit_toolchain_identity() {
             now
         }
     };
-    // content identity of the compiler source (no clock, no path): key of the cross-checkout analysis cache
+    // The compiler's identity for every cache: a digest of all build inputs (content only: no git state, no path, no
+    // clock; build_support/content_key.rs). A copy of the binary, another checkout or a touched file keeps it.
     println!("cargo:rustc-env=WJ_BUILD_KEY={key}");
+    // The sources alone (no toolchain): what `wj --version` shows and what the staleness check compares with a checkout.
+    println!("cargo:rustc-env=WJ_INPUTS_KEY={inputs}");
     println!("cargo:rustc-env=WJ_GIT_HASH={hash}");
     println!("cargo:rustc-env=WJ_GIT_TS={commit_ts}");
-    println!("cargo:rustc-env=WJ_GIT_DIRTY={dirty}");
     println!("cargo:rustc-env=WJ_BUILD_PROFILE={profile}");
     println!("cargo:rustc-env=WJ_BUILD_TS={build_ts}");
+}
+
+/// [`build_key::content_key`] of this build (the manifest tree, the compiler (`rustc -vV`), target, profile and
+/// enabled features) and the inputs key of the tree alone. Watches exactly the content inputs.
+fn build_content_key() -> (String, String) {
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    for rel in content_key::INPUTS {
+        println!("cargo:rerun-if-changed={rel}");
+    }
+    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".into());
+    let version = std::process::Command::new(rustc)
+        .arg("-vV")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    let env = |k: &str| std::env::var(k).unwrap_or_default();
+    let features: Vec<String> = std::env::vars().filter_map(|(k, _)| k.strip_prefix("CARGO_FEATURE_").map(str::to_string)).collect();
+    let root = std::path::Path::new(&manifest);
+    (build_key::content_key(root, &version, &env("TARGET"), &env("PROFILE"), &features), content_key::inputs_key(root))
+}
+
+/// macOS on Apple silicon: link `wj` with chained fixups, so dyld applies the binary's pointer fixups page by page as
+/// it maps them instead of rebasing every pointer before `main` (4.3M of the 27.5M instructions `wj -V` retired; the
+/// interpreter's startup ladder, ADR-0038 P2). Only the `wj` binary is linked differently: no dependency is rebuilt.
+fn link_wj_with_chained_fixups() {
+    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    if os == "macos" && arch == "aarch64" {
+        println!("cargo:rustc-link-arg-bin=wj=-Wl,-fixup_chains");
+    }
 }
 
 fn main() {
@@ -229,6 +232,7 @@ fn main() {
     // `generate_test_all_rs`); a test file added later is caught by tests/build_rerun_stability_test.rs.
     println!("cargo:rerun-if-changed=build_support");
     println!("cargo::rustc-check-cfg=cfg(tarpaulin)");
+    link_wj_with_chained_fixups();
 
     generate_test_all_rs();
 

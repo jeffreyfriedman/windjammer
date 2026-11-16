@@ -320,11 +320,11 @@ impl Lo<'_, '_> {
         self.vars.len() - 1
     }
 
-    fn tys(&self) -> Vec<Ty> {
+    pub(super) fn tys(&self) -> Vec<Ty> {
         self.vars.iter().map(|v| v.ty).collect()
     }
 
-    fn set_tys(&mut self, tys: &[Ty]) {
+    pub(super) fn set_tys(&mut self, tys: &[Ty]) {
         for (v, t) in self.vars.iter_mut().zip(tys) {
             v.ty = *t;
         }
@@ -673,6 +673,9 @@ impl Lo<'_, '_> {
                 self.scopes.last_mut()?.push((n.as_str(), Bind::Var(id)));
             }
             Statement::Assignment { target, value, compound_op, .. } => self.assign(target, value, *compound_op)?,
+            Statement::Match { value, arms, .. } => {
+                self.map_match(value, arms, false)?;
+            }
             Statement::Expression { expr, .. } => self.effect(expr)?,
             Statement::If { condition, then_block, else_block, .. } => return self.if_stmt(condition, then_block, else_block.as_deref()),
             Statement::While { condition, body, label, .. } => self.while_stmt(condition, body, label.as_deref())?,

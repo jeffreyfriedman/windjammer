@@ -191,3 +191,83 @@ fn real_socket_only_with_allow_network() {
     assert!(hi.ends_with("\r\n\r\nhi ann via raw"), "{hi}");
     assert!(post.starts_with("HTTP/1.1 201 Created\r\n") && post.ends_with("got abc"), "{post}");
 }
+
+/// `serve_fn`'s one handler sees every path, `/` included (the runtime routes `/` and `/*path`): a file server serves
+/// its index. Found by the game web gate (a request for `/` answered 404 without calling the handler).
+#[test]
+fn serve_fn_hands_the_root_path_to_its_handler() {
+    let mock = r#"[
+ {"request": {"method": "GET", "path": "/"}},
+ {"request": {"method": "GET", "path": "/x"}}
+]"#;
+    let src = "use std::http\nfn handle(req: http::Request) -> http::ServerResponse {\n    http::ServerResponse::ok(\"at \" + req.path())\n}\nfn main() {\n    let _ = http::serve_fn(\"127.0.0.1:0\", handle)\n}\n";
+    let (_, err, code) = run_with(src, &[], Some(mock));
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(transcript(&err), vec!["[mock-http] GET / -> 200 at /", "[mock-http] GET /x -> 200 at /x"], "{err}");
+}
+
+/// `ServerResponse.headers` is the runtime's `HashMap<String, String>`, as `std/http.wj` now declares it: `insert`
+/// builds and runs in both modes (`push` builds in neither).
+#[test]
+fn server_response_headers_are_a_map_as_declared() {
+    let src = "use std::http\nfn main() {\n    let mut r = http::ServerResponse::new(200, \"\")\n    r.headers.insert(\"content-type\", \"application/wasm\")\n    println(\"${r.headers.len()} ${r.status}\")\n}\n";
+    let (out, err, code) = run_with(src, &[], None);
+    assert_eq!((code, out.as_str()), (0, "1 200\n"), "{err}");
+}
+
+/// A raw server that answers one request with `response` and keeps the connection open (as chromedriver does,
+/// whatever `Connection: close` asked); the interpreted client must stop at the body's framing, not wait for the
+/// end of the connection.
+fn keep_alive_server(response: &'static str) -> (u16, std::thread::JoinHandle<()>) {
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let h = std::thread::spawn(move || {
+        if let Ok((mut s, _)) = l.accept() {
+            let mut buf = [0u8; 4096];
+            let _ = s.read(&mut buf);
+            let _ = s.write_all(response.as_bytes());
+            std::thread::sleep(Duration::from_secs(20));
+        }
+    });
+    (port, h)
+}
+
+fn get_with_deadline(port: u16) -> (String, std::time::Duration) {
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("prog.wj");
+    let src = format!("use std::http\nfn main() {{\n    match http::get(\"http://127.0.0.1:{port}/status\") {{\n        Ok(r) => println(\"ok ${{r.status()}} ${{r.text().unwrap_or(\\\"?\\\")}}\"),\n        Err(e) => println(\"err ${{e}}\"),\n    }}\n}}\n");
+    fs::write(&f, src).unwrap();
+    let start = Instant::now();
+    let mut child = Command::new(WJ)
+        .args(["run", "--interpret", "--allow", "net.connect=127.0.0.1"])
+        .arg(&f)
+        .current_dir(dir.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    while child.try_wait().unwrap().is_none() {
+        if start.elapsed() > Duration::from_secs(15) {
+            let _ = child.kill();
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let mut out = String::new();
+    let _ = child.stdout.take().unwrap().read_to_string(&mut out);
+    (out, start.elapsed())
+}
+
+#[test]
+fn client_reads_a_content_length_body_without_waiting_for_the_connection_to_close() {
+    let (port, _h) = keep_alive_server("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nready");
+    let (out, took) = get_with_deadline(port);
+    assert_eq!(out, "ok 200 ready\n", "after {took:?}");
+}
+
+#[test]
+fn client_reads_a_chunked_body_without_waiting_for_the_connection_to_close() {
+    let (port, _h) = keep_alive_server("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n3;x=y\r\n!!!\r\n0\r\n\r\n");
+    let (out, took) = get_with_deadline(port);
+    assert_eq!(out, "ok 200 ok!!!\n", "after {took:?}");
+}

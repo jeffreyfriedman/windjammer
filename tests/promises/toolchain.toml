@@ -170,21 +170,33 @@ stdout_has = ["no problems found"]
 output_lacks = ["warning [behind]"]
 
 [[case]]
-name = "doctor --strict fails when the wj on PATH is older than the checkout"
+name = "doctor --strict fails when the wj on PATH is not built from the checkout's sources"
 polarity = "negative"
 files = { "cache/cargo-target/shared/keep" = "", "co/Cargo.toml" = "[package]\nname = \"windjammer\"\n", "co/.git/HEAD" = "ref: refs/heads/main\n" }
 cwd = "co"
 env = { PATH = "{bin_dir}", WJ_TOOLCHAIN_NOW = "1", WJ_CARGO_TARGET_ROOT = "{w}/cache", WJ_CHECKOUT_HEAD = "fffffffffffffffffffffffffffffffffffffff0@9999999999" }
 args = ["doctor", "--strict"]
 exit = 1
-stdout_has = ["warning [behind]", "is older than this checkout (commit ffffffffffff)", "install-dev"]
+stdout_has = ["warning [behind]", "is not built from this checkout's sources", "install-dev"]
 
 [[case]]
-name = "a command run inside a newer checkout names the older wj in one line"
+name = "a command run inside a checkout with other sources names the wj in one line"
 polarity = "positive"
 files = { "co/Cargo.toml" = "[package]\nname = \"windjammer\"\n", "co/.git/HEAD" = "ref: refs/heads/main\n" }
 cwd = "co"
 env = { WJ_CHECKOUT_HEAD = "fffffffffffffffffffffffffffffffffffffff0@9999999999" }
 args = ["eval", "1 + 1"]
 stdout_has = ["2"]
-stderr_has = ["is older than this checkout (commit ffffffffffff); run `wj install-dev --from"]
+stderr_has = ["is not built from this checkout's sources", "run `wj install-dev --from"]
+
+[[case]]
+name = "doctor --pin prints the pin line of the running wj"
+polarity = "positive"
+args = ["doctor", "--pin"]
+stdout_has = ["wj = \""]
+
+[[case]]
+name = "doctor --pin takes no positional arguments"
+polarity = "negative"
+args = ["doctor", "--pin", "extra"]
+exit = 2

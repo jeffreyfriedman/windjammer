@@ -31,11 +31,9 @@ struct Config {
 
 static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 
-/// Identity of this compiler build by content: version plus the build script's commit / uncommitted-diff / profile
-/// key. No executable path or time. `None` for a build of unknown origin (no git): such a build shares nothing.
+/// The compiler's identity for every cache ([`crate::compiler_config::compiler_key`]).
 pub fn compiler_key() -> Option<String> {
-    let key = option_env!("WJ_BUILD_KEY")?;
-    (!key.starts_with("unknown")).then(|| format!("{}+{key}", env!("CARGO_PKG_VERSION")))
+    crate::compiler_config::compiler_key()
 }
 
 /// Use `store` for the analysis cache, keyed under this build. Returns false (nothing shared) for an unknown build.
