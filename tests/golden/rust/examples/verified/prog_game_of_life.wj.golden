@@ -52,7 +52,7 @@ fn step(g: &Vec<Vec<bool>>) -> Vec<Vec<bool>> {
     for r in 0_i64..5_i64 {
         let mut row: Vec<bool> = vec![];
         for c in 0_i64..5_i64 {
-            let n = neighbors(g, (r as i64), (c as i64));
+            let n = neighbors(g, r as i64, c as i64);
             let alive = g[r as usize][c as usize];
             row.push(n == 3_i64 || alive && n == 2_i64);
         }

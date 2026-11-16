@@ -533,3 +533,44 @@ pub fn replace_whole_binding(haystack: &str, from: &str, to: &str) -> String {
     out.push_str(rest);
     out
 }
+
+/// The arguments of a call as printed: a whole argument that is a parenthesized integer conversion of a name or a
+/// field path (`(i as usize)`) is printed without the parentheses (`xs.get(i as usize)`; rustc warns on them). This
+/// runs on the finished argument text, after every borrow/value decision of the call site, so it never changes what
+/// the argument is, only how it is spelled.
+pub(crate) fn join_call_arguments(args: &[String]) -> String {
+    args.iter().map(|a| bare_cast_argument(a)).collect::<Vec<_>>().join(", ")
+}
+
+fn bare_cast_argument(arg: &str) -> &str {
+    let t = arg.trim();
+    if !crate::ir::coercion::parens_wrap_whole(t) {
+        return arg;
+    }
+    let inner = t[1..t.len() - 1].trim();
+    let Some((value, ty)) = inner.rsplit_once(" as ") else { return arg };
+    let place = !value.is_empty() && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
+    if place && crate::type_classification::is_integer_type(ty) {
+        inner
+    } else {
+        arg
+    }
+}
+
+#[cfg(test)]
+mod join_call_arguments_tests {
+    use super::join_call_arguments;
+
+    #[test]
+    fn a_parenthesized_conversion_of_a_name_is_printed_bare() {
+        let a = |v: &[&str]| join_call_arguments(&v.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert_eq!(a(&["(i as usize)"]), "i as usize");
+        assert_eq!(a(&["(self.n as u32)", "x"]), "self.n as u32, x");
+        // kept: an operator expression, a borrow, a method call, a float cast, a call text the parens do not wrap
+        assert_eq!(a(&["((i + 1) as usize)"]), "((i + 1) as usize)");
+        assert_eq!(a(&["&(i as usize)"]), "&(i as usize)");
+        assert_eq!(a(&["(v.len() as i64)"]), "(v.len() as i64)");
+        assert_eq!(a(&["(x as f64)"]), "(x as f64)");
+        assert_eq!(a(&["(a as usize) + (b as usize)"]), "(a as usize) + (b as usize)");
+    }
+}
