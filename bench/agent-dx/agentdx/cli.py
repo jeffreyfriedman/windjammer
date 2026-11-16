@@ -99,6 +99,11 @@ def main(argv=None):
     p7p.add_argument("--open-bugs", default=PF.DEFAULT_OPEN_BUGS)
     p7p.add_argument("--min-free-mem-gb", type=float, default=PF.DEFAULT_MIN_MEM_GB)
     p7p.add_argument("--prior", action="append", default=None)
+    p7a = sub.add_parser("pilot7-references", help="gate (a): the nine t301-t309 references under `wj run --verify` against their oracle; exit 1 on any red")
+    p7a.add_argument("--wj", default=None, help="wj binary (default: AGENTDX_WJ, WJ_BIN, then wj on PATH)")
+    p7a.add_argument("--tasks-dir", default=PF.DEFAULT_TASKS, help="directory of t30N_* tasks (default: tasks_set3 beside the harness)")
+    p7a.add_argument("--solutions-dir", default=PF.DEFAULT_SOLUTIONS, help="directory of the reference solutions (default: solutions/wj-set3)")
+    p7a.add_argument("--oracle-dir", default=None, help="root holding <task>/oracle/vectors.json (default: inside each task directory)")
     p7r = sub.add_parser("pilot7-report")
     p7r.add_argument("--config", default=P7.CONFIG)
     p7r.add_argument("--out", default="results/pilot7")
@@ -129,6 +134,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.cmd == "pilot7-preflight":
         return PF.run(a)
+    if a.cmd == "pilot7-references":
+        return PF.run_references(a)
     if a.cmd == "pilot7":
         cfg = P7.load_config(a.config)
         if a.seed is not None:

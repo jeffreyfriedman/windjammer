@@ -9,12 +9,23 @@ import re
 import subprocess
 import sys
 
+import glob
+import json
+import shutil
+import tempfile
+
 from . import pilot7 as P7, toolchains
+from .verify_status import reference_passes
 from .pilot6_report import NOISY_LOAD
 
 DEFAULT_ACCEPTED = os.path.join("friction", "pilot7-accepted.txt")
 DEFAULT_OPEN_BUGS = os.path.join("friction", "open-bugs.md")
 DEFAULT_MIN_MEM_GB = 4.0
+BENCH_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # bench/agent-dx, wherever the repo is checked out
+DEFAULT_TASKS = os.path.join(BENCH_ROOT, "tasks_set3")
+DEFAULT_SOLUTIONS = os.path.join(BENCH_ROOT, "solutions", "wj-set3")
+REFERENCE_GLOB = "t30[1-9]_*"
+REFERENCE_TIMEOUT = 900
 
 
 def check_wj(ident, expect_commit, environ=None):
@@ -96,6 +107,85 @@ def check_events(cfg, open_ids, accepted):
         if not any(e.startswith(p) for p, _ in accepted):
             red.append(f"open event {e} is on a pilot-7 task and not accepted in pilot7-accepted.txt")
     return red
+
+
+def default_wj(environ=None):
+    """The wj binary for the references gate: --wj, else AGENTDX_WJ, WJ_BIN, else `wj` on PATH; None when none exists."""
+    env = os.environ if environ is None else environ
+    for cand in (env.get("AGENTDX_WJ"), env.get("WJ_BIN")):
+        if cand:
+            return cand
+    return shutil.which("wj")
+
+
+def run_wj_verify(wj, workdir, stdin_text, timeout=REFERENCE_TIMEOUT):
+    """The real runner: `wj run --verify main.wj` in workdir with stdin_text -> (rc, stdout, stderr)."""
+    try:
+        r = subprocess.run([wj, "run", "--verify", "main.wj"], cwd=workdir, input=stdin_text, capture_output=True,
+                           text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return 124, "", f"timeout after {timeout} s"
+    return r.returncode, r.stdout, r.stderr
+
+
+def richest_vector(vectors_path):
+    """The oracle vector with the longest stdin -> (stdin, expected stdout, expected exit code)."""
+    v = max(json.load(open(vectors_path)), key=lambda y: len(y["stdin"]))
+    return v["stdin"], v["stdout"], int(v.get("code", 0))
+
+
+def check_references(wj, tasks_dir=DEFAULT_TASKS, solutions_dir=DEFAULT_SOLUTIONS, oracle_dir=None,
+                     runner=run_wj_verify, say=lambda *_: None, pattern=REFERENCE_GLOB, expected=9):
+    """Gate (a): every t301-t309 reference solution, run under `wj run --verify` on the oracle's richest vector, must give
+    the oracle's stdout, the oracle's exit status (verify_status.reference_passes) and say the compiled run matches.
+    The oracle is <oracle_dir>/<task>/oracle/vectors.json (default: inside the task directory). -> list of red reasons;
+    a missing path is a red reason, never an exception. `runner(wj, workdir, stdin)` is injectable for tests."""
+    if runner is run_wj_verify and not (wj and os.path.isfile(wj) and os.access(wj, os.X_OK)):
+        return [f"wj binary {wj!r} is missing or not executable (--wj, AGENTDX_WJ, WJ_BIN or PATH)"]
+    if not os.path.isdir(tasks_dir):
+        return [f"references directory {tasks_dir} does not exist (--tasks-dir)"]
+    if not os.path.isdir(solutions_dir):
+        return [f"solutions directory {solutions_dir} does not exist (--solutions-dir)"]
+    tasks = sorted(glob.glob(os.path.join(tasks_dir, pattern)))
+    if len(tasks) != expected:
+        return [f"found {len(tasks)} reference tasks matching {pattern} in {tasks_dir}, expected {expected}"]
+    red = []
+    tmp = tempfile.mkdtemp(prefix="p7refs-")
+    try:
+        for t in tasks:
+            name = os.path.basename(t)
+            src = os.path.join(solutions_dir, name, "main.wj")
+            vec = os.path.join(oracle_dir, name, "oracle", "vectors.json") if oracle_dir else os.path.join(t, "oracle", "vectors.json")
+            if not os.path.isfile(src):
+                red.append(f"{name}: reference solution {src} is missing")
+                continue
+            if not os.path.isfile(vec):
+                red.append(f"{name}: oracle {vec} is missing")
+                continue
+            stdin, want_out, want_code = richest_vector(vec)
+            ws = os.path.join(tmp, name)
+            os.makedirs(ws)
+            shutil.copy(src, os.path.join(ws, "main.wj"))
+            rc, out, err = runner(wj, ws, stdin)
+            if reference_passes(rc, err, want_code) and out == want_out:
+                say(f"        pass {name}")
+            else:
+                why = "stdout differs from the oracle" if out != want_out else "exit status or compiled-run check failed"
+                first = next((l for l in err.splitlines() if l.startswith(("error", "warning"))), "")[:110]
+                red.append(f"{name} (exit {rc}): {why} {first}".rstrip())
+                say(f"        FAIL {red[-1]}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return red
+
+
+def run_references(args, runner=run_wj_verify, say=print):
+    """CLI of gate (a); same GREEN/RED lines and exit code as run(): -> 0 only when all nine pass."""
+    wj = args.wj or default_wj()
+    problems = check_references(wj, args.tasks_dir, args.solutions_dir, args.oracle_dir, runner, say)
+    say(f"{'RED  ' if problems else 'GREEN'} references" + "".join(f"\n      {p}" for p in problems))
+    say("PREFLIGHT GREEN" if not problems else "PREFLIGHT RED: references")
+    return 1 if problems else 0
 
 
 def run(args, environ=None, load1=None, mem_gb=None, say=print):
