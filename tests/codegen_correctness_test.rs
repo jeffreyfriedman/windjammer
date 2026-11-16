@@ -145,6 +145,7 @@ corpus_tests!(
     self_field_arg_into_mut_self_method,
     self_field_arg_into_mut_self_method_returned,
     assigned_value_read_after_return_arm_in_let,
+    recursive_read_only_param_through_optional_field,
     str_array_element_in_owned_branch,
     borrowed_text_alias_reassigned_owned,
     owned_text_ordered_against_borrowed_text,

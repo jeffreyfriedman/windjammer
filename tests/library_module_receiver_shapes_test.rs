@@ -69,3 +69,21 @@ fn a_split_impl_passing_a_copy_field_to_a_module_function_borrows_self() {
     assert!(rs.contains("pub fn resize(&mut self"), "{rs}");
     test.cargo_check().expect("cargo-check");
 }
+
+/// A struct indexed out of a `Vec` field is cloned even when another module declares a unit enum of the same name
+/// (that enum is Copy; this file's struct is not: rustc E0507 when the homonym decided it).
+#[test]
+fn a_struct_element_is_cloned_despite_a_homonym_unit_enum_elsewhere() {
+    let mut test = MultiFileTest::new();
+    test.add_file("kinds/mod.wj", "pub mod presets\n");
+    test.add_file("kinds/presets.wj", "pub enum Preset {\n    Warm,\n    Cold,\n}\n\npub fn is_warm(p: Preset) -> bool {\n    match p {\n        Preset::Warm => true,\n        Preset::Cold => false,\n    }\n}\n");
+    test.add_file("tools/mod.wj", "pub mod picker\n");
+    test.add_file(
+        "tools/picker.wj",
+        "pub struct Preset {\n    pub name: string,\n    pub count: i32,\n}\n\nimpl Preset {\n    pub fn copy_of(other: Preset) -> Preset {\n        Preset { name: other.name, count: other.count }\n    }\n}\n\npub struct Picker {\n    pub items: Vec<Preset>,\n    pub current: Preset,\n}\n\nimpl Picker {\n    pub fn load(index: i32) {\n        if index >= 0 && (index as usize) < self.items.len() {\n            let preset = self.items[index as usize]\n            self.current = Preset::copy_of(preset)\n        }\n    }\n}\n",
+    );
+    let map = test.compile().expect("compile");
+    let rs = map.get("tools/picker.rs").expect("tools/picker.rs");
+    assert!(rs.contains("let preset = self.items[index as usize].clone();"), "a non-Copy element is cloned:\n{rs}");
+    test.cargo_check().expect("cargo-check");
+}
