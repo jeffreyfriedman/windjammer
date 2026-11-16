@@ -12,7 +12,7 @@ fn is_perfect(n: i64) -> bool {
 fn main() {
     let mut found: Vec<String> = vec![];
     for n in 2_i64..500_i64 {
-        if is_perfect((n as i64)) {
+        if is_perfect(n as i64) {
             found.push(n.to_string());
         }
     }
