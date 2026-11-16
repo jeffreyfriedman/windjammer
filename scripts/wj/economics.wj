@@ -54,7 +54,9 @@ const TWINS: string = "bench/economics/twins"
 const MARK: string = "\n@@wj-economics counter@@\n"
 // rustc flags shared by twin and generated builds, so a compile/size/run difference is the source, not the flags
 const DEBUG_FLAGS: string = "--edition 2021 -A warnings -C opt-level=0 -C debuginfo=0"
-const RELEASE_FLAGS: string = "--edition 2021 -A warnings -C opt-level=3"
+// fat LTO on both sides: the generated crate's dependencies are built for LTO (cargo makes them bitcode-only), so
+// the same-flags comparison links both with -C lto
+const RELEASE_FLAGS: string = "--edition 2021 -A warnings -C opt-level=3 -C lto"
 // the lint allowances the generated Cargo.toml adds ([lints.rust])
 const GEN_ALLOW: string = "--allow=unconditional_panic --allow=arithmetic_overflow"
 
@@ -76,6 +78,7 @@ struct M {
     wall: f64,
     status: int,
     stdout: string,
+    err: string,
 }
 
 fn die(msg: string) {
@@ -138,7 +141,7 @@ fn measure_once(dir: string, cmd: string, stdin_file: string, flag: string) -> M
         Some(i) => (out.stdout[0..i].to_string(), out.stdout[i + MARK.len()..].to_string()),
         None => (out.stdout, ""),
     }
-    let mut m = M { instr: 0, rss: 0, cpu: 0.0, wall: wall_outer, status: out.status, stdout: stdout }
+    let mut m = M { instr: 0, rss: 0, cpu: 0.0, wall: wall_outer, status: out.status, stdout: stdout, err: if err.len() > 400 { err[0..400].to_string() } else { err } }
     for l in strings.split_lines(err) {
         if l.contains(" real ") && l.contains(" user ") && l.contains(" sys") {
             m.wall = num_word(l, 0)
@@ -351,20 +354,25 @@ fn gen_rs(dir: string) -> string {
     strings.trim(run_sh("ls " + quote(dir) + "/*.rs 2>/dev/null | head -1")).to_string()
 }
 
+// the binary's name: the `name` of the `[[bin]]` section (the package name when there is none)
 fn gen_bin_name(dir: string) -> string {
+    let mut name = ""
+    let mut in_bin = false
     for l in strings.split_lines(read(dir + "/Cargo.toml")) {
         let t = strings.trim(l)
-        if t.starts_with("name = \"") {
-            return strings.replace(strings.replace(t, "name = \"", ""), "\"", "")
+        if t.starts_with("[") {
+            in_bin = t == "[[bin]]"
+        } else if t.starts_with("name = \"") && (name == "" || in_bin) {
+            name = strings.replace(strings.replace(t, "name = \"", ""), "\"", "")
         }
     }
-    ""
+    name
 }
 
 // rustc flags that link a generated file against the runtime rlibs cargo built in `target/<profile>`
 fn extern_flags(target: string, profile: string) -> string {
     let t = quote(target + "/" + profile)
-    let line = "for c in windjammer_runtime serde smallvec; do r=$(find " + t + " -name \"lib\${c}-*.rlib\" 2>/dev/null | head -1); [ -n \"$r\" ] && printf ' --extern %s=%s' \"$c\" \"$r\"; done; find " + t + " -name '*.rlib' -exec dirname {} \\; 2>/dev/null | sort -u | while read d; do printf ' -L dependency=%s' \"$d\"; done"
+    let line = "for c in windjammer_runtime serde smallvec; do for ext in rlib rmeta; do r=$(find " + t + " -name \"lib\${c}-*.\${ext}\" 2>/dev/null | head -1); [ -n \"$r\" ] && printf ' --extern %s=%s' \"$c\" \"$r\"; done; done; find " + t + " \\( -name '*.rlib' -o -name '*.dylib' -o -name '*.so' \\) -exec dirname {} \\; 2>/dev/null | sort -u | while read d; do printf ' -L dependency=%s' \"$d\"; done"
     run_sh(line)
 }
 
@@ -407,7 +415,8 @@ fn argv(p: Prog) -> string {
 fn check(p: Prog, what: string, m: M, expected: string, problems: Vec<string>) -> Vec<string> {
     let mut out = problems
     if m.status != 0 {
-        out.push("${p.id} ${what}: exit ${m.status}")
+        let first = strings.split_lines(m.err)
+        out.push("${p.id} ${what}: exit ${m.status}" + (if first.len() > 0 { ": " + first[0] } else { "" }))
     } else if expected != "" && norm(m.stdout) != norm(expected) {
         out.push("${p.id} ${what}: output differs from the expected output")
     }
@@ -442,8 +451,11 @@ fn measure_prog(p: Prog, wj: string, target: string, ext_dbg: string, ext_rel: s
     problems = check(p, "rust debug run", r_rs_dbg, expected, problems)
 
     // Windjammer: interpreter (the interpreted-first verify loop)
+    // as the agent-dx harness does: the program sits in its working directory (the interpreter's default
+    // capability grant is the program's own directory)
     let _ = prepare_dir(p, run_dir)
-    let r_interp = measure(run_dir, quote(wj) + " run --interpret " + quote(wj_src) + argv(p), input, kernel_runs, flag)
+    let _ = run_sh("cp " + quote(wj_src) + " " + quote(run_dir + "/main.wj"))
+    let r_interp = measure(run_dir, quote(wj) + " run --interpret main.wj" + argv(p), input, kernel_runs, flag)
     problems = check(p, "wj interpreter run", r_interp, expected, problems)
 
     // Windjammer: transpile, then the same rustc flags as the twin
@@ -458,6 +470,8 @@ fn measure_prog(p: Prog, wj: string, target: string, ext_dbg: string, ext_rel: s
         let wj_rel = work + "/wj_rel"
         let c_wj_dbg = measure(work, "rustc " + DEBUG_FLAGS + " " + GEN_ALLOW + ext_dbg + " -o " + quote(wj_dbg) + " " + quote(grs), "", 1, flag)
         let c_wj_rel = measure(work, "rustc " + RELEASE_FLAGS + " " + GEN_ALLOW + ext_rel + " -o " + quote(wj_rel) + " " + quote(grs), "", 1, flag)
+        problems = check(p, "wj rustc debug", c_wj_dbg, "", problems)
+        problems = check(p, "wj rustc release", c_wj_rel, "", problems)
         let _ = prepare_dir(p, run_dir)
         let r_wj_dbg = measure(run_dir, quote(wj_dbg) + argv(p), input, kernel_runs, flag)
         let _ = prepare_dir(p, run_dir)
@@ -471,6 +485,7 @@ fn measure_prog(p: Prog, wj: string, target: string, ext_dbg: string, ext_rel: s
         if shipped {
             // as shipped: the generated Cargo.toml's release profile (lto, overflow checks), warm dependency cache
             let c_ship = measure(gen_dir, "env CARGO_TARGET_DIR=" + quote(target) + " CARGO_BUILD_JOBS=2 cargo build -q --release", "", 1, flag)
+            problems = check(p, "wj cargo release", c_ship, "", problems)
             let ship_bin = target + "/release/" + gen_bin_name(gen_dir)
             let _ = prepare_dir(p, run_dir)
             let r_ship = measure(run_dir, quote(ship_bin) + argv(p), input, runs, flag)
