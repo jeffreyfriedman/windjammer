@@ -14,9 +14,9 @@
 //!     the runtime with `default-features = false`, so those modules are not part of it,
 //!   - the line is a comment, or follows a `#[cfg(test)]` line (inline test modules are last in the file).
 //!
-//! A new site belongs behind a port (the engine's clock and file-system ports in game-host), behind that
+//! A new site belongs behind a port (a game engine's clock and file-system ports), behind that
 //! cfg with a wasm32 alternative, or in a module the browser never reaches; only then may a count be raised.
-//! The wasm32 build itself is gated by the game repo (`cargo check --target wasm32-unknown-unknown
+//! The wasm32 build itself is gated by the engine's own repo (`cargo check --target wasm32-unknown-unknown
 //! --no-default-features`, scripts/check_wasm_runtime.wj).
 
 use std::collections::BTreeMap;
