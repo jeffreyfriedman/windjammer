@@ -130,14 +130,12 @@ pub fn pragma(decl: &FunctionDecl<'_>) -> Pragma {
 pub struct Program<'p, 'a> {
     pub resolved: &'p ResolvedProgram<'a>,
     pub by_key: HashMap<ExprKey, &'p CallResolution>,
-    /// Per file: `use std::fs` -> `fs` (a name that stands for a std module, so `fs.read(..)` is `fs::read`).
-    pub modules: HashMap<String, HashSet<String>>,
 }
 
 impl<'p, 'a> Program<'p, 'a> {
-    pub fn new(resolved: &'p ResolvedProgram<'a>, modules: HashMap<String, HashSet<String>>) -> Self {
+    pub fn new(resolved: &'p ResolvedProgram<'a>) -> Self {
         let by_key = resolved.calls.iter().map(|c| (c.key, c)).collect();
-        Program { resolved, by_key, modules }
+        Program { resolved, by_key }
     }
 }
 
@@ -447,6 +445,10 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         match e {
             Expression::TryOp { expr, .. } => self.is_connect(expr),
             Expression::MethodCall { object, method, .. } if matches!(method.as_str(), "unwrap" | "expect") => self.is_connect(object),
+            Expression::MethodCall { method, .. } if method == "connect" => {
+                let key = ExprKey(e as *const Expression<'_> as usize);
+                matches!(self.prog.by_key.get(&key).map(|c| (&c.res, c.kind)), Some((Res::Unresolved(Reason::External(p)), CallKind::Path)) if p.ends_with("db"))
+            }
             Expression::Call { function: Expression::Identifier { name, .. }, .. } => {
                 matches!(self.std_path_of(e, name).as_deref(), Some(p) if p.ends_with("db::connect"))
             }
@@ -602,12 +604,18 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
     }
 
     fn method_call(&mut self, e: &Expression<'_>, object: &Expression<'_>, method: &str, arguments: &[(Option<String>, &Expression<'_>)], loc: &crate::parser::ast::types::SourceLocation) -> Taint {
-        // `fs.read_to_string(..)` with `use std::fs`: a call of the module's function
-        if let Expression::Identifier { name, .. } = object {
-            if !self.bound.contains(name) && self.prog.modules.get(&self.file).is_some_and(|m| m.contains(name)) {
-                let args = self.args(arguments);
-                return self.std_call(&format!("{name}::{method}"), method, &args, loc, e);
-            }
+        // `fs.read_to_string(..)` with `use std::fs` resolves like `fs::read_to_string(..)` (`resolve::walk::module_dot_call`):
+        // one classification for both spellings
+        let key = ExprKey(e as *const Expression<'_> as usize);
+        let prog = self.prog;
+        if let Some(c) = prog.by_key.get(&key).filter(|c| c.kind == CallKind::Path) {
+            let args = self.args(arguments);
+            let word = method.to_string();
+            return match &c.res {
+                Res::Def(id) => self.apply_user(&[*id], None, &args, loc, &word, CallKind::Path),
+                Res::Unresolved(Reason::External(p)) | Res::Prim(p) => self.std_call(&full(p, &c.callee), &word, &args, loc, e),
+                _ => args.into_iter().fold(Taint::new(), union),
+            };
         }
         let recv = self.expr(object);
         // a closure argument sees the elements of the receiver (`lines.map(|l| ..)`)

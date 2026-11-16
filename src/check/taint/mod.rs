@@ -8,10 +8,9 @@ pub mod flow;
 use super::front::Parsed;
 use super::locate::Locator;
 use crate::diagnostics::{Diagnostic, SourceIndex, Span};
-use crate::parser::ast::core::Item;
 use crate::resolve::{self, DefKind, ParsedFile};
 use flow::{Finding, Pragma, Summary};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 /// The registry code.
@@ -28,18 +27,6 @@ fn may_flow(parsed: &[&Parsed]) -> bool {
     any(&["process", "fs", "db", "Connection"]) && any(&["env", "fs", "io", "args", "Request", "read"])
 }
 
-fn std_modules(items: &[Item<'_>], out: &mut HashSet<String>) {
-    for i in items {
-        match i {
-            Item::Use { path, alias, .. } if path.first().is_some_and(|s| s == "std") && path.len() == 2 => {
-                out.insert(alias.clone().unwrap_or_else(|| path[1].clone()));
-            }
-            Item::Mod { items, .. } => std_modules(items, out),
-            _ => {}
-        }
-    }
-}
-
 pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
     if !may_flow(parsed) {
         return;
@@ -53,15 +40,7 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
         })
         .collect();
     let resolved = resolve::resolve_program(&inputs);
-    let modules: HashMap<String, HashSet<String>> = parsed
-        .iter()
-        .map(|p| {
-            let mut s = HashSet::new();
-            std_modules(&p.program.items, &mut s);
-            (p.file.clone(), s)
-        })
-        .collect();
-    let prog = flow::Program::new(&resolved, modules);
+    let prog = flow::Program::new(&resolved);
     let defs = resolved.defs();
     let fns: Vec<_> = resolved
         .collected
