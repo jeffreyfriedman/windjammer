@@ -41,6 +41,18 @@ lines (`WJ_MAX_OUTPUT=N`, 0 lifts it) with an omitted-lines marker, and end with
 ("do not use redirects, pipes, `$?` or `${PIPESTATUS}`"). Pilot 8 showed agents appending `2>&1 | head -40` and `$?`, which the
 allow-list refuses. Denials per arm are recorded; any recurring denial is a tool defect to fix before the next run.
 
+## Sheet additions in the candidate sheets (token delta against `pilot7/sheet_u.md`, 3.2 bytes per token)
+
+| Block | Bytes | Tokens |
+|---|---|---|
+| idioms program (split+collect, exit status, trait objects, recursive enum, owned text, mutating through `self`), replaces the old example | +905 | +283 |
+| one command / no redirects / exit status line, `--stdin-file`, `run:` hint | +300 | +94 |
+| style (`match`, tail expression, no let per sub-expression) and the already-exists helpers (+ 1 executed program) | +670 | +209 |
+| total U8 (sheet_u8.md 3658 B vs 1683 B) | +1975 | +617 (+117%) |
+
+The size is the cost of the experiment, not a proposal: the default sheet is unchanged and its budget stays. If U8 wins, the
+block is rewritten for brevity before it ships (candidates: drop the helper list the model already knows).
+
 ## Metrics (all recorded by the harness already)
 
 Primary: first-write thinking tokens (`modelUsage.thinkingTokens`), assistant turns before the first Write, `wj docs`

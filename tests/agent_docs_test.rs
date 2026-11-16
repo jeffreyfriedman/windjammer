@@ -201,7 +201,7 @@ fn default_sheet_fits_its_ratchet_and_points_at_the_tools() {
 /// 1683 (U) and 1955 (V3) bytes; the idiom block (split+collect, exit status, trait objects, recursive enums, owned
 /// text, mutating through `self`) replaces the sheet's old example and adds 905 bytes (about 283 tokens), and the output line (agent mode: stderr included, `exit status: N`) 157 more (about 49). Lower these
 /// when the block shrinks; raise one only with a measurement (PILOT8_SHEET_AB.md).
-const PILOT8_BUDGET_BYTES: [(&str, usize); 3] = [("sheet_u8.md", 3_050), ("sheet_u8s.md", 3_090), ("sheet_v4.md", 3_450)];
+const PILOT8_BUDGET_BYTES: [(&str, usize); 3] = [("sheet_u8.md", 3_700), ("sheet_u8s.md", 3_740), ("sheet_v4.md", 4_130)];
 
 #[test]
 fn pilot8_sheets_are_executed_budgeted_and_state_the_verify_rule() {

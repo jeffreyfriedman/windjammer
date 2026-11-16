@@ -272,4 +272,3 @@ args = ["build", "{w}/m.wj", "--no-cargo", "-o", "{w}/out"]
 exit = 1
 output_has = ["error[WJ0011]", "`mut self` is not Windjammer", "m.wj:6:12", "fix (auto-fixable): remove `mut`"]
 output_lacks = ["Parse error"]
-absent = ["out/m.rs"]

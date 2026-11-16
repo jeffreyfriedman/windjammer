@@ -13,6 +13,8 @@ Windjammer (.wj): Rust-like, ownership inferred. Follow this sheet exactly; wher
 - Rust crates: add `strsim = "0.11"` under `[dependencies]` in `wj.toml`, call `strsim::levenshtein(a, b)`; `wj rust-surface strsim` lists what is callable.
 - One command, no redirects, no chains (`2>&1`, `|`, `&&`, `;`, `$?`, `${PIPESTATUS}`): the tool already merges stderr and prints the exit status (last line `exit status: N`).
 - Input: write it to a file with the Write tool, pass `--stdin-file in.txt` (never `printf`, `$()` or a heredoc; a `printf` argument starting with `=` is refused). `wj build` prints `run: ...`; there is no `./build/main`.
+- Style: dispatch with `match` on strings and enums, not if-chains; the last expression is the value (no `return`); no `let` per sub-expression.
+- Already exists, never hand-roll: `x.abs()`, `a.min(b)`, `a.max(b)`, `s.contains("t")`, `s.parse::<int>()`, `c.is_alphabetic()`, `c.is_ascii_digit()`, `[0; n]`.
 - Unsure? `wj docs <terms>` searches the full reference, stdlib and verified examples; `wj explain <CODE>` explains an error code.
 
 Idioms:
@@ -37,5 +39,17 @@ fn main() {
     a.add(s[0].area())
     println("${ev(E::Add(Box::new(E::N(1)), Box::new(E::N(5))))} ${a.t}")
     if v.len() != 2 { process::exit(1) }   // exit status; end of main is 0, a panic 101
+}
+```
+
+```windjammer
+// expect: 2 5 -5 3 true 42 true 3
+fn kind(cmd: string) -> int {
+    match cmd { "add" => 1, "neg" => 2, _ => 0 }
+}
+fn main() {
+    let (a, b): (int, int) = (-5, 3)
+    let n: int = "42".parse().unwrap_or(0)
+    println("${kind("neg")} ${a.abs()} ${a.min(b)} ${a.max(b)} ${"hello".contains("ell")} ${n} ${'a'.is_alphabetic()} ${[0; 3].len()}")
 }
 ```
