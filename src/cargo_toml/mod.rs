@@ -57,22 +57,28 @@ pub fn generate_single_file_cargo_toml(
     )
 }
 
-/// `[[bin]]` sections for the executables beside `lib.rs`: each root-level generated file with a `fn main`
-/// (not `main.rs`, which has its own section), named after the file, in file-name order.
-pub(crate) fn extra_bin_sections(output_dir: &Path) -> String {
-    let mut names: Vec<String> = std::fs::read_dir(output_dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| e.file_name().to_str().map(str::to_string))
-        .filter(|f| f.ends_with(".rs") && !matches!(f.as_str(), "lib.rs" | "mod.rs" | "main.rs" | "build.rs"))
-        .filter(|f| matches!(detect_rust_file_type(&output_dir.join(f)), RustFileType::Binary))
-        .collect();
-    names.sort();
-    names
-        .iter()
-        .map(|f| format!("[[bin]]\nname = \"{}\"\npath = \"{}\"\n\n", f.trim_end_matches(".rs"), f))
-        .collect()
+/// `[[bin]]` sections for the runners of this build: each root-level `.wj` file of the source tree that declares its
+/// own top-level `fn main` (not `main.wj`, which has its own section) and was generated beside `lib.rs`, named after
+/// the file, in file-name order. A leftover `.rs` with a `fn main` from an earlier build has no such source and gets none.
+pub(crate) fn extra_bin_sections(output_dir: &Path, source_dir: &Path) -> String {
+    let has_main = |text: &str| {
+        text.lines().any(|l| ["fn main(", "pub fn main(", "async fn main(", "pub async fn main("].iter().any(|p| l.trim_end().starts_with(p)))
+    };
+    let mut stems: Vec<String> = Vec::new();
+    for dir in [source_dir.to_path_buf(), source_dir.join("src")] {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            let Some(stem) = p.file_stem().and_then(|s| s.to_str()).map(str::to_string) else { continue };
+            let wj = p.extension().is_some_and(|x| x == "wj");
+            if wj && stem != "main" && std::fs::read_to_string(&p).is_ok_and(|t| has_main(&t)) && output_dir.join(format!("{stem}.rs")).is_file() {
+                stems.push(stem);
+            }
+        }
+    }
+    stems.sort();
+    stems.dedup();
+    stems.iter().map(|s| format!("[[bin]]\nname = \"{s}\"\npath = \"{s}.rs\"\n\n")).collect()
 }
 
 /// Generate Cargo.toml honoring `config` (`skip_cargo_toml_generation`, `runtime_path`).
@@ -100,10 +106,10 @@ pub fn generate_single_file_cargo_toml_with_config(
     let lib_or_bin_section = if has_lib_rs && has_main_rs {
         format!(
             "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n{}",
-            lib_name, project_name, extra_bin_sections(output_dir)
+            lib_name, project_name, extra_bin_sections(output_dir, source_dir)
         )
     } else if has_lib_rs {
-        format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n{}", lib_name, extra_bin_sections(output_dir))
+        format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n{}", lib_name, extra_bin_sections(output_dir, source_dir))
     } else if has_mod_rs && has_main_rs {
         format!(
             "[lib]\nname = \"{}\"\npath = \"mod.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",

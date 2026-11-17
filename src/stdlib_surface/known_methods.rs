@@ -101,7 +101,7 @@ pub const KNOWN_METHODS: &[&str] = &[
     "total_cmp", "trailing_zeros", "transaction", "trim", "trim_end", "trim_end_matches",
     "trim_matches", "trim_start", "trim_start_matches", "trunc", "truncate", "try_borrow",
     "try_borrow_mut", "try_get", "try_into", "try_iter", "try_lock", "try_recv", "try_send",
-    "unauthorized", "under", "union", "unique", "unique_by", "unpark", "unwrap",
+    "type_header", "unauthorized", "under", "union", "unique", "unique_by", "unpark", "unwrap",
     "unwrap_err", "unwrap_or", "unwrap_or_default", "unwrap_or_else", "unzip", "upgrade",
     "uri", "value_of", "values", "values_mut", "values_of", "var", "verify_called",
     "verify_called_times", "version", "wait", "wait_for_shutdown", "wait_timeout",

@@ -214,7 +214,7 @@ You can import and use multiple modules together:
 use std::fs
 use std::json
 
-fn load_config(path: &str) -> Option<serde_json.Value> {
+fn load_config(path: string) -> Option<serde_json.Value> {
     match fs::read_to_string(path) {
         Ok(content) => {
             match json::parse(&content) {
@@ -289,12 +289,12 @@ use std::http  // Not used
 use std::fs
 
 // Good: Handle errors explicitly
-fn read_config() -> Result<String, std::io::Error> {
+fn read_config() -> Result<string, std::io::Error> {
     fs::read_to_string("config.txt")
 }
 
 // Better: Provide context
-fn read_config_safe() -> String {
+fn read_config_safe() -> string {
     match fs::read_to_string("config.txt") {
         Ok(content) => content,
         Err(_) => {
@@ -391,7 +391,7 @@ Example stdlib module structure:
 // std/mymodule.wj - Brief description
 
 // Public function with clear purpose
-fn do_something(input: &str) -> Result<String, Error> {
+fn do_something(input: string) -> Result<string, Error> {
     // Implementation that calls Rust crates
     my_crate::function(input)
 }

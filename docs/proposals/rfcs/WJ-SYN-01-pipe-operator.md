@@ -204,7 +204,7 @@ fn handle_login(req: Request, db: Connection) -> Response {
 
 **Without pipes:**
 ```windjammer
-fn process_data(raw: str) -> Result<Data, Error> {
+fn process_data(raw: string) -> Result<Data, Error> {
     let parsed = json.parse(raw)?
     let validated = validate_schema(parsed)?
     let normalized = normalize_fields(validated)?
@@ -215,7 +215,7 @@ fn process_data(raw: str) -> Result<Data, Error> {
 
 **With pipes:**
 ```windjammer
-fn process_data(raw: str) -> Result<Data, Error> {
+fn process_data(raw: string) -> Result<Data, Error> {
     raw
         |> json.parse()?
         |> validate_schema()?

@@ -23,7 +23,8 @@ fn run_toolchain(cmd: &Commands) {
             std::process::exit(1);
         }
     }
-    if !matches!(cmd, Commands::Doctor { .. } | Commands::Version { .. } | Commands::InstallDev { .. }) {
+    // (a dry run of the installer writes nothing, so it keeps its verdict files out of the cache too)
+    if !matches!(cmd, Commands::Doctor { .. } | Commands::Version { .. } | Commands::InstallDev { .. } | Commands::SelfInstall { dry_run: true }) {
         toolchain::stale::warn_if_stale();
         toolchain::behind::warn_if_behind();
     }
