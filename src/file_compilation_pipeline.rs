@@ -389,20 +389,7 @@ fn compile_file_impl(
         }
         // CROSS-MODULE STRUCT FIELD TYPES: Register struct field types for imported type inference
         if let parser::Item::Struct { decl, .. } = item {
-            // std's own types (`Duration`, `Instant`) are declared by the core surface (std/rust_core.wji): a std
-            // module's placeholder struct of the same name (std/time.wj's chrono-era `struct Duration`) is not a
-            // user declaration and must not shadow the surface's typing of `Duration::from_millis(10)` (u64).
-            let std_file = !module_compiler.stdlib_path.as_os_str().is_empty() && input_path.starts_with(&module_compiler.stdlib_path);
-            if std_file && crate::ir::stdlib_tables::surface_type_name(&parser::Type::Parameterized(decl.name.clone(), Vec::new())).is_some() {
-                continue;
-            }
-            let mut field_types = HashMap::new();
-            for field in &decl.fields {
-                field_types.insert(field.name.clone(), field.field_type.clone());
-            }
-            module_compiler
-                .global_struct_field_types
-                .insert(decl.name.clone(), field_types);
+            module_compiler.register_struct_field_types(input_path, decl);
         }
     }
 

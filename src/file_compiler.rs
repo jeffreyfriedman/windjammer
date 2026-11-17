@@ -48,6 +48,19 @@ pub struct ModuleCompiler {
 
 #[allow(dead_code)]
 impl ModuleCompiler {
+    /// Cross-module struct field types for imported type inference. std's own types (`Duration`, `Instant`) are
+    /// declared by the core surface (std/rust_core.wji): a std module's placeholder struct of the same name
+    /// (std/time.wj's chrono-era `struct Duration`) is not a user declaration and must not shadow the surface's
+    /// typing of `Duration::from_millis(10)` (u64).
+    pub(crate) fn register_struct_field_types(&mut self, input_path: &Path, decl: &parser::StructDecl) {
+        let std_file = !self.stdlib_path.as_os_str().is_empty() && input_path.starts_with(&self.stdlib_path);
+        if std_file && crate::ir::stdlib_tables::surface_type_name(&parser::Type::Parameterized(decl.name.clone(), Vec::new())).is_some() {
+            return;
+        }
+        let field_types = decl.fields.iter().map(|f| (f.name.clone(), f.field_type.clone())).collect();
+        self.global_struct_field_types.insert(decl.name.clone(), field_types);
+    }
+
     pub fn new(target: CompilationTarget, enable_lint: bool) -> Self {
         Self::with_config(
             target,
