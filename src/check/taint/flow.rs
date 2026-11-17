@@ -409,10 +409,6 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                 }
                 Taint::new()
             }
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                self.block(body);
-                Taint::new()
-            }
             Statement::Defer { statement, .. } => {
                 self.stmt(statement);
                 Taint::new()
@@ -545,12 +541,16 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
             Expression::Await { expr, .. }
             | Expression::AsyncCall { expr, .. }
             | Expression::SpawnCall { expr, .. } => self.expr(expr),
-            Expression::ChannelSend { channel, value, .. } => {
-                self.expr(channel);
-                self.expr(value);
+            Expression::Scope { body, .. } => self.expr(body),
+            Expression::Select { arms, .. } => {
+                for arm in arms {
+                    if let Some(source) = arm.source {
+                        self.expr(source);
+                    }
+                    self.expr(arm.body);
+                }
                 Taint::new()
             }
-            Expression::ChannelRecv { channel, .. } => self.expr(channel),
             Expression::Block { statements, .. } => {
                 self.block(statements)
             }
