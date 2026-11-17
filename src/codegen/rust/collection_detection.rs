@@ -658,7 +658,7 @@ impl CodeGenerator<'_> {
         else {
             return false;
         };
-        matches!((ret.as_ref(), generics.first()), (Type::Generic(g), Some(t)) if g == t)
+        matches!((ret.as_ref(), generics.first()), (Type::Generic(g) | Type::Custom(g), Some(t)) if g == t)
             && !matches!(element, Type::Reference(_) | Type::MutableReference(_))
             && types_equivalent_for_collect(&element, inner)
     }
