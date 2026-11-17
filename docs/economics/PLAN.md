@@ -3,6 +3,8 @@ status: proposal
 ---
 # Plan: two measured economic advantages before beta
 
+> **Proposal: not implemented.** This plan states targets for the beta, not current behaviour.
+
 - **Date:** 2026-11-16. Inputs: [DEFINITION.md](DEFINITION.md), [RESULTS.md](RESULTS.md), [ADVANTAGES.md](ADVANTAGES.md).
 - **Goal:** at least two rows of RESULTS.md meet DEFINITION.md's *win* threshold, each protected by a gate that fails
   when the advantage regresses, before the compiler beta. Public docs may then state those two, with the ratio and the
