@@ -606,6 +606,11 @@ path = "tests/build_speed_gate.rs"
 name = "library_build_memory"
 path = "tests/library_build_memory.rs"
 
+# Library-scaling ceiling (peak RSS, wall time, N=100 -> 200 growth, byte-identical rebuild): cargo test --release --test library_scaling_ceiling
+[[test]]
+name = "library_scaling_ceiling"
+path = "tests/library_scaling_ceiling.rs"
+
 [[test]]
 name = "build_output_golden"
 path = "tests/build_output_golden.rs"
