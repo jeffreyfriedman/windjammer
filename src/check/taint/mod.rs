@@ -8,6 +8,7 @@ pub mod flow;
 use super::front::Parsed;
 use super::locate::Locator;
 use crate::diagnostics::{Diagnostic, SourceIndex, Span};
+use crate::parser::ast::core::Item;
 use crate::resolve::{self, DefKind, ParsedFile};
 use flow::{Finding, Pragma, Summary};
 use std::collections::{BTreeSet, HashMap};
@@ -21,14 +22,77 @@ pub const ANNOTATION: &str = "wj-taint:";
 
 pub use catalog::{SOURCES, STD_SANITIZERS};
 
-/// Cheap test whether a program can have a flow at all: it must mention a source and a sink module.
+/// Cheap, exact test whether a program can have a finding at all. A finding is a `Source` origin reaching a sink call.
+/// * Origins arise only from (1) a call of a std source function (`catalog::SOURCES`), (2) a member of an HTTP request value (a
+///   parameter whose type is a runtime type of request shape), and (3) the results of the program's own functions, which hold them
+///   only because their bodies contain (1) or (2). So a program none of whose functions calls a function named like a source,
+///   imports one (under any alias), takes a request-shaped parameter or imports `http` has no origin at all.
+/// * A sink is a call of a std function the effect table gives a process or file-write role, or `query`/`execute` of a database
+///   connection (`catalog::sink_roles`, `db_method_role`); a program with no call named like one has no sink.
+/// Either absent means no finding is possible and the walk (a second resolution of the whole program and the function summaries)
+/// is skipped. The names are the last segments of the tables, so any module path, alias or method spelling is covered; the test is a
+/// superset (`read` of anything counts), never a subset.
 fn may_flow(parsed: &[&Parsed]) -> bool {
-    let any = |words: &[&str]| parsed.iter().any(|p| words.iter().any(|w| p.text.contains(w)));
-    any(&["process", "fs", "db", "Connection"]) && any(&["env", "fs", "io", "args", "Request", "read"])
+    let sinks = catalog::sink_names();
+    // sinks first: the cheaper, and most programs that read input never write a path or start a process
+    if !parsed.iter().any(|p| items_match(&p.program.items, &sinks, false)) {
+        return false;
+    }
+    let sources: Vec<&str> = catalog::SOURCES.iter().filter_map(|s| s.path.rsplit("::").next()).collect();
+    parsed.iter().any(|p| items_match(&p.program.items, &sources, true))
+}
+
+/// Does any function of `items` call (or, for sources, import or take a request parameter) one of `names`?
+fn items_match(items: &[Item<'_>], names: &[&str], sources: bool) -> bool {
+    items.iter().any(|i| match i {
+        Item::Use { path, alias, .. } => {
+            sources && (path.iter().any(|seg| seg == "http") || path.last().is_some_and(|l| names.contains(&l.as_str())) || alias.as_deref().is_some_and(|a| names.contains(&a)))
+        }
+        Item::Function { decl, .. } => function_matches(decl, names, sources),
+        Item::Impl { block, .. } => block.functions.iter().any(|f| function_matches(f, names, sources)),
+        Item::Trait { decl, .. } => decl.methods.iter().any(|m| m.body.as_ref().is_some_and(|b| body_matches(b, names))),
+        Item::Mod { items, .. } => items_match(items, names, sources),
+        _ => false,
+    })
+}
+
+fn function_matches(decl: &crate::parser::ast::core::FunctionDecl<'_>, names: &[&str], sources: bool) -> bool {
+    (sources && decl.parameters.iter().any(|p| param_is_request(&p.type_))) || body_matches(&decl.body, names)
+}
+
+fn param_is_request(t: &crate::parser::ast::types::Type) -> bool {
+    use crate::parser::ast::types::Type;
+    match t {
+        Type::Custom(n) => crate::ir::taint::is_http_request_type(n),
+        Type::Reference(i) | Type::MutableReference(i) | Type::Option(i) | Type::Vec(i) => param_is_request(i),
+        Type::Parameterized(n, args) => crate::ir::taint::is_http_request_type(n) || args.iter().any(param_is_request),
+        _ => false,
+    }
+}
+
+fn body_matches(body: &[&crate::parser::ast::core::Statement<'_>], names: &[&str]) -> bool {
+    use crate::parser::ast::core::Expression;
+    let found = std::cell::Cell::new(false);
+    flow::scan(body, &mut |_| {}, &mut |e| {
+        if found.get() {
+            return;
+        }
+        let hit = match e {
+            Expression::Call { function: Expression::Identifier { name, .. }, .. } => names.contains(&name.rsplit("::").next().unwrap_or(name)),
+            Expression::MethodCall { method, .. } => names.contains(&method.as_str()),
+            _ => false,
+        };
+        if hit {
+            found.set(true);
+        }
+    });
+    found.get()
 }
 
 pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
-    if !may_flow(parsed) {
+    let flows = may_flow(parsed);
+    crate::debug_env::phase("check-taint-prescan");
+    if !flows {
         return;
     }
     let base = super::effects::module_base(root);

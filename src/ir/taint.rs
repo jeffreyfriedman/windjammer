@@ -305,6 +305,11 @@ fn taint_kind_from_request_field(field: &str) -> Option<TaintSourceKind> {
     }
 }
 
+/// True when the runtime type of that name has the shape of an inbound HTTP request (decided by the scanned struct fields).
+pub fn is_http_request_type(type_name: &str) -> bool {
+    type_is_http_request_type(SignatureRegistry::stdlib(), type_name)
+}
+
 fn type_is_http_request_type(registry: &SignatureRegistry, type_name: &str) -> bool {
     let base = type_name.rsplit("::").next().unwrap_or(type_name);
     is_http_request_shape(registry.runtime_type_fields(base))

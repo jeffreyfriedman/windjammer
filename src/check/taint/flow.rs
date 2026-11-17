@@ -1032,7 +1032,7 @@ fn member_what(kind: &Option<crate::ir::taint::TaintSourceKind>) -> &'static str
 
 
 /// Visit every statement and every expression of `stmts` (nested blocks, branches, loops, closures, arguments, interpolation parts).
-fn scan(stmts: &[&Statement<'_>], on_stmt: &mut dyn FnMut(&Statement<'_>), on_expr: &mut dyn FnMut(&Expression<'_>)) {
+pub(super) fn scan(stmts: &[&Statement<'_>], on_stmt: &mut dyn FnMut(&Statement<'_>), on_expr: &mut dyn FnMut(&Expression<'_>)) {
     for st in stmts {
         scan_stmt(st, on_stmt, on_expr);
     }
