@@ -991,7 +991,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // the global/multipass registry also lists them — that re-prefixes `&` onto
     // already-`&T` caller formals (`touch(&csr)`).
     let cross_crate_import = import_alias || lookup_ref.contains("::");
-    if cross_crate_import {
+    if cross_crate_import && !is_extern_call { // an extern's arguments are converted at its declared boundary
         let resolved_dep = gen.resolve_cross_crate_dep_signature(func_name);
         let dep_sig = resolved_dep.as_ref().or_else(|| signature.as_ref());
         if let Some(gs) = dep_sig {

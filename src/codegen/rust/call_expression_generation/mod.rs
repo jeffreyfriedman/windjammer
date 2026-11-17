@@ -55,6 +55,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let func_name = ast_utilities::extract_function_name(function);
+        // `ffi::f(..)` naming the extern `f` of a child module (`ffi/api.wj`) is the call `ffi::api::f(..)`: every
+        // later lookup reads that declaration (its `string` parameters are `FfiString` at the boundary).
+        let func_name = self.child_module_extern_path(&func_name).unwrap_or(func_name);
 
         if let Some(done) =
             stdlib_call_generation::try_early_stdio_and_test_dispatch(self, function, arguments)
