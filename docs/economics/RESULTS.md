@@ -355,6 +355,25 @@ rm -rf /tmp/econ-target-pc
 
 Commit `bench/economics/results/pc-*.{json,md}` and add the PC rows above, labelled "PC, quiet".
 
+The "after" numbers of the later steps, on the integration head (wave 3, cf73e7fe4 or later), same session:
+
+```
+# D2: record the PC's own verify-loop ratio (a new meter entry; the Mac entry is never compared), then check it
+$WJ run scripts/wj/economics.wj --d2 --wj $WJ --runs 5 --write bench/economics/d2_baseline.json
+$WJ run scripts/wj/economics.wj --d2 --wj $WJ --runs 5 --check bench/economics/d2_baseline.json
+
+# C2 lean manifest + lean runtime, and the LTO default: cold and incremental release builds per program, LTO on/off
+$WJ run scripts/wj/economics.wj --lto-study --wj $WJ --label pc-$(date +%Y%m%d) --runs 5 \
+    --only dx/t001_gcd_lcm,dx/t009_rpn_eval,dx/t011_lru_cache,dx/t013_bst,dx/t018_word_freq,dx/t030_bank_ledger,dx/t043_channel_pipeline,dx/t048_wc_clone,interp/fib30,interp/hashmap,parity/string_build
+
+# C4: overflow checks on/off per kernel and the bounded_counter clawback, with callgrind instruction counts
+cargo build --release --example optimize_rs
+$WJ run scripts/wj/economics.wj --profiles --wj $WJ --label pc-$(date +%Y%m%d) --runs 3 --instr callgrind
+$WJ run scripts/wj/economics.wj --clawback --wj $WJ --optimize-rs target/release/examples/optimize_rs --label pc-$(date +%Y%m%d) --runs 3 --instr callgrind
+$WJ run scripts/wj/economics_report.wj bench/economics/results/pc-YYYYMMDD-profiles.json --md bench/economics/results/pc-YYYYMMDD-profiles.md
+$WJ run scripts/wj/economics_report.wj bench/economics/results/pc-YYYYMMDD-clawback.json --md bench/economics/results/pc-YYYYMMDD-clawback.md
+```
+
 ## Reproduce the Mac numbers
 
 ```
