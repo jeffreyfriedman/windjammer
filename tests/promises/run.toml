@@ -571,3 +571,18 @@ polarity = "negative"
 args = ["run", "--pair-list", "{w}/nope.txt"]
 exit = 1
 output_has = ["cannot read"]
+
+[[case]]
+name = "run --fix applies the WJ0035 fix, then runs the program"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let parts = \"a b c\".split(\" \")\n    println(\"first=${parts[0]}\")\n}\n" }
+args = ["run", "--interpret", "--fix", "{w}/m.wj"]
+stdout_has = ["first=a"]
+
+[[case]]
+name = "run without --fix reports WJ0035 and does not run"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let parts = \"a b c\".split(\" \")\n    println(\"first=${parts[0]}\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+exit = 1
+output_has = ["WJ0035", "collect"]

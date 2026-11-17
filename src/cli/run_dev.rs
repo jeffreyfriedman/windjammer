@@ -37,6 +37,8 @@ pub struct RunOptions {
     pub no_lint: bool,
     /// Interpreted runs: start a bounded background compiled build of the same content (ADR-0033, `cli::speculate`).
     pub speculate: bool,
+    /// Apply the machine-applicable fixes of `wj check` to the sources before running (`wj run --fix`).
+    pub fix: bool,
     /// Diagnostic format and build progress (ADR-0037); decided by the CLI driver.
     pub output: super::run::Output,
 }
@@ -65,6 +67,16 @@ fn execute_path(opts: &RunOptions) -> i32 {
             return 1;
         }
     };
+    if opts.fix {
+        match crate::cli::check::fix_in_place(&target.entry) {
+            Ok(0) => {}
+            Ok(n) => eprintln!("wj run --fix: {n} edit(s) applied"),
+            Err(e) => {
+                eprintln!("error: {e}");
+                return 1;
+            }
+        }
+    }
     let non_rust = !matches!(opts.target.to_lowercase().as_str(), "rust");
     crate::debug_env::phase("target");
     if let (Some(lint), false, false) = (opts.lint, non_rust, matches!(opts.mode, Mode::Compiled { .. })) {

@@ -8,7 +8,10 @@ use super::index::{is_std_name, FileNames, Index};
 use super::iterators;
 use super::mismatch::check_literal;
 use super::rules::{self, Kind};
-use super::visit::{walk_block, walk_expr, walk_pattern, Visitor};
+use super::visit::{walk_block, walk_expr, walk_pattern, walk_stmt, Visitor};
+
+mod iter_use;
+use iter_use::Use;
 use crate::check::locate::Locator;
 use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, SourceIndex, Span};
 use crate::fuzzy_matcher::levenshtein_distance;
@@ -158,7 +161,7 @@ impl Cx<'_, '_> {
             }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types, scalars, iter_locals, .. } = col;
+        let Collect { names, counts, let_types, scalars, iter_locals, uses, .. } = col;
         let iter_locals: iterators::IterLocals = iter_locals.into_iter().filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1).collect();
         let scalars: HashMap<String, (Kind, bool)> = scalars
             .into_iter()
@@ -174,7 +177,15 @@ impl Cx<'_, '_> {
         ck.ret_ty = ret.cloned();
         ck.scalars = scalars;
         ck.iter_locals = iter_locals;
+        ck.name_uses = uses;
         walk_block(&mut ck, body);
+        for (name, location) in iter_use::reuse_after_consumption(body, &ck.iter_locals) {
+            let at = Expression::Identifier { name, location: location.clone() };
+            ck.iterator_as_list(&at, Use::Twice, &location);
+        }
+        if let Some(Statement::Expression { expr, location }) = body.last().map(|s| &**s) {
+            ck.returned_iterator(expr, location);
+        }
         if let (Some(Statement::Expression { expr, .. }), Some(ty)) = (body.last().map(|s| &**s), ret) {
             ck.wrapper_mismatch(ty, expr, " in return value");
         }
@@ -206,6 +217,7 @@ struct Collect<'i> {
     scalars: HashMap<String, (Kind, bool)>,
     /// Bindings initialised with a std iterator (`let parts = "a,b".split(",")`), by the std declaration.
     iter_locals: iterators::IterLocals,
+    uses: HashMap<String, usize>,
 }
 
 impl<'i> Collect<'i> {
@@ -220,6 +232,7 @@ impl<'i> Collect<'i> {
             let_types: HashMap::new(),
             scalars: HashMap::new(),
             iter_locals: HashMap::new(),
+            uses: HashMap::new(),
         }
     }
 
@@ -241,6 +254,11 @@ impl<'i> Collect<'i> {
 }
 
 impl Visitor for Collect<'_> {
+    fn expr(&mut self, e: &Expression<'_>) {
+        if let Expression::Identifier { name, .. } = e {
+            *self.uses.entry(name.clone()).or_default() += 1;
+        }
+    }
     fn pattern(&mut self, p: &Pattern<'_>) {
         match p {
             Pattern::Identifier(n) | Pattern::Ref(n) | Pattern::RefMut(n) | Pattern::MutBinding(n) => {
@@ -362,6 +380,10 @@ struct Checker<'c, 'a, 'o> {
     ret_ty: Option<Type>,
     scalars: HashMap<String, (Kind, bool)>,
     iter_locals: iterators::IterLocals,
+    /// How often each name is mentioned in the function (an iterator mentioned once may take `.count()`/`.next()`).
+    name_uses: HashMap<String, usize>,
+    /// Iterator bindings whose `.collect()` fix was already offered by an earlier report.
+    collected: HashSet<String>,
     skip: HashSet<usize>,
     macro_locs: Vec<SourceLocation>,
 }
@@ -381,6 +403,8 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             ret_ty: None,
             scalars: HashMap::new(),
             iter_locals: HashMap::new(),
+            name_uses: HashMap::new(),
+            collected: HashSet::new(),
             skip: HashSet::new(),
             macro_locs: Vec::new(),
         }
@@ -576,52 +600,6 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         self.cx.out.push(d);
     }
 
-    /// `parts.contains("a")` where `parts` is a std iterator (`"a,b".split(",")`) and the std declaration gives `contains`
-    /// to lists only (WJ0015).
-    fn list_method_on_iterator(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
-        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
-        let Some(root) = iterators::iterator_root(object, &text, &self.iter_locals) else { return };
-        if !iterators::lists_only(method, &root) {
-            return;
-        }
-        let mut d = Diagnostic::error("WJ0015", format!("no method `{method}` found for an iterator"));
-        let span = self.cx.loc.word(&self.effective(loc), method).or_else(|| self.cx.loc.first_use(method));
-        if let Some(sp) = span {
-            d = d.at(sp.with_label("an iterator has no such method"));
-        }
-        self.cx.out.push(self.collect_first_help(d, object, method));
-    }
-
-    /// `parts[0]` where `parts` is a std iterator: iterators have no positions (WJ0035).
-    fn index_into_iterator(&mut self, object: &Expression<'_>) {
-        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
-        if iterators::iterator_root(object, &text, &self.iter_locals).is_none() {
-            return;
-        }
-        let mut d = Diagnostic::error("WJ0035", "this value cannot be indexed: an iterator has no positions");
-        if let Expression::Identifier { name, location } = object {
-            if let Some(sp) = self.cx.loc.word(&self.effective(location), name) {
-                d = d.at(sp.with_label("an iterator"));
-            }
-        }
-        self.cx.out.push(self.collect_first_help(d, object, "[..]"));
-    }
-
-    /// Help, and a machine-applicable fix when the iterator is a plain `let` binding whose initialiser ends at the end
-    /// of its line: `let parts = text.split(" ")` becomes `let parts = text.split(" ").collect()`.
-    fn collect_first_help(&self, d: Diagnostic, object: &Expression<'_>, use_: &str) -> Diagnostic {
-        let name = if let Expression::Identifier { name, .. } = object { name.as_str() } else { "the iterator" };
-        let mut d = d.with_help(format!(
-            "`split`, `lines`, `chars` and the adapters give an iterator; `{use_}` belongs to lists: call `.collect()` first (`let {name}: Vec<string> = ...collect()`), then use the list"
-        ));
-        if let Expression::Identifier { name, .. } = object {
-            if let Some(fix) = self.collect_fix_for_binding(name) {
-                d = d.with_fix(fix);
-            }
-        }
-        d
-    }
-
     /// Insert `.collect()` at the end of the `let [mut] <name>[: T] = <iterator>` line when that line is exactly that
     /// statement (one binding of the name, no trailing comment, the initialiser ends in `)`).
     fn collect_fix_for_binding(&self, name: &str) -> Option<Fix> {
@@ -652,31 +630,14 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         Some(fix)
     }
 
-    /// `let parts: Vec<string> = line.split(" ")`: a list is declared, an iterator is given (WJ0003).
-    fn iterator_for_declared_list(&mut self, name: &str, declared: &Type, value: &Expression<'_>, location: &SourceLocation) {
-        if !crate::type_classification::type_is_vec_container(declared) {
-            return;
-        }
-        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
-        // a trailing `.collect()` makes the value a list: `iterator_root` only follows iterator-returning calls
-        if iterators::iterator_root(value, &text, &self.iter_locals).is_none() {
-            return;
-        }
-        let mut d = Diagnostic::error("WJ0003", "mismatched types: expected a list, found an iterator");
-        if let Some(sp) = self.cx.loc.word(&self.effective(location), name) {
-            d = d.at(sp.with_label("declared a list, given an iterator"));
-        }
-        d = d.with_help(format!("add `.collect()`: `let {name}: Vec<..> = ...collect()` turns the iterator into the list the type declares"));
-        if let Some(fix) = self.collect_fix_for_binding(name) {
-            d = d.with_fix(fix);
-        }
-        self.cx.out.push(d);
-    }
-
     /// `x.m()` where `x` is known to be a user struct/enum: `m` must exist on it (WJ0015).
     fn method_call(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
         self.unknown_anywhere(object, method, loc);
-        self.list_method_on_iterator(object, method, loc);
+        if let Some(root) = self.iterator_of(object) {
+            if iterators::lists_only(method, &root) {
+                self.iterator_as_list(object, Use::Method(method), loc);
+            }
+        }
         let Expression::Identifier { name, .. } = object else { return };
         let ty = if name == "self" { self.self_ty.clone() } else { self.typed.get(name).cloned() };
         let Some(ty) = ty else { return };
@@ -1100,6 +1061,7 @@ const PRELUDE_TYPES: &[&str] = &[
 
 impl Visitor for Checker<'_, '_, '_> {
     fn expr(&mut self, e: &Expression<'_>) {
+        self.list_use_in_expr(e);
         match e {
             Expression::Call { function, arguments, .. } => {
                 self.skip.insert(*function as *const Expression<'_> as usize);
@@ -1133,8 +1095,10 @@ impl Visitor for Checker<'_, '_, '_> {
                 let loc = self.effective(location);
                 self.variant_path(name, &loc);
             }
-            Expression::MacroInvocation { name, args, .. } if name == "format" => self.display_args(args),
-            Expression::Index { object, .. } => self.index_into_iterator(object),
+            Expression::MacroInvocation { name, args, .. } if name == "format" => {
+                self.display_args(args);
+                self.debug_of_iterator(args);
+            }
             Expression::MethodCall { object, method, location, .. } => {
                 let loc = self.effective(location);
                 self.method_call(object, method, &loc);
@@ -1171,6 +1135,9 @@ impl Visitor for Checker<'_, '_, '_> {
                 }
                 self.cx.out.push(d.with_help("add an arm for each missing variant, or a final `_` arm"));
             }
+        }
+        if let Statement::Return { value: Some(v), location, .. } = s {
+            self.returned_iterator(v, location);
         }
         if let (Statement::Return { value: Some(Expression::Literal { value, location }), .. }, Some(ty)) =
             (s, self.ret_ty.clone())

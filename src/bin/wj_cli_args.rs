@@ -178,6 +178,11 @@ pub enum Commands {
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
 
+        /// Apply every machine-applicable fix `wj check` reports (such as `.collect()` on an iterator used as a list,
+        /// WJ0035) to the sources, then run the result
+        #[arg(long)]
+        fix: bool,
+
         /// How diagnostics and failed runs report on stderr: `human` (default); `agent`, one compact line per diagnostic
         /// (location, code, message, first help, fixes) for tools and coding agents; or `json` (interpreted runs: one
         /// last line in the diagnostics schema with `stack` and `locals`, ADR-0036). Program stdout and the exit status

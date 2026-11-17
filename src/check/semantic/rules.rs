@@ -212,6 +212,27 @@ pub fn bad_operands(op: BinaryOp, l: Option<Kind>, r: Option<Kind>, strict: bool
 
 /// Placeholders of a lowered interpolation format string: `true` for `{}` (Display), `false` for
 /// any `{:..}` spec.
+/// The text between the braces of each placeholder (`:?`, `:.2`, empty for `{}`).
+pub fn placeholder_specs(fmt: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let b: Vec<char> = fmt.chars().collect();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == '{' {
+            if b.get(i + 1) == Some(&'{') {
+                i += 2;
+                continue;
+            }
+            let close = b[i..].iter().position(|c| *c == '}').map(|p| i + p).unwrap_or(b.len());
+            out.push(b[i + 1..close.min(b.len())].iter().collect());
+            i = close + 1;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
 pub fn placeholders(fmt: &str) -> Vec<bool> {
     let mut out = Vec::new();
     let b: Vec<char> = fmt.chars().collect();

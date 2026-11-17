@@ -235,6 +235,33 @@ pub trait Thread {
     fn spawn<T>(f: fn() -> T) -> JoinHandle<T>;
 }
 
+// `std::time::Duration` and `Instant` are the standard library's own types in compiled code and in the interpreter
+// (`Duration::from_millis(10)`: the argument is a `u64`, so a literal there is a `u64`).
+pub trait Duration {
+    fn new(secs: u64, nanos: u32) -> Duration;
+    fn from_secs(secs: u64) -> Duration;
+    fn from_millis(millis: u64) -> Duration;
+    fn from_micros(micros: u64) -> Duration;
+    fn from_nanos(nanos: u64) -> Duration;
+    fn from_secs_f64(secs: f64) -> Duration;
+    fn from_secs_f32(secs: f32) -> Duration;
+    fn as_secs(self) -> u64;
+    fn as_millis(self) -> u128;
+    fn as_micros(self) -> u128;
+    fn as_nanos(self) -> u128;
+    fn as_secs_f64(self) -> f64;
+    fn as_secs_f32(self) -> f32;
+    fn subsec_nanos(self) -> u32;
+    fn subsec_millis(self) -> u32;
+    fn subsec_micros(self) -> u32;
+    fn is_zero(self) -> bool;
+}
+
+pub trait Instant {
+    fn now() -> Instant;
+    fn elapsed(self) -> Duration;
+}
+
 // Integer methods, for every integer type `T` (`int`, `i32`, `u8`, `usize`, ...): `T` is the receiver's type, so
 // an argument or result of type `T` has the receiver's width (`10.min(3)`: one class); exponents, rotations and
 // shift amounts are `u32` and bit counts are `u32`, as in Rust. Signed-only methods (`abs`, `signum`) are checked

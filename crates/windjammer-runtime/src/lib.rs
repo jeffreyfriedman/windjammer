@@ -91,7 +91,6 @@ pub mod test_output;
 pub mod testing;
 pub mod task;
 pub mod thread;
-#[cfg(feature = "datetime")]
 pub mod time;
 pub mod timeout;
 #[cfg(feature = "base")]

@@ -65,11 +65,19 @@ pub fn classify(msg: &str) -> Option<Classified> {
             )
         };
     }
+    if let Some(rest) = msg.find("an iterator is used as a list: ") {
+        let what = msg[rest + "an iterator is used as a list: ".len()..].split(';').next().unwrap_or("").trim();
+        return c(
+            "WJ0035",
+            format!("an iterator is used as a list: {what}"),
+            "call `.collect()` on the iterator first (`.count()` for its size, `.next()` for its first item); `wj check --fix` applies it",
+        );
+    }
     if let Some(rest) = msg.strip_prefix("indexing ") {
         if rest.starts_with("Iterator") {
             return c(
                 "WJ0035",
-                "an iterator cannot be indexed".to_string(),
+                "an iterator is used as a list: it is indexed or sliced, and only a list has positions".to_string(),
                 "collect it into a list first (`let items = it.collect()`), then index `items[i]`; or use `.nth(i)`",
             );
         }
@@ -108,6 +116,8 @@ mod tests {
     #[test]
     fn iterator_index_and_stdin() {
         assert_eq!(classify("indexing Iterator with i64").unwrap().code, "WJ0035");
+        let c = classify("an iterator is used as a list: `len` is a list method; call `.collect()` first").unwrap();
+        assert_eq!((c.code, c.message.as_str()), ("WJ0035", "an iterator is used as a list: `len` is a list method"));
         let c = classify("not interpreted yet: `std::io::read_all` is not implemented by the interpreter [std.module_fn]").unwrap();
         assert!(c.help.contains("/dev/stdin"));
         assert!(classify("division by zero").is_none());

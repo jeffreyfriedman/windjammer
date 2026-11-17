@@ -85,6 +85,7 @@ pub fn run(code: &str) -> std::io::Result<i32> {
         lint: None,
         speculate: false,
         no_lint: true,
+        fix: false,
         output: Default::default(),
     });
     remove(&file);
