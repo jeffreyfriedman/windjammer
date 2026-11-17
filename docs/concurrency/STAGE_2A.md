@@ -64,7 +64,7 @@ re-raises the first real panic. A cancelled task's own `defer`s run. Code withou
 - Rust runtime: an `Arc<AtomicBool>` per scope registry; `Receiver::recv`, `Task::wait`, `select`, and the runtime
   sleep check it (blocking calls wait in slices of at most 10 ms, or on a condition variable the scope notifies).
   A cancelled task unwinds with `resume_unwind(Cancelled)`, which the scope recognises and does not re-raise.
-- Spec: a new rule in `docs/spec/concurrency.md` (the next free SPEC-CONC id, with its example under `tests/spec/concurrency/`) when this lands. Diagnostics: none (run-time behaviour).
+- Spec: a new rule in `docs/spec/concurrency.md` (the next free concurrency rule id, with its example under `tests/spec/concurrency/`) when this lands. Diagnostics: none (run-time behaviour).
 
 ```windjammer
 // Acceptance: cancellation.wj (expected exit status 101; stderr names "worker 2 failed")
