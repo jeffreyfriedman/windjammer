@@ -160,7 +160,7 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
         }
         Type::Parameterized(base, args) => {
             // ADR-0004 `Task<T>` -> the runtime's task handle
-            if base == "Task" && args.len() == 1 {
+            if base == crate::parser::task_prefix::TASK_TYPE && args.len() == 1 {
                 format!("windjammer_runtime::task::Task<{}>", type_to_rust_mapped(&args[0], map_custom))
             // Special case: Signal<T> -> windjammer_ui::reactivity::Signal<T>
             } else if base == "Signal" {

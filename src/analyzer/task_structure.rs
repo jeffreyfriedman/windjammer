@@ -96,13 +96,13 @@ pub fn gate(program: &Program<'_>) -> Result<(), String> {
 }
 
 fn is_task_type(t: &Type) -> bool {
-    matches!(t, Type::Parameterized(n, _) | Type::Custom(n) if n == "Task")
+    matches!(t, Type::Parameterized(n, _) | Type::Custom(n) if n == crate::parser::task_prefix::TASK_TYPE)
 }
 
 fn defines_task_type(items: &[Item<'_>]) -> bool {
     items.iter().any(|item| match item {
-        Item::Struct { decl, .. } => decl.name == "Task",
-        Item::Enum { decl, .. } => decl.name == "Task",
+        Item::Struct { decl, .. } => decl.name == crate::parser::task_prefix::TASK_TYPE,
+        Item::Enum { decl, .. } => decl.name == crate::parser::task_prefix::TASK_TYPE,
         Item::Mod { items, .. } => defines_task_type(items),
         _ => false,
     })
