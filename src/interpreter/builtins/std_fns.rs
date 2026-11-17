@@ -489,7 +489,7 @@ pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option
                 other => Err(semantic(format!("cannot convert {} to {}", other.type_name(), ty))),
             })()),
             "default" => Some(Ok(Value::Float(0.0, ft))),
-            // `f64::from_bits(u64)` / `f32::from_bits(u32)`: the IEEE bits as the float (DbProject I1)
+            // `f64::from_bits(u64)` / `f32::from_bits(u32)`: the IEEE bits as the float
             "from_bits" => Some((|| {
                 let n = arg_int(args, 0, "from_bits")?;
                 Ok(if ft == FloatTy::F32 { Value::Float(f32::from_bits(n as u32) as f64, ft) } else { Value::Float(f64::from_bits(n as u64), ft) })

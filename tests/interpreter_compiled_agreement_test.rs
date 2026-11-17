@@ -112,7 +112,7 @@ fn json_decodes_into_the_struct_the_decoding_module_declares() {
     assert_eq!((code, out.as_str()), (0, "shop ok 1 a 3\nstock ok 2 c 1\n"), "{err}");
 }
 
-/// `f64::from_bits` / `f32::from_bits` decode IEEE bits, as the compiled build does (DbProject I1: the interpreter
+/// `f64::from_bits` / `f32::from_bits` decode IEEE bits, as the compiled build does (the interpreter
 /// reported "`u64` has no method `from_bits`"); `to_bits` round-trips.
 #[test]
 fn float_from_bits_round_trips_like_the_compiled_build() {
