@@ -2087,6 +2087,8 @@ impl<'ast> CodeGenerator<'ast> {
                 left, right, op, ..
             } => {
                 use crate::parser::BinaryOp;
+                // a shift has the type of the shifted operand; the shift amount is its own type
+                if matches!(op, BinaryOp::Shl | BinaryOp::Shr) { return self.int_type_for_mixed_int_codegen(left); }
                 if matches!(
                     op,
                     BinaryOp::Add
@@ -2097,13 +2099,7 @@ impl<'ast> CodeGenerator<'ast> {
                         | BinaryOp::BitAnd
                         | BinaryOp::BitOr
                         | BinaryOp::BitXor
-                        | BinaryOp::Shl
-                        | BinaryOp::Shr
                 ) {
-                    // a shift has the type of the shifted operand; the shift amount is its own type
-                    if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
-                        return self.int_type_for_mixed_int_codegen(left);
-                    }
                     let lt = self.int_type_for_mixed_int_codegen(left);
                     let rt = self.int_type_for_mixed_int_codegen(right);
                     let lit = |e: &Expression<'ast>| {
