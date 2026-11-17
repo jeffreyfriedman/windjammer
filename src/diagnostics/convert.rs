@@ -122,8 +122,11 @@ pub fn ir(severity_is_error: bool, severity_is_warning: bool, message: &str) -> 
 }
 
 /// A marker such as `.unwrap` must not be the front of a longer name (`.unwrap_or`).
+/// Only a marker that itself ends in a name character (`.unwrap`) is at risk: `&` and `&mut ` end in punctuation and
+/// are followed by the borrowed name.
 fn ends_at_word_boundary(text: &str, end: usize) -> bool {
-    !text[end.min(text.len())..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+    let name_char = |c: char| c.is_alphanumeric() || c == '_';
+    !text[..end.min(text.len())].ends_with(name_char) || !text[end.min(text.len())..].starts_with(name_char)
 }
 
 /// Lint locations come from AST nodes (0-based columns, often just after the construct, or a
