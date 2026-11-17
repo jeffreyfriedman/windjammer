@@ -1,0 +1,44 @@
+// expect: 2 true 9 0
+// expect: 1
+// A borrow the program writes on a Copy key (`&(x, y, z)`, `&(q % 3)`) is kept where the map declares `key: &K`
+// (`get`, `remove`, `contains_key`); it was dropped because the key type is Copy (rustc E0308, expected
+// `&(i32, i32, i32)`).
+use std::collections::HashMap
+
+pub struct Grid {
+    data: HashMap<(i32, i32, i32), int>,
+}
+
+impl Grid {
+    pub fn set(self, x: i32, y: i32, z: i32, v: int) {
+        if v == 0 {
+            self.data.remove(&(x, y, z))
+        } else {
+            self.data.insert((x, y, z), v)
+        }
+    }
+
+    pub fn get(self, x: i32, y: i32, z: i32) -> int {
+        match self.data.get(&(x, y, z)) {
+            Some(v) => *v,
+            None => 0,
+        }
+    }
+
+    pub fn has(self, x: i32, y: i32, z: i32) -> bool {
+        self.data.contains_key(&(x, y, z))
+    }
+}
+
+fn main() {
+    let mut g = Grid { data: HashMap::new() }
+    g.set(1, 2, 3, 9)
+    g.set(4, 5, 6, 7)
+    g.set(4, 5, 6, 0)
+    g.set(0, 0, 1, 1)
+    println("${g.data.len()} ${g.has(1, 2, 3)} ${g.get(1, 2, 3)} ${g.get(4, 5, 6)}")
+    let mut w: HashMap<int, int> = HashMap::new()
+    w.insert(1, 1)
+    let q = 4
+    println("${w.get(&(q % 3)).unwrap_or(&0)}")
+}

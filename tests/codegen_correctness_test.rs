@@ -148,6 +148,7 @@ corpus_tests!(
     recursive_read_only_param_through_optional_field,
     trait_param_mutated_by_impl,
     char_closures_take_the_declared_item,
+    borrowed_copy_key_into_map_lookup,
     mut_param_is_own_copy,
     str_literal_loop_var_pushed_into_owned_vec,
     split_of_line_collected_into_owned_vec,

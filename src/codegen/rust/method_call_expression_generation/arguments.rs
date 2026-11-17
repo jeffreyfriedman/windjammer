@@ -272,14 +272,12 @@ impl<'ast> CodeGenerator<'ast> {
                             || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 sig, sig_param_idx,
                             )
+                            // A formal declared `&K` (`HashMap::remove(&self, key: &K)`) takes the borrow the user wrote,
+                            // even of a Copy key (`&(x, y, z)`); only a by-value Copy formal drops it.
                             || sig.formal_param_type(sig_param_idx).is_some_and(|t| {
-                                let bare = match t {
-                                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                                        inner.as_ref()
-                                    }
-                                    other => other,
-                                };
-                                self.is_type_copy(bare)
+                                let bare = t;
+                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    && self.is_type_copy(bare)
                                     && !crate::type_classification::is_copy_pass_by_value_formal(
                                         bare,
                                     )
