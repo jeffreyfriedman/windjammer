@@ -651,8 +651,7 @@ impl CodeGenerator<'_> {
             Type::Reference(t) | Type::MutableReference(t) => t.as_ref(),
             other => other,
         };
-        let Some(name) = crate::typing::core_surface::surface_type_name(container) else { return false };
-        if !surface.is_adapter_on_collection(name, method) {
+        if !surface.is_adapter_on_type(container, method) {
             return false;
         }
         let Some((generics, _, _, Some(Type::Option(ret)))) = surface.declared(crate::ir::stdlib_tables::ITERATOR, method)

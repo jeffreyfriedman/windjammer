@@ -188,6 +188,11 @@ impl CoreSurface {
             && self.table.contains_key(&(ITERATOR.to_string(), method.to_string()))
     }
 
+    /// [`Self::is_adapter_on_collection`] for a receiver given as a type.
+    pub fn is_adapter_on_type(&self, receiver: &Type, method: &str) -> bool {
+        surface_type_name(receiver).is_some_and(|name| self.is_adapter_on_collection(name, method))
+    }
+
     /// Whether `type_name::name` is declared without `self` (an associated function).
     pub fn is_static(&self, type_name: &str, name: &str) -> bool {
         self.table.get(&(type_name.to_string(), name.to_string())).is_some_and(|e| e.is_static)

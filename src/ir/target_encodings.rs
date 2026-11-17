@@ -354,10 +354,8 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
         (Target::Rust, CoercionKind::Deref) => {
             // Never `*x.clone()`: Deref is only for Copy pointees.
             let peel = |s: &str| {
-                let mut core = crate::codegen::rust::string_analysis::strip_enclosing_parens(s.trim())
-                    .unwrap_or(s)
-                    .trim()
-                    .to_string();
+                let t = s.trim();
+                let mut core = if crate::ir::coercion::parens_wrap_whole(t) { t[1..t.len() - 1].trim() } else { s.trim() }.to_string();
                 crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut core);
                 core
             };

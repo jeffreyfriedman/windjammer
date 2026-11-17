@@ -58,7 +58,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::MacroInvocation { is_repeat: false, name, args, .. }
                     if tail
                         && !args.is_empty()
-                        && crate::intrinsics::Intrinsic::from_macro_name(name) == Some(crate::intrinsics::Intrinsic::Vec) =>
+                        && name == "vec" =>
                 {
                     out.insert(args.as_ptr() as usize);
                 }
