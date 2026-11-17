@@ -1,0 +1,21 @@
+// The source is read in the innermost of five loops, the sink runs after the outermost loop.
+use std::fs
+use std::process
+
+fn main() {
+    let items = ["a", "b"]
+    let mut last = ""
+    for a in items {
+        for b in items {
+            for c in items {
+                for d in items {
+                    for e in items {
+                        last = fs::read_to_string("x.txt").unwrap_or("")
+                    }
+                }
+            }
+        }
+    }
+    let out = process::run(last) //~ WJ0173
+    println("${out}")
+}

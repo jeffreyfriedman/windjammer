@@ -1,0 +1,48 @@
+// A 14-assignment carry chain in the innermost of five loops. Loops nested more than three deep are not walked to a fixpoint:
+// every variable they assign first receives TOP, which includes the file read below, so the sink at the top of the body fires.
+use std::fs
+use std::process
+
+fn main() {
+    let items = ["a", "b"]
+    let mut v0 = ""
+    let mut v1 = ""
+    let mut v2 = ""
+    let mut v3 = ""
+    let mut v4 = ""
+    let mut v5 = ""
+    let mut v6 = ""
+    let mut v7 = ""
+    let mut v8 = ""
+    let mut v9 = ""
+    let mut v10 = ""
+    let mut v11 = ""
+    let mut v12 = ""
+    let mut v13 = ""
+    for p in items {
+        for q in items {
+            for r in items {
+                for s in items {
+                    for t in items {
+                        let out = process::run(v0) //~ WJ0173
+                        println("${out} ${p}${q}${r}${s}${t}")
+                        v0 = v1
+                        v1 = v2
+                        v2 = v3
+                        v3 = v4
+                        v4 = v5
+                        v5 = v6
+                        v6 = v7
+                        v7 = v8
+                        v8 = v9
+                        v9 = v10
+                        v10 = v11
+                        v11 = v12
+                        v12 = v13
+                        v13 = fs::read_to_string("next.txt").unwrap_or("")
+                    }
+                }
+            }
+        }
+    }
+}

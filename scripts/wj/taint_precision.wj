@@ -3,7 +3,7 @@
 //
 //   wj run scripts/wj/taint_precision.wj <wj-binary> [ecosystem-root]
 //
-// Scanned: every `.wj` file of tests/, examples/ and scripts/ that mentions both a sink module and a source (one file at a
+// Scanned: every `.wj` file of tests/, examples/, scripts/ and bench/ that mentions both a sink module and a source (one file at a
 // time), every project of tests/drift_corpus/eco (the pinned ecosystem snapshot) and, when given, every package and app
 // of a windjammer-ecosystem checkout. Ledger: tests/taint/precision_ledger.tsv, `path <TAB> source <TAB> sink <TAB> reason`
 // (a path under the ecosystem checkout is written `eco:<path>`). A finding is reported by file, source kind and sink kind,
@@ -137,7 +137,7 @@ fn main() {
     let mut found: Vec<Finding> = Vec::new()
     let mut scanned = 0
     // files that can hold a flow: a sink module and a source
-    let files = lines_of("find tests examples scripts -name '*.wj' -not -path 'tests/taint/*' -not -path 'tests/drift_corpus/eco/*' | xargs grep -l 'process\\|fs\\|db\\|Connection' | xargs grep -l 'env\\|io\\|args\\|Request\\|read'")
+    let files = lines_of("find tests examples scripts bench -name '*.wj' -not -path 'tests/taint/*' -not -path 'tests/drift_corpus/eco/*' | xargs grep -l 'process\\|fs\\|db\\|Connection' | xargs grep -l 'env\\|io\\|args\\|Request\\|read'")
     for f in files {
         found.extend(findings_in("", run_check(wj, ".", f)))
         scanned += 1

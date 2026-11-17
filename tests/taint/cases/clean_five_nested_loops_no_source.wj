@@ -1,0 +1,20 @@
+// Precision: five nested loops that never read outside data stay clean (TOP of a function without sources is only its parameters).
+use std::process
+
+fn main() {
+    let items = ["a", "b"]
+    let mut cmd = "ls"
+    for a in items {
+        for b in items {
+            for c in items {
+                for d in items {
+                    for e in items {
+                        let out = process::run(cmd)
+                        println("${out} ${a}${b}${c}${d}${e}")
+                        cmd = "pwd"
+                    }
+                }
+            }
+        }
+    }
+}
