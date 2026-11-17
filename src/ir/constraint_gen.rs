@@ -444,7 +444,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Expression::StructLiteral { fields, .. } => {
                 for (_, field_expr) in fields {
-                    self.emit_owned_for_stored_param_identifiers_inner(field_expr, true); self.emit_owned_for_moved_field(field_expr);
+                    self.emit_owned_for_stored_param_identifiers_inner(field_expr, true);
                 }
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
@@ -507,7 +507,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             if let Some(mode) = sig.param_ownership.get(param_idx).filter(|_| !self.link_recursive_formal(param_idx, arg_index, arg_var)) {
-                let own = self.ownership_mode_to_owned(*mode); if *mode == OwnershipMode::Owned { if let Some((_, a)) = arguments.get(arg_index) { self.emit_owned_for_moved_field(a); } }
+                let own = self.ownership_mode_to_owned(*mode);
                 self.cs.add_because(
                     Constraint::OwnershipIs(expected_var, own),
                     origin(

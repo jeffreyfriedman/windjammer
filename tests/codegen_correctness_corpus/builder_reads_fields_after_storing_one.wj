@@ -1,0 +1,37 @@
+// expect: SELECT a, b FROM t | 2
+// A builder method that stores one field of `self` in its result and reads others (a loop over one, `len()` of
+// another) keeps borrowing `self` and copies the stored field (rustc E0382 borrow of moved `self.columns` when the
+// receiver was made by-value; reduced from the ecosystem SQL builder).
+pub struct Query {
+    pub sql: string,
+    pub params: Vec<string>,
+}
+
+pub struct Select {
+    table: string,
+    columns: Vec<string>,
+    params: Vec<string>,
+}
+
+impl Select {
+    pub fn build(self) -> Query {
+        let mut sql = "SELECT "
+        let mut first = true
+        for c in self.columns {
+            if !first { sql = sql + ", " }
+            sql = sql + c
+            first = false
+        }
+        sql = sql + " FROM " + self.table
+        if self.columns.len() == 0 { sql = sql + "*" }
+        Query { sql: sql, params: self.params }
+    }
+}
+
+fn main() {
+    let s = Select { table: "t", columns: ["a", "b"], params: ["x", "y"] }
+    let q = s.build()
+    println("${q.sql} | ${q.params.len()}")
+    let again = s.build()
+    let _ = again
+}

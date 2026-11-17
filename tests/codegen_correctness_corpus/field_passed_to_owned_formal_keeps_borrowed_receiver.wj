@@ -1,0 +1,35 @@
+// expect: 0 -1 1
+// A method that passes a field of `self` to a function (`has(self.rooms, s)`) keeps borrowing `self`: the callee's formal
+// is not final while ownership is solved, and a consuming receiver would break the `&mut self` caller (WJ0016 cannot
+// move `*self` out of a borrow; reduced from the pilot-7 text-world program).
+fn has(list: Vec<string>, s: string) -> bool {
+    for x in list {
+        if x == s { return true }
+    }
+    false
+}
+
+struct W {
+    rooms: Vec<string>,
+    errors: int,
+}
+
+impl W {
+    fn parse_loc(self, s: string) -> int {
+        if has(self.rooms, s) { return 0 }
+        -1
+    }
+
+    fn line(self, s: string) -> int {
+        let k = self.parse_loc(s)
+        if k < 0 { self.errors += 1 }
+        k
+    }
+}
+
+fn main() {
+    let mut w = W { rooms: ["hall", "yard"], errors: 0 }
+    let a = w.line("hall")
+    let b = w.line("cave")
+    println("${a} ${b} ${w.errors}")
+}

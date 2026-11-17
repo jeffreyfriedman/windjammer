@@ -3,8 +3,7 @@
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
-mod clone_impls;
-mod generic_returns;
+mod clone_impls; mod generic_returns; mod glob_reexports;
 
 /// The runtime crate's Rust sources as `(module path relative to src/, text)`, read from the copy baked into the
 /// binary (`embedded_assets`): no directory is materialized or consulted, so the scan is the same on every target,
@@ -244,6 +243,7 @@ fn register_scanned_runtime_signature(
             registry.register_taint_sanitizer(&sig.name);
         }
         registry.add_function(sig.name.clone(), sig.clone());
+        glob_reexports::register_glob_reexport(registry, module_name, &sig, &method_name, mark_sanitizer);
         // Mirror import aliases: `csv_mod` / `regex_mod` → WJ short names `csv` / `regex`.
         if let Some(short) = module_name.strip_suffix("_mod") {
             let mut aliased = sig.clone();

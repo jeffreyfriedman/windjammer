@@ -428,3 +428,62 @@ fn gate4_compiler_inserted_narrowing_casts_do_not_rise() {
     let b = baseline.unwrap();
     assert!(total <= b, "compiler-inserted narrowing casts rose: {b} -> {total}\n{per_file:?}");
 }
+
+const OWN_STAGES_INVENTORY: &str = "tests/golden/own_stages_emitted_vs_ir.txt";
+
+/// The formals whose emitted mode differs from the IR's (`ir=X emitted=Y` in a D-OWN-STAGES finding): a codegen rule
+/// re-decided the parameter after the solver, so a caller reading the solved signature and the emitted callee disagree.
+/// One entry per `file::function::param`.
+fn own_stages_emitted_vs_ir(files: &[String]) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    for rel in files {
+        let src = std::fs::read_to_string(root().join(rel)).unwrap();
+        let rust = std::fs::read_to_string(golden_path(rel)).ok().filter(|r| r != BUILD_FAILED);
+        let opts = windjammer::ir::explain::ExplainOptions { only_fn: None, emitted_rust: rust };
+        let Ok(Ok(report)) = std::panic::catch_unwind(|| windjammer::ir::explain::explain_source(&src, rel, &opts)) else { continue };
+        for f in &report.functions {
+            for p in &f.params {
+                for finding in p.findings.iter().filter(|x| x.id == "D-OWN-STAGES") {
+                    let stage = |name: &str| finding.message.split_whitespace().find_map(|w| w.strip_prefix(name)).map(str::to_string);
+                    let (Some(ir), Some(emitted)) = (stage("ir="), stage("emitted=")) else { continue };
+                    if emitted != "-" && ir != emitted {
+                        out.insert(format!("{rel}::{}::{}", f.name, p.name), format!("ir={ir} emitted={emitted}"));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Gate 5 (ownership decided once): the inventory of formals codegen re-decides after the solver may only shrink. A rule
+/// that changes an emitted formal belongs in the solver, where callers read it (docs/spec/inference.md, D-OWN-STAGES).
+#[test]
+fn gate5_formals_emitted_against_the_ir_only_shrink() {
+    let files = corpus();
+    let now = own_stages_emitted_vs_ir(&files);
+    if filter().is_some() {
+        for (k, v) in &now {
+            eprintln!("{k} | {v}");
+        }
+        return;
+    }
+    if updating() {
+        let mut s = String::from(
+            "# Formals whose emitted mode differs from the IR's mode over the convergence corpus (gate 5). May only shrink.\n\
+             # <file>::<function>::<param> | ir=<mode> emitted=<mode>\n",
+        );
+        for (k, v) in &now {
+            s.push_str(&format!("{k} | {v}\n"));
+        }
+        std::fs::write(root().join(OWN_STAGES_INVENTORY), s).unwrap();
+        return;
+    }
+    let baseline = read_list(OWN_STAGES_INVENTORY);
+    let new: Vec<String> = now.iter().filter(|(k, _)| !baseline.contains_key(*k)).map(|(k, v)| format!("  {k} | {v}")).collect();
+    let gone: Vec<&String> = baseline.keys().filter(|k| !now.contains_key(*k)).collect();
+    for k in &gone {
+        eprintln!("emitted-vs-IR formal fixed (rerun with UPDATE_GOLDEN=1 to lock in): {k}");
+    }
+    assert!(new.is_empty(), "new formals emitted against the IR's mode (decide them in the solver):\n{}", new.join("\n"));
+}

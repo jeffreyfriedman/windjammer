@@ -1,0 +1,15 @@
+// expect: Ok(5000)
+// expect: Ok(90000)
+// A std function whose runtime formal is `&str` (`time.parse_duration_ms`, declared in a submodule the time module
+// re-exports) borrows an owned `string` argument (rustc E0308 expected `&str`, found `String`).
+use std::time
+
+pub fn parse_ms(text: string) -> Result<int, string> {
+    time.parse_duration_ms(text)
+}
+
+fn main() {
+    println("${parse_ms("5s"):?}")
+    let t = "1m30s"
+    println("${parse_ms(t):?}")
+}
