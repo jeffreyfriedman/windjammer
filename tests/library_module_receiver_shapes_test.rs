@@ -88,14 +88,14 @@ fn a_struct_element_is_cloned_despite_a_homonym_unit_enum_elsewhere() {
     test.cargo_check().expect("cargo-check");
 }
 
-/// A method's emitted formals are read from its own signature (`Zone::contains`), never from a same-named free function
-/// of the module or crate (`contains(lo, items)` borrows its second formal): the engine's `ReverbZone::contains` got
-/// `x: &f32` and every caller passing `f32` failed (rustc E0308).
+/// A method's emitted formals are read from its own signature (`Zone::contains`), never from the bare key `contains`
+/// that a `std::strings` user registers (`contains(s, sub)`, both formals borrowed): the engine's `ReverbZone::contains`
+/// read that key and got `x: &f32`, and every caller passing `f32` failed (rustc E0308).
 #[test]
 fn a_method_does_not_take_the_formals_of_a_same_named_free_function() {
     let mut test = MultiFileTest::new();
-    test.add_file("util/mod.wj", "pub mod lookup\n");
-    test.add_file("util/lookup.wj", "pub fn contains(lo: f32, items: Vec<f32>) -> bool {\n    items.len() > 0 && lo > 0.0\n}\n");
+    test.add_file("text/mod.wj", "pub mod find\n");
+    test.add_file("text/find.wj", "use std::strings\n\npub fn has_word(s: string, w: string) -> bool {\n    strings.contains(s, w)\n}\n");
     test.add_file("audio/mod.wj", "pub mod zone\n");
     test.add_file(
         "audio/zone.wj",

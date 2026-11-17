@@ -1,37 +1,48 @@
-// expect: SELECT a, b FROM t | 2
-// A builder method that stores one field of `self` in its result and reads others (a loop over one, `len()` of
-// another) keeps borrowing `self` and copies the stored field (rustc E0382 borrow of moved `self.columns` when the
-// receiver was made by-value; reduced from the ecosystem SQL builder).
+// expect: INSERT INTO t (a, b) VALUES (?, ?) | 2
+// expect: none
+// A builder method that passes one field of `self` to a function, loops over another and then reads it again, and
+// stores a third in its result keeps borrowing `self` (rustc E0382 borrow of moved `self.columns` after the loop
+// when the receiver was made by-value; reduced from the ecosystem SQL builder's `Insert::build`).
 pub struct Query {
     pub sql: string,
     pub params: Vec<string>,
 }
 
-pub struct Select {
+pub struct Insert {
     table: string,
     columns: Vec<string>,
-    params: Vec<string>,
+    values: Vec<string>,
+    errors: Vec<string>,
 }
 
-impl Select {
-    pub fn build(self) -> Query {
-        let mut sql = "SELECT "
-        let mut first = true
-        for c in self.columns {
-            if !first { sql = sql + ", " }
-            sql = sql + c
-            first = false
+fn first_error(errors: Vec<string>) -> string {
+    if errors.len() == 0 { "" } else { errors[0] }
+}
+
+impl Insert {
+    pub fn build(self) -> Result<Query, string> {
+        let err = first_error(self.errors)
+        if err.len() > 0 {
+            return Err(err)
         }
-        sql = sql + " FROM " + self.table
-        if self.columns.len() == 0 { sql = sql + "*" }
-        Query { sql: sql, params: self.params }
+        let mut marks = Vec::new()
+        for c in self.columns {
+            marks.push("?")
+        }
+        let sql = "INSERT INTO " + self.table + " (" + self.columns.join(", ") + ") VALUES (" + marks.join(", ") + ")"
+        Ok(Query { sql: sql, params: self.values })
     }
 }
 
 fn main() {
-    let s = Select { table: "t", columns: ["a", "b"], params: ["x", "y"] }
-    let q = s.build()
-    println("${q.sql} | ${q.params.len()}")
-    let again = s.build()
-    let _ = again
+    let ins = Insert { table: "t", columns: ["a", "b"], values: ["x", "y"], errors: [] }
+    match ins.build() {
+        Ok(q) => println("${q.sql} | ${q.params.len()}"),
+        Err(e) => println("error ${e}"),
+    }
+    let again = ins.build()
+    match again {
+        Ok(_) => println("none"),
+        Err(_) => println("err"),
+    }
 }
