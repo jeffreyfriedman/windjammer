@@ -489,6 +489,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
+| `wj optimize` | Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument |
 | `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) |
 | `wj rust-surface` | Generate the signature surface of a Rust crate dependency (ADR-0026) from its source |
 | `wj explain` | Explain an error code |
@@ -927,6 +928,22 @@ Usage: wj explain-effects [OPTIONS] <PATH>
 |---|---|---|---|
 | `<PATH>` | PATH |  | Windjammer source file or project directory |
 | `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
+| `--json` | JSON |  | Machine-readable JSON output |
+
+### `wj optimize`
+
+Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument
+
+```text
+Usage: wj optimize [OPTIONS] [FILE]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<FILE>` | FILE |  | Windjammer source file |
+| `--explain` | EXPLAIN |  | Report each pass that changed the file: edit count, soundness section, default state |
+| `--pass` | NAME |  | Only this pass (an unknown name is an error that lists the known passes) |
+| `--list` | LIST |  | List every optimizer pass: name, default state, rewrite and soundness section |
 | `--json` | JSON |  | Machine-readable JSON output |
 
 ### `wj caps`

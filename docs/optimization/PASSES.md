@@ -122,6 +122,44 @@ every use names the same binding before and after; (2) every use borrows `b` (wh
 The wrapping block drops the buffer when the loop exits. Lines are preserved.
 Mutant caught: `ScratchIgnoresMoves` (`kept.push(s)` hoisted: use of moved value), tests/optimizer_scratch_reuse_test.rs.
 
+## P9 macro_arg_clone (ON)
+Rewrite: `m!(fmt, .., E.clone(), ..)` -> `m!(fmt, .., E, ..)` for `m` in the format family (`format`, `print`,
+`println`, `eprint`, `eprintln`, `panic`, and `write`/`writeln` after their destination argument), when the argument is
+exactly a zero-argument `.clone()` call.
+Why sound: the format family takes every argument by reference (`format_args!` borrows), so `E` is not moved and stays
+usable afterwards; `E.clone()` and `E` format identically for every `Clone` whose clone is equal to its source, which
+is the `Clone` contract. `E` is still evaluated exactly once, in the same position.
+Relies on: macro name and argument shape only (no type facts).
+Known deviation (documented, accepted): a user `Clone` impl with side effects (printing, counting) loses those side
+effects for the removed call, and a side-effecting `Drop` of the clone no longer runs. The code generator emits these
+clones for borrowed formatting; the deviation needs a user's own side-effecting `impl Clone` on a type they format.
+Mutant caught: `MacroCloneInVec` (the same rewrite inside `vec![..]`, which moves its arguments).
+
+## P10 bounded_counter (ON)
+Purpose: Windjammer release builds keep `overflow-checks = true` (the spec: integer overflow panics, as in the
+interpreter). This pass removes the check only from arithmetic it proves cannot overflow, by writing it with
+`wrapping_*` (identical results whenever no overflow occurs).
+Shape: `while C { .. }` where a top-level `&&` operand of `C` is `i < B` (or `B > i`), `i` has one known integer type
+in the function (facts rule), the loop body contains a top-level statement `i += 1` and no other write to `i`
+(assignment, compound assignment, `&mut i`, `*_assign` method, a closure or non-format macro mentioning `i`), and does
+not re-bind `i`.
+Rewrites:
+(a) `i += 1` -> `i = i.wrapping_add(1)`. Why sound: `i < B` held when the iteration started and `i` is not written
+before the increment, so `i + 1 <= B <= T::MAX` (`B` has `i`'s type `T`, required by `<`). No overflow is possible,
+so the wrapping add equals the checked add.
+(b) when `B` is an integer literal: an expression built only from `i`, integer literals, `+` and `*`, in a statement
+before the increment -> the same expression with `wrapping_add`/`wrapping_mul`, when its largest value over
+`0 <= i <= B - 1` (computed exactly in u128) is at most `T::MAX`. Why sound: every binding of `i` in the function
+starts at a non-negative integer literal and every write to `i` anywhere in the function is `i += 1`, so `i >= 0`;
+the loop condition gives `i <= B - 1`; `+` and `*` are monotone on non-negative values, so the computed maximum
+bounds every intermediate result. A parameter named `i` (unknown start) disables (b).
+Relies on: syntactic shape, the facts rule, literal values. Lines are preserved.
+Not covered (stay checked): `<=` bounds, other steps than `+ 1`, subtraction, division, values that are not the
+counter (accumulators), non-literal bounds for (b).
+Mutants caught (tests/optimizer_bounded_counter_test.rs, each turns a program that must panic into one that does not):
+`CounterIgnoresTypeMax` (99 * 3 in u8), `CounterAcceptsLessEqual` (`i <= 255_u8`), `CounterIgnoresOtherWrites`
+(`i = i + 1; i += 1;`).
+
 ## Considered and rejected (stay OFF / not implemented)
 - Last-use clone elimination (`let y = x.clone();` with `x` unused afterwards): needs
   borrow facts (a live `&x` makes the move a compile error) and drop-order facts

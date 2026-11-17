@@ -216,6 +216,26 @@ path = "tests/taint_flow_test.rs"
 name = "all"
 path = "tests/all.rs"
 
+# Single-file builds read the same metadata whatever surrounds the file (C12): cargo test --release --test meta_scan_locality
+[[test]]
+name = "meta_scan_locality"
+path = "tests/meta_scan_locality.rs"
+
+# A generated crate depends only on the default crates its code names (C2): cargo test --release --test lean_manifest
+[[test]]
+name = "lean_manifest"
+path = "tests/lean_manifest.rs"
+
+# Overflow-check clawback pass (PASSES.md P10): cargo test --release --test optimizer_bounded_counter
+[[test]]
+name = "optimizer_bounded_counter"
+path = "tests/optimizer_bounded_counter.rs"
+
+# wj optimize's pass table agrees with the optimizer and PASSES.md: cargo test --release --test optimize_cli
+[[test]]
+name = "optimize_cli"
+path = "tests/optimize_cli.rs"
+
 # Resolved engine vs the walker on every corpus program: cargo test --release --test engine_parity
 [[test]]
 name = "engine_parity"

@@ -407,6 +407,11 @@ pub fn run(cli: Cli) -> Result<()> {
         }
         Commands::ExplainOwnership { file, function, json } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
         Commands::ExplainEffects { path, function, json } => windjammer::cli::explain_effects::execute(&path, function.as_deref(), json)?,
+        Commands::Optimize { file, explain: _, pass, list, json } => match (list, file) {
+            (true, _) => windjammer::cli::optimize::list(json)?,
+            (false, Some(file)) => windjammer::cli::optimize::explain(&file, pass.as_deref(), json)?,
+            (false, None) => anyhow::bail!("wj optimize: give a file to explain, or --list"),
+        },
         Commands::Caps { action, path, json } => windjammer::cli::caps::execute(&action, path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), json)?,
         Commands::RustSurface { crate_name, functions, all_pub: _, write, path } => windjammer::cli::rust_surface::execute(
             path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), &crate_name, &functions, write)?,

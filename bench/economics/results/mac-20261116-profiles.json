@@ -1,0 +1,5917 @@
+{
+ "env": {
+  "wj_version": "wj 0.50.0 (commit 37d50458ec6a 2026-11-11, clean, release, built 2026-11-11T22:47:08Z)",
+  "rustc": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)",
+  "uname": "Darwin arm64",
+  "head": "086628cdbc28",
+  "load_start": "14:46  up 21 days, 15:53, 6 users, load averages: 11.09 13.55 15.15",
+  "counter": "macOS /usr/bin/time -l: cpu (children included), peak rss, instructions and cycles of the process",
+  "meter": "-l"
+ },
+ "profiles": [
+  {
+   "id": "parity/sieve",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 420142099,
+      "cycles": 231776417,
+      "rss": 99172352,
+      "cpu": 0.27,
+      "wall": 0.38,
+      "status": 0
+     },
+     "run": {
+      "instr": 365332136,
+      "cycles": 180081092,
+      "rss": 21430272,
+      "cpu": 0.05,
+      "wall": 0.11,
+      "status": 0
+     },
+     "stripped": 343104,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15441382179,
+      "cycles": 6907463429,
+      "rss": 185352192,
+      "cpu": 2.42,
+      "wall": 3.09,
+      "status": 0
+     },
+     "run": {
+      "instr": 368344187,
+      "cycles": 192077090,
+      "rss": 21331968,
+      "cpu": 0.06,
+      "wall": 0.2,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20364159285,
+      "cycles": 8977391640,
+      "rss": 192593920,
+      "cpu": 3.16,
+      "wall": 3.06,
+      "status": 0
+     },
+     "run": {
+      "instr": 366827929,
+      "cycles": 177137716,
+      "rss": 21364736,
+      "cpu": 0.05,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15350612946,
+      "cycles": 6545645084,
+      "rss": 184942592,
+      "cpu": 2.28,
+      "wall": 2.87,
+      "status": 0
+     },
+     "run": {
+      "instr": 366155126,
+      "cycles": 169925859,
+      "rss": 21282816,
+      "cpu": 0.05,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15313893055,
+      "cycles": 6120884166,
+      "rss": 193937408,
+      "cpu": 2.11,
+      "wall": 2.28,
+      "status": 0
+     },
+     "run": {
+      "instr": 366995614,
+      "cycles": 166717921,
+      "rss": 21331968,
+      "cpu": 0.05,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20272603527,
+      "cycles": 8198754631,
+      "rss": 202719232,
+      "cpu": 2.85,
+      "wall": 2.17,
+      "status": 0
+     },
+     "run": {
+      "instr": 368702455,
+      "cycles": 165602094,
+      "rss": 21364736,
+      "cpu": 0.05,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 339984,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 431723075,
+      "cycles": 196642656,
+      "rss": 96452608,
+      "cpu": 0.15,
+      "wall": 0.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 368409506,
+      "cycles": 169252921,
+      "rss": 21381120,
+      "cpu": 0.05,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 343168,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15243611576,
+      "cycles": 5973760352,
+      "rss": 194805760,
+      "cpu": 2.04,
+      "wall": 2.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 345609472,
+      "cycles": 169878974,
+      "rss": 21331968,
+      "cpu": 0.05,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 442279190,
+      "cycles": 217829756,
+      "rss": 99368960,
+      "cpu": 0.14,
+      "wall": 0.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 232599381,
+      "cycles": 127198091,
+      "rss": 21430272,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 343008,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15323658068,
+      "cycles": 6411862659,
+      "rss": 183746560,
+      "cpu": 2.24,
+      "wall": 2.63,
+      "status": 0
+     },
+     "run": {
+      "instr": 230445621,
+      "cycles": 111909815,
+      "rss": 21331968,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20284083384,
+      "cycles": 8467639161,
+      "rss": 201916416,
+      "cpu": 2.96,
+      "wall": 2.32,
+      "status": 0
+     },
+     "run": {
+      "instr": 232676575,
+      "cycles": 128488433,
+      "rss": 21446656,
+      "cpu": 0.03,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15291686191,
+      "cycles": 6044187316,
+      "rss": 191102976,
+      "cpu": 2.07,
+      "wall": 2.26,
+      "status": 0
+     },
+     "run": {
+      "instr": 232069168,
+      "cycles": 128624611,
+      "rss": 21331968,
+      "cpu": 0.03,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15301433480,
+      "cycles": 6138280546,
+      "rss": 192053248,
+      "cpu": 2.11,
+      "wall": 2.37,
+      "status": 0
+     },
+     "run": {
+      "instr": 206608260,
+      "cycles": 145324572,
+      "rss": 21331968,
+      "cpu": 0.04,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20227617704,
+      "cycles": 8032808472,
+      "rss": 217645056,
+      "cpu": 2.77,
+      "wall": 2.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 206992119,
+      "cycles": 149517421,
+      "rss": 21397504,
+      "cpu": 0.04,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 339936,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 422087640,
+      "cycles": 223968318,
+      "rss": 99123200,
+      "cpu": 0.15,
+      "wall": 0.17,
+      "status": 0
+     },
+     "run": {
+      "instr": 206734948,
+      "cycles": 151053399,
+      "rss": 21430272,
+      "cpu": 0.04,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 343040,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15268078951,
+      "cycles": 6182996123,
+      "rss": 189710336,
+      "cpu": 2.13,
+      "wall": 2.47,
+      "status": 0
+     },
+     "run": {
+      "instr": 231029519,
+      "cycles": 118465677,
+      "rss": 21282816,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 302544,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/matmul",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 465082228,
+      "cycles": 235438031,
+      "rss": 103284736,
+      "cpu": 0.16,
+      "wall": 0.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 283428364,
+      "cycles": 76296088,
+      "rss": 3555328,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 16366323964,
+      "cycles": 6711653518,
+      "rss": 185614336,
+      "cpu": 2.31,
+      "wall": 2.68,
+      "status": 0
+     },
+     "run": {
+      "instr": 284010696,
+      "cycles": 80154431,
+      "rss": 3506176,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 319296,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 21510088480,
+      "cycles": 8948099264,
+      "rss": 210518016,
+      "cpu": 3.11,
+      "wall": 2.58,
+      "status": 0
+     },
+     "run": {
+      "instr": 283114896,
+      "cycles": 76704381,
+      "rss": 3522560,
+      "cpu": 0.02,
+      "wall": 0.02,
+      "status": 0
+     },
+     "stripped": 356928,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 16411153293,
+      "cycles": 6990597622,
+      "rss": 183123968,
+      "cpu": 2.44,
+      "wall": 3.0,
+      "status": 0
+     },
+     "run": {
+      "instr": 283401333,
+      "cycles": 77086314,
+      "rss": 3506176,
+      "cpu": 0.02,
+      "wall": 0.02,
+      "status": 0
+     },
+     "stripped": 319296,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 16388439503,
+      "cycles": 6976426901,
+      "rss": 182091776,
+      "cpu": 2.45,
+      "wall": 2.91,
+      "status": 0
+     },
+     "run": {
+      "instr": 284066069,
+      "cycles": 79885897,
+      "rss": 3506176,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 319296,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 21490411244,
+      "cycles": 8911066853,
+      "rss": 215482368,
+      "cpu": 3.1399999999999997,
+      "wall": 2.5,
+      "status": 0
+     },
+     "run": {
+      "instr": 283638750,
+      "cycles": 79601252,
+      "rss": 3571712,
+      "cpu": 0.02,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 356928,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 463220916,
+      "cycles": 244709458,
+      "rss": 96419840,
+      "cpu": 0.16999999999999998,
+      "wall": 0.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 283319500,
+      "cycles": 75772244,
+      "rss": 3555328,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 16337453739,
+      "cycles": 6830865378,
+      "rss": 179126272,
+      "cpu": 2.4,
+      "wall": 2.96,
+      "status": 0
+     },
+     "run": {
+      "instr": 282868967,
+      "cycles": 76234270,
+      "rss": 3522560,
+      "cpu": 0.02,
+      "wall": 0.02,
+      "status": 0
+     },
+     "stripped": 319152,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 524655588,
+      "cycles": 274198335,
+      "rss": 101597184,
+      "cpu": 0.18,
+      "wall": 0.25,
+      "status": 0
+     },
+     "run": {
+      "instr": 227948581,
+      "cycles": 71701000,
+      "rss": 3620864,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 16466282399,
+      "cycles": 6884303749,
+      "rss": 182304768,
+      "cpu": 2.4,
+      "wall": 3.04,
+      "status": 0
+     },
+     "run": {
+      "instr": 228264140,
+      "cycles": 70379236,
+      "rss": 3506176,
+      "cpu": 0.02,
+      "wall": 0.02,
+      "status": 0
+     },
+     "stripped": 319344,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 21593878214,
+      "cycles": 9397182483,
+      "rss": 211861504,
+      "cpu": 3.34,
+      "wall": 3.01,
+      "status": 0
+     },
+     "run": {
+      "instr": 228083457,
+      "cycles": 70093142,
+      "rss": 3588096,
+      "cpu": 0.02,
+      "wall": 0.02,
+      "status": 0
+     },
+     "stripped": 356960,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 16501371392,
+      "cycles": 7271145999,
+      "rss": 176881664,
+      "cpu": 2.5700000000000003,
+      "wall": 3.34,
+      "status": 0
+     },
+     "run": {
+      "instr": 227657086,
+      "cycles": 70409691,
+      "rss": 3457024,
+      "cpu": 0.02,
+      "wall": 0.02,
+      "status": 0
+     },
+     "stripped": 319344,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 16500574054,
+      "cycles": 7204347773,
+      "rss": 179601408,
+      "cpu": 2.5500000000000003,
+      "wall": 3.3,
+      "status": 0
+     },
+     "run": {
+      "instr": 227641534,
+      "cycles": 71444093,
+      "rss": 3457024,
+      "cpu": 0.02,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 319344,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 21641843521,
+      "cycles": 9630190336,
+      "rss": 210255872,
+      "cpu": 3.43,
+      "wall": 2.93,
+      "status": 0
+     },
+     "run": {
+      "instr": 227894858,
+      "cycles": 70213258,
+      "rss": 3538944,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 356960,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 529870852,
+      "cycles": 274751154,
+      "rss": 102236160,
+      "cpu": 0.18,
+      "wall": 0.17,
+      "status": 0
+     },
+     "run": {
+      "instr": 227741834,
+      "cycles": 70125835,
+      "rss": 3620864,
+      "cpu": 0.02,
+      "wall": 0.02,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 16404348583,
+      "cycles": 7058865925,
+      "rss": 178356224,
+      "cpu": 2.5,
+      "wall": 3.38,
+      "status": 0
+     },
+     "run": {
+      "instr": 227583855,
+      "cycles": 70116711,
+      "rss": 3473408,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 319184,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/collatz",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 291863178,
+      "cycles": 149344605,
+      "rss": 90488832,
+      "cpu": 0.13,
+      "wall": 0.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 3045030642,
+      "cycles": 1380938909,
+      "rss": 1409024,
+      "cpu": 0.45,
+      "wall": 0.67,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15228642484,
+      "cycles": 6530093321,
+      "rss": 166985728,
+      "cpu": 2.3200000000000003,
+      "wall": 2.91,
+      "status": 0
+     },
+     "run": {
+      "instr": 3049466688,
+      "cycles": 1385052687,
+      "rss": 1310720,
+      "cpu": 0.45,
+      "wall": 0.57,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20099537369,
+      "cycles": 8117807416,
+      "rss": 202391552,
+      "cpu": 2.8600000000000003,
+      "wall": 2.26,
+      "status": 0
+     },
+     "run": {
+      "instr": 3043611876,
+      "cycles": 1381478694,
+      "rss": 1409024,
+      "cpu": 0.45,
+      "wall": 0.56,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15198786888,
+      "cycles": 6193574364,
+      "rss": 182976512,
+      "cpu": 2.17,
+      "wall": 2.62,
+      "status": 0
+     },
+     "run": {
+      "instr": 3043445891,
+      "cycles": 1380119613,
+      "rss": 1261568,
+      "cpu": 0.45,
+      "wall": 0.55,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15228572210,
+      "cycles": 6502605694,
+      "rss": 172343296,
+      "cpu": 2.28,
+      "wall": 2.66,
+      "status": 0
+     },
+     "run": {
+      "instr": 4619836888,
+      "cycles": 1867512082,
+      "rss": 1212416,
+      "cpu": 0.62,
+      "wall": 0.72,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20154140262,
+      "cycles": 8507384394,
+      "rss": 205848576,
+      "cpu": 2.9699999999999998,
+      "wall": 2.5,
+      "status": 0
+     },
+     "run": {
+      "instr": 3763669036,
+      "cycles": 1852659775,
+      "rss": 1409024,
+      "cpu": 0.6,
+      "wall": 0.66,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 298626266,
+      "cycles": 149432079,
+      "rss": 90619904,
+      "cpu": 0.15000000000000002,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 3765169353,
+      "cycles": 1964017624,
+      "rss": 1409024,
+      "cpu": 0.64,
+      "wall": 0.71,
+      "status": 0
+     },
+     "stripped": 343024,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15127878496,
+      "cycles": 5975159010,
+      "rss": 201129984,
+      "cpu": 2.05,
+      "wall": 2.24,
+      "status": 0
+     },
+     "run": {
+      "instr": 3042740046,
+      "cycles": 1377846781,
+      "rss": 1277952,
+      "cpu": 0.45,
+      "wall": 0.53,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 292493586,
+      "cycles": 154462163,
+      "rss": 90898432,
+      "cpu": 0.13,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 3046252244,
+      "cycles": 1378020914,
+      "rss": 1409024,
+      "cpu": 0.45,
+      "wall": 0.48,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15154157233,
+      "cycles": 6074120626,
+      "rss": 190070784,
+      "cpu": 2.09,
+      "wall": 2.29,
+      "status": 0
+     },
+     "run": {
+      "instr": 3045236035,
+      "cycles": 1376232644,
+      "rss": 1261568,
+      "cpu": 0.45,
+      "wall": 0.57,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20077480509,
+      "cycles": 8113280649,
+      "rss": 203735040,
+      "cpu": 2.81,
+      "wall": 2.36,
+      "status": 0
+     },
+     "run": {
+      "instr": 3042679928,
+      "cycles": 1375194071,
+      "rss": 1359872,
+      "cpu": 0.45,
+      "wall": 0.49,
+      "status": 0
+     },
+     "stripped": 339856,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15161804589,
+      "cycles": 5954432914,
+      "rss": 191004672,
+      "cpu": 2.05,
+      "wall": 2.28,
+      "status": 0
+     },
+     "run": {
+      "instr": 3043185181,
+      "cycles": 1382041963,
+      "rss": 1310720,
+      "cpu": 0.45,
+      "wall": 0.57,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15159580928,
+      "cycles": 6017838237,
+      "rss": 188760064,
+      "cpu": 2.08,
+      "wall": 2.41,
+      "status": 0
+     },
+     "run": {
+      "instr": 4617331308,
+      "cycles": 1845418570,
+      "rss": 1261568,
+      "cpu": 0.6,
+      "wall": 0.86,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20120721854,
+      "cycles": 8355145069,
+      "rss": 213942272,
+      "cpu": 2.9299999999999997,
+      "wall": 2.53,
+      "status": 0
+     },
+     "run": {
+      "instr": 3765942271,
+      "cycles": 1972184514,
+      "rss": 1409024,
+      "cpu": 0.64,
+      "wall": 0.74,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 299170874,
+      "cycles": 153143588,
+      "rss": 90865664,
+      "cpu": 0.14,
+      "wall": 0.16,
+      "status": 0
+     },
+     "run": {
+      "instr": 3765583540,
+      "cycles": 1961236451,
+      "rss": 1409024,
+      "cpu": 0.64,
+      "wall": 0.73,
+      "status": 0
+     },
+     "stripped": 343024,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15125792372,
+      "cycles": 6069452789,
+      "rss": 191561728,
+      "cpu": 2.1,
+      "wall": 2.47,
+      "status": 0
+     },
+     "run": {
+      "instr": 3042720766,
+      "cycles": 1376708101,
+      "rss": 1310720,
+      "cpu": 0.45,
+      "wall": 0.57,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/string_build",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 563506637,
+      "cycles": 277878412,
+      "rss": 105234432,
+      "cpu": 0.17,
+      "wall": 0.23,
+      "status": 0
+     },
+     "run": {
+      "instr": 36493512,
+      "cycles": 9252815,
+      "rss": 3915776,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15430822160,
+      "cycles": 6156815477,
+      "rss": 192921600,
+      "cpu": 2.11,
+      "wall": 2.47,
+      "status": 0
+     },
+     "run": {
+      "instr": 34426506,
+      "cycles": 9323045,
+      "rss": 3817472,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20441022336,
+      "cycles": 8294070493,
+      "rss": 206290944,
+      "cpu": 2.89,
+      "wall": 2.45,
+      "status": 0
+     },
+     "run": {
+      "instr": 34531597,
+      "cycles": 9567019,
+      "rss": 3915776,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339856,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15430571572,
+      "cycles": 6069857514,
+      "rss": 192249856,
+      "cpu": 2.1,
+      "wall": 2.38,
+      "status": 0
+     },
+     "run": {
+      "instr": 34387976,
+      "cycles": 8980441,
+      "rss": 3817472,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15446131379,
+      "cycles": 6304818698,
+      "rss": 192266240,
+      "cpu": 2.1799999999999997,
+      "wall": 2.6,
+      "status": 0
+     },
+     "run": {
+      "instr": 34517445,
+      "cycles": 10129872,
+      "rss": 3817472,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20430324579,
+      "cycles": 8256077722,
+      "rss": 206422016,
+      "cpu": 2.89,
+      "wall": 2.24,
+      "status": 0
+     },
+     "run": {
+      "instr": 34626221,
+      "cycles": 9417641,
+      "rss": 3915776,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339856,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 566306198,
+      "cycles": 284353006,
+      "rss": 107921408,
+      "cpu": 0.18,
+      "wall": 0.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 36603438,
+      "cycles": 10434487,
+      "rss": 3915776,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15380978788,
+      "cycles": 6294946000,
+      "rss": 194609152,
+      "cpu": 2.19,
+      "wall": 2.67,
+      "status": 0
+     },
+     "run": {
+      "instr": 34315927,
+      "cycles": 9268667,
+      "rss": 3866624,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 606525378,
+      "cycles": 322430706,
+      "rss": 102694912,
+      "cpu": 0.18,
+      "wall": 0.25,
+      "status": 0
+     },
+     "run": {
+      "instr": 29031441,
+      "cycles": 8115022,
+      "rss": 3227648,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343008,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15492954377,
+      "cycles": 6192745017,
+      "rss": 176046080,
+      "cpu": 2.12,
+      "wall": 2.41,
+      "status": 0
+     },
+     "run": {
+      "instr": 27331622,
+      "cycles": 7210287,
+      "rss": 3129344,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20442357727,
+      "cycles": 7998865996,
+      "rss": 208748544,
+      "cpu": 2.75,
+      "wall": 2.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 27354794,
+      "cycles": 7190900,
+      "rss": 3211264,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15462784887,
+      "cycles": 6040199583,
+      "rss": 194166784,
+      "cpu": 2.06,
+      "wall": 2.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 27283546,
+      "cycles": 7698434,
+      "rss": 3129344,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15428329423,
+      "cycles": 5851897672,
+      "rss": 191053824,
+      "cpu": 1.99,
+      "wall": 2.09,
+      "status": 0
+     },
+     "run": {
+      "instr": 27506618,
+      "cycles": 7806160,
+      "rss": 3129344,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20431819695,
+      "cycles": 8037735266,
+      "rss": 211042304,
+      "cpu": 2.8,
+      "wall": 2.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 27728998,
+      "cycles": 7988764,
+      "rss": 3211264,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 577892740,
+      "cycles": 270667961,
+      "rss": 104644608,
+      "cpu": 0.17,
+      "wall": 0.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 29318414,
+      "cycles": 8051846,
+      "rss": 3227648,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343056,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15389324632,
+      "cycles": 6020769619,
+      "rss": 192036864,
+      "cpu": 2.07,
+      "wall": 2.4,
+      "status": 0
+     },
+     "run": {
+      "instr": 27085918,
+      "cycles": 7589082,
+      "rss": 3129344,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/fib",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 278962520,
+      "cycles": 137541972,
+      "rss": 88637440,
+      "cpu": 0.13,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 1107967708,
+      "cycles": 384741800,
+      "rss": 1359872,
+      "cpu": 0.12,
+      "wall": 0.15,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15135331258,
+      "cycles": 5827278701,
+      "rss": 190365696,
+      "cpu": 1.99,
+      "wall": 2.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 1107617361,
+      "cycles": 382319221,
+      "rss": 1261568,
+      "cpu": 0.12,
+      "wall": 0.15,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20043746871,
+      "cycles": 7895025336,
+      "rss": 195919872,
+      "cpu": 2.75,
+      "wall": 1.97,
+      "status": 0
+     },
+     "run": {
+      "instr": 1107774518,
+      "cycles": 383590234,
+      "rss": 1409024,
+      "cpu": 0.12,
+      "wall": 0.18,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15137361792,
+      "cycles": 5831913634,
+      "rss": 191922176,
+      "cpu": 1.98,
+      "wall": 2.09,
+      "status": 0
+     },
+     "run": {
+      "instr": 1107701574,
+      "cycles": 381736390,
+      "rss": 1310720,
+      "cpu": 0.12,
+      "wall": 0.13,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15143530178,
+      "cycles": 5811204318,
+      "rss": 190545920,
+      "cpu": 1.97,
+      "wall": 2.05,
+      "status": 0
+     },
+     "run": {
+      "instr": 1463874954,
+      "cycles": 486355727,
+      "rss": 1310720,
+      "cpu": 0.15,
+      "wall": 0.18,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20046078213,
+      "cycles": 7905351386,
+      "rss": 199229440,
+      "cpu": 2.7,
+      "wall": 1.94,
+      "status": 0
+     },
+     "run": {
+      "instr": 1463048607,
+      "cycles": 481534697,
+      "rss": 1409024,
+      "cpu": 0.15,
+      "wall": 0.15,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 273508267,
+      "cycles": 131994449,
+      "rss": 88342528,
+      "cpu": 0.13,
+      "wall": 0.08,
+      "status": 0
+     },
+     "run": {
+      "instr": 1463189737,
+      "cycles": 481414885,
+      "rss": 1359872,
+      "cpu": 0.15,
+      "wall": 0.17,
+      "status": 0
+     },
+     "stripped": 342992,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15078276740,
+      "cycles": 5757997561,
+      "rss": 191021056,
+      "cpu": 1.9400000000000002,
+      "wall": 1.96,
+      "status": 0
+     },
+     "run": {
+      "instr": 1083814116,
+      "cycles": 371631183,
+      "rss": 1310720,
+      "cpu": 0.11,
+      "wall": 0.12,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 279501171,
+      "cycles": 142936478,
+      "rss": 88506368,
+      "cpu": 0.13,
+      "wall": 0.1,
+      "status": 0
+     },
+     "run": {
+      "instr": 1108136878,
+      "cycles": 382724585,
+      "rss": 1409024,
+      "cpu": 0.12,
+      "wall": 0.12,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15142163404,
+      "cycles": 5935498001,
+      "rss": 191954944,
+      "cpu": 2.01,
+      "wall": 2.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 1108935115,
+      "cycles": 384649975,
+      "rss": 1310720,
+      "cpu": 0.12,
+      "wall": 0.17,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20055626707,
+      "cycles": 8013511345,
+      "rss": 200589312,
+      "cpu": 2.77,
+      "wall": 2.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 1109024686,
+      "cycles": 387830256,
+      "rss": 1359872,
+      "cpu": 0.12,
+      "wall": 0.16,
+      "status": 0
+     },
+     "stripped": 339856,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15198311862,
+      "cycles": 6395660172,
+      "rss": 174358528,
+      "cpu": 2.23,
+      "wall": 2.65,
+      "status": 0
+     },
+     "run": {
+      "instr": 1109541951,
+      "cycles": 392511410,
+      "rss": 1212416,
+      "cpu": 0.12,
+      "wall": 0.32,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15168876836,
+      "cycles": 6138035950,
+      "rss": 187613184,
+      "cpu": 2.11,
+      "wall": 2.32,
+      "status": 0
+     },
+     "run": {
+      "instr": 1467167994,
+      "cycles": 491513041,
+      "rss": 1261568,
+      "cpu": 0.15,
+      "wall": 0.18,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20109941026,
+      "cycles": 8553203579,
+      "rss": 201162752,
+      "cpu": 3.01,
+      "wall": 2.71,
+      "status": 0
+     },
+     "run": {
+      "instr": 1469094648,
+      "cycles": 495565722,
+      "rss": 1409024,
+      "cpu": 0.16,
+      "wall": 0.19,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 274162058,
+      "cycles": 148243210,
+      "rss": 88358912,
+      "cpu": 0.14,
+      "wall": 0.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 1467433160,
+      "cycles": 497731250,
+      "rss": 1409024,
+      "cpu": 0.16,
+      "wall": 0.24,
+      "status": 0
+     },
+     "stripped": 342992,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15195663576,
+      "cycles": 6482423580,
+      "rss": 171589632,
+      "cpu": 2.23,
+      "wall": 2.81,
+      "status": 0
+     },
+     "run": {
+      "instr": 1087518776,
+      "cycles": 379076155,
+      "rss": 1310720,
+      "cpu": 0.12,
+      "wall": 0.15,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/vec_fill",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 380744274,
+      "cycles": 204338583,
+      "rss": 96239616,
+      "cpu": 0.16,
+      "wall": 0.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 1141614439,
+      "cycles": 344561617,
+      "rss": 17399808,
+      "cpu": 0.11,
+      "wall": 0.14,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15348075450,
+      "cycles": 6588647229,
+      "rss": 174440448,
+      "cpu": 2.28,
+      "wall": 2.92,
+      "status": 0
+     },
+     "run": {
+      "instr": 1139378903,
+      "cycles": 336098368,
+      "rss": 17285120,
+      "cpu": 0.11,
+      "wall": 0.16,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20263895597,
+      "cycles": 8437079487,
+      "rss": 203980800,
+      "cpu": 2.92,
+      "wall": 2.37,
+      "status": 0
+     },
+     "run": {
+      "instr": 1138788215,
+      "cycles": 340811539,
+      "rss": 17416192,
+      "cpu": 0.11,
+      "wall": 0.14,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15282913768,
+      "cycles": 6240741348,
+      "rss": 184270848,
+      "cpu": 2.15,
+      "wall": 2.6,
+      "status": 0
+     },
+     "run": {
+      "instr": 1137763184,
+      "cycles": 353350458,
+      "rss": 17285120,
+      "cpu": 0.11,
+      "wall": 0.16,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15297491653,
+      "cycles": 6271212163,
+      "rss": 174063616,
+      "cpu": 2.15,
+      "wall": 2.52,
+      "status": 0
+     },
+     "run": {
+      "instr": 1538744106,
+      "cycles": 399231264,
+      "rss": 17334272,
+      "cpu": 0.12,
+      "wall": 0.14,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20251293141,
+      "cycles": 8664580732,
+      "rss": 202211328,
+      "cpu": 3.05,
+      "wall": 2.86,
+      "status": 0
+     },
+     "run": {
+      "instr": 1538521211,
+      "cycles": 412969267,
+      "rss": 17367040,
+      "cpu": 0.13,
+      "wall": 0.17,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 384112257,
+      "cycles": 195430878,
+      "rss": 97271808,
+      "cpu": 0.16,
+      "wall": 0.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 1538153779,
+      "cycles": 413083344,
+      "rss": 17432576,
+      "cpu": 0.13,
+      "wall": 0.24,
+      "status": 0
+     },
+     "stripped": 343008,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15220988955,
+      "cycles": 6198991648,
+      "rss": 186761216,
+      "cpu": 2.14,
+      "wall": 2.5,
+      "status": 0
+     },
+     "run": {
+      "instr": 1056754021,
+      "cycles": 364324526,
+      "rss": 17334272,
+      "cpu": 0.11,
+      "wall": 0.13,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 424751599,
+      "cycles": 207295946,
+      "rss": 100597760,
+      "cpu": 0.14,
+      "wall": 0.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 576292611,
+      "cycles": 125932277,
+      "rss": 17383424,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15306279382,
+      "cycles": 6224906497,
+      "rss": 187695104,
+      "cpu": 2.1399999999999997,
+      "wall": 2.49,
+      "status": 0
+     },
+     "run": {
+      "instr": 576848400,
+      "cycles": 128539930,
+      "rss": 17285120,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20294313520,
+      "cycles": 8544385318,
+      "rss": 217464832,
+      "cpu": 2.9499999999999997,
+      "wall": 2.57,
+      "status": 0
+     },
+     "run": {
+      "instr": 576246673,
+      "cycles": 129825657,
+      "rss": 17383424,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15316409031,
+      "cycles": 6236281213,
+      "rss": 178307072,
+      "cpu": 2.15,
+      "wall": 2.41,
+      "status": 0
+     },
+     "run": {
+      "instr": 575666430,
+      "cycles": 128109093,
+      "rss": 17334272,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15316971651,
+      "cycles": 6307707923,
+      "rss": 191643648,
+      "cpu": 2.18,
+      "wall": 2.5,
+      "status": 0
+     },
+     "run": {
+      "instr": 896375523,
+      "cycles": 180762217,
+      "rss": 17285120,
+      "cpu": 0.05,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20238882980,
+      "cycles": 8096415704,
+      "rss": 204865536,
+      "cpu": 2.79,
+      "wall": 2.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 978519693,
+      "cycles": 196476317,
+      "rss": 17399808,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 430303999,
+      "cycles": 218142886,
+      "rss": 99598336,
+      "cpu": 0.16,
+      "wall": 0.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 977759472,
+      "cycles": 195431095,
+      "rss": 17432576,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 342992,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15274988870,
+      "cycles": 6306446739,
+      "rss": 190857216,
+      "cpu": 2.17,
+      "wall": 2.61,
+      "status": 0
+     },
+     "run": {
+      "instr": 576840225,
+      "cycles": 133148198,
+      "rss": 17285120,
+      "cpu": 0.04,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/insertion_sort",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 408136903,
+      "cycles": 229257413,
+      "rss": 99893248,
+      "cpu": 0.16,
+      "wall": 0.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 705026972,
+      "cycles": 106824522,
+      "rss": 1605632,
+      "cpu": 0.03,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15271120209,
+      "cycles": 6258287770,
+      "rss": 189612032,
+      "cpu": 2.1799999999999997,
+      "wall": 2.73,
+      "status": 0
+     },
+     "run": {
+      "instr": 806938640,
+      "cycles": 154054024,
+      "rss": 1556480,
+      "cpu": 0.05,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20331975813,
+      "cycles": 9014502121,
+      "rss": 200835072,
+      "cpu": 3.19,
+      "wall": 3.53,
+      "status": 0
+     },
+     "run": {
+      "instr": 705707083,
+      "cycles": 111179468,
+      "rss": 1654784,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15352034344,
+      "cycles": 6607139404,
+      "rss": 173228032,
+      "cpu": 2.3,
+      "wall": 3.02,
+      "status": 0
+     },
+     "run": {
+      "instr": 805421937,
+      "cycles": 143580270,
+      "rss": 1540096,
+      "cpu": 0.04,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15353960103,
+      "cycles": 6507296576,
+      "rss": 184696832,
+      "cpu": 2.27,
+      "wall": 2.86,
+      "status": 0
+     },
+     "run": {
+      "instr": 806227518,
+      "cycles": 147110565,
+      "rss": 1556480,
+      "cpu": 0.04,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20338676269,
+      "cycles": 9038796999,
+      "rss": 190300160,
+      "cpu": 3.19,
+      "wall": 3.47,
+      "status": 0
+     },
+     "run": {
+      "instr": 707133147,
+      "cycles": 112779112,
+      "rss": 1654784,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 339904,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 408589046,
+      "cycles": 203000834,
+      "rss": 97878016,
+      "cpu": 0.16,
+      "wall": 0.27,
+      "status": 0
+     },
+     "run": {
+      "instr": 706240530,
+      "cycles": 112717595,
+      "rss": 1654784,
+      "cpu": 0.03,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 343024,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15315766865,
+      "cycles": 6699252082,
+      "rss": 174669824,
+      "cpu": 2.33,
+      "wall": 3.11,
+      "status": 0
+     },
+     "run": {
+      "instr": 805247068,
+      "cycles": 142783927,
+      "rss": 1507328,
+      "cpu": 0.04,
+      "wall": 0.1,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 426757095,
+      "cycles": 229474473,
+      "rss": 100794368,
+      "cpu": 0.15,
+      "wall": 0.18,
+      "status": 0
+     },
+     "run": {
+      "instr": 705601321,
+      "cycles": 108670824,
+      "rss": 1605632,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15311276250,
+      "cycles": 6200259188,
+      "rss": 194445312,
+      "cpu": 2.15,
+      "wall": 2.55,
+      "status": 0
+     },
+     "run": {
+      "instr": 805707984,
+      "cycles": 146188652,
+      "rss": 1507328,
+      "cpu": 0.04,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20258467779,
+      "cycles": 8288499514,
+      "rss": 206209024,
+      "cpu": 2.88,
+      "wall": 2.36,
+      "status": 0
+     },
+     "run": {
+      "instr": 706144038,
+      "cycles": 113467031,
+      "rss": 1540096,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15311092009,
+      "cycles": 6077755554,
+      "rss": 195051520,
+      "cpu": 2.0999999999999996,
+      "wall": 2.45,
+      "status": 0
+     },
+     "run": {
+      "instr": 805050789,
+      "cycles": 142793494,
+      "rss": 1507328,
+      "cpu": 0.04,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15343484227,
+      "cycles": 6373558676,
+      "rss": 185860096,
+      "cpu": 2.21,
+      "wall": 2.73,
+      "status": 0
+     },
+     "run": {
+      "instr": 804583092,
+      "cycles": 138768464,
+      "rss": 1507328,
+      "cpu": 0.04,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20253436940,
+      "cycles": 8110508823,
+      "rss": 202801152,
+      "cpu": 2.84,
+      "wall": 2.43,
+      "status": 0
+     },
+     "run": {
+      "instr": 705011593,
+      "cycles": 107227519,
+      "rss": 1540096,
+      "cpu": 0.03,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 339904,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 427367763,
+      "cycles": 221115613,
+      "rss": 100548608,
+      "cpu": 0.15000000000000002,
+      "wall": 0.18,
+      "status": 0
+     },
+     "run": {
+      "instr": 705559636,
+      "cycles": 109089695,
+      "rss": 1556480,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 0
+     },
+     "stripped": 343024,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15276629072,
+      "cycles": 6310346737,
+      "rss": 189333504,
+      "cpu": 2.19,
+      "wall": 2.66,
+      "status": 0
+     },
+     "run": {
+      "instr": 804801596,
+      "cycles": 143437520,
+      "rss": 1507328,
+      "cpu": 0.04,
+      "wall": 0.05,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/nbody",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 658646631,
+      "cycles": 280484178,
+      "rss": 105037824,
+      "cpu": 0.16999999999999998,
+      "wall": 0.24,
+      "status": 0
+     },
+     "run": {
+      "instr": 75859537,
+      "cycles": 15406822,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 16452453106,
+      "cycles": 7012000914,
+      "rss": 176504832,
+      "cpu": 2.43,
+      "wall": 3.01,
+      "status": 0
+     },
+     "run": {
+      "instr": 72812681,
+      "cycles": 15530934,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 319312,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 21690433591,
+      "cycles": 8743176383,
+      "rss": 207929344,
+      "cpu": 3.02,
+      "wall": 2.32,
+      "status": 0
+     },
+     "run": {
+      "instr": 75827690,
+      "cycles": 15367090,
+      "rss": 1343488,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 356928,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 16388539265,
+      "cycles": 6689707337,
+      "rss": 197754880,
+      "cpu": 2.33,
+      "wall": 2.67,
+      "status": 0
+     },
+     "run": {
+      "instr": 72812886,
+      "cycles": 15046625,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 319312,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 16379506654,
+      "cycles": 6594115112,
+      "rss": 197050368,
+      "cpu": 2.29,
+      "wall": 2.64,
+      "status": 0
+     },
+     "run": {
+      "instr": 72809337,
+      "cycles": 15457030,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 319312,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 21666921692,
+      "cycles": 9057788055,
+      "rss": 208289792,
+      "cpu": 3.1799999999999997,
+      "wall": 2.64,
+      "status": 0
+     },
+     "run": {
+      "instr": 75872547,
+      "cycles": 15730116,
+      "rss": 1343488,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 356928,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 661730073,
+      "cycles": 278916154,
+      "rss": 104464384,
+      "cpu": 0.17,
+      "wall": 0.21,
+      "status": 0
+     },
+     "run": {
+      "instr": 75884809,
+      "cycles": 15559061,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 16327719733,
+      "cycles": 6365127391,
+      "rss": 197558272,
+      "cpu": 2.1799999999999997,
+      "wall": 2.34,
+      "status": 0
+     },
+     "run": {
+      "instr": 72715746,
+      "cycles": 14938856,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 319152,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 726339930,
+      "cycles": 295476969,
+      "rss": 105545728,
+      "cpu": 0.18,
+      "wall": 0.18,
+      "status": 0
+     },
+     "run": {
+      "instr": 77233945,
+      "cycles": 18481408,
+      "rss": 1425408,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 16524632142,
+      "cycles": 6850902490,
+      "rss": 189513728,
+      "cpu": 2.38,
+      "wall": 2.85,
+      "status": 0
+     },
+     "run": {
+      "instr": 72805194,
+      "cycles": 15079349,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 319296,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 21777617246,
+      "cycles": 9112191209,
+      "rss": 215318528,
+      "cpu": 3.2,
+      "wall": 2.94,
+      "status": 0
+     },
+     "run": {
+      "instr": 75678337,
+      "cycles": 16011712,
+      "rss": 1343488,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 356912,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 16574766784,
+      "cycles": 7077994586,
+      "rss": 177504256,
+      "cpu": 2.48,
+      "wall": 3.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 72720186,
+      "cycles": 15222241,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 319296,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 16474706749,
+      "cycles": 6398272787,
+      "rss": 198017024,
+      "cpu": 2.2,
+      "wall": 2.47,
+      "status": 0
+     },
+     "run": {
+      "instr": 72807039,
+      "cycles": 14374563,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 319296,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 21729831231,
+      "cycles": 8562254447,
+      "rss": 205668352,
+      "cpu": 3.0,
+      "wall": 2.21,
+      "status": 0
+     },
+     "run": {
+      "instr": 75812364,
+      "cycles": 14823014,
+      "rss": 1343488,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 356912,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 725511459,
+      "cycles": 296497901,
+      "rss": 103399424,
+      "cpu": 0.18000000000000002,
+      "wall": 0.18,
+      "status": 0
+     },
+     "run": {
+      "instr": 75883281,
+      "cycles": 15372872,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 16501202487,
+      "cycles": 6929661719,
+      "rss": 184090624,
+      "cpu": 2.4,
+      "wall": 2.95,
+      "status": 0
+     },
+     "run": {
+      "instr": 72597251,
+      "cycles": 16071454,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 319136,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/byte_hash",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 368094411,
+      "cycles": 211309726,
+      "rss": 99155968,
+      "cpu": 0.16999999999999998,
+      "wall": 0.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 327334220,
+      "cycles": 238444498,
+      "rss": 6455296,
+      "cpu": 0.07,
+      "wall": 0.09,
+      "status": 0
+     },
+     "stripped": 342976,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15262978415,
+      "cycles": 6121031316,
+      "rss": 190005248,
+      "cpu": 2.13,
+      "wall": 2.5,
+      "status": 0
+     },
+     "run": {
+      "instr": 321371727,
+      "cycles": 238183405,
+      "rss": 6356992,
+      "cpu": 0.07,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20196842251,
+      "cycles": 8354886439,
+      "rss": 214302720,
+      "cpu": 2.95,
+      "wall": 2.84,
+      "status": 0
+     },
+     "run": {
+      "instr": 326679808,
+      "cycles": 237616118,
+      "rss": 6504448,
+      "cpu": 0.07,
+      "wall": 0.09,
+      "status": 0
+     },
+     "stripped": 339872,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15272047314,
+      "cycles": 6235415624,
+      "rss": 193085440,
+      "cpu": 2.17,
+      "wall": 2.47,
+      "status": 0
+     },
+     "run": {
+      "instr": 321449507,
+      "cycles": 237791779,
+      "rss": 6406144,
+      "cpu": 0.07,
+      "wall": 0.09,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15270743542,
+      "cycles": 6332092789,
+      "rss": 192659456,
+      "cpu": 2.2199999999999998,
+      "wall": 2.54,
+      "status": 0
+     },
+     "run": {
+      "instr": 322444457,
+      "cycles": 238389613,
+      "rss": 6406144,
+      "cpu": 0.07,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20177623858,
+      "cycles": 8173409778,
+      "rss": 200441856,
+      "cpu": 2.88,
+      "wall": 2.35,
+      "status": 0
+     },
+     "run": {
+      "instr": 327106051,
+      "cycles": 238319660,
+      "rss": 6504448,
+      "cpu": 0.07,
+      "wall": 0.09,
+      "status": 0
+     },
+     "stripped": 339872,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 366806145,
+      "cycles": 183535384,
+      "rss": 101974016,
+      "cpu": 0.15000000000000002,
+      "wall": 0.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 326226802,
+      "cycles": 237358983,
+      "rss": 6504448,
+      "cpu": 0.07,
+      "wall": 0.1,
+      "status": 0
+     },
+     "stripped": 342976,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15184669830,
+      "cycles": 6025460673,
+      "rss": 191791104,
+      "cpu": 2.11,
+      "wall": 2.39,
+      "status": 0
+     },
+     "run": {
+      "instr": 317214697,
+      "cycles": 239395079,
+      "rss": 6406144,
+      "cpu": 0.07,
+      "wall": 0.09,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 440685842,
+      "cycles": 231683102,
+      "rss": 99319808,
+      "cpu": 0.16,
+      "wall": 0.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 347471401,
+      "cycles": 239772544,
+      "rss": 6455296,
+      "cpu": 0.07,
+      "wall": 0.15,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15323746129,
+      "cycles": 6353245534,
+      "rss": 191479808,
+      "cpu": 2.24,
+      "wall": 2.59,
+      "status": 0
+     },
+     "run": {
+      "instr": 345829577,
+      "cycles": 236551146,
+      "rss": 6356992,
+      "cpu": 0.07,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20229933209,
+      "cycles": 7920548931,
+      "rss": 201703424,
+      "cpu": 2.73,
+      "wall": 2.08,
+      "status": 0
+     },
+     "run": {
+      "instr": 345555610,
+      "cycles": 236249456,
+      "rss": 6406144,
+      "cpu": 0.07,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15288169810,
+      "cycles": 5835217833,
+      "rss": 200359936,
+      "cpu": 1.98,
+      "wall": 2.07,
+      "status": 0
+     },
+     "run": {
+      "instr": 345602269,
+      "cycles": 236307565,
+      "rss": 6307840,
+      "cpu": 0.07,
+      "wall": 0.12,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15286909556,
+      "cycles": 5871102148,
+      "rss": 200359936,
+      "cpu": 2.0,
+      "wall": 2.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 345759088,
+      "cycles": 235964215,
+      "rss": 6356992,
+      "cpu": 0.07,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20223198593,
+      "cycles": 7788332640,
+      "rss": 203669504,
+      "cpu": 2.6999999999999997,
+      "wall": 1.92,
+      "status": 0
+     },
+     "run": {
+      "instr": 345882435,
+      "cycles": 236180880,
+      "rss": 6455296,
+      "cpu": 0.07,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 440448109,
+      "cycles": 212710695,
+      "rss": 99893248,
+      "cpu": 0.15,
+      "wall": 0.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 345614811,
+      "cycles": 235382471,
+      "rss": 6455296,
+      "cpu": 0.07,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15235530092,
+      "cycles": 5916026705,
+      "rss": 193658880,
+      "cpu": 2.03,
+      "wall": 2.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 346585991,
+      "cycles": 237776229,
+      "rss": 6356992,
+      "cpu": 0.07,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "parity/histogram",
+   "suite": "parity",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 379236393,
+      "cycles": 200006283,
+      "rss": 99155968,
+      "cpu": 0.16,
+      "wall": 0.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 278828887,
+      "cycles": 196025609,
+      "rss": 1441792,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15252141800,
+      "cycles": 6101073942,
+      "rss": 192561152,
+      "cpu": 2.11,
+      "wall": 2.4,
+      "status": 0
+     },
+     "run": {
+      "instr": 278364370,
+      "cycles": 194785158,
+      "rss": 1294336,
+      "cpu": 0.06,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20172060088,
+      "cycles": 7794496160,
+      "rss": 200163328,
+      "cpu": 2.69,
+      "wall": 1.97,
+      "status": 0
+     },
+     "run": {
+      "instr": 278461613,
+      "cycles": 194848987,
+      "rss": 1392640,
+      "cpu": 0.06,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 339840,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15236808669,
+      "cycles": 5969502938,
+      "rss": 192495616,
+      "cpu": 2.05,
+      "wall": 2.32,
+      "status": 0
+     },
+     "run": {
+      "instr": 278367772,
+      "cycles": 195025763,
+      "rss": 1343488,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15248246364,
+      "cycles": 5990470146,
+      "rss": 191610880,
+      "cpu": 2.05,
+      "wall": 2.32,
+      "status": 0
+     },
+     "run": {
+      "instr": 338366687,
+      "cycles": 193329019,
+      "rss": 1294336,
+      "cpu": 0.06,
+      "wall": 0.06,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20194194171,
+      "cycles": 8167500310,
+      "rss": 208814080,
+      "cpu": 2.87,
+      "wall": 2.43,
+      "status": 0
+     },
+     "run": {
+      "instr": 339860101,
+      "cycles": 197650952,
+      "rss": 1376256,
+      "cpu": 0.06,
+      "wall": 0.1,
+      "status": 0
+     },
+     "stripped": 339904,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 391172859,
+      "cycles": 246449846,
+      "rss": 97468416,
+      "cpu": 0.18,
+      "wall": 0.23,
+      "status": 0
+     },
+     "run": {
+      "instr": 342902225,
+      "cycles": 204171910,
+      "rss": 1392640,
+      "cpu": 0.06,
+      "wall": 0.11,
+      "status": 0
+     },
+     "stripped": 343024,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15244724713,
+      "cycles": 6273416011,
+      "rss": 182255616,
+      "cpu": 2.22,
+      "wall": 3.08,
+      "status": 0
+     },
+     "run": {
+      "instr": 279828334,
+      "cycles": 195711602,
+      "rss": 1294336,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 397131973,
+      "cycles": 206748569,
+      "rss": 98811904,
+      "cpu": 0.16,
+      "wall": 0.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 278948289,
+      "cycles": 195323196,
+      "rss": 1441792,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15260796041,
+      "cycles": 6152505514,
+      "rss": 192675840,
+      "cpu": 2.12,
+      "wall": 2.48,
+      "status": 0
+     },
+     "run": {
+      "instr": 279137471,
+      "cycles": 195790304,
+      "rss": 1343488,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20209757802,
+      "cycles": 8041204526,
+      "rss": 204144640,
+      "cpu": 2.8200000000000003,
+      "wall": 2.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 278445173,
+      "cycles": 194492841,
+      "rss": 1441792,
+      "cpu": 0.06,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 339904,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15276126573,
+      "cycles": 6148993308,
+      "rss": 190611456,
+      "cpu": 2.16,
+      "wall": 2.62,
+      "status": 0
+     },
+     "run": {
+      "instr": 278997269,
+      "cycles": 195651074,
+      "rss": 1343488,
+      "cpu": 0.06,
+      "wall": 0.09,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15319070286,
+      "cycles": 6400236839,
+      "rss": 169263104,
+      "cpu": 2.26,
+      "wall": 2.83,
+      "status": 0
+     },
+     "run": {
+      "instr": 341380411,
+      "cycles": 198021847,
+      "rss": 1294336,
+      "cpu": 0.06,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20270785048,
+      "cycles": 8634694128,
+      "rss": 205701120,
+      "cpu": 3.06,
+      "wall": 2.77,
+      "status": 0
+     },
+     "run": {
+      "instr": 340151606,
+      "cycles": 197071063,
+      "rss": 1425408,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 339968,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 389837304,
+      "cycles": 211328808,
+      "rss": 102383616,
+      "cpu": 0.16999999999999998,
+      "wall": 0.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 340840085,
+      "cycles": 198679498,
+      "rss": 1441792,
+      "cpu": 0.06,
+      "wall": 0.08,
+      "status": 0
+     },
+     "stripped": 343024,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15302195716,
+      "cycles": 6533464720,
+      "rss": 172916736,
+      "cpu": 2.31,
+      "wall": 3.02,
+      "status": 0
+     },
+     "run": {
+      "instr": 280473513,
+      "cycles": 197854597,
+      "rss": 1343488,
+      "cpu": 0.06,
+      "wall": 0.07,
+      "status": 0
+     },
+     "stripped": 302544,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/closures",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 263913585,
+      "cycles": 135522492,
+      "rss": 88096768,
+      "cpu": 0.04,
+      "wall": 0.1,
+      "status": 1
+     },
+     "run": {
+      "instr": 1015638,
+      "cycles": 788579,
+      "rss": 966656,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 257813682,
+      "cycles": 126731455,
+      "rss": 87883776,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 1
+     },
+     "run": {
+      "instr": 1027302,
+      "cycles": 806044,
+      "rss": 983040,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 254133204,
+      "cycles": 118525989,
+      "rss": 87998464,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 1
+     },
+     "run": {
+      "instr": 1051292,
+      "cycles": 851259,
+      "rss": 999424,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 253380281,
+      "cycles": 119683567,
+      "rss": 87883776,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 1
+     },
+     "run": {
+      "instr": 1028468,
+      "cycles": 850389,
+      "rss": 999424,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 253028350,
+      "cycles": 115391954,
+      "rss": 87949312,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 1
+     },
+     "run": {
+      "instr": 992805,
+      "cycles": 728757,
+      "rss": 999424,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 250247438,
+      "cycles": 102370326,
+      "rss": 87883776,
+      "cpu": 0.02,
+      "wall": 0.03,
+      "status": 1
+     },
+     "run": {
+      "instr": 996865,
+      "cycles": 875943,
+      "rss": 999424,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 251091020,
+      "cycles": 117265201,
+      "rss": 87916544,
+      "cpu": 0.03,
+      "wall": 0.05,
+      "status": 1
+     },
+     "run": {
+      "instr": 988062,
+      "cycles": 802648,
+      "rss": 999424,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 252153362,
+      "cycles": 109904857,
+      "rss": 87965696,
+      "cpu": 0.03,
+      "wall": 0.04,
+      "status": 1
+     },
+     "run": {
+      "instr": 1125024,
+      "cycles": 1335669,
+      "rss": 1081344,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 127
+     },
+     "stripped": 0,
+     "ok": "no"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 422973310,
+      "cycles": 228161415,
+      "rss": 101777408,
+      "cpu": 0.16,
+      "wall": 0.18,
+      "status": 0
+     },
+     "run": {
+      "instr": 11672949,
+      "cycles": 4377212,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15383808769,
+      "cycles": 6461401425,
+      "rss": 172130304,
+      "cpu": 2.2399999999999998,
+      "wall": 2.64,
+      "status": 0
+     },
+     "run": {
+      "instr": 11519146,
+      "cycles": 4194612,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20245140217,
+      "cycles": 8040731959,
+      "rss": 199442432,
+      "cpu": 2.8000000000000003,
+      "wall": 2.11,
+      "status": 0
+     },
+     "run": {
+      "instr": 11594645,
+      "cycles": 4531955,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15310886075,
+      "cycles": 6080338582,
+      "rss": 191561728,
+      "cpu": 2.08,
+      "wall": 2.39,
+      "status": 0
+     },
+     "run": {
+      "instr": 11559451,
+      "cycles": 4071583,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15325937523,
+      "cycles": 6024248568,
+      "rss": 189825024,
+      "cpu": 2.08,
+      "wall": 2.31,
+      "status": 0
+     },
+     "run": {
+      "instr": 12502223,
+      "cycles": 4589556,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20253405218,
+      "cycles": 7990068286,
+      "rss": 204275712,
+      "cpu": 2.75,
+      "wall": 2.08,
+      "status": 0
+     },
+     "run": {
+      "instr": 12529405,
+      "cycles": 4197572,
+      "rss": 1343488,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339984,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 428439655,
+      "cycles": 206041906,
+      "rss": 100990976,
+      "cpu": 0.15,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 12609964,
+      "cycles": 3929191,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343152,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15249023218,
+      "cycles": 5870316555,
+      "rss": 190087168,
+      "cpu": 1.99,
+      "wall": 2.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 11442754,
+      "cycles": 4603289,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/fib30",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 278427145,
+      "cycles": 141031890,
+      "rss": 88752128,
+      "cpu": 0.13,
+      "wall": 0.1,
+      "status": 0
+     },
+     "run": {
+      "instr": 32898969,
+      "cycles": 11314633,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15196786495,
+      "cycles": 6169907979,
+      "rss": 182026240,
+      "cpu": 2.13,
+      "wall": 2.75,
+      "status": 0
+     },
+     "run": {
+      "instr": 32995868,
+      "cycles": 11201504,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20110441599,
+      "cycles": 8389608676,
+      "rss": 197312512,
+      "cpu": 2.92,
+      "wall": 2.91,
+      "status": 0
+     },
+     "run": {
+      "instr": 33151954,
+      "cycles": 11915594,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.03,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15295556447,
+      "cycles": 6835663594,
+      "rss": 169803776,
+      "cpu": 2.44,
+      "wall": 5.55,
+      "status": 0
+     },
+     "run": {
+      "instr": 33016346,
+      "cycles": 12866595,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15211539637,
+      "cycles": 6324498225,
+      "rss": 173735936,
+      "cpu": 2.1799999999999997,
+      "wall": 2.58,
+      "status": 0
+     },
+     "run": {
+      "instr": 39575498,
+      "cycles": 15747300,
+      "rss": 1310720,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20115756020,
+      "cycles": 8176461277,
+      "rss": 202407936,
+      "cpu": 2.8400000000000003,
+      "wall": 2.18,
+      "status": 0
+     },
+     "run": {
+      "instr": 39257179,
+      "cycles": 13851998,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339952,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 272888281,
+      "cycles": 148620553,
+      "rss": 88702976,
+      "cpu": 0.14,
+      "wall": 0.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 39478862,
+      "cycles": 14565819,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343136,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15147104759,
+      "cycles": 6165411347,
+      "rss": 193183744,
+      "cpu": 2.1199999999999997,
+      "wall": 2.33,
+      "status": 0
+     },
+     "run": {
+      "instr": 32386361,
+      "cycles": 11126959,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 275299512,
+      "cycles": 131024218,
+      "rss": 88489984,
+      "cpu": 0.12,
+      "wall": 0.09,
+      "status": 0
+     },
+     "run": {
+      "instr": 33150623,
+      "cycles": 11431743,
+      "rss": 1409024,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15173008819,
+      "cycles": 5938879831,
+      "rss": 191561728,
+      "cpu": 2.03,
+      "wall": 2.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 33092331,
+      "cycles": 12378714,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20110261480,
+      "cycles": 8188652975,
+      "rss": 198803456,
+      "cpu": 2.85,
+      "wall": 2.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 32998638,
+      "cycles": 11419393,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15195604010,
+      "cycles": 6275392510,
+      "rss": 192430080,
+      "cpu": 2.1799999999999997,
+      "wall": 2.61,
+      "status": 0
+     },
+     "run": {
+      "instr": 33003297,
+      "cycles": 11528605,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15229681486,
+      "cycles": 6213039901,
+      "rss": 170590208,
+      "cpu": 2.15,
+      "wall": 2.45,
+      "status": 0
+     },
+     "run": {
+      "instr": 39262333,
+      "cycles": 13218111,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20139310788,
+      "cycles": 8420797357,
+      "rss": 202522624,
+      "cpu": 2.94,
+      "wall": 2.48,
+      "status": 0
+     },
+     "run": {
+      "instr": 39038837,
+      "cycles": 15850102,
+      "rss": 1409024,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 339952,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 272560608,
+      "cycles": 146610179,
+      "rss": 88096768,
+      "cpu": 0.14,
+      "wall": 0.24,
+      "status": 0
+     },
+     "run": {
+      "instr": 39375508,
+      "cycles": 14378858,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343136,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15180308571,
+      "cycles": 6239068234,
+      "rss": 175456256,
+      "cpu": 2.1599999999999997,
+      "wall": 2.59,
+      "status": 0
+     },
+     "run": {
+      "instr": 32357168,
+      "cycles": 11525172,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/hashmap",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 1267879864,
+      "cycles": 534138846,
+      "rss": 105906176,
+      "cpu": 0.25,
+      "wall": 0.26,
+      "status": 0
+     },
+     "run": {
+      "instr": 52953012,
+      "cycles": 15497462,
+      "rss": 2080768,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 16158621221,
+      "cycles": 6644138828,
+      "rss": 169525248,
+      "cpu": 2.29,
+      "wall": 2.67,
+      "status": 0
+     },
+     "run": {
+      "instr": 52863066,
+      "cycles": 15731726,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302800,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 21337082888,
+      "cycles": 9500566685,
+      "rss": 206323712,
+      "cpu": 3.4000000000000004,
+      "wall": 2.89,
+      "status": 0
+     },
+     "run": {
+      "instr": 52858324,
+      "cycles": 16414268,
+      "rss": 2064384,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 340176,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 16200475854,
+      "cycles": 6968485410,
+      "rss": 171704320,
+      "cpu": 2.42,
+      "wall": 2.99,
+      "status": 0
+     },
+     "run": {
+      "instr": 53070667,
+      "cycles": 17289958,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302800,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 16186530857,
+      "cycles": 6760897112,
+      "rss": 180371456,
+      "cpu": 2.33,
+      "wall": 2.78,
+      "status": 0
+     },
+     "run": {
+      "instr": 53736534,
+      "cycles": 15769803,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302800,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 21391604347,
+      "cycles": 9656181730,
+      "rss": 212615168,
+      "cpu": 3.44,
+      "wall": 3.29,
+      "status": 0
+     },
+     "run": {
+      "instr": 54060189,
+      "cycles": 16201999,
+      "rss": 2064384,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 340224,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 1280967975,
+      "cycles": 649625484,
+      "rss": 107462656,
+      "cpu": 0.31,
+      "wall": 0.52,
+      "status": 0
+     },
+     "run": {
+      "instr": 54267494,
+      "cycles": 16178140,
+      "rss": 2031616,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 360032,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 16068673687,
+      "cycles": 6617050296,
+      "rss": 193134592,
+      "cpu": 2.2800000000000002,
+      "wall": 2.66,
+      "status": 0
+     },
+     "run": {
+      "instr": 52753097,
+      "cycles": 15498348,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302640,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 1363645001,
+      "cycles": 590261094,
+      "rss": 110772224,
+      "cpu": 0.28,
+      "wall": 0.28,
+      "status": 0
+     },
+     "run": {
+      "instr": 32134364,
+      "cycles": 10441396,
+      "rss": 2031616,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 360000,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 16226715592,
+      "cycles": 6807269808,
+      "rss": 192020480,
+      "cpu": 2.35,
+      "wall": 2.93,
+      "status": 0
+     },
+     "run": {
+      "instr": 32077310,
+      "cycles": 10780234,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302800,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 21341727657,
+      "cycles": 8538696012,
+      "rss": 208240640,
+      "cpu": 2.93,
+      "wall": 2.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 31986818,
+      "cycles": 9869162,
+      "rss": 2015232,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 340176,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 16202156626,
+      "cycles": 6537206622,
+      "rss": 193822720,
+      "cpu": 2.2199999999999998,
+      "wall": 2.38,
+      "status": 0
+     },
+     "run": {
+      "instr": 31978814,
+      "cycles": 10631286,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302800,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 16180023234,
+      "cycles": 6427952037,
+      "rss": 193167360,
+      "cpu": 2.19,
+      "wall": 2.3,
+      "status": 0
+     },
+     "run": {
+      "instr": 31991665,
+      "cycles": 10455524,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302800,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 21333513628,
+      "cycles": 8545889470,
+      "rss": 213041152,
+      "cpu": 2.95,
+      "wall": 2.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 31974138,
+      "cycles": 10551673,
+      "rss": 2015232,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 340224,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 1362038797,
+      "cycles": 596824150,
+      "rss": 110952448,
+      "cpu": 0.29,
+      "wall": 0.35,
+      "status": 0
+     },
+     "run": {
+      "instr": 32068095,
+      "cycles": 10725129,
+      "rss": 2031616,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 360032,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 16101112839,
+      "cycles": 6385593658,
+      "rss": 194035712,
+      "cpu": 2.16,
+      "wall": 2.36,
+      "status": 0
+     },
+     "run": {
+      "instr": 29020650,
+      "cycles": 10135049,
+      "rss": 1916928,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302640,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/loop5m",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 302110789,
+      "cycles": 164092952,
+      "rss": 90013696,
+      "cpu": 0.14,
+      "wall": 0.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 31483989,
+      "cycles": 8804312,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15171793050,
+      "cycles": 6123124207,
+      "rss": 190251008,
+      "cpu": 2.08,
+      "wall": 2.25,
+      "status": 0
+     },
+     "run": {
+      "instr": 31372057,
+      "cycles": 8722263,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20117884686,
+      "cycles": 8082013284,
+      "rss": 197476352,
+      "cpu": 2.79,
+      "wall": 2.09,
+      "status": 0
+     },
+     "run": {
+      "instr": 31515633,
+      "cycles": 9041607,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15297937392,
+      "cycles": 6194546762,
+      "rss": 189956096,
+      "cpu": 2.13,
+      "wall": 2.34,
+      "status": 0
+     },
+     "run": {
+      "instr": 31342688,
+      "cycles": 9997168,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15276743444,
+      "cycles": 6883961058,
+      "rss": 169689088,
+      "cpu": 2.45,
+      "wall": 2.96,
+      "status": 0
+     },
+     "run": {
+      "instr": 73261572,
+      "cycles": 17737139,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20098426384,
+      "cycles": 8280992261,
+      "rss": 196100096,
+      "cpu": 2.88,
+      "wall": 2.31,
+      "status": 0
+     },
+     "run": {
+      "instr": 73288891,
+      "cycles": 14997032,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339984,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 283680831,
+      "cycles": 151740242,
+      "rss": 88817664,
+      "cpu": 0.13,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 73367051,
+      "cycles": 15361761,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343152,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15140338414,
+      "cycles": 6029379414,
+      "rss": 192380928,
+      "cpu": 2.06,
+      "wall": 2.26,
+      "status": 0
+     },
+     "run": {
+      "instr": 31233196,
+      "cycles": 8874883,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 312180188,
+      "cycles": 157241456,
+      "rss": 91258880,
+      "cpu": 0.13,
+      "wall": 0.1,
+      "status": 0
+     },
+     "run": {
+      "instr": 64601288,
+      "cycles": 16082616,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15184996432,
+      "cycles": 6089160987,
+      "rss": 192348160,
+      "cpu": 2.08,
+      "wall": 2.26,
+      "status": 0
+     },
+     "run": {
+      "instr": 64502100,
+      "cycles": 15455535,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20115998977,
+      "cycles": 7980072310,
+      "rss": 201506816,
+      "cpu": 2.74,
+      "wall": 2.04,
+      "status": 0
+     },
+     "run": {
+      "instr": 64530459,
+      "cycles": 15405923,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15210930128,
+      "cycles": 6129174751,
+      "rss": 188366848,
+      "cpu": 2.0999999999999996,
+      "wall": 2.28,
+      "status": 0
+     },
+     "run": {
+      "instr": 64503864,
+      "cycles": 15637825,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15221583586,
+      "cycles": 6320308482,
+      "rss": 179273728,
+      "cpu": 2.19,
+      "wall": 2.46,
+      "status": 0
+     },
+     "run": {
+      "instr": 73369985,
+      "cycles": 18587833,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20171130749,
+      "cycles": 8629319299,
+      "rss": 205799424,
+      "cpu": 3.0300000000000002,
+      "wall": 2.49,
+      "status": 0
+     },
+     "run": {
+      "instr": 73401355,
+      "cycles": 16009403,
+      "rss": 1409024,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 339984,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 285862664,
+      "cycles": 152510225,
+      "rss": 89833472,
+      "cpu": 0.13,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 73309085,
+      "cycles": 16043395,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343152,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15231947424,
+      "cycles": 6504622666,
+      "rss": 181665792,
+      "cpu": 2.25,
+      "wall": 2.77,
+      "status": 0
+     },
+     "run": {
+      "instr": 64450139,
+      "cycles": 15973716,
+      "rss": 1310720,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/nbody",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 768040103,
+      "cycles": 334605132,
+      "rss": 105431040,
+      "cpu": 0.2,
+      "wall": 0.21,
+      "status": 0
+     },
+     "run": {
+      "instr": 16277985,
+      "cycles": 5980713,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 359616,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15708242616,
+      "cycles": 6868171474,
+      "rss": 174981120,
+      "cpu": 2.4099999999999997,
+      "wall": 3.04,
+      "status": 0
+     },
+     "run": {
+      "instr": 17704852,
+      "cycles": 7283340,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20632112134,
+      "cycles": 8541328742,
+      "rss": 215760896,
+      "cpu": 3.0,
+      "wall": 2.33,
+      "status": 0
+     },
+     "run": {
+      "instr": 16240087,
+      "cycles": 6074124,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15606558342,
+      "cycles": 6069577556,
+      "rss": 192135168,
+      "cpu": 2.07,
+      "wall": 2.25,
+      "status": 0
+     },
+     "run": {
+      "instr": 17696805,
+      "cycles": 6077304,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15601768940,
+      "cycles": 5925575628,
+      "rss": 194805760,
+      "cpu": 2.02,
+      "wall": 2.17,
+      "status": 0
+     },
+     "run": {
+      "instr": 17705518,
+      "cycles": 6416261,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20614016731,
+      "cycles": 8205198099,
+      "rss": 208650240,
+      "cpu": 2.85,
+      "wall": 2.23,
+      "status": 0
+     },
+     "run": {
+      "instr": 16238971,
+      "cycles": 5949118,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 764091664,
+      "cycles": 302417064,
+      "rss": 102973440,
+      "cpu": 0.18000000000000002,
+      "wall": 0.16,
+      "status": 0
+     },
+     "run": {
+      "instr": 16316644,
+      "cycles": 6089961,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 359616,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15572261724,
+      "cycles": 6068141203,
+      "rss": 192151552,
+      "cpu": 2.08,
+      "wall": 2.26,
+      "status": 0
+     },
+     "run": {
+      "instr": 17549670,
+      "cycles": 6295401,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 637645462,
+      "cycles": 272390607,
+      "rss": 104595456,
+      "cpu": 0.17,
+      "wall": 0.17,
+      "status": 0
+     },
+     "run": {
+      "instr": 16402089,
+      "cycles": 6381661,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15504828606,
+      "cycles": 6371514602,
+      "rss": 183238656,
+      "cpu": 2.2,
+      "wall": 2.53,
+      "status": 0
+     },
+     "run": {
+      "instr": 17502647,
+      "cycles": 6383891,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20494388511,
+      "cycles": 8258365252,
+      "rss": 207306752,
+      "cpu": 2.86,
+      "wall": 2.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 16307919,
+      "cycles": 5939636,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339904,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15486046875,
+      "cycles": 6194935789,
+      "rss": 192020480,
+      "cpu": 2.13,
+      "wall": 2.33,
+      "status": 0
+     },
+     "run": {
+      "instr": 17452241,
+      "cycles": 6492465,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15481227960,
+      "cycles": 6106579717,
+      "rss": 192249856,
+      "cpu": 2.08,
+      "wall": 2.24,
+      "status": 0
+     },
+     "run": {
+      "instr": 17423682,
+      "cycles": 6864976,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20474583242,
+      "cycles": 7978649168,
+      "rss": 219512832,
+      "cpu": 2.7600000000000002,
+      "wall": 1.96,
+      "status": 0
+     },
+     "run": {
+      "instr": 16328772,
+      "cycles": 6005054,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339904,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 640055112,
+      "cycles": 261795758,
+      "rss": 104300544,
+      "cpu": 0.17,
+      "wall": 0.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 16379720,
+      "cycles": 5820954,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15451084990,
+      "cycles": 6031273720,
+      "rss": 194691072,
+      "cpu": 2.06,
+      "wall": 2.21,
+      "status": 0
+     },
+     "run": {
+      "instr": 17824907,
+      "cycles": 7413098,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/sieve",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 394536396,
+      "cycles": 196576688,
+      "rss": 94437376,
+      "cpu": 0.15,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 42586279,
+      "cycles": 11343270,
+      "rss": 2457600,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343104,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15310340737,
+      "cycles": 6154380077,
+      "rss": 193658880,
+      "cpu": 2.12,
+      "wall": 2.32,
+      "status": 0
+     },
+     "run": {
+      "instr": 48603715,
+      "cycles": 12642671,
+      "rss": 2359296,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20247210977,
+      "cycles": 8158126068,
+      "rss": 196476928,
+      "cpu": 2.8200000000000003,
+      "wall": 2.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 42759218,
+      "cycles": 11905084,
+      "rss": 2457600,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15266102616,
+      "cycles": 5852437632,
+      "rss": 190775296,
+      "cpu": 1.99,
+      "wall": 2.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 48806895,
+      "cycles": 12824856,
+      "rss": 2359296,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15301388037,
+      "cycles": 6097671543,
+      "rss": 194068480,
+      "cpu": 2.09,
+      "wall": 2.39,
+      "status": 0
+     },
+     "run": {
+      "instr": 48806007,
+      "cycles": 12194579,
+      "rss": 2359296,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20241115526,
+      "cycles": 8179732576,
+      "rss": 201719808,
+      "cpu": 2.85,
+      "wall": 2.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 42624188,
+      "cycles": 11595608,
+      "rss": 2457600,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339952,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 394297330,
+      "cycles": 199038482,
+      "rss": 94076928,
+      "cpu": 0.14,
+      "wall": 0.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 42883174,
+      "cycles": 11595805,
+      "rss": 2457600,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343136,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15284250480,
+      "cycles": 6285777846,
+      "rss": 177209344,
+      "cpu": 2.1799999999999997,
+      "wall": 2.51,
+      "status": 0
+     },
+     "run": {
+      "instr": 47571526,
+      "cycles": 12956055,
+      "rss": 2359296,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 383494815,
+      "cycles": 192466558,
+      "rss": 93765632,
+      "cpu": 0.15,
+      "wall": 0.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 34889361,
+      "cycles": 10711761,
+      "rss": 2457600,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343008,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15261303634,
+      "cycles": 6061776138,
+      "rss": 187645952,
+      "cpu": 2.07,
+      "wall": 2.23,
+      "status": 0
+     },
+     "run": {
+      "instr": 34700136,
+      "cycles": 10308592,
+      "rss": 2310144,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20189968020,
+      "cycles": 7997340723,
+      "rss": 201637888,
+      "cpu": 2.76,
+      "wall": 2.03,
+      "status": 0
+     },
+     "run": {
+      "instr": 34734526,
+      "cycles": 10507010,
+      "rss": 2424832,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15235208707,
+      "cycles": 5799675879,
+      "rss": 190431232,
+      "cpu": 1.96,
+      "wall": 2.03,
+      "status": 0
+     },
+     "run": {
+      "instr": 34715734,
+      "cycles": 10246091,
+      "rss": 2310144,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15255976032,
+      "cycles": 5949417340,
+      "rss": 188481536,
+      "cpu": 2.03,
+      "wall": 2.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 34902848,
+      "cycles": 10100274,
+      "rss": 2310144,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302720,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20211909555,
+      "cycles": 8132682984,
+      "rss": 205668352,
+      "cpu": 2.81,
+      "wall": 2.04,
+      "status": 0
+     },
+     "run": {
+      "instr": 34830103,
+      "cycles": 10395546,
+      "rss": 2424832,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339936,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 390357191,
+      "cycles": 197599533,
+      "rss": 94945280,
+      "cpu": 0.14,
+      "wall": 0.18,
+      "status": 0
+     },
+     "run": {
+      "instr": 34981039,
+      "cycles": 10356524,
+      "rss": 2408448,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343040,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15221269952,
+      "cycles": 6133447963,
+      "rss": 190316544,
+      "cpu": 2.12,
+      "wall": 2.49,
+      "status": 0
+     },
+     "run": {
+      "instr": 34630521,
+      "cycles": 10762406,
+      "rss": 2310144,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302544,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/strings",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 379296282,
+      "cycles": 189757945,
+      "rss": 95617024,
+      "cpu": 0.14,
+      "wall": 0.16,
+      "status": 0
+     },
+     "run": {
+      "instr": 148438169,
+      "cycles": 24970529,
+      "rss": 1507328,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343152,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15312081596,
+      "cycles": 5985021174,
+      "rss": 195903488,
+      "cpu": 2.04,
+      "wall": 2.22,
+      "status": 0
+     },
+     "run": {
+      "instr": 140052270,
+      "cycles": 23463426,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20262673245,
+      "cycles": 8034956888,
+      "rss": 202997760,
+      "cpu": 2.77,
+      "wall": 2.1,
+      "status": 0
+     },
+     "run": {
+      "instr": 145093981,
+      "cycles": 24422068,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339984,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15322671176,
+      "cycles": 6020184412,
+      "rss": 194134016,
+      "cpu": 2.05,
+      "wall": 2.23,
+      "status": 0
+     },
+     "run": {
+      "instr": 140225628,
+      "cycles": 24472991,
+      "rss": 1572864,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15321580193,
+      "cycles": 6102362044,
+      "rss": 192086016,
+      "cpu": 2.1,
+      "wall": 2.35,
+      "status": 0
+     },
+     "run": {
+      "instr": 140078791,
+      "cycles": 23865206,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20322265995,
+      "cycles": 8508618783,
+      "rss": 200785920,
+      "cpu": 2.97,
+      "wall": 2.46,
+      "status": 0
+     },
+     "run": {
+      "instr": 145099147,
+      "cycles": 24348589,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 340032,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 379975225,
+      "cycles": 199313028,
+      "rss": 97402880,
+      "cpu": 0.14,
+      "wall": 0.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 148375811,
+      "cycles": 26060318,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343216,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15268325022,
+      "cycles": 6000842216,
+      "rss": 189890560,
+      "cpu": 2.05,
+      "wall": 2.19,
+      "status": 0
+     },
+     "run": {
+      "instr": 139919494,
+      "cycles": 23780566,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 420331187,
+      "cycles": 217350695,
+      "rss": 99794944,
+      "cpu": 0.15,
+      "wall": 0.16,
+      "status": 0
+     },
+     "run": {
+      "instr": 58983977,
+      "cycles": 10468821,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 342960,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15272989878,
+      "cycles": 5807561449,
+      "rss": 192888832,
+      "cpu": 1.96,
+      "wall": 2.09,
+      "status": 0
+     },
+     "run": {
+      "instr": 58678840,
+      "cycles": 10804206,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20253952558,
+      "cycles": 8065400941,
+      "rss": 200884224,
+      "cpu": 2.79,
+      "wall": 2.02,
+      "status": 0
+     },
+     "run": {
+      "instr": 58890532,
+      "cycles": 10530212,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339856,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15273607111,
+      "cycles": 5904375639,
+      "rss": 189366272,
+      "cpu": 2.01,
+      "wall": 2.17,
+      "status": 0
+     },
+     "run": {
+      "instr": 58660782,
+      "cycles": 11108670,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15291722033,
+      "cycles": 5918034838,
+      "rss": 190169088,
+      "cpu": 1.99,
+      "wall": 2.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 58678627,
+      "cycles": 10782123,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.01,
+      "status": 0
+     },
+     "stripped": 302688,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20233573050,
+      "cycles": 7972306214,
+      "rss": 210616320,
+      "cpu": 2.75,
+      "wall": 1.98,
+      "status": 0
+     },
+     "run": {
+      "instr": 58899384,
+      "cycles": 10319826,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339888,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 418748721,
+      "cycles": 209243155,
+      "rss": 100548608,
+      "cpu": 0.16,
+      "wall": 0.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 59002418,
+      "cycles": 10548381,
+      "rss": 1376256,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343008,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15234380676,
+      "cycles": 5970335425,
+      "rss": 190300160,
+      "cpu": 2.03,
+      "wall": 2.32,
+      "status": 0
+     },
+     "run": {
+      "instr": 58539793,
+      "cycles": 10803790,
+      "rss": 1277952,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302512,
+     "ok": "yes"
+    }
+   }
+  },
+  {
+   "id": "interp/structs",
+   "suite": "interp",
+   "wj": {
+    "cargo-default": {
+     "compile": {
+      "instr": 332534854,
+      "cycles": 162296813,
+      "rss": 95518720,
+      "cpu": 0.13,
+      "wall": 0.12,
+      "status": 0
+     },
+     "run": {
+      "instr": 15751581,
+      "cycles": 5081008,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15242318025,
+      "cycles": 6016908301,
+      "rss": 192413696,
+      "cpu": 2.06,
+      "wall": 2.33,
+      "status": 0
+     },
+     "run": {
+      "instr": 15483645,
+      "cycles": 4956468,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20199616591,
+      "cycles": 8255766825,
+      "rss": 209272832,
+      "cpu": 2.84,
+      "wall": 2.36,
+      "status": 0
+     },
+     "run": {
+      "instr": 15523060,
+      "cycles": 4771119,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15215208541,
+      "cycles": 6019373534,
+      "rss": 191004672,
+      "cpu": 2.05,
+      "wall": 2.34,
+      "status": 0
+     },
+     "run": {
+      "instr": 15450244,
+      "cycles": 4589413,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15243129286,
+      "cycles": 6146528310,
+      "rss": 188579840,
+      "cpu": 2.11,
+      "wall": 2.54,
+      "status": 0
+     },
+     "run": {
+      "instr": 17869472,
+      "cycles": 6145936,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20168823410,
+      "cycles": 8320205559,
+      "rss": 203735040,
+      "cpu": 2.89,
+      "wall": 2.25,
+      "status": 0
+     },
+     "run": {
+      "instr": 17822006,
+      "cycles": 5831351,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339984,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 321417387,
+      "cycles": 156580606,
+      "rss": 100270080,
+      "cpu": 0.13,
+      "wall": 0.11,
+      "status": 0
+     },
+     "run": {
+      "instr": 17986997,
+      "cycles": 5511314,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343152,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15179100077,
+      "cycles": 5983353006,
+      "rss": 194117632,
+      "cpu": 2.04,
+      "wall": 2.2,
+      "status": 0
+     },
+     "run": {
+      "instr": 14981115,
+      "cycles": 5442899,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   },
+   "rust": {
+    "cargo-default": {
+     "compile": {
+      "instr": 328326207,
+      "cycles": 164440184,
+      "rss": 94961664,
+      "cpu": 0.13,
+      "wall": 0.14,
+      "status": 0
+     },
+     "run": {
+      "instr": 15873770,
+      "cycles": 5542548,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343088,
+     "ok": "yes"
+    },
+    "lto-fat": {
+     "compile": {
+      "instr": 15209013101,
+      "cycles": 5984101093,
+      "rss": 192282624,
+      "cpu": 2.05,
+      "wall": 2.23,
+      "status": 0
+     },
+     "run": {
+      "instr": 15696446,
+      "cycles": 4958893,
+      "rss": 1310720,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin": {
+     "compile": {
+      "instr": 20151267572,
+      "cycles": 7975420996,
+      "rss": 207011840,
+      "cpu": 2.74,
+      "wall": 2.0,
+      "status": 0
+     },
+     "run": {
+      "instr": 15792194,
+      "cycles": 5373294,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339920,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1": {
+     "compile": {
+      "instr": 15190805706,
+      "cycles": 5918711230,
+      "rss": 193560576,
+      "cpu": 2.02,
+      "wall": 2.29,
+      "status": 0
+     },
+     "run": {
+      "instr": 15765024,
+      "cycles": 5015094,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-overflow": {
+     "compile": {
+      "instr": 15219730160,
+      "cycles": 6071630819,
+      "rss": 191578112,
+      "cpu": 2.09,
+      "wall": 2.28,
+      "status": 0
+     },
+     "run": {
+      "instr": 17868181,
+      "cycles": 5700862,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302672,
+     "ok": "yes"
+    },
+    "lto-thin-overflow": {
+     "compile": {
+      "instr": 20161601662,
+      "cycles": 8273267071,
+      "rss": 207470592,
+      "cpu": 2.88,
+      "wall": 2.13,
+      "status": 0
+     },
+     "run": {
+      "instr": 17894637,
+      "cycles": 5314546,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 339984,
+     "ok": "yes"
+    },
+    "cargo-default-overflow": {
+     "compile": {
+      "instr": 318356134,
+      "cycles": 168147778,
+      "rss": 98205696,
+      "cpu": 0.14,
+      "wall": 0.15,
+      "status": 0
+     },
+     "run": {
+      "instr": 18069177,
+      "cycles": 6759731,
+      "rss": 1359872,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 343152,
+     "ok": "yes"
+    },
+    "lto-fat-cgu1-abort": {
+     "compile": {
+      "instr": 15193391315,
+      "cycles": 6207935163,
+      "rss": 182108160,
+      "cpu": 2.1399999999999997,
+      "wall": 2.55,
+      "status": 0
+     },
+     "run": {
+      "instr": 15616706,
+      "cycles": 5117559,
+      "rss": 1261568,
+      "cpu": 0.0,
+      "wall": 0.0,
+      "status": 0
+     },
+     "stripped": 302496,
+     "ok": "yes"
+    }
+   }
+  }
+ ]
+}

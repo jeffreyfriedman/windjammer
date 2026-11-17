@@ -1,5 +1,6 @@
 //! Individual passes. Each reads a parsed file and reports span edits.
 
+pub mod bounded_counter;
 pub mod clone_elision;
 pub mod dead_helpers;
 pub mod inline_policy;
@@ -51,6 +52,9 @@ pub fn collect(ctx: &Ctx) -> Vec<Edit> {
     }
     if c.dead_helpers {
         edits.extend(dead_helpers::collect(ctx));
+    }
+    if c.bounded_counter {
+        edits.extend(bounded_counter::collect(ctx));
     }
     edits
 }

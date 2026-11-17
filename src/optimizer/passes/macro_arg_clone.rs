@@ -1,4 +1,4 @@
-//! macro_arg_clone (PASSES.md P8): `format!("{}", x.clone())` -> `format!("{}", x)`.
+//! macro_arg_clone (PASSES.md P9): `format!("{}", x.clone())` -> `format!("{}", x)`.
 //!
 //! Applies to the format family only (`format`, `print`, `println`, `eprint`,
 //! `eprintln`, `write`, `writeln`, `panic`), whose arguments are taken by

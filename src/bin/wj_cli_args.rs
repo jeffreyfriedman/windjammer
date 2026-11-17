@@ -711,6 +711,29 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument
+    #[command(arg_required_else_help = true)]
+    Optimize {
+        /// Windjammer source file
+        file: Option<PathBuf>,
+
+        /// Report each pass that changed the file: edit count, soundness section, default state
+        #[arg(long, requires = "file")]
+        explain: bool,
+
+        /// Only this pass (an unknown name is an error that lists the known passes)
+        #[arg(long, value_name = "NAME", requires = "explain")]
+        pass: Option<String>,
+
+        /// List every optimizer pass: name, default state, rewrite and soundness section
+        #[arg(long, conflicts_with_all = ["file", "explain"])]
+        list: bool,
+
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+
     /// What the project's dependencies are known to do (per-package capabilities and the lock file)
     Caps {
         /// `show` the effects each dependency performs and whether .wj-capabilities.lock covers them;

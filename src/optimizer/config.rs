@@ -25,6 +25,9 @@ pub struct OptimizationConfig {
     /// Auto-arena: hoist a per-iteration `String::new()`/`Vec::new()` scratch buffer out of its loop and
     /// `clear()` it instead (PASSES.md P8). OFF by default; `WJ_AUTO_ARENA=1` (CompilerConfig::auto_arena) turns it on.
     pub scratch_reuse: bool,
+    /// Overflow-check clawback: `while i < B` counter arithmetic proven not to overflow uses `wrapping_*`
+    /// (PASSES.md P10; release builds keep `overflow-checks = true`).
+    pub bounded_counter: bool,
     /// Byte size of a function body above which `#[inline]` is removed.
     pub inline_max_body_bytes: usize,
     /// Test-only: run a deliberately unsound variant of one pass.
@@ -45,6 +48,7 @@ impl OptimizationConfig {
             inline_policy: true,
             dead_helpers: true,
             scratch_reuse: false,
+            bounded_counter: true,
             inline_max_body_bytes: 600,
             mutant: None,
         }
@@ -62,6 +66,7 @@ impl OptimizationConfig {
             inline_policy: false,
             dead_helpers: false,
             scratch_reuse: false,
+            bounded_counter: false,
             ..Self::production()
         }
     }

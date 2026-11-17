@@ -137,6 +137,11 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs | tested |
 | `wj explain-effects --fn` | Only this function (`name` or `Type::name`) | tested |
 | `wj explain-effects --json` | Machine-readable JSON output | tested |
+| `wj optimize` | Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument | tested |
+| `wj optimize --explain` | Report each pass that changed the file: edit count, soundness section, default state | tested |
+| `wj optimize --pass` | Only this pass (an unknown name is an error that lists the known passes) | tested |
+| `wj optimize --list` | List every optimizer pass: name, default state, rewrite and soundness section | tested |
+| `wj optimize --json` | Machine-readable JSON output | tested |
 | `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) | tested |
 | `wj caps --json` | Machine-readable JSON output (show) | tested |
 | `wj run --sandbox` | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) | tested |

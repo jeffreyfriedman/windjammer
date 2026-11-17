@@ -155,6 +155,7 @@ fn collect_wj_sources(root: &Path, dir: &Path, depth: usize, out: &mut Vec<(Stri
     if depth > 8 || out.len() > 4096 {
         return;
     }
+    crate::metadata::scan_stats::dir_listed();
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         let p = e.path();

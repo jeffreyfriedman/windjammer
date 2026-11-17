@@ -36,6 +36,7 @@ pub fn type_serde_derives_in_dir(dir: &Path) -> Vec<(String, bool)> {
     let mut files = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(d) = stack.pop() {
+        crate::metadata::scan_stats::dir_listed();
         let Ok(entries) = std::fs::read_dir(&d) else { continue };
         for p in entries.flatten().map(|e| e.path()) {
             if p.is_dir() {

@@ -349,7 +349,7 @@ known_violations = []
 
 [modules.optimizer]
 layer = "backend"
-owner_stage = "optimization passes (disabled)"
+owner_stage = "post-codegen Rust optimizer (live, ADR-0006 amendment)"
 module_md = "src/optimizer/MODULE.md"
 allowed_imports = ["analyzer", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
 known_violations = []

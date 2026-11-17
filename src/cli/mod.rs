@@ -22,6 +22,7 @@ pub mod fmt;
 pub mod crate_host_build;
 pub mod host_build;
 pub mod lint;
+pub mod optimize;
 pub mod eject;
 pub mod new;
 mod new_templates;

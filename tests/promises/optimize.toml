@@ -1,0 +1,53 @@
+# Acceptance cases for `wj optimize` (tests/promise_registry_test.rs; spec: docs/economics/COMMANDS.md).
+
+[[case]]
+name = "optimize explains the string_append rewrite and names its soundness section"
+polarity = "positive"
+files = { "s.wj" = "fn build(words: Vec<string>) -> string {\n    let mut out = \"\"\n    for w in words {\n        out = out + w + \",\"\n    }\n    out\n}\n\nfn main() {\n    println(build([\"a\", \"b\"]))\n}\n" }
+args = ["optimize", "--explain", "{w}/s.wj"]
+stdout_has = ["string_append: 1 edit(s)", "docs/optimization/PASSES.md#p5-string_append-on"]
+
+[[case]]
+name = "optimize --json reports the passes with their edit counts"
+polarity = "positive"
+files = { "s.wj" = "fn build(words: Vec<string>) -> string {\n    let mut out = \"\"\n    for w in words {\n        out = out + w + \",\"\n    }\n    out\n}\n\nfn main() {\n    println(build([\"a\", \"b\"]))\n}\n" }
+args = ["optimize", "{w}/s.wj", "--json"]
+json = true
+stdout_has = ["\"name\": \"string_append\"", "\"edits\": 1", "\"clones_before\""]
+
+[[case]]
+name = "optimize --pass limits the report to one pass"
+polarity = "positive"
+files = { "s.wj" = "fn build(words: Vec<string>) -> string {\n    let mut out = \"\"\n    for w in words {\n        out = out + w + \",\"\n    }\n    out\n}\n\nfn main() {\n    println(build([\"a\", \"b\"]))\n}\n" }
+args = ["optimize", "--explain", "{w}/s.wj", "--pass", "string_append"]
+stdout_has = ["string_append: 1 edit(s)"]
+output_lacks = ["inline_policy:"]
+
+[[case]]
+name = "optimize --pass rejects an unknown pass and lists the known ones"
+polarity = "negative"
+files = { "s.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["optimize", "--explain", "{w}/s.wj", "--pass", "nope"]
+exit = 1
+output_has = ["unknown pass `nope`", "string_append", "scratch_reuse"]
+
+[[case]]
+name = "optimize reports a file that does not compile"
+polarity = "negative"
+files = { "bad.wj" = "fn main( {\n" }
+args = ["optimize", "--explain", "{w}/bad.wj"]
+exit = 1
+output_has = ["does not compile"]
+
+[[case]]
+name = "optimize --list names every pass, scratch_reuse off"
+polarity = "positive"
+args = ["optimize", "--list"]
+stdout_has = ["temp_clone", "macro_arg_clone", "bounded_counter", "scratch_reuse    off", "soundness: docs/optimization/PASSES.md#p8"]
+
+[[case]]
+name = "optimize --list --json is machine readable"
+polarity = "positive"
+args = ["optimize", "--list", "--json"]
+json = true
+stdout_has = ["\"name\": \"dead_helpers\"", "\"default_on\": false"]

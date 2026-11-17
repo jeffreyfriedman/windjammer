@@ -1,0 +1,382 @@
+// Render the economics runner's JSON (scripts/wj/economics.wj) as markdown: one table per dimension of
+// docs/economics/DEFINITION.md, then per-program detail.
+//
+//   wj run scripts/wj/economics_report.wj -- RESULTS.json [--md OUT.md]
+//
+// Ratios are Windjammer / Rust (below 1.00 = Windjammer cheaper). A suite's ratio is the geometric mean over its
+// programs that have both numbers and no reported problem; "wins" counts programs below 0.98, "losses" above 1.02.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_cli_args::long_flag_value_or
+use wj_cli_args::first_positional
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::items
+use wj_json_doc::as_str
+use wj_json_doc::as_f64
+use wj_json_doc::as_i64
+use wj_json_doc::object
+use wj_json_doc::array
+use wj_table::Table
+use wj_table::new
+use wj_table::add_row
+use wj_table::right_align
+use wj_table::markdown
+use wj_table::fixed
+
+struct Metric {
+    key: string,
+    what: string,
+    dim: string,
+}
+
+fn num(doc: Json, path: string) -> f64 {
+    let mut cur = doc
+    for part in path.split(".") {
+        cur = match get(cur, part) {
+            Some(v) => v,
+            None => return -1.0,
+        }
+    }
+    match as_f64(cur) {
+        Some(x) => x,
+        None => (as_i64(cur) ?? -1) as f64,
+    }
+}
+
+// sum of several paths; -1 when any is missing
+fn sum_of(doc: Json, paths: Vec<string>) -> f64 {
+    let mut s = 0.0
+    for p in paths {
+        let v = num(doc, p)
+        if v < 0.0 { return -1.0 }
+        s += v
+    }
+    s
+}
+
+fn max_of(doc: Json, paths: Vec<string>) -> f64 {
+    let mut s = -1.0
+    for p in paths {
+        let v = num(doc, p)
+        if v < 0.0 { return -1.0 }
+        if v > s { s = v }
+    }
+    s
+}
+
+// (windjammer, rust) for one metric of one program
+fn pair(p: Json, key: string) -> (f64, f64) {
+    if key == "verify_interp_instr" {
+        (num(p, "wj_interp_run.instr"), sum_of(p, ["rust_rustc_debug.instr", "rust_run_debug.instr"]))
+    } else if key == "verify_interp_cycles" {
+        (num(p, "wj_interp_run.cycles"), sum_of(p, ["rust_rustc_debug.cycles", "rust_run_debug.cycles"]))
+    } else if key == "compile_release_cycles" {
+        (sum_of(p, ["wj_transpile.cycles", "wj_rustc_release.cycles"]), num(p, "rust_rustc_release.cycles"))
+    } else if key == "transpile_share_cpu" {
+        (num(p, "wj_transpile.cpu"), num(p, "rust_rustc_debug.cpu"))
+    } else if key == "run_release_cycles" {
+        (num(p, "wj_run_release.cycles"), num(p, "rust_run_release.cycles"))
+    } else if key == "verify_interp_cpu" {
+        (num(p, "wj_interp_run.cpu"), sum_of(p, ["rust_rustc_debug.cpu", "rust_run_debug.cpu"]))
+    } else if key == "verify_compiled_instr" {
+        (sum_of(p, ["wj_transpile.instr", "wj_rustc_debug.instr", "wj_run_debug.instr"]), sum_of(p, ["rust_rustc_debug.instr", "rust_run_debug.instr"]))
+    } else if key == "compile_release_instr" {
+        (sum_of(p, ["wj_transpile.instr", "wj_rustc_release.instr"]), num(p, "rust_rustc_release.instr"))
+    } else if key == "compile_shipped_cpu" {
+        (sum_of(p, ["wj_transpile.cpu", "wj_cargo_release.cpu"]), num(p, "rust_rustc_release.cpu"))
+    } else if key == "compile_release_rss" {
+        (max_of(p, ["wj_transpile.rss", "wj_rustc_release.rss"]), num(p, "rust_rustc_release.rss"))
+    } else if key == "compile_shipped_rss" {
+        (max_of(p, ["wj_transpile.rss", "wj_cargo_release.rss"]), num(p, "rust_rustc_release.rss"))
+    } else if key == "run_release_instr" {
+        (num(p, "wj_run_release.instr"), num(p, "rust_run_release.instr"))
+    } else if key == "run_shipped_instr" {
+        (num(p, "wj_run_shipped.instr"), num(p, "rust_run_release.instr"))
+    } else if key == "run_release_rss" {
+        (num(p, "wj_run_release.rss"), num(p, "rust_run_release.rss"))
+    } else if key == "size_release" {
+        (num(p, "wj_rustc_release.stripped"), num(p, "rust_rustc_release.stripped"))
+    } else if key == "size_shipped" {
+        (num(p, "wj_cargo_release.stripped"), num(p, "rust_rustc_release.stripped"))
+    } else if key == "src_lines" {
+        (num(p, "wj_src.lines"), num(p, "rust_src.lines"))
+    } else if key == "src_chars" {
+        (num(p, "wj_src.chars"), num(p, "rust_src.chars"))
+    } else if key == "src_tokens" {
+        (num(p, "wj_src.tokens"), num(p, "rust_src.tokens"))
+    } else if key == "src_ceremony" {
+        (num(p, "wj_src.ceremony"), num(p, "rust_src.ceremony"))
+    } else {
+        (-1.0, -1.0)
+    }
+}
+
+fn metrics() -> Vec<Metric> {
+    [
+        Metric { key: "verify_interp_instr", what: "source to verified output: `wj run --interpret` vs `rustc` debug + run (instructions)", dim: "verify" },
+        Metric { key: "verify_interp_cycles", what: "same, CPU cycles of the measured process (the decision metric on a loaded Mac; instruction counts differ in IPC between programs)", dim: "verify" },
+        Metric { key: "verify_interp_cpu", what: "same, user+sys CPU seconds (children included: rustc's linker)", dim: "verify" },
+        Metric { key: "verify_compiled_instr", what: "`wj build --no-cargo` + rustc debug + run vs rustc debug + run (instructions)", dim: "verify" },
+        Metric { key: "compile_release_instr", what: "transpile + rustc -O3 (same flags, warm deps) vs rustc -O3 (instructions)", dim: "compile" },
+        Metric { key: "compile_release_cycles", what: "same, CPU cycles", dim: "compile" },
+        Metric { key: "transpile_share_cpu", what: "`wj build --no-cargo` alone (fresh output dir) vs rustc debug of the twin (CPU s)", dim: "compile" },
+        Metric { key: "compile_shipped_cpu", what: "transpile + `cargo build --release` as shipped (lto, warm deps) vs rustc -O3 (CPU s)", dim: "compile" },
+        Metric { key: "compile_release_rss", what: "peak RSS of the -O3 compile (same flags)", dim: "memory" },
+        Metric { key: "compile_shipped_rss", what: "peak RSS of the shipped cargo build", dim: "memory" },
+        Metric { key: "run_release_rss", what: "peak RSS of the -O3 binary at run time", dim: "memory" },
+        Metric { key: "run_release_instr", what: "run, -O3 binaries (same flags) (instructions)", dim: "run" },
+        Metric { key: "run_release_cycles", what: "run, -O3 binaries (same flags) (cycles)", dim: "run" },
+        Metric { key: "run_shipped_instr", what: "run, shipped binary vs Rust -O3 (instructions)", dim: "run" },
+        Metric { key: "size_release", what: "stripped binary, -O3 same flags (bytes)", dim: "size" },
+        Metric { key: "size_shipped", what: "stripped binary, shipped profile vs Rust -O3 (bytes)", dim: "size" },
+        Metric { key: "src_lines", what: "source lines (no blanks, no comment lines)", dim: "maintenance" },
+        Metric { key: "src_chars", what: "non-whitespace characters", dim: "maintenance" },
+        Metric { key: "src_tokens", what: "lexical tokens (identifiers, literals, punctuation)", dim: "maintenance" },
+        Metric { key: "src_ceremony", what: "ownership/conversion ceremony (`&`, lifetimes, clone, to_string, unwrap, as, iter)", dim: "maintenance" },
+    ]
+}
+
+fn clean(p: Json) -> bool {
+    items(get(p, "problems") ?? array()).len() == 0
+}
+
+fn ratio_cell(xs: Vec<f64>) -> string {
+    if xs.len() == 0 { return "-" }
+    let mut s = 0.0
+    for x in xs { s += x.ln() }
+    fixed((s / (xs.len() as f64)).exp(), 2)
+}
+
+fn summary_rows(progs: Vec<Json>, m: Metric, suite: string) -> Vec<string> {
+    let mut rs: Vec<f64> = Vec::new()
+    let mut wins = 0
+    let mut losses = 0
+    let mut wsum = 0.0
+    let mut rsum = 0.0
+    for p in progs {
+        if suite != "all" && (as_str(get(p, "suite") ?? object()) ?? "") != suite { continue }
+        if !clean(p) { continue }
+        let (w, r) = pair(p, m.key)
+        if w <= 0.0 || r <= 0.0 { continue }
+        rs.push(w / r)
+        wsum += w
+        rsum += r
+        if w / r < 0.98 { wins += 1 }
+        if w / r > 1.02 { losses += 1 }
+    }
+    let total = if rsum > 0.0 { fixed(wsum / rsum, 2) } else { "-" }
+    [suite, "${rs.len()}", ratio_cell(rs), total, "${wins}", "${losses}"]
+}
+
+fn human(key: string, x: f64) -> string {
+    if x < 0.0 { return "-" }
+    if key.contains("instr") || key.contains("cycles") { return fixed(x / 1000000.0, 1) + "M" }
+    if key.contains("rss") { return fixed(x / 1048576.0, 1) + "MB" }
+    if key.contains("size") { return fixed(x / 1024.0, 0) + "KB" }
+    if key.contains("cpu") { return fixed(x, 2) + "s" }
+    "${x as int}"
+}
+
+// The advantage gate (docs/economics/PLAN.md): the claimed wins must hold in a results file. Each line:
+// metric, suite, ceiling of the geometric mean, minimum number of clean programs.
+fn gate(progs: Vec<Json>) -> int {
+    let claims = [("verify_interp_cpu", "dx", 0.50, 50), ("src_ceremony", "dx", 0.50, 50), ("src_ceremony", "parity", 0.50, 8)]
+    let mut failed = 0
+    for (key, suite, ceiling, min_n) in claims {
+        let mut m = Metric { key: key, what: "", dim: "" }
+        for x in metrics() {
+            if x.key == key { m = x }
+        }
+        let row = summary_rows(progs, m, suite)
+        let n = row[1].parse::<int>() ?? 0
+        let geo = row[2].parse::<f64>() ?? 99.0
+        let ok = n >= min_n && geo <= ceiling
+        println("${if ok { "ok  " } else { "FAIL" }} ${key} on ${suite}: geo ${row[2]} (ceiling ${ceiling}), ${n} programs (need ${min_n})")
+        if !ok { failed += 1 }
+    }
+    failed
+}
+
+// Release-profile study (economics.wj --profiles): per profile, Windjammer kernels against the Rust twin built with
+// cargo's default release flags, and what overflow checks cost per kernel.
+fn profiles_md(rows: Vec<Json>) -> string {
+    let names = ["cargo-default", "lto-fat", "lto-thin", "lto-fat-cgu1", "lto-fat-cgu1-overflow", "lto-thin-overflow", "cargo-default-overflow", "lto-fat-cgu1-abort"]
+    let mut md = "## Release profiles (C4)\n\nRatios are Windjammer with the profile / Rust twin with cargo's default release flags (`-C opt-level=3`), geometric mean over the std-only kernels; `own` = Windjammer with the profile / Windjammer with `cargo-default`.\n\n"
+    let mut t = right_align(new(["profile", "n", "run cycles vs twin", "size vs twin", "compile CPU vs twin", "run cycles vs own default"]), [1, 2, 3, 4, 5])
+    for name in names {
+        let mut run: Vec<f64> = Vec::new()
+        let mut size: Vec<f64> = Vec::new()
+        let mut comp: Vec<f64> = Vec::new()
+        let mut own: Vec<f64> = Vec::new()
+        for r in rows {
+            if get(r, "skipped").is_some() { continue }
+            let w = "wj." + name
+            let ok = as_str(get(get(get(r, "wj") ?? object(), name) ?? object(), "ok") ?? object()) ?? ""
+            if ok != "yes" { continue }
+            let rc = num(r, "rust.cargo-default.run.cycles")
+            let wc = num(r, w + ".run.cycles")
+            if rc > 0.0 && wc > 0.0 { run.push(wc / rc) }
+            let wd = num(r, "wj.cargo-default.run.cycles")
+            if wd > 0.0 && wc > 0.0 { own.push(wc / wd) }
+            let rs = num(r, "rust.cargo-default.stripped")
+            let ws = num(r, w + ".stripped")
+            if rs > 0.0 && ws > 0.0 { size.push(ws / rs) }
+            let rp = num(r, "rust.cargo-default.compile.cpu")
+            let wp = num(r, w + ".compile.cpu")
+            if rp > 0.0 && wp > 0.0 { comp.push(wp / rp) }
+        }
+        t = add_row(t, [name, "${run.len()}", ratio_cell(run), ratio_cell(size), ratio_cell(comp), ratio_cell(own)])
+    }
+    md = md + markdown(t) + "\n\n### Overflow checks per kernel (Windjammer, `lto-fat-cgu1` with / without `-C overflow-checks=on`, run cycles)\n\n"
+    let mut o = right_align(new(["kernel", "with / without", "twin, cargo default: with / without"]), [1, 2])
+    for r in rows {
+        if get(r, "skipped").is_some() { continue }
+        let a = num(r, "wj.lto-fat-cgu1-overflow.run.cycles")
+        let b = num(r, "wj.lto-fat-cgu1.run.cycles")
+        let c = num(r, "rust.cargo-default-overflow.run.cycles")
+        let d = num(r, "rust.cargo-default.run.cycles")
+        let x = if a > 0.0 && b > 0.0 { fixed(a / b, 2) } else { "-" }
+        let y = if c > 0.0 && d > 0.0 { fixed(c / d, 2) } else { "-" }
+        o = add_row(o, [as_str(get(r, "id") ?? object()) ?? "", x, y])
+    }
+    md + markdown(o) + "\n"
+}
+
+// Overflow-check clawback (economics.wj --clawback): per kernel, what bounded_counter removed and recovered.
+fn clawback_md(rows: Vec<Json>) -> string {
+    let mut md = "## Overflow checks: cost and clawback (C4, PASSES.md P10)\n\nEvery build `-C opt-level=3`. `checked` = overflow checks on (what Windjammer ships), without / with the bounded_counter pass; `unchecked` = overflow checks off (not shipped; the floor). Recovered = share of the checks' cost the pass removes.\n\n"
+    let mut t = right_align(new(["kernel", "pass edits", "instr checked, no pass", "instr checked, pass", "instr unchecked", "cost of checks", "recovered", "cycles checked, no pass / pass"]), [1, 2, 3, 4, 5, 6, 7])
+    for r in rows {
+        if get(r, "skipped").is_some() { continue }
+        let a = num(r, "checked_without_pass.instr")
+        let b = num(r, "checked_with_pass.instr")
+        let u = num(r, "unchecked.instr")
+        let ca = num(r, "checked_without_pass.cycles")
+        let cb = num(r, "checked_with_pass.cycles")
+        let cost = if u > 0.0 { fixed(a / u, 2) + "x" } else { "-" }
+        let rec = if a - u > 0.0 { fixed(100.0 * (a - b) / (a - u), 0) + "%" } else { "-" }
+        let cyc = if cb > 0.0 { fixed(ca / cb, 2) } else { "-" }
+        t = add_row(t, [as_str(get(r, "id") ?? object()) ?? "", "${num(r, "pass_edits") as int}", fixed(a / 1000000.0, 1) + "M", fixed(b / 1000000.0, 1) + "M", fixed(u / 1000000.0, 1) + "M", cost, rec, cyc])
+    }
+    md + markdown(t) + "\n"
+}
+
+fn main() {
+    let args = env.args()
+    let path = match first_positional(args) {
+        Some(p) => p,
+        None => {
+            eprintln("usage: economics_report.wj RESULTS.json [--md OUT.md]")
+            process.exit(2)
+            ""
+        },
+    }
+    let doc = match parse(fs.read_to_string(path) ?? "") {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln("cannot parse ${path}: ${e}")
+            process.exit(1)
+            object()
+        },
+    }
+    if get(doc, "clawback").is_some() {
+        let md = clawback_md(items(get(doc, "clawback") ?? array()))
+        let out = long_flag_value_or(args, "md", "")
+        if out == "" { println(md) } else { let _ = fs.write(out, md) }
+        return
+    }
+    if get(doc, "profiles").is_some() {
+        let md = profiles_md(items(get(doc, "profiles") ?? array()))
+        let out = long_flag_value_or(args, "md", "")
+        if out == "" { println(md) } else { let _ = fs.write(out, md) }
+        return
+    }
+    let progs = items(get(doc, "programs") ?? array())
+    if args.contains("--gate") {
+        let failed = gate(progs)
+        if failed > 0 {
+            eprintln("economics gate: ${failed} claimed advantage(s) do not hold in ${path}")
+            process.exit(1)
+        }
+        return
+    }
+    let envd = get(doc, "env") ?? object()
+    let mut md = "# Economics: Windjammer vs hand-written Rust (measured)\n\n"
+    md = md + "Generated by `scripts/wj/economics_report.wj` from `${path}`. Definitions and thresholds: `docs/economics/DEFINITION.md`.\n\n"
+    for k in ["wj_version", "rustc", "uname", "head", "counter", "load_start", "load_end"] {
+        md = md + "- ${k}: `" + (as_str(get(envd, k) ?? object()) ?? "") + "`\n"
+    }
+    md = md + "\nRatio = Windjammer / Rust; below 1.00 means Windjammer is cheaper. `geo` = geometric mean of per-program ratios, `total` = ratio of sums (dominated by the largest programs), wins/losses = programs below 0.98 / above 1.02. Programs with a reported problem are excluded.\n"
+    let mut dim = ""
+    for m in metrics() {
+        if m.dim != dim {
+            dim = m.dim
+            md = md + "\n## Dimension: ${dim}\n"
+        }
+        md = md + "\n### ${m.key}: ${m.what}\n\n"
+        let mut t = right_align(new(["suite", "n", "geo", "total", "wins", "losses"]), [1, 2, 3, 4, 5])
+        for s in ["dx", "parity", "interp", "all"] {
+            t = add_row(t, summary_rows(progs, m, s))
+        }
+        md = md + markdown(t) + "\n"
+    }
+
+    // cold dependency build
+    md = md + "\n## Dimension: compile (one-off): cold dependency build of a generated crate\n\n"
+    let cold = get(doc, "cold_deps") ?? object()
+    match as_str(cold) {
+        Some(s) => { md = md + s + "\n" },
+        None => {
+            let mut t = right_align(new(["profile", "CPU s", "wall s", "peak RSS MB", "crates"]), [1, 2, 3, 4])
+            for prof in ["debug", "release"] {
+                t = add_row(t, [prof, fixed(num(cold, prof + ".cpu"), 1), fixed(num(cold, prof + ".wall"), 1), fixed(num(cold, prof + ".rss") / 1048576.0, 0), "${num(cold, prof + ".rlib_crates") as int}"])
+            }
+            md = md + markdown(t) + "\nTarget directory after both builds: ${(num(cold, "target_kb") / 1024.0) as int} MB. A hand-written Rust twin has no dependencies (std only).\n"
+        },
+    }
+
+    // agent dimension
+    md = md + "\n## Dimension: agent (from bench/agent-dx pilots; measured by that harness)\n\n"
+    let mut at = right_align(new(["report", "arm", "pass", "cost USD", "turns", "tokens in", "tokens out", "cost/pass"]), [2, 3, 4, 5, 6, 7])
+    for r in items(get(doc, "agent") ?? array()) {
+        let pass = num(r, "pass")
+        let cost = num(r, "cost")
+        let cpp = if pass > 0.0 { fixed(cost / pass, 3) } else { "-" }
+        at = add_row(at, [as_str(get(r, "report") ?? object()) ?? "", as_str(get(r, "arm") ?? object()) ?? "", fixed(pass, 2), fixed(cost, 3), fixed(num(r, "turns"), 1), fixed(num(r, "tok_in"), 0), fixed(num(r, "tok_out"), 0), cpp])
+    }
+    md = md + markdown(at) + "\n"
+
+    // per-program detail
+    md = md + "\n## Per program\n\nverify = source to verified output (interpreter vs rustc debug + run); compile/run/size = -O3, same flags. Cells are `wj / rust`.\n\n"
+    let mut dt = new(["program", "verify cycles", "compile -O3 cycles", "run cycles", "size", "tokens", "ceremony", "problems"])
+    for p in progs {
+        let mut row = [as_str(get(p, "id") ?? object()) ?? ""]
+        for key in ["verify_interp_cycles", "compile_release_cycles", "run_release_cycles", "size_release", "src_tokens", "src_ceremony"] {
+            let (w, r) = pair(p, key)
+            row.push(human(key, w) + " / " + human(key, r))
+        }
+        row.push("${items(get(p, "problems") ?? array()).len()}")
+        dt = add_row(dt, row)
+    }
+    md = md + markdown(dt) + "\n"
+    let mut probs = ""
+    for p in progs {
+        for pr in items(get(p, "problems") ?? array()) {
+            probs = probs + "- " + (as_str(pr) ?? "") + "\n"
+        }
+    }
+    if probs != "" {
+        md = md + "\n## Problems (excluded from the summaries)\n\n" + probs
+    }
+    let out = long_flag_value_or(args, "md", "")
+    if out == "" {
+        println(md)
+    } else {
+        let _ = fs.write(out, md)
+        eprintln("wrote ${out}")
+    }
+}

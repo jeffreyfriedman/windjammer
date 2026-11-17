@@ -58,6 +58,8 @@ pub(super) fn merge_root(
         super::PEER_SCOPE.with(|c| *c.borrow_mut() = None);
     }
     DECLARED.with(|c| *c.borrow_mut() = prev);
+    // cumulative counts after every root, so any command that merges metadata (build, check, run) reports them
+    super::scan_stats::report_if_requested();
 }
 
 /// The `.wj` source a `.wj.meta` was written for: `<project>/.wj-cache/foo/bar.wj.meta` is `<project>/src/foo/bar.wj`
@@ -174,6 +176,7 @@ fn collect_metas(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     if depth > 12 {
         return;
     }
+    crate::metadata::scan_stats::dir_listed();
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         let p = e.path();

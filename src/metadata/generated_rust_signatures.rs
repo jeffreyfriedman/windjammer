@@ -34,6 +34,7 @@ pub(in crate::metadata) fn merge_generated_rust_dir_with_alias(
 /// Parse `pub fn` formals from `lib.rs` and sibling `.rs` files (not recursive).
 pub fn recover_signatures_from_generated_rust_dir(dir: &Path) -> Vec<(String, FunctionSignature)> {
     let mut out = Vec::new();
+    crate::metadata::scan_stats::dir_listed();
     let Ok(entries) = std::fs::read_dir(dir) else {
         return out;
     };

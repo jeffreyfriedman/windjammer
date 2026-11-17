@@ -1,0 +1,643 @@
+{
+ "env": {
+  "wj_version": "wj 0.50.0+c174f69b0e (commit unknown unknown, clean, release, built 2026-11-16T22:15:55Z)",
+  "rustc": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)",
+  "uname": "Darwin arm64",
+  "head": "55fc997d83b0",
+  "load_start": "17:25  up 21 days, 18:31, 6 users, load averages: 86.46 73.73 61.10",
+  "counter": "macOS /usr/bin/time -l: cpu (children included), peak rss, instructions and cycles of the process",
+  "meter": "-l"
+ },
+ "clawback": [
+  {
+   "id": "parity/sieve",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 368713145,
+    "cycles": 167605916,
+    "rss": 21430272,
+    "cpu": 0.05,
+    "wall": 0.09,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 369394574,
+    "cycles": 181334703,
+    "rss": 21381120,
+    "cpu": 0.05,
+    "wall": 0.14,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 365114818,
+    "cycles": 169574057,
+    "rss": 21430272,
+    "cpu": 0.05,
+    "wall": 0.1,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/matmul",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 283416178,
+    "cycles": 77015533,
+    "rss": 3555328,
+    "cpu": 0.02,
+    "wall": 0.03,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 283598953,
+    "cycles": 77127960,
+    "rss": 3555328,
+    "cpu": 0.02,
+    "wall": 0.03,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 283125282,
+    "cycles": 76090206,
+    "rss": 3555328,
+    "cpu": 0.02,
+    "wall": 0.03,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/collatz",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 3761453633,
+    "cycles": 1951312418,
+    "rss": 1359872,
+    "cpu": 0.63,
+    "wall": 0.7,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 3762155448,
+    "cycles": 1959663083,
+    "rss": 1409024,
+    "cpu": 0.64,
+    "wall": 0.89,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 3041664597,
+    "cycles": 1366853116,
+    "rss": 1409024,
+    "cpu": 0.44,
+    "wall": 0.5,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/string_build",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 36091271,
+    "cycles": 9632583,
+    "rss": 3948544,
+    "cpu": 0.0,
+    "wall": 0.01,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 36387917,
+    "cycles": 9321431,
+    "rss": 3915776,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 36259694,
+    "cycles": 9427074,
+    "rss": 3915776,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/fib",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 1464345638,
+    "cycles": 481375838,
+    "rss": 1409024,
+    "cpu": 0.15,
+    "wall": 0.16,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 1463694749,
+    "cycles": 481589151,
+    "rss": 1409024,
+    "cpu": 0.15,
+    "wall": 0.16,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 1108424387,
+    "cycles": 384259327,
+    "rss": 1409024,
+    "cpu": 0.12,
+    "wall": 0.14,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/vec_fill",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 1535199758,
+    "cycles": 423969869,
+    "rss": 17383424,
+    "cpu": 0.13,
+    "wall": 0.14,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 1535631487,
+    "cycles": 403752551,
+    "rss": 17432576,
+    "cpu": 0.13,
+    "wall": 0.14,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 1136984187,
+    "cycles": 348258275,
+    "rss": 17432576,
+    "cpu": 0.11,
+    "wall": 0.2,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/insertion_sort",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 706046129,
+    "cycles": 109835295,
+    "rss": 1654784,
+    "cpu": 0.03,
+    "wall": 0.04,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 705488755,
+    "cycles": 112494846,
+    "rss": 1605632,
+    "cpu": 0.03,
+    "wall": 0.07,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 707431909,
+    "cycles": 112788911,
+    "rss": 1654784,
+    "cpu": 0.03,
+    "wall": 0.08,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/nbody",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 75820586,
+    "cycles": 14781982,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 75790645,
+    "cycles": 15214457,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 75944096,
+    "cycles": 15763963,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/byte_hash",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 325618307,
+    "cycles": 235478465,
+    "rss": 6471680,
+    "cpu": 0.07,
+    "wall": 0.08,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 326565291,
+    "cycles": 236894476,
+    "rss": 6455296,
+    "cpu": 0.07,
+    "wall": 0.09,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 327010538,
+    "cycles": 238330899,
+    "rss": 6455296,
+    "cpu": 0.07,
+    "wall": 0.09,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "parity/histogram",
+   "suite": "parity",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 338686294,
+    "cycles": 194750784,
+    "rss": 1441792,
+    "cpu": 0.06,
+    "wall": 0.07,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 340763533,
+    "cycles": 198732729,
+    "rss": 1441792,
+    "cpu": 0.06,
+    "wall": 0.08,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 280882997,
+    "cycles": 198561033,
+    "rss": 1392640,
+    "cpu": 0.06,
+    "wall": 0.1,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/closures",
+   "suite": "interp",
+   "pass_edits": 1,
+   "checked_without_pass": {
+    "instr": 12599787,
+    "cycles": 4982419,
+    "rss": 1376256,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 12571911,
+    "cycles": 4243764,
+    "rss": 1376256,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 11601171,
+    "cycles": 4280425,
+    "rss": 1376256,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/fib30",
+   "suite": "interp",
+   "pass_edits": 0,
+   "checked_without_pass": {
+    "instr": 39273300,
+    "cycles": 13295775,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 39218543,
+    "cycles": 13993840,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 33165476,
+    "cycles": 12628862,
+    "rss": 1409024,
+    "cpu": 0.0,
+    "wall": 0.02,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/hashmap",
+   "suite": "interp",
+   "pass_edits": 3,
+   "checked_without_pass": {
+    "instr": 54049280,
+    "cycles": 16356414,
+    "rss": 2031616,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 53157505,
+    "cycles": 16174620,
+    "rss": 2162688,
+    "cpu": 0.0,
+    "wall": 0.01,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 52812535,
+    "cycles": 15391826,
+    "rss": 2031616,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/loop5m",
+   "suite": "interp",
+   "pass_edits": 2,
+   "checked_without_pass": {
+    "instr": 73351616,
+    "cycles": 16879096,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.01,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 73405359,
+    "cycles": 16828980,
+    "rss": 1409024,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 31613268,
+    "cycles": 10602058,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.01,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/nbody",
+   "suite": "interp",
+   "pass_edits": 4,
+   "checked_without_pass": {
+    "instr": 16268815,
+    "cycles": 6325054,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 16230183,
+    "cycles": 6431551,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 16228938,
+    "cycles": 5717818,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.01,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/sieve",
+   "suite": "interp",
+   "pass_edits": 2,
+   "checked_without_pass": {
+    "instr": 43015122,
+    "cycles": 12780654,
+    "rss": 2457600,
+    "cpu": 0.0,
+    "wall": 0.04,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 42871336,
+    "cycles": 11711757,
+    "rss": 2506752,
+    "cpu": 0.0,
+    "wall": 0.01,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 42862549,
+    "cycles": 12939308,
+    "rss": 2457600,
+    "cpu": 0.0,
+    "wall": 0.01,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/strings",
+   "suite": "interp",
+   "pass_edits": 1,
+   "checked_without_pass": {
+    "instr": 149565205,
+    "cycles": 30203411,
+    "rss": 1835008,
+    "cpu": 0.0,
+    "wall": 0.04,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 148361327,
+    "cycles": 28127818,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.04,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 148414665,
+    "cycles": 25679361,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.03,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  },
+  {
+   "id": "interp/structs",
+   "suite": "interp",
+   "pass_edits": 1,
+   "checked_without_pass": {
+    "instr": 18051251,
+    "cycles": 6872638,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.02,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "checked_with_pass": {
+    "instr": 17888072,
+    "cycles": 6351349,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.02,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   },
+   "unchecked": {
+    "instr": 15447999,
+    "cycles": 5957183,
+    "rss": 1359872,
+    "cpu": 0.0,
+    "wall": 0.0,
+    "status": 0,
+    "ok": "yes",
+    "compile_status": 0
+   }
+  }
+ ]
+}

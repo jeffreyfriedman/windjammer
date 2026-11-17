@@ -1,0 +1,1702 @@
+{
+ "env": {
+  "wj_version": "wj 0.50.0 (commit 37d50458ec6a 2026-11-11, clean, release, built 2026-11-11T22:47:08Z)",
+  "rustc": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)",
+  "uname": "Darwin arm64",
+  "head": "f55f8b1b6dc5",
+  "load_start": "9:40  up 21 days, 10:46, 6 users, load averages: 190.25 107.47 72.23",
+  "counter": "macOS /usr/bin/time -l (instructions retired: the process itself)",
+  "load_end": "9:40  up 21 days, 10:46, 6 users, load averages: 190.25 107.47 72.23"
+ },
+ "cold_deps": "not measured (--static)",
+ "programs": [
+  {
+   "id": "dx/t001_gcd_lcm",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 34,
+    "chars": 390,
+    "tokens": 210,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 21,
+    "chars": 375,
+    "tokens": 200,
+    "ceremony": 8
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t002_fizzbuzz_custom",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 21,
+    "chars": 417,
+    "tokens": 192,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 17,
+    "chars": 423,
+    "tokens": 213,
+    "ceremony": 4
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t003_prime_counts",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 51,
+    "chars": 677,
+    "tokens": 308,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 30,
+    "chars": 560,
+    "tokens": 287,
+    "ceremony": 7
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t004_collatz",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 26,
+    "chars": 355,
+    "tokens": 166,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 22,
+    "chars": 421,
+    "tokens": 212,
+    "ceremony": 6
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t005_roman",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 54,
+    "chars": 857,
+    "tokens": 413,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 46,
+    "chars": 769,
+    "tokens": 440,
+    "ceremony": 6
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t006_base_convert",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 36,
+    "chars": 710,
+    "tokens": 283,
+    "ceremony": 5
+   },
+   "rust_src": {
+    "lines": 31,
+    "chars": 558,
+    "tokens": 276,
+    "ceremony": 10
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t007_digit_stats",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 34,
+    "chars": 441,
+    "tokens": 185,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 18,
+    "chars": 506,
+    "tokens": 246,
+    "ceremony": 9
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t008_fib_mod",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 30,
+    "chars": 454,
+    "tokens": 256,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 25,
+    "chars": 453,
+    "tokens": 268,
+    "ceremony": 8
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t009_rpn_eval",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 48,
+    "chars": 823,
+    "tokens": 365,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 49,
+    "chars": 699,
+    "tokens": 351,
+    "ceremony": 6
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t010_ring_buffer",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 77,
+    "chars": 1469,
+    "tokens": 631,
+    "ceremony": 7
+   },
+   "rust_src": {
+    "lines": 50,
+    "chars": 916,
+    "tokens": 412,
+    "ceremony": 10
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t011_lru_cache",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 82,
+    "chars": 1521,
+    "tokens": 697,
+    "ceremony": 12
+   },
+   "rust_src": {
+    "lines": 57,
+    "chars": 1044,
+    "tokens": 511,
+    "ceremony": 14
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t012_min_heap",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 79,
+    "chars": 1307,
+    "tokens": 602,
+    "ceremony": 8
+   },
+   "rust_src": {
+    "lines": 31,
+    "chars": 652,
+    "tokens": 298,
+    "ceremony": 5
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t013_bst",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 160,
+    "chars": 2950,
+    "tokens": 1229,
+    "ceremony": 34
+   },
+   "rust_src": {
+    "lines": 130,
+    "chars": 1987,
+    "tokens": 980,
+    "ceremony": 37
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t014_union_find",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 65,
+    "chars": 1329,
+    "tokens": 608,
+    "ceremony": 11
+   },
+   "rust_src": {
+    "lines": 65,
+    "chars": 1151,
+    "tokens": 572,
+    "ceremony": 10
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t015_linked_list",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 84,
+    "chars": 1445,
+    "tokens": 654,
+    "ceremony": 7
+   },
+   "rust_src": {
+    "lines": 51,
+    "chars": 967,
+    "tokens": 444,
+    "ceremony": 12
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t016_matrix_mult",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 57,
+    "chars": 796,
+    "tokens": 386,
+    "ceremony": 5
+   },
+   "rust_src": {
+    "lines": 35,
+    "chars": 850,
+    "tokens": 434,
+    "ceremony": 23
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t017_interval_merge",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 42,
+    "chars": 648,
+    "tokens": 312,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 28,
+    "chars": 519,
+    "tokens": 276,
+    "ceremony": 7
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t018_word_freq",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 68,
+    "chars": 1321,
+    "tokens": 644,
+    "ceremony": 11
+   },
+   "rust_src": {
+    "lines": 18,
+    "chars": 690,
+    "tokens": 328,
+    "ceremony": 11
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t019_caesar",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 38,
+    "chars": 772,
+    "tokens": 364,
+    "ceremony": 11
+   },
+   "rust_src": {
+    "lines": 26,
+    "chars": 564,
+    "tokens": 288,
+    "ceremony": 13
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t020_rle",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 46,
+    "chars": 721,
+    "tokens": 340,
+    "ceremony": 4
+   },
+   "rust_src": {
+    "lines": 43,
+    "chars": 698,
+    "tokens": 343,
+    "ceremony": 9
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t021_anagram_groups",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 42,
+    "chars": 687,
+    "tokens": 293,
+    "ceremony": 4
+   },
+   "rust_src": {
+    "lines": 26,
+    "chars": 559,
+    "tokens": 238,
+    "ceremony": 2
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t022_csv_parse",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 56,
+    "chars": 739,
+    "tokens": 307,
+    "ceremony": 5
+   },
+   "rust_src": {
+    "lines": 41,
+    "chars": 692,
+    "tokens": 285,
+    "ceremony": 5
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t023_expr_eval",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 102,
+    "chars": 1253,
+    "tokens": 641,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 77,
+    "chars": 1288,
+    "tokens": 652,
+    "ceremony": 9
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t024_bracket_match",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 33,
+    "chars": 564,
+    "tokens": 297,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 32,
+    "chars": 513,
+    "tokens": 286,
+    "ceremony": 4
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t025_template_render",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 77,
+    "chars": 1583,
+    "tokens": 804,
+    "ceremony": 15
+   },
+   "rust_src": {
+    "lines": 60,
+    "chars": 1277,
+    "tokens": 634,
+    "ceremony": 24
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t026_palindromes",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 48,
+    "chars": 557,
+    "tokens": 240,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 34,
+    "chars": 700,
+    "tokens": 346,
+    "ceremony": 11
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t027_ini_parser",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 46,
+    "chars": 871,
+    "tokens": 382,
+    "ceremony": 9
+   },
+   "rust_src": {
+    "lines": 30,
+    "chars": 748,
+    "tokens": 345,
+    "ceremony": 9
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t028_safe_div_chain",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 30,
+    "chars": 538,
+    "tokens": 230,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 28,
+    "chars": 544,
+    "tokens": 241,
+    "ceremony": 5
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t029_parse_report",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 52,
+    "chars": 860,
+    "tokens": 323,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 58,
+    "chars": 1047,
+    "tokens": 445,
+    "ceremony": 8
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t030_bank_ledger",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 97,
+    "chars": 2366,
+    "tokens": 887,
+    "ceremony": 14
+   },
+   "rust_src": {
+    "lines": 87,
+    "chars": 1569,
+    "tokens": 694,
+    "ceremony": 14
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t031_config_validate",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 73,
+    "chars": 1865,
+    "tokens": 701,
+    "ceremony": 11
+   },
+   "rust_src": {
+    "lines": 77,
+    "chars": 1688,
+    "tokens": 687,
+    "ceremony": 11
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t032_checked_arith",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 51,
+    "chars": 1031,
+    "tokens": 434,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 41,
+    "chars": 820,
+    "tokens": 432,
+    "ceremony": 6
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t033_org_chart",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 57,
+    "chars": 1338,
+    "tokens": 547,
+    "ceremony": 13
+   },
+   "rust_src": {
+    "lines": 36,
+    "chars": 833,
+    "tokens": 392,
+    "ceremony": 9
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t034_shapes_trait",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 71,
+    "chars": 1518,
+    "tokens": 639,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 63,
+    "chars": 1537,
+    "tokens": 691,
+    "ceremony": 26
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t035_generic_minmax_stack",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 83,
+    "chars": 1600,
+    "tokens": 718,
+    "ceremony": 11
+   },
+   "rust_src": {
+    "lines": 64,
+    "chars": 1332,
+    "tokens": 653,
+    "ceremony": 19
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t036_multikey_sort",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 71,
+    "chars": 1435,
+    "tokens": 693,
+    "ceremony": 13
+   },
+   "rust_src": {
+    "lines": 39,
+    "chars": 731,
+    "tokens": 375,
+    "ceremony": 9
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t037_animal_traits",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 76,
+    "chars": 1640,
+    "tokens": 653,
+    "ceremony": 7
+   },
+   "rust_src": {
+    "lines": 63,
+    "chars": 1332,
+    "tokens": 576,
+    "ceremony": 33
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t038_vec2_ops",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 47,
+    "chars": 1122,
+    "tokens": 573,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 53,
+    "chars": 1013,
+    "tokens": 557,
+    "ceremony": 6
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t039_custom_iterators",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 96,
+    "chars": 1236,
+    "tokens": 608,
+    "ceremony": 3
+   },
+   "rust_src": {
+    "lines": 58,
+    "chars": 1115,
+    "tokens": 573,
+    "ceremony": 12
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t040_memoizer",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 67,
+    "chars": 1122,
+    "tokens": 479,
+    "ceremony": 3
+   },
+   "rust_src": {
+    "lines": 70,
+    "chars": 1093,
+    "tokens": 575,
+    "ceremony": 7
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t041_expr_tree",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 82,
+    "chars": 1458,
+    "tokens": 708,
+    "ceremony": 7
+   },
+   "rust_src": {
+    "lines": 94,
+    "chars": 1542,
+    "tokens": 835,
+    "ceremony": 18
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t042_parallel_sum",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 48,
+    "chars": 823,
+    "tokens": 357,
+    "ceremony": 3
+   },
+   "rust_src": {
+    "lines": 36,
+    "chars": 804,
+    "tokens": 407,
+    "ceremony": 13
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t043_channel_pipeline",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 78,
+    "chars": 1540,
+    "tokens": 701,
+    "ceremony": 6
+   },
+   "rust_src": {
+    "lines": 84,
+    "chars": 1650,
+    "tokens": 802,
+    "ceremony": 11
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t044_shared_histogram",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 81,
+    "chars": 1330,
+    "tokens": 598,
+    "ceremony": 8
+   },
+   "rust_src": {
+    "lines": 36,
+    "chars": 969,
+    "tokens": 461,
+    "ceremony": 17
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t045_parallel_divisors",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 65,
+    "chars": 1058,
+    "tokens": 489,
+    "ceremony": 4
+   },
+   "rust_src": {
+    "lines": 48,
+    "chars": 941,
+    "tokens": 486,
+    "ceremony": 16
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t046_producer_consumer",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 74,
+    "chars": 1364,
+    "tokens": 572,
+    "ceremony": 4
+   },
+   "rust_src": {
+    "lines": 57,
+    "chars": 1069,
+    "tokens": 522,
+    "ceremony": 11
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t047_task_scheduler",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 116,
+    "chars": 2144,
+    "tokens": 982,
+    "ceremony": 14
+   },
+   "rust_src": {
+    "lines": 53,
+    "chars": 1300,
+    "tokens": 611,
+    "ceremony": 14
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t048_wc_clone",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 58,
+    "chars": 880,
+    "tokens": 380,
+    "ceremony": 4
+   },
+   "rust_src": {
+    "lines": 43,
+    "chars": 776,
+    "tokens": 410,
+    "ceremony": 10
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t049_grep_clone",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 78,
+    "chars": 1299,
+    "tokens": 499,
+    "ceremony": 6
+   },
+   "rust_src": {
+    "lines": 58,
+    "chars": 975,
+    "tokens": 435,
+    "ceremony": 7
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t050_cat_number",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 58,
+    "chars": 950,
+    "tokens": 409,
+    "ceremony": 5
+   },
+   "rust_src": {
+    "lines": 46,
+    "chars": 857,
+    "tokens": 391,
+    "ceremony": 13
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t051_file_transform",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 71,
+    "chars": 1368,
+    "tokens": 535,
+    "ceremony": 8
+   },
+   "rust_src": {
+    "lines": 38,
+    "chars": 1095,
+    "tokens": 461,
+    "ceremony": 14
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t052_csv_columns",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 82,
+    "chars": 1536,
+    "tokens": 687,
+    "ceremony": 12
+   },
+   "rust_src": {
+    "lines": 57,
+    "chars": 1335,
+    "tokens": 631,
+    "ceremony": 15
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t053_cli_flags",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 66,
+    "chars": 1379,
+    "tokens": 562,
+    "ceremony": 10
+   },
+   "rust_src": {
+    "lines": 71,
+    "chars": 1471,
+    "tokens": 643,
+    "ceremony": 10
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t054_dir_tree",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 37,
+    "chars": 627,
+    "tokens": 230,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 29,
+    "chars": 682,
+    "tokens": 307,
+    "ceremony": 8
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t055_log_summary",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 105,
+    "chars": 2344,
+    "tokens": 1025,
+    "ceremony": 18
+   },
+   "rust_src": {
+    "lines": 56,
+    "chars": 1462,
+    "tokens": 691,
+    "ceremony": 16
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t056_todo_manager",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 98,
+    "chars": 1830,
+    "tokens": 711,
+    "ceremony": 7
+   },
+   "rust_src": {
+    "lines": 81,
+    "chars": 1504,
+    "tokens": 641,
+    "ceremony": 10
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t057_inventory",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 101,
+    "chars": 1842,
+    "tokens": 718,
+    "ceremony": 6
+   },
+   "rust_src": {
+    "lines": 74,
+    "chars": 1394,
+    "tokens": 611,
+    "ceremony": 5
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t058_vending_machine",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 66,
+    "chars": 1373,
+    "tokens": 511,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 60,
+    "chars": 1251,
+    "tokens": 531,
+    "ceremony": 7
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t059_game_of_life",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 77,
+    "chars": 1164,
+    "tokens": 584,
+    "ceremony": 8
+   },
+   "rust_src": {
+    "lines": 36,
+    "chars": 892,
+    "tokens": 500,
+    "ceremony": 16
+   },
+   "problems": []
+  },
+  {
+   "id": "dx/t060_kv_transactions",
+   "suite": "dx",
+   "wj_src": {
+    "lines": 75,
+    "chars": 1308,
+    "tokens": 573,
+    "ceremony": 7
+   },
+   "rust_src": {
+    "lines": 73,
+    "chars": 1279,
+    "tokens": 606,
+    "ceremony": 15
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/sieve",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 33,
+    "chars": 334,
+    "tokens": 171,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 27,
+    "chars": 347,
+    "tokens": 192,
+    "ceremony": 2
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/matmul",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 31,
+    "chars": 355,
+    "tokens": 231,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 21,
+    "chars": 344,
+    "tokens": 231,
+    "ceremony": 7
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/collatz",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 25,
+    "chars": 221,
+    "tokens": 117,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 19,
+    "chars": 200,
+    "tokens": 117,
+    "ceremony": 0
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/string_build",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 19,
+    "chars": 283,
+    "tokens": 122,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 17,
+    "chars": 364,
+    "tokens": 167,
+    "ceremony": 5
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/fib",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 9,
+    "chars": 82,
+    "tokens": 49,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 9,
+    "chars": 84,
+    "tokens": 51,
+    "ceremony": 0
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/vec_fill",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 19,
+    "chars": 224,
+    "tokens": 118,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 11,
+    "chars": 201,
+    "tokens": 100,
+    "ceremony": 2
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/insertion_sort",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 30,
+    "chars": 328,
+    "tokens": 210,
+    "ceremony": 1
+   },
+   "rust_src": {
+    "lines": 24,
+    "chars": 341,
+    "tokens": 207,
+    "ceremony": 4
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/nbody",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 47,
+    "chars": 615,
+    "tokens": 400,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 42,
+    "chars": 597,
+    "tokens": 397,
+    "ceremony": 5
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/byte_hash",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 17,
+    "chars": 269,
+    "tokens": 129,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 18,
+    "chars": 248,
+    "tokens": 121,
+    "ceremony": 4
+   },
+   "problems": []
+  },
+  {
+   "id": "parity/histogram",
+   "suite": "parity",
+   "wj_src": {
+    "lines": 19,
+    "chars": 266,
+    "tokens": 136,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 12,
+    "chars": 234,
+    "tokens": 120,
+    "ceremony": 3
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/closures",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 16,
+    "chars": 202,
+    "tokens": 115,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 9,
+    "chars": 184,
+    "tokens": 104,
+    "ceremony": 2
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/fib30",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 7,
+    "chars": 81,
+    "tokens": 43,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 9,
+    "chars": 84,
+    "tokens": 51,
+    "ceremony": 0
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/hashmap",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 28,
+    "chars": 300,
+    "tokens": 151,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 9,
+    "chars": 255,
+    "tokens": 120,
+    "ceremony": 1
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/loop5m",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 10,
+    "chars": 121,
+    "tokens": 62,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 12,
+    "chars": 117,
+    "tokens": 60,
+    "ceremony": 0
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/nbody",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 75,
+    "chars": 1418,
+    "tokens": 816,
+    "ceremony": 2
+   },
+   "rust_src": {
+    "lines": 63,
+    "chars": 1259,
+    "tokens": 771,
+    "ceremony": 9
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/sieve",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 23,
+    "chars": 207,
+    "tokens": 104,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 16,
+    "chars": 159,
+    "tokens": 82,
+    "ceremony": 0
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/strings",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 14,
+    "chars": 168,
+    "tokens": 72,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 13,
+    "chars": 185,
+    "tokens": 96,
+    "ceremony": 1
+   },
+   "problems": []
+  },
+  {
+   "id": "interp/structs",
+   "suite": "interp",
+   "wj_src": {
+    "lines": 24,
+    "chars": 277,
+    "tokens": 161,
+    "ceremony": 0
+   },
+   "rust_src": {
+    "lines": 23,
+    "chars": 295,
+    "tokens": 181,
+    "ceremony": 0
+   },
+   "problems": []
+  }
+ ],
+ "agent": [
+  {
+   "report": "bench/agent-dx/results/ablation/report.json",
+   "arm": "S",
+   "pass": 0.8666666666666667,
+   "cost": 0.04796467,
+   "turns": 6.766666666666667,
+   "tok_in": 46718.73333333333,
+   "tok_out": 1912.0,
+   "wall": 105.66266666666667,
+   "tool_wait": 0.0,
+   "verify": 3.1
+  },
+  {
+   "report": "bench/agent-dx/results/ablation/report.json",
+   "arm": "Sa",
+   "pass": 0.9666666666666667,
+   "cost": 0.04594979333333334,
+   "turns": 6.333333333333333,
+   "tok_in": 46362.7,
+   "tok_out": 1824.4,
+   "wall": 134.38466666666667,
+   "tool_wait": 0.0,
+   "verify": 2.533333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/ablation/report.json",
+   "arm": "Sb",
+   "pass": 1.0,
+   "cost": 0.04593608666666667,
+   "turns": 4.933333333333334,
+   "tok_in": 33711.4,
+   "tok_out": 1510.5666666666666,
+   "wall": 120.68633333333334,
+   "tool_wait": 0.0,
+   "verify": 2.7666666666666666
+  },
+  {
+   "report": "bench/agent-dx/results/ablation/report.json",
+   "arm": "Sc",
+   "pass": 0.8333333333333334,
+   "cost": 0.12951737666666668,
+   "turns": 16.566666666666666,
+   "tok_in": 197856.86666666667,
+   "tok_out": 2989.866666666667,
+   "wall": 332.38366666666667,
+   "tool_wait": 0.0,
+   "verify": 6.8
+  },
+  {
+   "report": "bench/agent-dx/results/ablation/report.json",
+   "arm": "Sd",
+   "pass": 1.0,
+   "cost": 0.04830347666666667,
+   "turns": 6.366666666666666,
+   "tok_in": 48072.73333333333,
+   "tok_out": 1871.1666666666667,
+   "wall": 136.26933333333332,
+   "tool_wait": 0.0,
+   "verify": 2.966666666666667
+  },
+  {
+   "report": "bench/agent-dx/results/ablation/report.json",
+   "arm": "Se",
+   "pass": 0.9,
+   "cost": 0.04278963,
+   "turns": 4.6,
+   "tok_in": 33329.4,
+   "tok_out": 1415.0333333333333,
+   "wall": 140.67533333333333,
+   "tool_wait": 0.0,
+   "verify": 2.4
+  },
+  {
+   "report": "bench/agent-dx/results/ablation/report.json",
+   "arm": "Sf",
+   "pass": 0.9666666666666667,
+   "cost": 0.040020936666666666,
+   "turns": 4.5,
+   "tok_in": 29675.966666666667,
+   "tok_out": 1540.5,
+   "wall": 102.503,
+   "tool_wait": 0.0,
+   "verify": 2.033333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/pilot/report.json",
+   "arm": "A",
+   "pass": 0.5666666666666667,
+   "cost": 0.02756807,
+   "turns": 3.533333333333333,
+   "tok_in": 31754.766666666666,
+   "tok_out": 1435.2666666666667,
+   "wall": 20.297,
+   "tool_wait": 0.0,
+   "verify": 2.033333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/pilot/report.json",
+   "arm": "B",
+   "pass": 0.9,
+   "cost": 0.04071370333333334,
+   "turns": 5.333333333333333,
+   "tok_in": 53623.86666666667,
+   "tok_out": 1681.6,
+   "wall": 96.86333333333333,
+   "tool_wait": 0.0,
+   "verify": 2.3333333333333335
+  },
+  {
+   "report": "bench/agent-dx/results/pilot2/report.json",
+   "arm": "A",
+   "pass": 0.4,
+   "cost": 0.028464076666666668,
+   "turns": 3.3,
+   "tok_in": 34389.166666666664,
+   "tok_out": 1388.4,
+   "wall": 27.755666666666666,
+   "tool_wait": 0.0,
+   "verify": 1.8333333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/pilot2/report.json",
+   "arm": "B",
+   "pass": 0.8666666666666667,
+   "cost": 0.037910070000000004,
+   "turns": 5.033333333333333,
+   "tok_in": 51550.1,
+   "tok_out": 1717.8,
+   "wall": 117.76666666666667,
+   "tool_wait": 0.0,
+   "verify": 2.1
+  },
+  {
+   "report": "bench/agent-dx/results/pilot2/report.json",
+   "arm": "C",
+   "pass": 0.2,
+   "cost": 0.11784832333333334,
+   "turns": 21.933333333333334,
+   "tok_in": 229448.3,
+   "tok_out": 3903.0,
+   "wall": 147.523,
+   "tool_wait": 0.0,
+   "verify": 6.933333333333334
+  },
+  {
+   "report": "bench/agent-dx/results/pilot2/report.json",
+   "arm": "D",
+   "pass": 0.8333333333333334,
+   "cost": 0.05474726666666667,
+   "turns": 3.566666666666667,
+   "tok_in": 54408.166666666664,
+   "tok_out": 665.2,
+   "wall": 344.8926666666667,
+   "tool_wait": 0.0,
+   "verify": 3.7333333333333334
+  },
+  {
+   "report": "bench/agent-dx/results/pilot2/report.json",
+   "arm": "G",
+   "pass": 1.0,
+   "cost": 0.02082963,
+   "turns": 2.566666666666667,
+   "tok_in": 18332.466666666667,
+   "tok_out": 1069.5333333333333,
+   "wall": 25.134666666666664,
+   "tool_wait": 0.0,
+   "verify": 0.3333333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/pilot2/report.json",
+   "arm": "P",
+   "pass": 1.0,
+   "cost": 0.019158966666666666,
+   "turns": 3.6,
+   "tok_in": 23548.566666666666,
+   "tok_out": 940.7666666666667,
+   "wall": 86.36733333333333,
+   "tool_wait": 0.0,
+   "verify": 0.0
+  },
+  {
+   "report": "bench/agent-dx/results/pilot2/report.json",
+   "arm": "R",
+   "pass": 1.0,
+   "cost": 0.02170651666666667,
+   "turns": 3.0,
+   "tok_in": 17101.466666666667,
+   "tok_out": 1190.7333333333333,
+   "wall": 27.642333333333333,
+   "tool_wait": 0.0,
+   "verify": 0.9666666666666667
+  },
+  {
+   "report": "bench/agent-dx/results/pilot3/report.json",
+   "arm": "B",
+   "pass": 0.9666666666666667,
+   "cost": 0.04774906,
+   "turns": 3.8333333333333335,
+   "tok_in": 44278.0,
+   "tok_out": 1294.1,
+   "wall": 155.97533333333334,
+   "tool_wait": 0.0,
+   "verify": 2.2666666666666666
+  },
+  {
+   "report": "bench/agent-dx/results/pilot3/report.json",
+   "arm": "E",
+   "pass": 0.9666666666666667,
+   "cost": 0.04253744,
+   "turns": 5.433333333333334,
+   "tok_in": 40284.433333333334,
+   "tok_out": 1671.3,
+   "wall": 165.95600000000002,
+   "tool_wait": 0.0,
+   "verify": 2.4
+  },
+  {
+   "report": "bench/agent-dx/results/pilot3/report.json",
+   "arm": "F",
+   "pass": 0.9,
+   "cost": 0.040117153333333336,
+   "turns": 4.1,
+   "tok_in": 29407.8,
+   "tok_out": 1401.7333333333333,
+   "wall": 128.07266666666666,
+   "tool_wait": 0.0,
+   "verify": 1.8333333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/pilot3/report.json",
+   "arm": "T",
+   "pass": 0.8666666666666667,
+   "cost": 0.043117423333333335,
+   "turns": 4.166666666666667,
+   "tok_in": 28951.066666666666,
+   "tok_out": 1462.4333333333334,
+   "wall": 173.31233333333333,
+   "tool_wait": 0.0,
+   "verify": 3.033333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/pilot4/report.json",
+   "arm": "K",
+   "pass": 1.0,
+   "cost": 0.040688973333333336,
+   "turns": 6.3,
+   "tok_in": 47739.03333333333,
+   "tok_out": 1987.4666666666667,
+   "wall": 44.369,
+   "tool_wait": 0.0,
+   "verify": 2.533333333333333
+  },
+  {
+   "report": "bench/agent-dx/results/pilot4/report.json",
+   "arm": "L",
+   "pass": 0.6,
+   "cost": 0.023779423333333334,
+   "turns": 3.433333333333333,
+   "tok_in": 21269.866666666665,
+   "tok_out": 1333.0333333333333,
+   "wall": 16.487000000000002,
+   "tool_wait": 0.0,
+   "verify": 1.4666666666666666
+  },
+  {
+   "report": "bench/agent-dx/results/pilot4/report.json",
+   "arm": "M",
+   "pass": 0.8333333333333334,
+   "cost": 0.03407487666666666,
+   "turns": 6.533333333333333,
+   "tok_in": 46877.2,
+   "tok_out": 1675.8,
+   "wall": 31.620333333333335,
+   "tool_wait": 0.0,
+   "verify": 3.8
+  },
+  {
+   "report": "bench/agent-dx/results/pilot4/report.json",
+   "arm": "N",
+   "pass": 0.9666666666666667,
+   "cost": 0.041938123333333334,
+   "turns": 7.333333333333333,
+   "tok_in": 48838.26666666667,
+   "tok_out": 1948.2,
+   "wall": 34.74033333333333,
+   "tool_wait": 0.0,
+   "verify": 3.3666666666666667
+  },
+  {
+   "report": "bench/agent-dx/results/pilot5/report.json",
+   "arm": "U",
+   "pass": 1.0,
+   "cost": 0.04291461,
+   "turns": 6.733333333333333,
+   "tok_in": 47165.13333333333,
+   "tok_out": 2145.7,
+   "wall": 27.075333333333333,
+   "tool_wait": 0.0,
+   "verify": 3.0
+  },
+  {
+   "report": "bench/agent-dx/results/pilot5/report.json",
+   "arm": "V",
+   "pass": 0.6666666666666666,
+   "cost": 0.026332456666666667,
+   "turns": 4.3,
+   "tok_in": 27472.766666666666,
+   "tok_out": 1423.3666666666666,
+   "wall": 15.244666666666665,
+   "tool_wait": 0.0,
+   "verify": 1.8
+  },
+  {
+   "report": "bench/agent-dx/results/pilot5/report.json",
+   "arm": "W",
+   "pass": 0.9666666666666667,
+   "cost": 0.03754446333333334,
+   "turns": 6.466666666666667,
+   "tok_in": 46407.8,
+   "tok_out": 1829.5,
+   "wall": 22.308666666666667,
+   "tool_wait": 0.0,
+   "verify": 3.466666666666667
+  },
+  {
+   "report": "bench/agent-dx/results/pilot6/report.json",
+   "arm": "R",
+   "pass": 1.0,
+   "cost": 0.033378580000000005,
+   "turns": 3.0,
+   "tok_in": 22774.7,
+   "tok_out": 1710.2,
+   "wall": 22.054333333333332,
+   "tool_wait": 0.0,
+   "verify": 1.0
+  },
+  {
+   "report": "bench/agent-dx/results/pilot6/report.json",
+   "arm": "U",
+   "pass": 1.0,
+   "cost": 0.03883897333333333,
+   "turns": 3.8,
+   "tok_in": 32248.966666666667,
+   "tok_out": 1797.5666666666666,
+   "wall": 34.074333333333335,
+   "tool_wait": 0.0,
+   "verify": 1.7
+  },
+  {
+   "report": "bench/agent-dx/results/pilot6/report.json",
+   "arm": "V2",
+   "pass": 1.0,
+   "cost": 0.04014156333333333,
+   "turns": 4.766666666666667,
+   "tok_in": 41135.36666666667,
+   "tok_out": 1869.4,
+   "wall": 39.388333333333335,
+   "tool_wait": 0.0,
+   "verify": 1.9
+  }
+ ]
+}
