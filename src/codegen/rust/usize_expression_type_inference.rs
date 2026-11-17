@@ -450,7 +450,43 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         if let Some(target) = Self::declared_int_target_name(declared) {
             self.maybe_cast_usize_to_int_target(expr_str, expr, Some(target));
+        } else if let Type::Option(payload) = declared {
+            if let Some(target) = Self::declared_int_target_name(payload) {
+                self.convert_option_usize_into_int(expr_str, expr, target);
+            }
         }
+    }
+
+    /// B2+ at an `Option<usize>` position result (`xs.position(..)`, `xs.index_of(x)`) meeting a declared `Option<int>`:
+    /// the `Some` payload goes through the integer conversion (a position always fits an `int`). The result type
+    /// comes from the std declaration (`position` yields an index), never from the receiver's or the callee's name.
+    pub(in crate::codegen::rust) fn convert_option_usize_into_int(
+        &self,
+        expr_str: &mut String,
+        expr: &Expression<'ast>,
+        target: &str,
+    ) {
+        if expr_str.contains(".map(|wj_pos| wj_pos as ") || !self.expression_is_option_usize(expr) {
+            return;
+        }
+        let cast = if target == "i32" { "i32" } else { "i64" };
+        *expr_str = format!("{expr_str}.map(|wj_pos| wj_pos as {cast})");
+    }
+
+    /// The expression is an `Option<usize>`: a surface/inferred index result, or the iterator `position` adapter
+    /// on a receiver whose own type does not define `position`.
+    fn expression_is_option_usize(&self, expr: &Expression<'ast>) -> bool {
+        if let Some(Type::Option(inner)) = self.infer_expression_type(expr) {
+            if matches!(&*inner, Type::Custom(n) if n == "usize") {
+                return true;
+            }
+        }
+        let Expression::MethodCall { object, method, arguments, .. } = expr else {
+            return false;
+        };
+        method == "position"
+            && arguments.len() == 1
+            && !self.receiver_defines_method(self.infer_type_name(object).as_deref(), method)
     }
 
     /// Cast a `usize`-producing expression to the target int type when needed.

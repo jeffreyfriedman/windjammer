@@ -55,6 +55,9 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => None,
                 };
                 self.maybe_cast_usize_to_int_target(&mut return_str, e, target);
+                if let Some(ret) = self.current_function_return_type.as_ref().filter(|t| matches!(t, Type::Option(_))) {
+                    self.convert_usize_into_declared_int(&mut return_str, e, ret);
+                }
                 self.maybe_cast_to_function_return_int_width(&mut return_str, e);
                 crate::codegen::rust::type_classification_utilities::strip_redundant_same_width_int_cast(
                     &mut return_str,

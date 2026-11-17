@@ -97,6 +97,8 @@ impl<'ast> CodeGenerator<'ast> {
         };
         if let Some(t) = target {
             self.maybe_cast_usize_to_int_target(arm_str, arm_body, Some(t));
+        } else if let Some(ret @ Type::Option(_)) = &self.current_function_return_type {
+            self.convert_usize_into_declared_int(arm_str, arm_body, ret);
         }
     }
 }
