@@ -118,6 +118,10 @@ pub fn parse(file: &str, text: &str, out: &mut Vec<Diagnostic>) -> Option<Parsed
 pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     let ix = SourceIndex::new(p.file.clone(), &p.text);
     for w in p.parser.warnings() {
+        if let Some(rest) = w.message.strip_prefix("WJ0011: ") {
+            out.push(convert::mut_self_diagnostic(&ix, rest, w.line.unwrap_or(1), w.column.unwrap_or(1)));
+            continue;
+        }
         if let Some(rest) = w.message.strip_prefix("W0010: ") {
             let (l, c) = (w.line.unwrap_or(1), w.column.unwrap_or(1));
             let span = locate_type_word(&ix, l, c);
@@ -148,7 +152,7 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
                 }),
         );
     }
-    if let Err(msg) = crate::analyzer::Analyzer::new().check_forbidden_rust_patterns(&p.program) {
+    if let Err(msg) = crate::analyzer::forbidden_rust_patterns(&p.program) {
         out.push(forbidden(&msg, &ix));
     }
     crate::debug_env::phase("check-forbidden");

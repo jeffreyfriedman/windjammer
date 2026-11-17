@@ -105,3 +105,55 @@ mod tests {
         }
     }
 }
+
+static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Which thread holds the lock, and how many guards it has (the lock is re-entrant on one thread).
+static OWNER: std::sync::Mutex<Option<(std::thread::ThreadId, u32)>> = std::sync::Mutex::new(None);
+
+/// The working-directory lock, held. Re-entrant on one thread (a test that holds it may call `in_dir`).
+pub struct CwdGuard(Option<std::sync::MutexGuard<'static, ()>>);
+
+impl Drop for CwdGuard {
+    fn drop(&mut self) {
+        let mut owner = OWNER.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, n)) = owner.as_mut() {
+            *n -= 1;
+            if *n == 0 {
+                *owner = None;
+            }
+        }
+        drop(owner);
+        self.0.take();
+    }
+}
+
+/// Hold the working-directory lock without changing the directory: a test that watches the process directory (or a
+/// process-wide store) holds it so another test's `in_dir` cannot interfere meanwhile.
+pub fn hold_cwd() -> CwdGuard {
+    let me = std::thread::current().id();
+    {
+        let mut owner = OWNER.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((t, n)) = owner.as_mut() {
+            if *t == me {
+                *n += 1;
+                return CwdGuard(None);
+            }
+        }
+    }
+    let guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    *OWNER.lock().unwrap_or_else(|e| e.into_inner()) = Some((me, 1));
+    CwdGuard(Some(guard))
+}
+
+/// Run `f` with `dir` as the working directory. The working directory is process-wide, so every test that changes
+/// it goes through here (one lock for the whole test binary, however many modules include a helper); the previous
+/// directory is restored even when `f` panics, and falls back to the manifest dir when it was removed meanwhile.
+pub fn in_dir<T>(dir: &std::path::Path, f: impl FnOnce() -> T) -> T {
+    let _g = hold_cwd();
+    let prev = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+    std::env::set_current_dir(dir).unwrap();
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    std::env::set_current_dir(&prev).unwrap_or_else(|_| std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap());
+    r.unwrap_or_else(|e| std::panic::resume_unwind(e))
+}

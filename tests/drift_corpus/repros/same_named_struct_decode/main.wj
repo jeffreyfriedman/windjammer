@@ -1,0 +1,10 @@
+// Two modules each declare a struct `Item` with different fields; each decodes JSON into its own. The decoder must
+// use the `Item` the name denotes in the decoding module (S1 from the game project: it used the other module's,
+// "cannot decode JSON into `Item`", or the wrong fields).
+use shop
+use stock
+
+fn main() {
+    println(shop::parse("[{\"kind\":\"a\",\"price\":3}]"))
+    println(stock::parse("[{\"kind\":\"b\",\"count\":7},{\"kind\":\"c\",\"count\":1}]"))
+}

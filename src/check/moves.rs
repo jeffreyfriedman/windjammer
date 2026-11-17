@@ -16,7 +16,11 @@ pub use super::test_api::predicted_moves;
 pub fn predict(program: &crate::parser::Program<'_>, source: &str, file: &str) -> Vec<Diagnostic> {
     let rust = generate(program);
     remember(file, source, &rust);
-    rust.map_or_else(Vec::new, |rust| predict_from(&rust, source, file))
+    rust.map_or_else(Vec::new, |rust| {
+        let mut out = predict_from(&rust, source, file);
+        out.extend(super::borrow_moves::predict(program, &rust, source, file));
+        out
+    })
 }
 
 /// The Rust generated for a file's text, kept for the width trigger of the same run (`widths::generated_rust`
@@ -196,7 +200,7 @@ fn in_comment_or_string(source: &str, at: usize) -> bool {
 
 /// The first occurrence of `needle` at a word boundary, not in a `fn` definition, for which `ok` holds of the
 /// text after it.
-fn span_of(source: &str, file: &str, needle: &str, ok: impl Fn(&str) -> bool) -> Option<Span> {
+pub(super) fn span_of(source: &str, file: &str, needle: &str, ok: impl Fn(&str) -> bool) -> Option<Span> {
     let bytes = source.as_bytes();
     let byte = source.match_indices(needle).map(|(i, _)| i).find(|i| {
         let boundary = *i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';

@@ -12,7 +12,7 @@ fn find(xs: &Vec<i64>, needle: i64) -> i64 {
     let mut i = 0_i64;
     let n = (xs.len() as i64);
     while i < n {
-        if at(xs, (i as usize)) == needle {
+        if at(xs, i as usize) == needle {
             return i;
         }
         i += 1;

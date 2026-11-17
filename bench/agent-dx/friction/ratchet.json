@@ -15,7 +15,7 @@
     "cost.friction.events_open": 9,
     "cost.friction.open_compiler_bugs": 9,
     "cost.noise.lines_per_build": 0,
-    "cost.diag.check_tokens_per_error_human": 278,
+    "cost.diag.check_tokens_per_error_human": 277,
     "cost.diag.check_tokens_per_error_agent": 126,
     "cost.diag.build_tokens_per_error_human": 116,
     "cost.diag.build_tokens_per_error_agent": 57

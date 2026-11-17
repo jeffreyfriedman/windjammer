@@ -150,7 +150,11 @@ impl<'ast> Analyzer<'ast> {
                         .insert(decl.name.clone(), decl.clone());
                 }
                 Item::Const { name, type_, .. } | Item::Static { name, type_, .. } => {
-                    std::sync::Arc::make_mut(&mut self.module_const_types).insert(name.clone(), type_.clone());
+                    // The map is usually the library-wide one shared by every file; copy it only when this
+                    // file changes an entry (a copy per file is kept by every analyzed function, Q-MEM-1).
+                    if self.module_const_types.get(name) != Some(type_) {
+                        std::sync::Arc::make_mut(&mut self.module_const_types).insert(name.clone(), type_.clone());
+                    }
                 }
                 Item::TypeAlias { name, type_params, target, .. } => {
                     let params = type_params.iter().map(|p| p.name.clone()).collect();

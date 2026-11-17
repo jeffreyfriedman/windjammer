@@ -112,6 +112,8 @@ pub struct CompilerConfig {
     /// The shared cache root, as the driver resolved it ([`cache_root_from_lookup`]). The analysis metadata of
     /// manifest-less trees lives in `<root>/meta`. `None`: the process default ([`shared_cache_root`]).
     pub cache_root: Option<PathBuf>,
+    /// Print resident memory per build phase and the work counters (`wj build --mem-report`, `WJ_MEM_REPORT=1`).
+    pub mem_report: bool,
 }
 
 impl Default for CompilerConfig {
@@ -136,6 +138,7 @@ impl Default for CompilerConfig {
             liveness_mutation_always_move: false,
             unchecked_arithmetic: false,
             cache_root: None,
+            mem_report: false,
         }
     }
 }
@@ -193,12 +196,19 @@ impl CompilerConfig {
             liveness_mutation_always_move: get("WJ_LIVENESS_MUTATION").is_some_and(|v| v == "always-move"),
             unchecked_arithmetic: false,
             cache_root: CACHE_ROOT_INPUTS.iter().any(|k| get(k).is_some()).then(|| cache_root_from_lookup(&get)),
+            mem_report: truthy("WJ_MEM_REPORT"),
         }
     }
 
     /// The shared cache root this configuration builds with (see the `cache_root` field).
     pub fn cache_root(&self) -> PathBuf {
         self.cache_root.clone().unwrap_or_else(shared_cache_root)
+    }
+
+    /// Turn the memory report on (`--mem-report`); `WJ_MEM_REPORT=1` already did when set.
+    pub fn with_mem_report(mut self, on: bool) -> Self {
+        self.mem_report |= on;
+        self
     }
 
     pub fn with_ir_cutover(mut self, ir_cutover: IrCutoverConfig) -> Self {

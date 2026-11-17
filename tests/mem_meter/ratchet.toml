@@ -1,0 +1,28 @@
+# Build memory and cost ratchet for tests/library_build_memory.rs (shrink-only: lower a limit when a change
+# improves it, never raise it). Measured from the synthetic library (gen_library.wj) built at 25 and 50 modules
+# with `wj build src/mod.wj --output gen --library --no-cargo --module-file --mem-report`.
+#
+# The gate is meant to hold on any machine: the work counters are deterministic, and ratios cancel most
+# allocator and platform differences. Absolute RSS differs by platform (Linux about twice macOS per module),
+# so its limit is generous.
+#
+# Before Q-MEM-1 (Linux): 112 MB at 25 modules, 267 MB at 50 (about 6350 KiB per module, doubling ratio 2.38
+# and rising with N: quadratic). After the memory fix: Linux 73 / 107 MiB (1393 KiB per module, ratio 1.47);
+# macOS 54 / 71 MiB (696 KiB per module, ratio 1.31).
+
+# Peak RSS growth per added module between the two builds, in KiB (generous: platform-dependent).
+max_peak_growth_kib_per_module = 2500
+
+# Peak RSS at 50 modules divided by peak RSS at 25 modules (linear growth plus a fixed base stays under 2).
+max_peak_doubling_ratio = 1.6
+
+# Deterministic work counters ([wj-work] line): value at 50 modules divided by value at 25. Linear work doubles
+# (2.0); work quadratic in the module count quadruples. Provisional until measured on the time fixes.
+# Measured on Linux (WSL2, i9-10885H) at c2638b274, N=25 -> 50: 59286 -> 111186 entries cloned (ratio 1.875).
+max_registry_entries_cloned_doubling_ratio = 1.9
+# Measured at c2638b274, N=25 -> 50: 11500 -> 44250 trait keys scanned (ratio 3.85; 3.85-3.96 up to N=200).
+# Still quadratic: this records the current cost so it cannot grow; lower it toward 2 when the scan is made linear.
+max_trait_keys_scanned_doubling_ratio = 3.9
+
+# Wall time at 50 modules divided by wall time at 25 (noisy under load: loose). Quadratic was about 3.5.
+max_wall_doubling_ratio = 4.0

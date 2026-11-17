@@ -514,7 +514,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 arg_expr,
                                 &mut arg_str,
                                 receiver_type_name.as_deref(),
-                                Some(&self.enum_variant_types),
+                                Some(self.enum_variant_types.as_map()),
                             );
                         }
                     }
@@ -2066,7 +2066,7 @@ impl<'ast> CodeGenerator<'ast> {
                 separator,
                 method,
                 turbofish,
-                fixed_args.join(", ")
+                crate::codegen::rust::expression_utilities::join_call_arguments(&fixed_args)
             )
         } else {
             let emit_method = if separator == "::" {
@@ -2124,7 +2124,7 @@ impl<'ast> CodeGenerator<'ast> {
                 separator,
                 emit_method,
                 turbofish,
-                processed_args.join(", ")
+                crate::codegen::rust::expression_utilities::join_call_arguments(&processed_args)
             )
         };
 

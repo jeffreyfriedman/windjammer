@@ -386,13 +386,14 @@ impl Request {
 
 // ServerResponse - Build Responses
 
-fn content_type(value: string) -> HashMap<string, string> {
-    let mut h = HashMap::new()
-    h.insert("Content-Type", value)
-    h
-}
-
 impl ServerResponse {
+    // A one-entry `Content-Type` header map (a method, so the module's free-function table stays the runtime's own).
+    fn type_header(value: string) -> HashMap<string, string> {
+        let mut h = HashMap::new()
+        h.insert("Content-Type", value)
+        h
+    }
+
     // Match windjammer-runtime: status is Windjammer `int` (i64); field stays u16.
     fn new(status: int, body: string) -> ServerResponse {
         ServerResponse {
@@ -415,7 +416,7 @@ impl ServerResponse {
     fn json(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: content_type("application/json"),
+            headers: Self::type_header("application/json"),
             body: body,
             binary_body: None,
         }
@@ -425,7 +426,7 @@ impl ServerResponse {
         ServerResponse {
             status: 200,
             body: "",
-            headers: content_type("application/json"),
+            headers: Self::type_header("application/json"),
             binary_body: None,
         }
     }
@@ -514,7 +515,7 @@ impl ServerResponse {
     fn error(status: int, message: string) -> ServerResponse {
         ServerResponse {
             status: status as u16,
-            headers: content_type("text/plain"),
+            headers: Self::type_header("text/plain"),
             body: message,
             binary_body: None,
         }
@@ -532,7 +533,7 @@ impl ServerResponse {
     fn html(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: content_type("text/html"),
+            headers: Self::type_header("text/html"),
             body: body,
             binary_body: None,
         }

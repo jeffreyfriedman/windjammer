@@ -69,6 +69,10 @@ retired instructions (-19.6%, macOS counter); the PC's callgrind counts 763.7M -
 commits. Kernel islands 21,304 -> 1,304. The second round put map lookups and inserts into machine code (hashmap
 537M -> 315M, -41%; net 0.76 vs QuickJS, was 1.49) and took the local-mut analysis off programs without bindings
 (startup 120M -> 105M). Geometric means at the second round's head: 0.33 vs QuickJS, 0.66 vs Lua, 0.17 vs CPython.
+The sixth round gave maps keyed by dense integers an array part (Lua's): a key is its slot, entries are 64 bytes instead of the table's 100, iteration sorts nothing, and machine code's map helpers read and overwrite integer keys without building a `Key` (hashmap 284.9M -> 228.1M, -20%; net 2.94 vs Lua, was 3.53; 0.62 vs QuickJS). Two costs outside the interpreter were found by the agent-loop rung and removed from the run path: the durable-function scan read every `.wj` under the nearest `wj.toml` (about 300M per run inside the compiler checkout, 2.5G under a stray manifest in a temp tree), and the behind-checkout check built the full list of compiler sources before comparing mtimes (53M per run inside a checkout; now one `stat` per file with an early exit, about 40M, and `WJ_NO_STALE_WARN=1`, which the instruction gate sets, skips it). An attempt at cheaper closure calls (the argument checked before the slot search, the frame pushed instead of filled with `Unit` and overwritten) measured 0.0% on the closures kernel and was not kept: the per-call setup is not where its instructions go.
+The fifth round took startup to 57.3M: `wj` no longer links CoreFoundation (chrono without `clock`; -6.7M before
+`main`), the check parses `rust_core.wji` only when it asks about a `String` method (-4.7M), and the numeric
+inference shares one stdlib signature table per process instead of copying it per inference.
 The fourth round stored the registry's runtime layer as bincode (startup 76.8M -> 69.1M), hashed map keys a word
 per round (hashmap -3.9%) and gave call-free closures a copy of their free names instead of a reference per name
 per call (closures -11.4%; the third round's attempt to reuse the references cost +3.2% and was not kept).
@@ -84,12 +88,29 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | Rung | Metric | Now | Target | Gate |
 |---|---|---|---|---|
 | P0 | every kernel and startup counted, outputs checked, fallbacks ledgered | done | stays done | `interp_instr.wj --check` (+3%), `cargo test --release --test fallbacks` |
-| P1 | worst kernel, net vs QuickJS | 1.12 (closures: 1.24 -> 1.12 after copying call-free closures' free names; hashmap 1.49 -> 0.76) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
-| P2 | startup instructions (`hello`) | per counter: retired (macOS) 69.1M (was 119M, 104.6M, 76.8M); callgrind (PC) 83.3M at the second round. By phase (`WJ_PHASES=1`, retired): before main 24.6M (a trivial Rust binary 8.3M; CoreFoundation 6.5M), registry 11.8M (runtime layer 5.8M, binary since the fourth round, was 13.7M as JSON; stdlib meta 4.0M, mostly merging, not parsing: caching it parsed saved 1M and was not kept), numeric 5.7M, analyzer 5.1M, calls 4.6M, moves 3.8M, the interpreter 2.6M | <= 60M (next: CoreFoundation off the run path, a dependency decision for chrono/notify/reqwest; then the numeric and calls checks' fixed setup), then <= 25M |   |
-| P3 | worst kernel, net vs Lua 5.5 | 3.53 (hashmap, was 6.89) | <= 1.0 | `--refs` |
+| P1 | worst kernel, net vs QuickJS | 1.11 (closures: 1.24 -> 1.12 after copying call-free closures' free names; hashmap 1.49 -> 0.76 -> 0.62) | <= 1.0 | `interp_instr.wj --refs`, baseline shrink-only |
+| P2 | startup instructions (`hello`) | per counter: retired (macOS) 57.3M, first rung reached (was 119M, 104.6M, 76.8M, 69.1M); callgrind (PC) 83.3M at the second round. By phase (`WJ_PHASES=1`, retired): before main 18.0M (a trivial Rust binary 8.3M; CoreFoundation no longer linked), registry 12.2M (runtime layer 5.8M binary, stdlib meta 4.9M merging, boundary 1.5M), numeric 5.7M (the shared stdlib table's one build), stdlib trait bootstrap 2.0M, analyzer 5.7M (the analyzer 2.6M, a full clone of the stdlib registry 1.3M, the analysis 1.8M; metered separately since the sixth round), forbidden-pattern check 0.0M (it no longer builds an analyzer), path 1.7M, IR 1.6M, moves 1.4M, the interpreter 2.6M | <= 25M. Plan: (a) the registry's runtime and stdlib layers as static tables generated from the sources by a checked-in generator with a freshness test (build.rs cannot run the scanner, which is crate code): the registry reads a static layer through its existing `global_fallback` read-through, so nothing is decoded or merged at run time (-12M); (b) the numeric stdlib table the same way (-5.7M); (c) the analysis layered over the stdlib registry instead of cloning it (-1.3M) and the trait bootstrap shared per process (-2M); (d) before `main` 17M is mostly the dynamic loader and static initializers of a 30MB binary | | `instr_baseline.json` `startup`; `cargo test --release --test run_path_dylibs` (no CoreFoundation, SystemConfiguration, Security, Foundation or AppKit in `wj`) |
+| P3 | worst kernel, net vs Lua 5.5 | 2.94 (hashmap, was 6.89, then 3.53; the array part for dense integer keys); closures 2.01 next | <= 1.0 | `--refs` |
 | P4 | islands and refused loops in kernels | 404 islands (was 21,304, then 1,304), 3 refused loops | 0 in any hot loop | `bench/interp/fallbacks.tsv` (exact) |
 | P5 | geometric mean, net vs Node (V8) | 2.5 to 2.8 (V8's own count varies by run) | <= 1.0 (JIT class) | `--refs` |
 | P6 | a kernel suite of real programs (JSON, regex, a game tick, a parser) | not yet | added, counted, P1-P5 apply | new kernels in `bench/interp/` |
+
+Against Node, per kernel (owner rule: every performance report carries this table). Two measurements, never mixed:
+`instr` is the net instruction ratio from `interp_instr.wj --refs` (retired, macOS, measured on the round-6 head
+81cc30963, 2026-11-13); `cpu` is the CPU-seconds ratio from `bench/interp/compare.json` (carried from the 2026-11-03
+record, load 12.6; the PC re-records it on a quiet box). Below 1.0 means Windjammer is cheaper than V8. Targets: the
+rung each kernel must reach before P5 can close.
+
+| Kernel | vs Node, instr (2026-11-13) | vs Node, cpu (2026-11-03) | vs CPython, instr | vs CPython, cpu | Node target (next rung, then P5) |
+|---|---|---|---|---|---|
+| closures | 4.55 | 2.04 | 2.09 | 1.94 | 2.0 (fused iterator loop), then 1.0 |
+| fib30 | 0.78 | 0.72 | 0.09 | 0.21 | stays below 1.0 |
+| hashmap | 2.94 | 2.01 | 0.27 | 1.42 | 1.5 (integer keys in machine code), then 1.0 |
+| loop5m | 1.89 | 0.85 | 0.02 | 0.04 | 1.0 |
+| nbody | 5.67 | 2.42 | 0.46 | 0.89 | 2.5 (no island per `advance` call), then 1.0 |
+| sieve | 3.71 | 1.05 | 0.10 | 0.17 | 1.5, then 1.0 |
+| strings | 6.54 | 1.32 | 0.42 | 0.63 | 2.5 (string loops in machine code), then 1.0 |
+| structs | 1.38 | 0.73 | 0.04 | 0.16 | 1.0 |
 
 ## Ladder 2: correctness (the compiled program is the oracle)
 
@@ -114,6 +135,7 @@ loops refused), nbody (an island per call of `advance`, plus loop-entry cost), s
 | D4 | REPL: continuation, history, recall | landed | values and types inspectable (`:type`), the resolved engine, under 50 ms per line | REPL tests |
 | D5 | hot reload between calls | landed (ADR-0024) | reload a running game loop without losing state | hot-reload tests |
 | D6 | tokens an agent reads per error (`wj check`, agent format) | 126 | <= 80 | `cost.diag.check_tokens_per_error_agent` |
+| D7 | the agent loop: a typical 190-line program (`bench/interp/startup/agent_loop.wj`: parsing, validation, structs, enums, a map, closures, `Result`) run after an edit through the default `wj run` (check + run) | interpreted: 581M instructions retired, 0.10 to 0.25 s wall on a loaded machine; compiled after the same edit (`wj run --compiled`): 1.1 to 3.0 s wall (wj's own 657M instructions; cargo and rustc not counted), so the interpreter is 7x to 12x faster per edit. By phase: move prediction 242M (42%: the file's Rust generated in process), local-mut 83M, numeric 74M, analyzer 30M, IR 12M, the program itself 65M. Found on the way: a stray `wj.toml` above the program made the durable-function scan read every `.wj` below it (2,508M), and inside the compiler checkout it cost about 300M per run; the scan now starts with the program's own sources | <= 150M and <= 50 ms (move prediction without generating Rust, local-mut sharing the analyzer's walk) | `instr_baseline.json` `agent_loop` (+3%), output checked against `bench/interp/expected/agent_loop.out` |
 
 ## Ladder 4: coverage
 

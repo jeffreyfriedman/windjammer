@@ -21,6 +21,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj build --ir-shadow-validate` | Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate) | tested |
 | `wj build --json` | Output diagnostics as machine-readable JSON (for agent/IDE consumption) | tested |
 | `wj build --library` | Library mode: exclude test main() functions from output | tested |
+| `wj build --mem-report` | Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines | tested |
 | `wj build --metadata` | External crate metadata for cross-crate type inference (NAME=PATH, repeatable) | tested |
 | `wj build --module-file` | Auto-generate mod.rs with pub mod declarations and re-exports | tested |
 | `wj build --no-cargo` | Skip cargo build after transpilation (transpile only) | tested |
@@ -97,7 +98,8 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj run --defer-drop` | Defer drop optimization mode (auto, always, never) | tested |
 | `wj run --defer-drop-threshold` | Defer drop threshold in bytes (default: 102400 = 100KB) | tested |
 | `wj run --speculate` | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) | tested |
-| `wj run --verify` | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints | tested |
+| `wj run --verify` | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty. When the two runs agree it prints `wj verify: OK` (with the program's own exit status) and exits 0, whatever that status is; a difference or a failed build exits non-zero | tested |
+| `wj run --stdin-file` | Read standard input from this file (a plain way to give input without a shell pipe, quoting or `printf`) | tested |
 | `wj run --interpret` | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release | tested |
 | `wj run --target` | Target platform (rust, javascript, wasm) | tested |
 | `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH | tested |
@@ -208,3 +210,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj rust-surface --write` | Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one) | tested |
 | `wj check --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |
 | `wj run --error-format` | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command | tested |
+| `wj lock` | Resolve dependencies and write or verify wj.lock (exact revisions and content hashes) | tested |
+| `wj lock update` | Re-resolve every path and git dependency, in dependency order, and write wj.lock | tested |
+| `wj lock check` | Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not | tested |
+| `wj build --locked` | Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds) | tested |

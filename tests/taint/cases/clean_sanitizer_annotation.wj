@@ -1,0 +1,15 @@
+// A function documented as a sanitizer returns data that is safe for every sink.
+use std::fs
+use std::process
+
+/// Only letters and digits survive.
+/// wj-taint: sanitizer
+fn safe_word(text: string) -> string {
+    text.replace(";", "").replace(" ", "")
+}
+
+fn main() {
+    let name = safe_word(fs::read_to_string("user.txt").unwrap_or(""))
+    let out = process::run("echo ${name}")
+    println("${out}")
+}

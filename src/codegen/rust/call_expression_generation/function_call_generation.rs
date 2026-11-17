@@ -354,7 +354,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                 .split("::")
                 .next()
                 .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
-            Some(&gen.enum_variant_types),
+            Some(gen.enum_variant_types.as_map()),
         ) || sig.as_ref().is_some_and(|s| {
             let idx = s.arg_param_index(i);
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, idx) {
@@ -1155,7 +1155,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             })
             .collect();
 
-        let call_expr = format!("{}({})", func_str, fixed_args.join(", "));
+        let call_expr = format!("{}({})", func_str, crate::codegen::rust::expression_utilities::join_call_arguments(&fixed_args));
 
         // Wrap in unsafe block if extern, otherwise regular block
         // Parenthesize so the block can be used as a sub-expression (e.g., in comparisons)
@@ -1166,7 +1166,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         }
     } else {
         // No format!() args - generate normally with optional unsafe wrapper
-        let call_str = format!("{}({})", func_str, args.join(", "));
+        let call_str = format!("{}({})", func_str, crate::codegen::rust::expression_utilities::join_call_arguments(&args));
         if is_extern_call && !gen.in_unsafe_block {
             format!("(unsafe {{ {} }})", call_str)
         } else {

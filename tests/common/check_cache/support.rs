@@ -1,22 +1,12 @@
 //! Shared helpers: a cwd lock (the cache keys read the working directory), cached-vs-uncached comparison.
 
 use std::path::Path;
-use std::sync::Mutex;
 use windjammer::check::{check_path, CheckOptions};
 use windjammer::diagnostics::Report;
 
-static CWD: Mutex<()> = Mutex::new(());
-
 /// Run `f` with `dir` as the working directory (serialized: the working directory is process-wide).
 pub fn in_dir<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
-    let _g = CWD.lock().unwrap_or_else(|e| e.into_inner());
-    // Another test in this process may have left the working directory in a temp dir it then removed (the
-    // process cwd is shared by every test thread): fall back to the manifest dir instead of failing on it.
-    let prev = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    std::env::set_current_dir(dir).unwrap();
-    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-    std::env::set_current_dir(&prev).unwrap_or_else(|_| std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap());
-    r.unwrap_or_else(|e| std::panic::resume_unwind(e))
+    windjammer::test_utils::in_dir(dir, f)
 }
 
 pub fn report(target: &Path, use_cache: bool) -> Report {

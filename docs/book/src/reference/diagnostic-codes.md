@@ -21,6 +21,7 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0051` | Local binding changed but not declared mut | HighConfidence |  | A local binding (`let`, a `for` loop variable) is immutable unless declared `mut` (ADR-0002) |
 | `WJ0160` | Arena value escapes its arena | HighConfidence | E0597, E0505 | A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function that declares the arena, stored in a variable, field or collection declared outside the arena's scope, used as the value of the block that declares the arena, or used after the arena's `reset()` |
 | `WJ0161` | `std::arena` is unstable | Proven |  | Arenas (ADR-0025) are behind the compiler feature `unstable_arenas` |
+| `WJ0173` | Untrusted data reaches a command, file path or query | HighConfidence |  | Data the program did not produce (file contents, standard input, an HTTP request, a database row) flows into a command, the path of a file write or SQL text without passing through a sanitizer (ADR-0009) |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

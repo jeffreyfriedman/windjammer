@@ -202,6 +202,8 @@ pub struct Interpreter {
     pub(crate) epoch: Epoch,
     /// Global random generator (`std::random`), seeded from entropy unless time is deterministic.
     pub(crate) rng: Option<rand::rngs::StdRng>,
+    /// The working directory the program set with `fs::set_current_dir` (the process keeps its own; see `virtual_cwd.rs`).
+    pub(crate) virtual_cwd: Option<std::path::PathBuf>,
     /// `std::log` threshold (0 = error .. 4 = trace); `None` until `log::init`.
     pub(crate) log_level: Option<i32>,
     /// How `std::http` client calls are answered (default: refuse).
@@ -344,6 +346,7 @@ impl Interpreter {
             #[cfg(target_arch = "wasm32")]
             epoch: Epoch,
             rng: None,
+            virtual_cwd: None,
             log_level: None,
             http: Default::default(),
             caps: None,
@@ -429,10 +432,6 @@ impl Interpreter {
         self.sched.set_seed(seed);
     }
 
-    /// Run tasks as nested calls on this thread instead of OS threads (always so on wasm32; see `sched.rs`).
-    pub fn set_one_thread_tasks(&mut self, on: bool) {
-        self.sched.one_thread = on;
-    }
 
     /// Deterministic time: no real clock is read; time advances only through `sleep`.
     pub fn set_deterministic_time(&mut self, on: bool) {

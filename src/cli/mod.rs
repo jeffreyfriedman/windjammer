@@ -3,6 +3,7 @@
 // This module provides the implementation for all CLI subcommands.
 
 pub mod add;
+pub mod agent_wrap;
 pub mod build;
 pub mod build_caps;
 pub mod build_json;
@@ -26,6 +27,7 @@ pub mod new;
 mod new_templates;
 pub mod reduce;
 pub mod replay;
+pub mod lock;
 pub mod remove;
 pub mod run;
 pub mod rust_surface;

@@ -23,6 +23,9 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
 | `wj check` | Type check without building |
 | `wj add` | Add a dependency to wj.toml |
+| `wj lock` | Resolve dependencies and write or verify wj.lock (exact revisions and content hashes) |
+| `wj lock update` | Re-resolve every path and git dependency, in dependency order, and write wj.lock |
+| `wj lock check` | Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not |
 | `wj remove` | Remove a dependency from wj.toml |
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
@@ -96,6 +99,8 @@ Usage: wj build [OPTIONS] <FILE>
 | `--metadata` | NAME=PATH |  | External crate metadata for cross-crate type inference (NAME=PATH, repeatable) |
 | `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
 | `--ir-shadow-validate` | IR_SHADOW_VALIDATE |  | Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate) |
+| `--mem-report` | MEM_REPORT |  | Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines |
+| `--locked` | LOCKED |  | Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds) |
 
 ## `wj run`
 
@@ -114,7 +119,8 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--compiled` | COMPILED |  | Transpile to Rust and run with cargo (the release path), skipping the interpreter |
 | `--release` | RELEASE |  | Like --compiled, with optimizations |
 | `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
-| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty |
+| `--stdin-file` | FILE |  | Read standard input from this file (a plain way to give input without a shell pipe, quoting or `printf`) |
+| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty. When the two runs agree it prints `wj verify: OK` (with the program's own exit status) and exits 0, whatever that status is; a difference or a failed build exits non-zero |
 | `--error-format` | FORMAT |  | How diagnostics and failed runs report on stderr: `human` (default); `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; or `json` (interpreted runs: one last line in the diagnostics schema with `stack` and `locals`, ADR-0036). Program stdout and the exit status do not change. `WJ_ERROR_FORMAT` sets the default for every command |
 | `--speculate` | SPECULATE |  | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) |
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
@@ -338,6 +344,38 @@ Usage: wj add [OPTIONS] <PACKAGE>
 | `<PACKAGE>` | PACKAGE |  | Package name |
 | `-f`, `--features` | FEATURES |  | Comma-separated list of features |
 | `-p`, `--path` | PATH |  | Local path dependency |
+
+## `wj lock`
+
+Resolve dependencies and write or verify wj.lock (exact revisions and content hashes)
+
+```text
+Usage: wj lock <COMMAND>
+```
+
+## `wj lock update`
+
+Re-resolve every path and git dependency, in dependency order, and write wj.lock
+
+```text
+Usage: wj lock update [DIR]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<DIR>` | DIR |  | Project directory (default: the current directory) |
+
+## `wj lock check`
+
+Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not
+
+```text
+Usage: wj lock check [DIR]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<DIR>` | DIR |  | Project directory (default: the current directory) |
 
 ## `wj remove`
 

@@ -9,9 +9,10 @@ pub mod effects;
 pub mod files;
 mod file_cache;
 mod fix;
-mod front;
+pub(crate) mod front;
 mod test_api;
-pub use test_api::compiler_identity_of;
+pub use test_api::{compiler_identity_of, uninstall_shared_cache};
+mod borrow_moves;
 pub mod moves;
 pub mod locate;
 pub mod local_mut;
@@ -21,6 +22,7 @@ mod rust_surface_health;
 mod match_variants;
 pub mod shared_cache;
 mod std_calls;
+pub mod taint;
 mod semantic;
 pub mod watch;
 pub mod widths;
@@ -148,6 +150,20 @@ pub fn local_mutability(path: &Path) -> Result<Checked> {
     Ok(Checked { report: Report::new("check", found), sources: sources.into_iter().collect() })
 }
 
+/// The `WJ0006` diagnostics for bare `use` of a module that does not exist (`use state_model` with no such module
+/// beside the file or in the project, in the standard library or in `wj.toml`), exactly as `wj check` reports them;
+/// `wj build` prints these and stops. No cache, no other check.
+pub fn missing_modules(path: &Path) -> Result<Checked> {
+    let (sources, _) = inputs(path)?;
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut sink = Vec::new();
+    let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+    let found = project::module_imports_only(path, &parsed);
+    std::panic::set_hook(previous);
+    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+}
+
 /// `local_mutability` over in-memory sources (one program); files that do not parse are left out.
 pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic> {
     let previous = std::panic::take_hook();
@@ -157,6 +173,28 @@ pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic>
     let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
     let tables = std::sync::Arc::new(crate::ir::stdlib_tables::StdlibTables::load_or_compute());
     let found = local_mut::run(&refs, tables);
+    std::panic::set_hook(previous);
+    finish(found)
+}
+
+/// ADR-0009: the `WJ0173` diagnostics (untrusted data reaching a command, a file path or SQL text) of the program at
+/// `path`, exactly as `wj check` reports them; `wj build` and `wj run --compiled` stop on these. No cache, no other check.
+pub fn taint_findings(path: &Path) -> Result<Checked> {
+    let (sources, _) = inputs(path)?;
+    let found = taint_findings_sources(path, &sources);
+    Ok(Checked { report: Report::new("check", found), sources: sources.into_iter().collect() })
+}
+
+/// `taint_findings` over in-memory sources; files that do not parse are left out.
+pub fn taint_findings_sources(root: &Path, sources: &[(String, String)]) -> Vec<Diagnostic> {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut sink = Vec::new();
+    let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+    let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
+    let by_file: HashMap<String, &front::Parsed> = refs.iter().map(|p| (p.file.clone(), *p)).collect();
+    let mut found = Vec::new();
+    taint::run(root, &refs, &by_file, &mut found);
     std::panic::set_hook(previous);
     finish(found)
 }

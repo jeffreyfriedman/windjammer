@@ -117,7 +117,10 @@ impl LintCollector {
         }
     }
 
-    pub fn add(&mut self, diagnostic: LintDiagnostic) {
+    pub fn add(&mut self, mut diagnostic: LintDiagnostic) {
+        // an expression inside `${..}` is located by an interpolation key column (`source_map::INTERP_COLUMN_BASE`, a
+        // million and up): report the column a reader sees, never the key (W0005 printed `326:1171590075`)
+        diagnostic.location.column = crate::source_map::display_column(diagnostic.location.column);
         self.diagnostics.push(diagnostic);
     }
 
@@ -379,5 +382,23 @@ mod owned_but_not_returned_tests {
             "expected owned-but-not-returned, got: {:?}",
             diags
         );
+    }
+}
+
+#[cfg(test)]
+mod span_sanity_tests {
+    /// Span sanity: every lint's column is within its line (plus one past the end), including a `.clone()` inside a
+    /// `${..}` interpolation, whose expression is keyed by a column no line reaches.
+    #[test]
+    fn lint_columns_never_exceed_the_line() {
+        let src = "struct P {\n    name: string,\n}\n\nfn main() {\n    let p = P { name: \"a\" }\n    let q = p\n    println(\"${p.name.clone()} and ${q.name.clone()}\")\n    let v = vec![1, 2]\n    for x in v.iter() {\n        println(\"${x}\")\n    }\n}\n";
+        let lints = super::lint_text("t.wj", src).expect("lints");
+        assert!(lints.iter().any(|d| d.lint_name == "W0005"), "the interpolated clone is linted: {lints:?}");
+        let lines: Vec<&str> = src.lines().collect();
+        for d in &lints {
+            let (l, c) = (d.location.line, d.location.column);
+            let len = lines.get(l.saturating_sub(1)).map_or(0, |t| t.chars().count());
+            assert!(c <= len + 1, "{} at {l}:{c} is past the end of line {l} ({len} characters)", d.lint_name);
+        }
     }
 }

@@ -1,0 +1,9 @@
+// A closure applied to the elements of tainted data sees tainted parameters.
+use std::fs
+use std::process
+
+fn main() {
+    let text = fs::read_to_string("jobs.txt").unwrap_or("")
+    let lines = text.split("\n").collect()
+    lines.iter().for_each(|l| process::run(l)) //~ WJ0173
+}

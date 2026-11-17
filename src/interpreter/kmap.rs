@@ -11,6 +11,12 @@
 //! distinguishes; a lookup with any other key (a float, a reference...) scans; inserting a key of
 //! another kind turns the table into a tree for good. Iteration sorts the table's entries by key, so
 //! the order is the tree's.
+//!
+//! A hashed map whose keys are all integers in `0..n`, with `n` at most twice its length (counters, ids,
+//! histograms), is an array instead (`Dense`, Lua's array part): a key is its slot, an entry is the key and
+//! the value (64 bytes, against the table's 100 with its hash key and control byte), and index order is key
+//! order, so iteration sorts nothing. A key outside that range turns it into a table; a table becomes an
+//! array again when its length reaches a power of two and its keys fit.
 
 use super::value::{Key, Value};
 use std::collections::{BTreeMap, HashMap};
@@ -20,6 +26,7 @@ use std::hash::{BuildHasherDefault, Hash, Hasher};
 enum Store {
     Tree(BTreeMap<Key, Value>),
     Table(HashMap<HKey, (Key, Value), BuildHasherDefault<Fx>>),
+    Dense { slots: Vec<Option<(Key, Value)>>, len: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +62,20 @@ impl HKey {
             _ => return None,
         })
     }
+}
+
+/// The array slot of an integer key, when it has one.
+fn index(k: &Value) -> Option<usize> {
+    match k {
+        Value::Int(i, _) if *i >= 0 && *i <= u32::MAX as i128 => Some(*i as usize),
+        _ => None,
+    }
+}
+
+/// Whether entries whose largest key is `max` fit an array once there are `len` of them (at most half of it
+/// empty, past a small one).
+fn dense_fits(max: usize, len: usize) -> bool {
+    max < (2 * len).max(16)
 }
 
 /// A small multiplicative hasher (keys are integers and short strings; the order is never observed).
@@ -131,9 +152,15 @@ impl KMap {
         }
     }
 
-    /// A hashed map whose keys are all hash-exact becomes a table.
+    /// A hashed map whose keys are all hash-exact becomes a table, or an array when they fit one.
     fn tabulate(&mut self) {
         if let (true, Store::Tree(t)) = (self.hashed, &self.store) {
+            let slots: Option<Vec<usize>> = t.keys().map(|k| index(&k.0)).collect();
+            if slots.is_some_and(|s| s.last().is_none_or(|m| dense_fits(*m, s.len()))) {
+                let Store::Tree(t) = std::mem::replace(&mut self.store, Store::Tree(BTreeMap::new())) else { unreachable!() };
+                self.store = Self::dense(t.into_iter());
+                return;
+            }
             if t.keys().all(|k| HKey::of(&k.0).is_some()) {
                 let Store::Tree(t) = std::mem::replace(&mut self.store, Store::Tree(BTreeMap::new())) else { unreachable!() };
                 self.store = Store::Table(t.into_iter().map(|(k, v)| (HKey::of(&k.0).expect("checked"), (k, v))).collect());
@@ -143,8 +170,55 @@ impl KMap {
 
     /// Back to a tree (a key of another kind arrives).
     fn untabulate(&mut self) {
-        if let Store::Table(t) = std::mem::replace(&mut self.store, Store::Tree(BTreeMap::new())) {
-            self.store = Store::Tree(t.into_values().collect());
+        self.store = match std::mem::replace(&mut self.store, Store::Tree(BTreeMap::new())) {
+            Store::Table(t) => Store::Tree(t.into_values().collect()),
+            Store::Dense { slots, .. } => Store::Tree(slots.into_iter().flatten().collect()),
+            tree => tree,
+        };
+    }
+
+    /// An array of these entries (their keys all have a slot).
+    fn dense(entries: impl Iterator<Item = (Key, Value)>) -> Store {
+        let mut slots: Vec<Option<(Key, Value)>> = Vec::new();
+        let mut len = 0;
+        for (k, v) in entries {
+            let i = index(&k.0).expect("a key with a slot");
+            if i >= slots.len() {
+                slots.resize_with(i + 1, || None);
+            }
+            if slots[i].is_none() {
+                len += 1;
+            }
+            slots[i] = Some((k, v));
+        }
+        Store::Dense { slots, len }
+    }
+
+    /// An array to a table (a hash-exact key without a slot, or too far past the others, arrives).
+    fn spread(&mut self) {
+        if let Store::Dense { slots, .. } = std::mem::replace(&mut self.store, Store::Tree(BTreeMap::new())) {
+            self.store = Store::Table(slots.into_iter().flatten().map(|(k, v)| (HKey::of(&k.0).expect("an integer key"), (k, v))).collect());
+        }
+    }
+
+    /// A table whose length just reached a power of two becomes an array when its keys fit one (checked once per
+    /// doubling, so the check costs O(1) per insert).
+    fn condense(&mut self) {
+        let Store::Table(t) = &self.store else { return };
+        let n = t.len();
+        if n < 8 || !n.is_power_of_two() || !t.values().all(|(k, _)| index(&k.0).is_some_and(|i| dense_fits(i, n))) {
+            return;
+        }
+        let Store::Table(t) = std::mem::replace(&mut self.store, Store::Tree(BTreeMap::new())) else { unreachable!() };
+        self.store = Self::dense(t.into_values());
+    }
+
+    /// The entry of key `k` in an array: its slot, nothing for another hash-exact kind, a scan otherwise.
+    fn slot<'a>(slots: &'a [Option<(Key, Value)>], k: &Key) -> Option<&'a (Key, Value)> {
+        match index(&k.0) {
+            Some(i) => slots.get(i).and_then(|e| e.as_ref()),
+            None if HKey::of(&k.0).is_some() => None,
+            None => slots.iter().flatten().find(|(kk, _)| kk == k),
         }
     }
 
@@ -152,6 +226,7 @@ impl KMap {
         match &self.store {
             Store::Tree(t) => t.len(),
             Store::Table(t) => t.len(),
+            Store::Dense { len, .. } => *len,
         }
     }
 
@@ -164,6 +239,7 @@ impl KMap {
         match &self.store {
             Store::Tree(t) => t.values().next(),
             Store::Table(t) => t.values().next().map(|(_, v)| v),
+            Store::Dense { slots, .. } => slots.iter().flatten().next().map(|(_, v)| v),
         }
     }
 
@@ -174,7 +250,31 @@ impl KMap {
                 Some(h) => t.get(&h).map(|(_, v)| v),
                 None => t.values().find(|(kk, _)| kk == k).map(|(_, v)| v),
             },
+            Store::Dense { slots, .. } => Self::slot(slots, k).map(|(_, v)| v),
         }
+    }
+
+    /// `get` of an integer key, without building one (machine code's lookups: an array slot or one probe).
+    pub fn get_int(&self, i: i128, t: crate::interpreter::int::IntTy) -> Option<&Value> {
+        match &self.store {
+            Store::Dense { slots, .. } => match usize::try_from(i) {
+                Ok(n) => slots.get(n).and_then(|e| e.as_ref()).map(|(_, v)| v),
+                Err(_) => None,
+            },
+            Store::Table(tb) => tb.get(&HKey::Int(i)).map(|(_, v)| v),
+            Store::Tree(_) => self.get(&Key(Value::Int(i, t))),
+        }
+    }
+
+    /// `insert` of an integer key whose old value (if any) is dropped: an array slot written in place.
+    pub fn set_int(&mut self, i: i128, t: crate::interpreter::int::IntTy, v: Value) {
+        if let Store::Dense { slots, .. } = &mut self.store {
+            if let Some(Some((_, old))) = usize::try_from(i).ok().and_then(|n| slots.get_mut(n)) {
+                *old = v;
+                return;
+            }
+        }
+        self.insert(Key(Value::Int(i, t)), v);
     }
 
     pub fn get_key_value(&self, k: &Key) -> Option<(&Key, &Value)> {
@@ -184,6 +284,7 @@ impl KMap {
                 Some(h) => t.get(&h).map(|(kk, v)| (kk, v)),
                 None => t.values().find(|(kk, _)| kk == k).map(|(kk, v)| (kk, v)),
             },
+            Store::Dense { slots, .. } => Self::slot(slots, k).map(|(kk, v)| (kk, v)),
         }
     }
 
@@ -198,11 +299,45 @@ impl KMap {
                 Some(h) => t.get_mut(&h).map(|(_, v)| v),
                 None => t.values_mut().find(|(kk, _)| kk == k).map(|(_, v)| v),
             },
+            Store::Dense { slots, .. } => match index(&k.0) {
+                Some(i) => slots.get_mut(i).and_then(|e| e.as_mut()).map(|(_, v)| v),
+                None if HKey::of(&k.0).is_some() => None,
+                None => slots.iter_mut().flatten().find(|(kk, _)| kk == k).map(|(_, v)| v),
+            },
         }
     }
 
     /// `BTreeMap::insert`: an equal key already present keeps its key and gets the new value.
     pub fn insert(&mut self, k: Key, v: Value) -> Option<Value> {
+        if let Store::Dense { slots, len } = &mut self.store {
+            match index(&k.0) {
+                Some(i) if i < slots.len() => {
+                    return match &mut slots[i] {
+                        Some((_, old)) => Some(std::mem::replace(old, v)),
+                        e => {
+                            *e = Some((k, v));
+                            *len += 1;
+                            None
+                        }
+                    };
+                }
+                Some(i) if dense_fits(i, *len + 1) => {
+                    // the vector's capacity grows geometrically, so filling `0..n` in order costs O(n)
+                    slots.resize_with(i + 1, || None);
+                    slots[i] = Some((k, v));
+                    *len += 1;
+                    return None;
+                }
+                Some(_) => self.spread(),
+                None if HKey::of(&k.0).is_some() => self.spread(),
+                None => {
+                    if let Some((_, old)) = slots.iter_mut().flatten().find(|(kk, _)| *kk == k) {
+                        return Some(std::mem::replace(old, v));
+                    }
+                    self.untabulate();
+                }
+            }
+        }
         if let Store::Table(t) = &mut self.store {
             match HKey::of(&k.0) {
                 Some(h) => {
@@ -210,6 +345,7 @@ impl KMap {
                         Some((_, old)) => Some(std::mem::replace(old, v)),
                         None => {
                             t.insert(h, (k, v));
+                            self.condense();
                             None
                         }
                     };
@@ -240,6 +376,16 @@ impl KMap {
                 };
                 t.remove(&h)
             }
+            Store::Dense { slots, len } => {
+                let i = match index(&k.0) {
+                    Some(i) => i,
+                    None if HKey::of(&k.0).is_some() => return None,
+                    None => slots.iter().position(|e| e.as_ref().is_some_and(|(kk, _)| kk == k))?,
+                };
+                let e = slots.get_mut(i)?.take()?;
+                *len -= 1;
+                Some(e)
+            }
         }
     }
 
@@ -247,6 +393,10 @@ impl KMap {
         match &mut self.store {
             Store::Tree(t) => t.clear(),
             Store::Table(t) => t.clear(),
+            Store::Dense { slots, len } => {
+                slots.clear();
+                *len = 0;
+            }
         }
     }
 
@@ -259,6 +409,7 @@ impl KMap {
                 v.sort_by(|a, b| a.0.cmp(b.0));
                 KIter::Sorted(v.into_iter())
             }
+            Store::Dense { slots, .. } => KIter::Dense(slots.iter().flatten()),
         }
     }
 
@@ -297,6 +448,7 @@ impl KMap {
 pub enum KIter<'a> {
     Tree(std::collections::btree_map::Iter<'a, Key, Value>),
     Sorted(std::vec::IntoIter<(&'a Key, &'a Value)>),
+    Dense(std::iter::Flatten<std::slice::Iter<'a, Option<(Key, Value)>>>),
 }
 
 impl<'a> Iterator for KIter<'a> {
@@ -305,6 +457,7 @@ impl<'a> Iterator for KIter<'a> {
         match self {
             KIter::Tree(i) => i.next(),
             KIter::Sorted(i) => i.next(),
+            KIter::Dense(i) => i.next().map(|(k, v)| (k, v)),
         }
     }
 }
@@ -314,6 +467,7 @@ impl DoubleEndedIterator for KIter<'_> {
         match self {
             KIter::Tree(i) => i.next_back(),
             KIter::Sorted(i) => i.next_back(),
+            KIter::Dense(i) => i.next_back().map(|(k, v)| (k, v)),
         }
     }
 }
@@ -323,5 +477,93 @@ impl<'a> IntoIterator for &'a KMap {
     type IntoIter = KIter<'a>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interpreter::int::IntTy;
+    use crate::interpreter::value::FloatTy;
+
+    fn int(i: i128) -> Key {
+        Key(Value::Int(i, IntTy::I64))
+    }
+
+    fn same(m: &KMap, oracle: &BTreeMap<Key, Value>) -> bool {
+        m.iter().map(|(k, v)| (k.clone(), Key(v.clone()))).eq(oracle.iter().map(|(k, v)| (k.clone(), Key(v.clone()))))
+    }
+
+    /// Every store answers as the tree does, through each change of store: random inserts, removes and lookups
+    /// of dense, sparse, negative and float keys, compared after every operation (a small LCG, so it replays).
+    #[test]
+    fn every_store_answers_as_the_tree() {
+        for (round, spread) in [(0u64, 40i128), (1, 400), (2, 20_000), (3, 12)].into_iter() {
+            let mut seed = 0x9e37_79b9_7f4a_7c15u64 ^ round;
+            let mut next = move || {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                seed >> 33
+            };
+            let mut m = KMap::hash_map(BTreeMap::new());
+            let mut oracle: BTreeMap<Key, Value> = BTreeMap::new();
+            let mut stores = std::collections::BTreeSet::new();
+            for step in 0..4000 {
+                let r = next();
+                let k = match r % 50 {
+                    0 => int(-((next() % 5) as i128) - 1),
+                    1 if round == 3 => Key(Value::Float((next() % 8) as f64 + 0.5, FloatTy::F64)),
+                    2 if round == 3 => Key(Value::Float((next() % 8) as f64, FloatTy::F64)),
+                    _ => int((next() as i128) % spread),
+                };
+                match next() % 4 {
+                    0 => assert_eq!(m.remove(&k).map(Key), oracle.remove(&k).map(Key), "remove {k:?} at {step}"),
+                    1 => {
+                        assert_eq!(m.get(&k).cloned().map(Key), oracle.get(&k).cloned().map(Key), "get {k:?} at {step}");
+                        if let Value::Int(i, t) = k.0 {
+                            assert_eq!(m.get_int(i, t).cloned().map(Key), oracle.get(&k).cloned().map(Key), "get_int {i} at {step}");
+                        }
+                    }
+                    2 if matches!(k.0, Value::Int(..)) => {
+                        let Value::Int(i, t) = k.0 else { unreachable!() };
+                        let v = Value::Int(step as i128, IntTy::I64);
+                        m.set_int(i, t, v.clone());
+                        oracle.insert(k, v);
+                    }
+                    _ => {
+                        let v = Value::Int(step as i128, IntTy::I64);
+                        assert_eq!(m.insert(k.clone(), v.clone()).map(Key), oracle.insert(k, v).map(Key), "insert at {step}");
+                    }
+                }
+                stores.insert(match &m.store {
+                    Store::Tree(_) => "tree",
+                    Store::Table(_) => "table",
+                    Store::Dense { .. } => "dense",
+                });
+                assert_eq!(m.len(), oracle.len());
+                if step % 97 == 0 {
+                    assert!(same(&m, &oracle), "iteration at {step}");
+                    assert_eq!(m.get_key_value(&int(3)).map(|(k, v)| (k.clone(), Key(v.clone()))), oracle.get_key_value(&int(3)).map(|(k, v)| (k.clone(), Key(v.clone()))));
+                }
+            }
+            assert!(same(&m, &oracle));
+            m.clear();
+            assert_eq!(m.len(), 0);
+            assert!(stores.contains("dense"), "round {round} never used the array: {stores:?}");
+        }
+    }
+
+    /// Counting into `0..n` in a scattered order (the hashmap kernel) ends as an array; keys far apart do not.
+    #[test]
+    fn scattered_dense_keys_become_an_array_and_sparse_ones_stay_a_table() {
+        let mut m = KMap::hash_map(BTreeMap::new());
+        for i in 0..10_007i128 {
+            m.insert(int((i * 7919) % 10_007), Value::Unit);
+        }
+        assert!(matches!(m.store, Store::Dense { len: 10_007, .. }));
+        let mut s = KMap::hash_map(BTreeMap::new());
+        for i in 0..1000i128 {
+            s.insert(int(i * 1000), Value::Unit);
+        }
+        assert!(matches!(s.store, Store::Table(_)));
     }
 }

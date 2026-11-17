@@ -456,14 +456,14 @@ pub fn create_cargo_toml_with_deps(
     // Emitting only [lib] left main.rs orphaned (no cargo run target).
     let lib_or_bin_section = if has_lib_rs && has_main_rs {
         format!(
-            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
-            lib_name_normalized, project_name
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n{}",
+            lib_name_normalized, project_name, crate::cargo_toml::extra_bin_sections(output_dir)
         )
     } else if has_lib_rs {
         // Library project - generate [lib] section
         format!(
-            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n",
-            lib_name_normalized
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n{}",
+            lib_name_normalized, crate::cargo_toml::extra_bin_sections(output_dir)
         )
     } else if has_main_rs {
         // Binary project with main.rs - generate [[bin]] section

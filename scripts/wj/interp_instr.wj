@@ -35,6 +35,7 @@ use wj_json_doc::dumps
 const BENCH: string = "bench/interp"
 const BASELINE: string = "bench/interp/instr_baseline.json"
 const STARTUP: string = "bench/interp/startup/hello.wj"
+const AGENT_LOOP: string = "bench/interp/startup/agent_loop.wj"
 const SLACK_PCT: int = 3
 
 struct Count {
@@ -83,7 +84,8 @@ const MARK: string = "\n@@wj-interp-instr counter@@\n"
 // nothing outlives the run, and appends it to stdout after `MARK`.
 fn count_once(c: string, cmd: string) -> Count {
     let counter = if c == "callgrind" { "valgrind --tool=callgrind --callgrind-out-file=/dev/null" } else { "/usr/bin/time -l" }
-    let line = "f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; ${counter} ${cmd} 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
+    // the staleness warnings are off: inside the checkout they cost a `stat` per compiler source, which is not the interpreter
+    let line = "export WJ_NO_STALE_WARN=1; f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; ${counter} ${cmd} 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
     let out = match sh(line) {
         Ok(o) => o,
         Err(e) => {
@@ -192,6 +194,10 @@ fn main() {
     // startup: the smallest program through the default `wj run` path
     let hello = measure(c, quote(wj) + " run --no-lint " + quote(cwd + "/" + STARTUP), runs + 2, "hello\n", "startup")
     counts = with(counts, "startup", from_int(hello as i64))
+    // the agent loop (ADR-0038 ladder 3): a typical 200-line program, check and run, as an agent runs it after an edit
+    let agent_expected = fs::read_to_string("${BENCH}/expected/agent_loop.out") ?? ""
+    let agent = measure(c, quote(wj) + " run " + quote(cwd + "/" + AGENT_LOOP), runs, agent_expected, "agent_loop")
+    counts = with(counts, "agent_loop", from_int(agent as i64))
     let mut refs = object()
     // each reference tool's own startup (bench/interp/startup/hello.*), subtracted for the net ratios
     let mut ref_start: Vec<(string, string, int)> = Vec::new()

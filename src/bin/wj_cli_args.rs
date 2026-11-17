@@ -124,6 +124,14 @@ pub enum Commands {
         /// Discrepancies are reported as errors instead of warnings (CI gate).
         #[arg(long)]
         ir_shadow_validate: bool,
+
+        /// Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines
+        #[arg(long)]
+        mem_report: bool,
+
+        /// Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds)
+        #[arg(long)]
+        locked: bool,
     },
 
     /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
@@ -159,9 +167,14 @@ pub enum Commands {
         #[arg(long)]
         watch: bool,
 
+        /// Read standard input from this file (a plain way to give input without a shell pipe, quoting or `printf`)
+        #[arg(long, value_name = "FILE")]
+        stdin_file: Option<std::path::PathBuf>,
+
         /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
         /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read
-        /// once for both runs; when no input arrives within 2 s it is taken as empty
+        /// once for both runs; when no input arrives within 2 s it is taken as empty. When the two runs agree it prints `wj verify: OK` (with the
+        /// program's own exit status) and exits 0, whatever that status is; a difference or a failed build exits non-zero
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
 
@@ -594,6 +607,12 @@ pub enum Commands {
         path: Option<String>,
     },
 
+    /// Resolve dependencies and write or verify wj.lock (exact revisions and content hashes)
+    Lock {
+        #[command(subcommand)]
+        command: LockCommand,
+    },
+
     /// Remove a dependency from wj.toml
     Remove {
         /// Package name
@@ -851,6 +870,22 @@ pub enum Commands {
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
+}
+
+#[derive(Subcommand)]
+pub enum LockCommand {
+    /// Re-resolve every path and git dependency, in dependency order, and write wj.lock
+    Update {
+        /// Project directory (default: the current directory)
+        #[arg(value_name = "DIR")]
+        dir: Option<PathBuf>,
+    },
+    /// Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not
+    Check {
+        /// Project directory (default: the current directory)
+        #[arg(value_name = "DIR")]
+        dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]

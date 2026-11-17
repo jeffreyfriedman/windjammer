@@ -1,0 +1,142 @@
+// Effect-spelling gate (ADR-0021): `fs.write(..)` with `use std::fs` is the call `fs::write(..)`. For every effect kind and both
+// spellings, a program that needs the effect without the grant must fail `wj check`, `wj build` and `wj run` (WJ0040), the
+// same program with the grant must pass `wj check`, and `wj explain-effects` must list the effect.
+//
+//   wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' scripts/wj/effect_spelling_gate.wj <wj-binary>
+//
+// A gate that cannot fail proves nothing: `--selftest` runs the program text builder and the verdict checks on planted inputs.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+struct Effect {
+    kind: string,
+    module: string,
+    // the call as `module::f(..)`; the dot spelling replaces the first `::` by `.`
+    call: string,
+    prelude: string,
+    // false for the determinism effects (time, random): the manifest does not grant them, `explain-effects` and `@uses` see them
+    enforced: bool,
+}
+
+fn effects() -> Vec<Effect> {
+    [
+        Effect { kind: "fs.read", module: "fs", call: "fs::read_to_string(\"a.txt\")", prelude: "", enforced: true },
+        Effect { kind: "fs.write", module: "fs", call: "fs::write(\"a.txt\", \"x\")", prelude: "", enforced: true },
+        Effect { kind: "net.connect", module: "http", call: "http::get(\"http://api.example/\")", prelude: "", enforced: true },
+        Effect { kind: "net.listen", module: "http", call: "http::serve_fn(\"127.0.0.1:0\", handler)", prelude: "fn handler(r: http::Request) -> http::ServerResponse {\n    http::ServerResponse::ok(\"x\")\n}\n\n", enforced: true },
+        Effect { kind: "env.read", module: "env", call: "env::get(\"HOME\")", prelude: "", enforced: true },
+        Effect { kind: "env.write", module: "env", call: "env::set(\"A\", \"b\")", prelude: "", enforced: true },
+        Effect { kind: "process", module: "process", call: "process::run(\"true\")", prelude: "", enforced: true },
+        Effect { kind: "time", module: "time", call: "time::now()", prelude: "", enforced: false },
+        Effect { kind: "random", module: "random", call: "random::bool()", prelude: "", enforced: false },
+    ]
+}
+
+fn spelled(call: string, dot: bool) -> string {
+    if dot { strings.replacen(call, "::", ".", 1) } else { call }
+}
+
+fn program(e: Effect, dot: bool) -> string {
+    "use std::${e.module}\n\n${e.prelude}fn main() {\n    let _ = ${spelled(e.call, dot)}\n}\n"
+}
+
+fn manifest(grant: string) -> string {
+    "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[capabilities]\nconsole = true\n${grant}"
+}
+
+struct Run {
+    status: int,
+    text: string,
+}
+
+fn go(cmd: string) -> Run {
+    match sh(cmd + " 2>&1") {
+        Ok(r) => Run { status: r.status, text: r.stdout },
+        Err(e) => Run { status: -1, text: e },
+    }
+}
+
+// the verdict on one denied run: it failed, and for the right reason
+fn refused(r: Run) -> bool {
+    r.status != 0 && strings.contains(r.text, "WJ0040")
+}
+
+fn selftest() -> bool {
+    let e = effects()[1]
+    let ok = program(e, false) == "use std::fs\n\nfn main() {\n    let _ = fs::write(\"a.txt\", \"x\")\n}\n"
+        && program(e, true) == "use std::fs\n\nfn main() {\n    let _ = fs.write(\"a.txt\", \"x\")\n}\n"
+        && refused(Run { status: 1, text: "error[WJ0040]: effect `fs.write` is not granted" })
+        && !refused(Run { status: 0, text: "" })
+        && !refused(Run { status: 1, text: "some other error" })
+    ok
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() >= 2 && args[1] == "--selftest" {
+        if selftest() {
+            println("effect-spelling selftest: program text and verdicts judged correctly")
+            return
+        }
+        println("effect-spelling selftest: FAILED")
+        process.exit(1)
+    }
+    if args.len() < 2 {
+        println("usage: effect_spelling_gate.wj <wj-binary> | --selftest")
+        process.exit(2)
+    }
+    let wj = quote(args[1])
+    let root = match sh("mktemp -d") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-effect-spelling",
+    }
+    let mut failed = 0
+    let mut checks = 0
+    for e in effects() {
+        for dot in [false, true] {
+            let spelling = if dot { "dot" } else { "path" }
+            let dir = "${root}/${strings.replace(e.kind, ".", "_")}_${spelling}"
+            let _ = sh("mkdir -p ${quote(dir)}/src")
+            let _ = fs.write("${dir}/src/main.wj", program(e, dot))
+            let _ = fs.write("${dir}/wj.toml", manifest(""))
+            let denied = if !e.enforced { Vec::new() } else { [
+                ("check", go("${wj} check ${quote(dir)}")),
+                ("build", go("${wj} build ${quote(dir)} --no-cargo --no-generate-cargo-toml -o ${quote(dir)}/out")),
+                ("run", go("${wj} run --interpret ${quote(dir)}")),
+            ] }
+            for d in denied {
+                checks += 1
+                if !refused(d.1) {
+                    println("FAIL  ${e.kind} (${spelling}): `wj ${d.0}` did not refuse the ungranted effect: ${strings.trim(strings.split_lines(d.1.text)[0])}")
+                    failed += 1
+                }
+            }
+            // explain-effects lists it
+            checks += 1
+            let ex = go("${wj} explain-effects ${quote(dir)}/src/main.wj")
+            if !strings.contains(ex.text, e.kind) {
+                println("FAIL  ${e.kind} (${spelling}): `wj explain-effects` does not list it")
+                failed += 1
+            }
+            // with the grant the same program passes the check
+            let _ = fs.write("${dir}/wj.toml", manifest("${e.kind} = true\n"))
+            let granted = go("${wj} check ${quote(dir)}")
+            if e.enforced {
+                checks += 1
+            }
+            if e.enforced && granted.status != 0 {
+                println("FAIL  ${e.kind} (${spelling}): granted, `wj check` still fails: ${strings.trim(strings.split_lines(granted.text)[0])}")
+                failed += 1
+            }
+        }
+    }
+    let _ = sh("rm -rf ${quote(root)}")
+    println("effect-spelling gate: ${checks - failed}/${checks} checks passed")
+    if failed > 0 {
+        process.exit(1)
+    }
+}

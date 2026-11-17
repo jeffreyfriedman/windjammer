@@ -192,6 +192,10 @@ id = "wj build --library"
 statement = "Library mode: exclude test main() functions from output"
 
 [[promise]]
+id = "wj build --mem-report"
+statement = "Print resident memory (current and peak MiB) at each build phase to stderr as `[wj-mem]` lines"
+
+[[promise]]
 id = "wj build --metadata"
 statement = "External crate metadata for cross-crate type inference (NAME=PATH, repeatable)"
 
@@ -501,7 +505,11 @@ statement = "Interpreted runs: also start a compiled build of the same content i
 
 [[promise]]
 id = "wj run --verify"
-statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints"
+statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty. When the two runs agree it prints `wj verify: OK` (with the program's own exit status) and exits 0, whatever that status is; a difference or a failed build exits non-zero"
+
+[[promise]]
+id = "wj run --stdin-file"
+statement = "Read standard input from this file (a plain way to give input without a shell pipe, quoting or `printf`)"
 
 [[promise]]
 id = "wj run --interpret"
@@ -964,3 +972,22 @@ statement = "Diagnostic format: `human` (default) or `agent`, one compact line p
 [[promise]]
 id = "wj run --error-format"
 statement = "Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command"
+
+[[promise]]
+id = "code WJ0173"
+
+[[promise]]
+id = "wj lock"
+statement = "Resolve dependencies and write or verify wj.lock (exact revisions and content hashes)"
+
+[[promise]]
+id = "wj lock update"
+statement = "Re-resolve every path and git dependency, in dependency order, and write wj.lock"
+
+[[promise]]
+id = "wj lock check"
+statement = "Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not"
+
+[[promise]]
+id = "wj build --locked"
+statement = "Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds)"

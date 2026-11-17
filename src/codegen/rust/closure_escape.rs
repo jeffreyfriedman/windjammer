@@ -20,16 +20,16 @@ pub(crate) fn non_escaping_closure_names(body: &[&Statement<'_>]) -> HashSet<Str
     for s in body {
         visit_stmt(s, &mut escaped);
     }
-    bound.retain(|n| !escaped.names.contains(n));
+    bound.retain(|n| !escaped.by_value.contains(n));
     bound
 }
 
-/// What the visitor records: every name used other than as a callee or plain call argument (`names`), and the names
+/// What the visitor records: every name used other than as a callee or plain call argument (`by_value`), and the names
 /// stored in a place that outlives the call (`stored`): a struct literal's field, an argument of a method on a field
 /// (`self.handlers.push(f)`), the value assigned to a field.
 #[derive(Default)]
 struct Escapes {
-    names: HashSet<String>,
+    by_value: HashSet<String>,
     stored: HashSet<String>,
 }
 
@@ -137,7 +137,7 @@ fn visit_expr(e: &Expression<'_>, esc: &mut Escapes, allowed: bool) {
     match e {
         Expression::Identifier { name, .. } => {
             if !allowed {
-                esc.names.insert(name.clone());
+                esc.by_value.insert(name.clone());
             }
         }
         Expression::Literal { .. } => {}

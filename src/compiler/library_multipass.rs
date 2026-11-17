@@ -17,10 +17,23 @@ fn profiling_enabled() -> bool {
     crate::debug_env::truthy("WJ_PROFILE")
 }
 
-fn profile_phase(phase: &str, start: Instant) {
+fn profile_phase(report: &crate::mem_report::MemReport, phase: &str, start: Instant) {
+    report.phase(phase);
     if profiling_enabled() {
         eprintln!("[wj-profile] {}: {}ms", phase, start.elapsed().as_millis());
     }
+}
+
+/// Writable access to the shared library registry. When another holder still reads it, `make_mut` copies it
+/// whole; that copy is counted (`registry_entries_cloned`), so a per-file copy shows up in the cost ratchet.
+fn global_mut<'a>(
+    report: &crate::mem_report::MemReport,
+    registry: &'a mut std::sync::Arc<SignatureRegistry>,
+) -> &'a mut SignatureRegistry {
+    if std::sync::Arc::strong_count(registry) > 1 || std::sync::Arc::weak_count(registry) > 0 {
+        report.count(crate::mem_report::Work::RegistryEntriesCloned, registry.signatures.len() as u64);
+    }
+    std::sync::Arc::make_mut(registry)
 }
 
 /// Re-scan output for hand-written / cfg-gated `.rs` siblings and refresh `mod.rs`/`lib.rs`
@@ -181,6 +194,7 @@ pub(crate) fn build_library_multipass(
     config: &crate::compiler_config::CompilerConfig,
 ) -> Result<()> {
     let phase_start = Instant::now();
+    let report = crate::mem_report::MemReport::new(config.mem_report);
 
     // The shared cache root: where `.wj.meta` entries of a manifest-less tree live.
     let cache_root = config.cache_root();
@@ -236,7 +250,7 @@ pub(crate) fn build_library_multipass(
         parsed_programs.push(program);
         parsers.push(parser);
     }
-    profile_phase("Parse upfront", parse_start);
+    profile_phase(&report, "Parse upfront", parse_start);
 
     let shader_filter_start = Instant::now();
     let (filtered_modules_by_dir, shader_count) =
@@ -247,9 +261,8 @@ pub(crate) fn build_library_multipass(
             shader_count
         );
     }
-    profile_phase("Shader filter (parsed AST)", shader_filter_start);
-    profile_phase(
-        "Step 0+1: Source reading + parse + shader filter",
+    profile_phase(&report, "Shader filter (parsed AST)", shader_filter_start);
+    profile_phase(&report, "Step 0+1: Source reading + parse + shader filter",
         phase_start,
     );
 
@@ -276,8 +289,7 @@ pub(crate) fn build_library_multipass(
 
     let dependency_graph =
         super::incremental::DependencyGraph::build(&sources, &parsed_programs, &src_base);
-    profile_phase(
-        "Incremental setup (deps + dep graph)",
+    profile_phase(&report, "Incremental setup (deps + dep graph)",
         incremental_setup_start,
     );
 
@@ -387,7 +399,7 @@ pub(crate) fn build_library_multipass(
             }
         }
     }
-    profile_phase("Copy registry collection", copy_registry_start);
+    profile_phase(&report, "Copy registry collection", copy_registry_start);
 
     let stub_registry_start = Instant::now();
     // Collect declaration stubs + float/struct registries from every file (parallel scan,
@@ -462,7 +474,7 @@ pub(crate) fn build_library_multipass(
         &parsed_programs,
         &source_indices,
     );
-    profile_phase("Declaration stub registry (parallel)", stub_registry_start);
+    profile_phase(&report, "Declaration stub registry (parallel)", stub_registry_start);
 
     // insert Box on one owned field per recursive SCC so rustc E0072
     // cannot fire on mutually recursive embeds (complete-chain / reducer graphs).
@@ -573,7 +585,7 @@ pub(crate) fn build_library_multipass(
                 };
                 if should_insert {
                     pass_changed = true;
-                    let new_registry = std::sync::Arc::make_mut(&mut global_registry);
+                    let new_registry = global_mut(&report, &mut global_registry);
                     new_registry.signatures.insert(name.clone(), sig.clone());
                     // Keep module-qualified aliases in sync when ownership changes
                     if !file_stem.is_empty() {
@@ -596,10 +608,10 @@ pub(crate) fn build_library_multipass(
 
         // `std/strings.wj` merge aliases `len` → `strings::len` as owned stubs.
         // Restore the runtime borrow contract after every convergence round.
-        std::sync::Arc::make_mut(&mut global_registry)
+        global_mut(&report, &mut global_registry)
             .restore_runtime_borrowed_strings_signatures();
 
-        profile_phase(&format!("Step 3 round {}", pass_number), round_start);
+        profile_phase(&report, &format!("Step 3 round {}", pass_number), round_start);
 
         if !pass_changed || pass_number >= MAX_GLOBAL_PASSES {
             break;
@@ -607,7 +619,7 @@ pub(crate) fn build_library_multipass(
 
         pass_number += 1;
     }
-    profile_phase("Step 3 total", step3_start);
+    profile_phase(&report, "Step 3 total", step3_start);
 
     let reexports_start = Instant::now();
     // Collect `pub use` re-exports from every file first so `use super::*` / `use crate::...::*`
@@ -664,10 +676,11 @@ pub(crate) fn build_library_multipass(
         &global_struct_fields,
         &struct_defining_module_paths,
         module_re_exports,
+        &report,
     );
     super::bail_on_inference_errors(&global_numeric_inference.errors, "Numeric", None)?;
-    profile_phase("Step 4A: Unified numeric inference", step4a_start);
-    profile_phase("Re-exports + Step 4A total", reexports_start);
+    profile_phase(&report, "Step 4A: Unified numeric inference", step4a_start);
+    profile_phase(&report, "Re-exports + Step 4A total", reexports_start);
 
     let global_numeric_inference = std::sync::Arc::new(global_numeric_inference);
 
@@ -684,8 +697,7 @@ pub(crate) fn build_library_multipass(
             &src_base,
             Some(&parsed_programs),
         )?;
-    profile_phase(
-        "Dependency resolution (type modules + extern qualifiers)",
+    profile_phase(&report, "Dependency resolution (type modules + extern qualifiers)",
         dep_resolution_start,
     );
 
@@ -717,7 +729,7 @@ pub(crate) fn build_library_multipass(
         }
         shared_analyzer.analyzed_trait_methods.clone()
     };
-    profile_phase("Step 4B-pre: Trait inference (per-file)", step4b_pre_start);
+    profile_phase(&report, "Step 4B-pre: Trait inference (per-file)", step4b_pre_start);
 
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
     //
@@ -805,6 +817,7 @@ pub(crate) fn build_library_multipass(
             "⚡ Step 4B-a prep: user_files={} reanalysis_set_total={} dirty_set_total={} user_in_reanalysis={} user_in_dirty={}",
             user_file_count, reanalysis_set.len(), dirty_set.len(), user_in_reanalysis, user_in_dirty
         );
+        report.phase("Step 4B-a prep");
     }
     for i in &user_file_indices {
         let file = &sources[*i].0;
@@ -845,7 +858,7 @@ pub(crate) fn build_library_multipass(
                     &mut meta_copy,
                     &mut meta_fields,
                 );
-                let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+                let reg = global_mut(&report, &mut final_global_registry);
                 for (name, sig) in &meta_registry.signatures {
                     if sig.param_ownership.is_empty() {
                         continue;
@@ -877,7 +890,7 @@ pub(crate) fn build_library_multipass(
             step4b_analyses[*i] = Some(Step4bFileAnalysis {
                 registry: SignatureRegistry::empty(),
                 analyzed_functions: Vec::new(),
-                merged_trait_methods: HashMap::new(),
+                own_trait_methods: None,
                 copy_structs: Vec::new(),
                 output_file,
                 file_stem,
@@ -899,7 +912,7 @@ pub(crate) fn build_library_multipass(
         }
 
         let file_start = Instant::now();
-        let analysis = analyze_file_for_step4b(
+        let mut analysis = analyze_file_for_step4b(
             *i,
             &sources,
             &parsed_programs,
@@ -910,7 +923,6 @@ pub(crate) fn build_library_multipass(
             &global_copy_structs,
             &global_struct_fields,
             &struct_defining_module_paths,
-            &global_analyzed_trait_methods_arc,
             &library_consts,
             enable_lint,
         )
@@ -928,37 +940,16 @@ pub(crate) fn build_library_multipass(
 
         deferred_lint_errors.extend(analysis.lint_errors.clone());
 
-        {
-            let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-            reg.merge(&analysis.registry);
-            reg.register_module_aliases(
-                &analysis.registry,
-                &analysis.file_stem,
-                &analysis.module_path,
-            );
-        }
-
-        let mut full_registry = analysis.registry.clone();
-        {
-            let mut tmp_analyzer = Analyzer::for_library_pass(
-                global_copy_structs.clone(),
-                global_struct_fields.clone(),
-                struct_defining_module_paths.clone(),
-            );
-            tmp_analyzer.analyzed_trait_methods = analysis.merged_trait_methods.clone();
-            tmp_analyzer.register_trait_methods_in_registry(
-                &analysis.merged_trait_methods,
-                &mut full_registry,
-            );
-            crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
-                &mut full_registry,
-            );
-            let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-            reg.merge(&full_registry);
-            crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
-                reg,
-            );
-        }
+        let full_registry = merge_file_analysis_into_global(
+            &report,
+            &mut analysis,
+            &mut final_global_registry,
+            &global_analyzed_trait_methods_arc,
+            &global_copy_structs,
+            &global_struct_fields,
+            &struct_defining_module_paths,
+        );
+        report.progress("Step 4B-a analyzed file", step_done, user_file_count);
 
         for (name, sig) in &full_registry.signatures {
             if !sig.param_ownership.is_empty()
@@ -981,7 +972,7 @@ pub(crate) fn build_library_multipass(
             step4b_analyzed_count, step4b_skipped_count
         );
     }
-    profile_phase("Step 4B-a: Analysis (sequential)", step4b_analyze_start);
+    profile_phase(&report, "Step 4B-a: Analysis (sequential)", step4b_analyze_start);
 
     // Promote converged local signatures over stale engine/dependency stubs on canonical
     // `Type::method` keys. Step 4B merge can leave engine metadata on the short key while
@@ -991,7 +982,7 @@ pub(crate) fn build_library_multipass(
             body_borrow_must_not_replace_owned_copy_formal,
             body_borrow_must_not_replace_owned_formal_stub, prefer_converged_over_stub,
         };
-        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        let reg = global_mut(&report, &mut final_global_registry);
         for (name, sig) in &local_converged_sigs {
             let mut keys = vec![name.clone()];
             let parts: Vec<&str> = name.split("::").collect();
@@ -1032,7 +1023,7 @@ pub(crate) fn build_library_multipass(
     // call-site constraints see the final ownership (e.g. owned HttpReply, not &mut).
     {
         use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
-        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        let reg = global_mut(&report, &mut final_global_registry);
         for sig in reg.signatures.values_mut() {
             wrap_converged_borrow_param_types(sig);
         }
@@ -1040,7 +1031,7 @@ pub(crate) fn build_library_multipass(
     {
         use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
         let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
-        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        let reg = global_mut(&report, &mut final_global_registry);
         crate::compiler::multipass_bare_pass_demotion::promote_callees_from_bare_pass_callers(
             reg,
             &program_refs,
@@ -1062,7 +1053,7 @@ pub(crate) fn build_library_multipass(
     // Path-dep generated Rust ABI is last writer after analysis stubs converge
     // (`wj_querystring::get` key: &str must beat Owned/Owned importer stubs).
     {
-        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        let reg = global_mut(&report, &mut final_global_registry);
         crate::metadata::merge_external_crate_metadata_with_aliases(external_paths, reg, None);
     }
 
@@ -1075,7 +1066,7 @@ pub(crate) fn build_library_multipass(
     {
         use crate::ir::pipeline::{DiagnosticSeverity, IrPipeline};
         let mut pipeline = IrPipeline::new();
-        let library_fields = library_field_types(&global_struct_fields, &parsed_programs);
+        let mut library_fields = library_field_types(&global_struct_fields, &parsed_programs);
         // Rounds until callers and callees agree on value-formal modes (value_formal_fixed_point).
         for round in 1..=super::value_formal_fixed_point::MAX_ROUNDS {
             let mut ir_errors = Vec::new();
@@ -1084,15 +1075,20 @@ pub(crate) fn build_library_multipass(
                 // Per-file import aliases (`qs_get` → `wj_querystring::get`) overwrite analyzer Owned stubs before IR expected types are set.
                 let mut ir_reg = SignatureRegistry::layered(std::sync::Arc::clone(&final_global_registry));
                 crate::codegen::rust::program_generation::install_program_import_alias_signatures(&mut ir_reg, &parsed_programs[i]);
-                let fields = file_field_types(&library_fields, &parsed_programs[i]);
-                let module = pipeline.lower_to_ir(&analysis.analyzed_functions, &ir_reg, Some(&fields));
+                let module = with_file_field_types(&mut library_fields, &parsed_programs[i], |fields| {
+                    pipeline.lower_to_ir(&analysis.analyzed_functions, &ir_reg, Some(fields))
+                });
+                // Release the read-through before writing the global registry, so the write is in place
+                // instead of a full copy of the library registry per file and round.
+                drop(ir_reg);
                 for diag in module.diagnostics.iter().filter(|d| matches!(d.severity, DiagnosticSeverity::Error)) {
                     ir_errors.push(format!("[IR ERROR] {}: {}", sources[i].0.display(), diag.message));
                 }
-                crate::ir::signature_bridge::sync_ir_ownership_to_registry(&module.functions, &analysis.analyzed_functions, std::sync::Arc::make_mut(&mut final_global_registry));
+                crate::ir::signature_bridge::sync_ir_ownership_to_registry(&module.functions, &analysis.analyzed_functions, global_mut(&report, &mut final_global_registry));
                 ir_functions_by_index[i] = Some(module.functions);
+                report.progress(&format!("Step 4B-a-IR round {round} lower file"), i + 1, step4b_analyses.len());
             }
-            let published = publish_value_formals(&formal_scope, std::sync::Arc::make_mut(&mut final_global_registry), &sources, &ir_functions_by_index, &step4b_analyses);
+            let published = publish_value_formals(&formal_scope, global_mut(&report, &mut final_global_registry), &sources, &ir_functions_by_index, &step4b_analyses);
             if !published || round == super::value_formal_fixed_point::MAX_ROUNDS {
                 ir_errors.iter().for_each(|e| eprintln!("{e}"));
                 break;
@@ -1103,7 +1099,7 @@ pub(crate) fn build_library_multipass(
     // body classification — restore owned formals again for call-site codegen.
     {
         let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
-        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        let reg = global_mut(&report, &mut final_global_registry);
         crate::compiler::multipass_bare_pass_demotion::restore_pub_owned_non_copy_api_formals(
             reg,
             &program_refs,
@@ -1119,7 +1115,7 @@ pub(crate) fn build_library_multipass(
         publish_value_formals(&formal_scope, reg, &sources, &ir_functions_by_index, &step4b_analyses);
         publish_into_file_registries(&formal_scope, &sources, &ir_functions_by_index, &mut step4b_analyses);
     }
-    profile_phase("Step 4B-a-IR: IR lowering", step4b_ir_start);
+    profile_phase(&report, "Step 4B-a-IR: IR lowering", step4b_ir_start);
 
     // Detect if any file in the project uses serde (via `use std::json`).
     // When true, all structs in the project auto-derive Serialize/Deserialize.
@@ -1222,7 +1218,7 @@ pub(crate) fn build_library_multipass(
         std::collections::HashSet<usize>,
     > = std::collections::HashMap::new();
 
-    let mut converged_qualified_keys = super::converged_module_signatures::register_all_files(std::sync::Arc::make_mut(&mut final_global_registry), &sources, &src_base, |i| stripped_programs[i].as_ref().unwrap_or(&parsed_programs[i]), |i| step4b_analyses[i].as_ref().map(|a| &a.registry));
+    let mut converged_qualified_keys = super::converged_module_signatures::register_all_files(global_mut(&report, &mut final_global_registry), &sources, &src_base, |i| stripped_programs[i].as_ref().unwrap_or(&parsed_programs[i]), |i| step4b_analyses[i].as_ref().map(|a| &a.registry));
 
     for batch_start in (0..total_codegen).step_by(CODEGEN_BATCH_SIZE) {
         let batch_end = (batch_start + CODEGEN_BATCH_SIZE).min(total_codegen);
@@ -1261,6 +1257,8 @@ pub(crate) fn build_library_multipass(
             let analysis = step4b_analyses[*i]
                 .as_ref()
                 .expect("analysis must exist after phase 4B-a");
+            let merged_trait_methods =
+                analysis.merged_trait_methods(&global_analyzed_trait_methods_arc);
             let program: &crate::parser::Program<'static> = stripped_programs[*i]
                 .as_ref()
                 .unwrap_or(&parsed_programs[*i]);
@@ -1312,26 +1310,19 @@ pub(crate) fn build_library_multipass(
                     global_struct_fields.clone(),
                     struct_defining_module_paths.clone(),
                 );
-                tmp_analyzer.analyzed_trait_methods = analysis.merged_trait_methods.clone();
+                tmp_analyzer.analyzed_trait_methods = merged_trait_methods.clone();
                 tmp_analyzer.register_trait_methods_in_registry(
-                    &analysis.merged_trait_methods,
+                    &merged_trait_methods,
                     &mut full_registry,
                 );
-                crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
-                    &mut full_registry,
-                );
+                write_back_counted(&report, &mut full_registry);
             }
-            {
-                let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-                crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
-                    reg,
-                );
-            }
+            write_back_global_if_needed(&report, &mut final_global_registry);
 
             // Crate-root main.wj is the binary entry ([[bin]]), not a library module.
             // Using new_for_module skipped `fn main` and injected `use super::*`.
-            let is_crate_root_main = file.file_name().and_then(|n| n.to_str()) == Some("main.wj")
-                && file.parent().is_some_and(|p| p == src_base.as_path());
+            let is_crate_root_main =
+                crate::module_system::module_graph::is_bin_entry_file(file, &src_base);
 
             let mut codegen = if is_crate_root_main {
                 CodeGenerator::new(full_registry, target)
@@ -1372,7 +1363,7 @@ pub(crate) fn build_library_multipass(
             codegen.set_library_source_root(src_base.clone());
             codegen.set_type_defining_modules((*type_defining_modules_arc).clone());
             codegen.set_extern_submodule_qualifiers((*extern_submodule_qualifiers_arc).clone());
-            codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
+            codegen.set_analyzed_trait_methods(merged_trait_methods);
             codegen.set_shared_numeric_inference(std::sync::Arc::clone(&global_numeric_inference));
             codegen.set_serde_available(project_has_serde);
             if let Some(ir_functions) = ir_functions_by_index_arc[*i].clone() {
@@ -1403,16 +1394,28 @@ pub(crate) fn build_library_multipass(
                 }
             }
 
-            let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-            reg.merge(&codegen.signature_registry);
-            super::converged_module_signatures::register_converged_module_qualified_signatures(reg, &crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file).unwrap_or_default(), program, &codegen.signature_registry, &mut converged_qualified_keys);
-            for (name, indices) in &codegen.function_emitted_mut_arg_indices {
+            // Take what the global registry needs from the generator and drop it first: it holds the global
+            // registry (directly and through its layered registry), and writing the global while it is alive
+            // forces a full copy of the library registry for every file. The merges read only the local layer.
+            let mut codegen_registry = std::mem::replace(
+                &mut codegen.signature_registry,
+                crate::analyzer::SignatureRegistry::empty(),
+            );
+            codegen_registry.detach_shared_layers();
+            let codegen_mut_arg_indices = std::mem::take(&mut codegen.function_emitted_mut_arg_indices);
+            let codegen_self_receiver_upgrades = std::mem::take(&mut codegen.self_receiver_upgrades);
+            drop(codegen);
+
+            let reg = global_mut(&report, &mut final_global_registry);
+            reg.merge(&codegen_registry);
+            super::converged_module_signatures::register_converged_module_qualified_signatures(reg, &crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file).unwrap_or_default(), program, &codegen_registry, &mut converged_qualified_keys);
+            for (name, indices) in &codegen_mut_arg_indices {
                 accumulated_emitted_mut_arg_indices
                     .entry(name.clone())
                     .or_default()
                     .extend(indices.iter().copied());
             }
-            for (name, mode) in &codegen.self_receiver_upgrades {
+            for (name, mode) in &codegen_self_receiver_upgrades {
                 if let Some(sig) = reg.signatures.get_mut(name) {
                     sig.upgrade_self_receiver(*mode);
                 }
@@ -1429,6 +1432,7 @@ pub(crate) fn build_library_multipass(
                 }
             }
             _codegen_done += 1;
+            report.progress("Step 4B-b codegen file", _codegen_done, total_codegen);
         }
 
         // Release per-file analysis data for completed files to reclaim memory.
@@ -1437,8 +1441,8 @@ pub(crate) fn build_library_multipass(
         }
     }
 
-    profile_phase("Step 4B-b: Codegen (parallel)", step4b_codegen_start);
-    profile_phase("Step 4B: Analysis + codegen (sequential)", step4b_start);
+    profile_phase(&report, "Step 4B-b: Codegen (parallel)", step4b_codegen_start);
+    profile_phase(&report, "Step 4B: Analysis + codegen (sequential)", step4b_start);
 
     let post_codegen_start = Instant::now();
     // Emit metadata.json for cross-crate call-site ownership. Path dependents discover
@@ -1520,10 +1524,13 @@ pub(crate) fn build_library_multipass(
                 Some((output, src_base.as_path())),
             )?;
             crate::build_utils::cleanup_stale_module_files(output)?;
-            if let Some(project_root) =
-                crate::rust_integration_tests::find_project_root_with_tests(src_base.as_path())
+            // Wire Rust integration tests of the generated crate only: a build writes into its output (and
+            // its cache), never into the source tree (it used to rewrite a hand-written `src/lib.rs`).
+            if let Some(crate_root) =
+                crate::rust_integration_tests::find_project_root_with_tests(output)
+                    .filter(|root| root.starts_with(output))
             {
-                let _ = crate::rust_integration_tests::sync_rust_integration_tests(&project_root);
+                let _ = crate::rust_integration_tests::sync_rust_integration_tests(&crate_root);
             }
         }
 
@@ -1543,10 +1550,8 @@ pub(crate) fn build_library_multipass(
 
     // Record the compiler version now that all codegen has completed successfully.
     let _ = super::cache_management::write_compiler_stamp(output);
-    profile_phase(
-        "Post-codegen (metadata + mod.rs + stale check)",
-        post_codegen_start,
-    );
+    profile_phase(&report, "Post-codegen (metadata + mod.rs + stale check)", post_codegen_start);
+    report.report_work();
 
     if !deferred_lint_errors.is_empty() {
         return Err(anyhow::anyhow!(
@@ -1561,16 +1566,87 @@ pub(crate) fn build_library_multipass(
 /// Cap parallel Step 4B registry scans — retaining all per-file analysis for 664+ files OOMs.
 const STEP4B_REGISTRY_BATCH_SIZE: usize = 16;
 
+/// Merge one analyzed file into the global registry and return its full registry (own layer plus trait methods).
+///
+/// The file's registry reads through to the global registry as it stood before this file. Everything that needs
+/// that view is computed first; then the file's layers are detached, so the global registry is updated in place.
+/// Keeping the read-through while merging forced a copy of the whole library registry for every file, and every
+/// stored analysis kept its copy alive (memory quadratic in the file count, Q-MEM-1). The merges see exactly
+/// the same inputs as before.
+#[allow(clippy::too_many_arguments)]
+fn merge_file_analysis_into_global(
+    report: &crate::mem_report::MemReport,
+    analysis: &mut Step4bFileAnalysis,
+    global: &mut std::sync::Arc<SignatureRegistry>,
+    library_trait_methods: &TraitMethods,
+    copy_structs: &std::sync::Arc<HashSet<String>>,
+    struct_fields: &std::sync::Arc<HashMap<String, HashMap<String, crate::parser::ast::types::Type>>>,
+    module_paths: &std::sync::Arc<HashMap<String, Vec<Vec<String>>>>,
+) -> SignatureRegistry {
+    let mut full_registry = analysis.registry.clone();
+    let merged_trait_methods = analysis.merged_trait_methods(library_trait_methods);
+    let mut tmp_analyzer = Analyzer::for_library_pass(copy_structs.clone(), struct_fields.clone(), module_paths.clone());
+    tmp_analyzer.analyzed_trait_methods = merged_trait_methods.clone();
+    tmp_analyzer.register_trait_methods_in_registry(&merged_trait_methods, &mut full_registry);
+    write_back_counted(report, &mut full_registry);
+    let alias_trait_keys = analysis.registry.trait_key_flags_of_own_signatures();
+    analysis.registry.detach_shared_layers();
+    full_registry.detach_shared_layers();
+    let reg = global_mut(report, global);
+    reg.merge(&analysis.registry);
+    reg.register_module_aliases_with_trait_flags(&analysis.registry, &alias_trait_keys, &analysis.file_stem, &analysis.module_path);
+    reg.merge(&full_registry);
+    write_back_counted(report, reg);
+    full_registry
+}
+
+/// Trait owned-string write-back, counting the impl keys it walks (`trait_keys_scanned`).
+fn write_back_counted(report: &crate::mem_report::MemReport, registry: &mut SignatureRegistry) {
+    let walked = crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(registry);
+    report.count(crate::mem_report::Work::TraitKeysScanned, walked as u64);
+}
+
+/// Write back onto the shared global registry only when it would change something: a file's layered
+/// registry still reads the global, so writing it copies it whole.
+fn write_back_global_if_needed(report: &crate::mem_report::MemReport, global: &mut std::sync::Arc<SignatureRegistry>) {
+    let (noop, walked) = crate::codegen::rust::call_signature_resolution::trait_owned_string_write_back_is_noop(global);
+    report.count(crate::mem_report::Work::TraitKeysScanned, walked as u64);
+    if !noop {
+        write_back_counted(report, global_mut(report, global));
+    }
+}
+
 struct Step4bFileAnalysis {
     registry: SignatureRegistry,
     analyzed_functions: Vec<crate::analyzer::AnalyzedFunction<'static>>,
-    merged_trait_methods:
-        HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>,
+    /// The file's own analyzed trait methods; `None` for a file skipped as unchanged (it merges no trait
+    /// methods). The library-wide ones are overlaid on demand ([`Step4bFileAnalysis::merged_trait_methods`])
+    /// instead of storing a copy of every library trait method per file (quadratic, Q-MEM-1).
+    own_trait_methods: Option<TraitMethods>,
     copy_structs: Vec<String>,
     output_file: PathBuf,
     file_stem: String,
     module_path: String,
     lint_errors: Vec<String>,
+}
+
+type TraitMethods = HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>;
+
+impl Step4bFileAnalysis {
+    /// The file's trait methods with the library-wide ones laid over them (library entries win).
+    fn merged_trait_methods(&self, global: &TraitMethods) -> TraitMethods {
+        let Some(own) = &self.own_trait_methods else {
+            return HashMap::new();
+        };
+        let mut merged = own.clone();
+        for (trait_name, methods) in global.iter() {
+            let entry = merged.entry(trait_name.clone()).or_default();
+            for (method_name, method_analysis) in methods {
+                entry.insert(method_name.clone(), method_analysis.clone());
+            }
+        }
+        merged
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1587,9 +1663,6 @@ fn analyze_file_for_step4b(
         HashMap<String, HashMap<String, crate::parser::ast::types::Type>>,
     >,
     struct_defining_module_paths: &std::sync::Arc<HashMap<String, Vec<Vec<String>>>>,
-    global_analyzed_trait_methods: &std::sync::Arc<
-        HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>,
-    >,
     library_consts: &std::sync::Arc<HashMap<String, crate::parser::ast::types::Type>>,
     enable_lint: bool,
 ) -> Result<Step4bFileAnalysis, String> {
@@ -1618,13 +1691,7 @@ fn analyze_file_for_step4b(
         .analyze_program_with_global_arc(program, global_registry)
         .map_err(|e| format!("Final analysis error: {}", e))?;
 
-    let mut merged_trait_methods = analyzer.analyzed_trait_methods.clone();
-    for (trait_name, methods) in global_analyzed_trait_methods.iter() {
-        let entry = merged_trait_methods.entry(trait_name.clone()).or_default();
-        for (method_name, method_analysis) in methods {
-            entry.insert(method_name.clone(), method_analysis.clone());
-        }
-    }
+    let own_trait_methods = Some(analyzer.analyzed_trait_methods.clone());
 
     let output_file = crate::project_paths::resolve_wj_output_path_library(src_base, file, output)
         .map_err(|e| e.to_string())?;
@@ -1642,7 +1709,7 @@ fn analyze_file_for_step4b(
     Ok(Step4bFileAnalysis {
         registry,
         analyzed_functions,
-        merged_trait_methods,
+        own_trait_methods,
         copy_structs: analyzer.get_copy_structs(),
         output_file,
         file_stem,
@@ -1664,6 +1731,7 @@ fn run_parallel_numeric_inference(
     global_struct_fields: &HashMap<String, HashMap<String, crate::parser::Type>>,
     struct_defining_module_paths: &HashMap<String, Vec<Vec<String>>>,
     module_re_exports: HashMap<String, HashMap<String, String>>,
+    report: &crate::mem_report::MemReport,
 ) -> crate::ir::numeric_bridge::UnifiedNumericInference {
     use crate::ir::numeric_bridge::UnifiedNumericInference;
 
@@ -1689,27 +1757,43 @@ fn run_parallel_numeric_inference(
         global.prepare_program(&parsed_programs[i]);
     }
 
+    report.phase("Step 4A numeric: programs prepared");
+    // Each partial starts as a clone of the prepared whole-library state, so holding one partial per file
+    // at once costs files x library (quadratic: 7+ GB on a 677-file library). Collect in bounded chunks
+    // and merge each chunk in source order before the next: the same partials are merged in the same
+    // order, so the solve is unchanged, and at most NUMERIC_PARTIALS_IN_FLIGHT copies are alive.
     let base = global.clone();
-    let partials: Vec<UnifiedNumericInference> = sources
-        .par_iter()
-        .enumerate()
-        .map(|(i, (file, _source))| {
-            let mut local = base.clone();
-            let file_module =
-                crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
-                    .unwrap_or_default();
-            local.set_current_file_module_path(file_module);
-            local.register_own_functions(&parsed_programs[i]);
-            local.collect_program_constraints(&parsed_programs[i]);
-            local
-        })
-        .collect();
-
-    for partial in partials {
-        global.merge_parallel_state(partial);
+    let chunk = numeric_partials_in_flight();
+    for chunk_start in (0..sources.len()).step_by(chunk) {
+        let chunk_end = (chunk_start + chunk).min(sources.len());
+        let partials: Vec<UnifiedNumericInference> = (chunk_start..chunk_end)
+            .into_par_iter()
+            .map(|i| {
+                let file = &sources[i].0;
+                let mut local = base.clone();
+                let file_module =
+                    crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
+                        .unwrap_or_default();
+                local.set_current_file_module_path(file_module);
+                local.register_own_functions(&parsed_programs[i]);
+                local.collect_program_constraints(&parsed_programs[i]);
+                local
+            })
+            .collect();
+        for partial in partials {
+            global.merge_parallel_state(partial);
+        }
+        report.progress("Step 4A numeric constraints file", chunk_end, sources.len());
     }
+    drop(base);
     global.finish_solve();
     global
+}
+
+/// How many per-file numeric partials (each a clone of the prepared library state) are alive at once:
+/// enough to keep every worker busy, bounded so memory stays linear in library size.
+fn numeric_partials_in_flight() -> usize {
+    (rayon::current_num_threads() * 2).clamp(1, 32)
 }
 
 /// The binary is its own crate: `crate::x` paths (in `use` and in expressions) name the package lib, and the
@@ -1808,10 +1892,29 @@ fn library_field_types(global: &FieldTypes, programs: &[crate::parser::Program<'
 
 /// The field types one file's IR is lowered with: the library's, with the file's own declarations winning over a
 /// homonym elsewhere.
-fn file_field_types(library: &FieldTypes, program: &crate::parser::Program<'static>) -> FieldTypes {
-    let mut fields = library.clone();
-    fields.extend(crate::type_inference::struct_field_registry::local_struct_field_table(program));
-    fields
+///
+/// The file's declarations are laid over the library table for the duration of `f` and then undone, instead of
+/// copying the library table for every file (and every fixed-point round).
+fn with_file_field_types<R>(
+    library: &mut FieldTypes,
+    program: &crate::parser::Program<'static>,
+    f: impl FnOnce(&FieldTypes) -> R,
+) -> R {
+    let local = crate::type_inference::struct_field_registry::local_struct_field_table(program);
+    let displaced: Vec<(String, Option<HashMap<String, crate::parser::ast::types::Type>>)> =
+        local.into_iter().map(|(k, v)| (k.clone(), library.insert(k, v))).collect();
+    let out = f(library);
+    for (k, previous) in displaced {
+        match previous {
+            Some(v) => {
+                library.insert(k, v);
+            }
+            None => {
+                library.remove(&k);
+            }
+        }
+    }
+    out
 }
 
 /// Publish every file's solved value-formal modes (convergence O4); true when one changed.
@@ -1834,17 +1937,50 @@ fn publish_value_formals(
 
 /// Each file's codegen overlays its own analysis-time registry on the global one: its copies of other files'
 /// signatures must carry the published value-formal modes too.
+///
+/// Same result as running [`publish_value_formals`] on every file's registry, without visiting every function
+/// of the library for every file: each registry gets only the publications whose key it holds, applied in the
+/// same (file, function, key) order. A publication only rewrites a key that is already present, so the set of
+/// keys of a registry does not change while publishing.
 fn publish_into_file_registries(
     scope: &super::value_formal_fixed_point::FormalScope,
     sources: &[(PathBuf, String)],
     ir_functions: &[Option<Vec<crate::ir::node::IrFunction>>],
     analyses: &mut [Option<Step4bFileAnalysis>],
 ) {
+    // Every publication in library order: (file, function, key).
+    let mut publications: Vec<(usize, usize, String)> = Vec::new();
+    for (i, (ir, analysis)) in ir_functions.iter().zip(analyses.iter()).enumerate() {
+        if let (Some(ir), Some(analysis)) = (ir, analysis) {
+            let stem = sources[i].0.file_stem().and_then(|s| s.to_str());
+            for (f, (ir_fn, af)) in ir.iter().zip(&analysis.analyzed_functions).enumerate() {
+                for key in scope.publish_keys(stem, ir_fn, af) {
+                    publications.push((i, f, key));
+                }
+            }
+        }
+    }
+    let mut by_key: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (n, (_, _, key)) in publications.iter().enumerate() {
+        by_key.entry(key.as_str()).or_default().push(n);
+    }
     for j in 0..analyses.len() {
         let Some(mut registry) = analyses[j].as_mut().map(|a| std::mem::take(&mut a.registry)) else {
             continue;
         };
-        publish_value_formals(scope, &mut registry, sources, ir_functions, analyses);
+        let mut mine: Vec<usize> = registry
+            .signatures
+            .keys()
+            .filter_map(|k| by_key.get(k.as_str()))
+            .flatten()
+            .copied()
+            .collect();
+        mine.sort_unstable();
+        for n in mine {
+            let (i, f, key) = &publications[n];
+            let (Some(ir), Some(analysis)) = (&ir_functions[*i], &analyses[*i]) else { continue };
+            scope.publish_key(&mut registry, key.clone(), &ir[*f], &analysis.analyzed_functions[*f]);
+        }
         if let Some(a) = analyses[j].as_mut() {
             a.registry = registry;
         }

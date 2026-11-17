@@ -254,10 +254,10 @@ impl CodeGenerator<'_> {
 
         // TDD FIX: Dynamically detect if first_segment is a directory by checking the generated output directory
         let is_child_of_mod_rs = self.is_child_module_of_mod_rs_dir(first_segment);
-        // A directory module declared beside this file's directory module (`use rendering::Texture` from `ui/hud.wj`).
+        // A directory module beside this file's module (`use rendering::Texture` from `ui/hud.wj`; for a root file, the root's).
         let is_directory_prefix = !is_child_of_mod_rs
             && self.output_module_dirs().is_some_and(|dirs| {
-                !dirs.is_empty() && self.source_module_has_dir_child(&dirs[..dirs.len() - 1], first_segment)
+                self.source_module_has_dir_child(&dirs[..dirs.len().saturating_sub(1)], first_segment)
             });
 
         // Handle super::super::math::vec3::Vec3 -> super::Vec3

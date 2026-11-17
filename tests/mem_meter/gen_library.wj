@@ -1,0 +1,70 @@
+// Synthetic library generator for the build memory meter (tests/library_build_memory.rs):
+// N neutral modules shaped like a large engine library
+// (structs with impls, an enum with payloads, a trait with a default method, cross-module imports).
+//
+//   wj run gen_library.wj <N> <out-dir>
+//
+// Writes <out-dir>/src/mod.wj, <out-dir>/src/geom.wj and <out-dir>/src/m<i>.wj for i in 0..N.
+// Build it the way the engine is built:
+//   wj build <out-dir>/src/mod.wj --output <out-dir>/gen --library --no-cargo --module-file
+use std::env
+use std::fs
+
+fn geom_module() -> string {
+    let mut s = "// shared vector type, imported by every module\n"
+    s = s + "pub struct V3 {\n    pub x: f32,\n    pub y: f32,\n    pub z: f32,\n}\n\n"
+    s = s + "impl V3 {\n"
+    s = s + "    pub fn new(x: f32, y: f32, z: f32) -> V3 {\n        V3 { x: x, y: y, z: z }\n    }\n\n"
+    s = s + "    pub fn add(self, o: V3) -> V3 {\n        V3::new(self.x + o.x, self.y + o.y, self.z + o.z)\n    }\n\n"
+    s = s + "    pub fn scale(self, k: f32) -> V3 {\n        V3::new(self.x * k, self.y * k, self.z * k)\n    }\n\n"
+    s = s + "    pub fn len2(self) -> f32 {\n        self.x * self.x + self.y * self.y + self.z * self.z\n    }\n}\n"
+    s
+}
+
+fn item_module(i: int) -> string {
+    let mut s = "use crate::geom::V3\n"
+    if i > 0 {
+        s = s + "use crate::m${i - 1}::Unit${i - 1}\n"
+    }
+    s = s + "\npub enum Kind${i} {\n    Idle,\n    Move(V3),\n    Wait(f32),\n    Tag(string),\n}\n\n"
+    s = s + "pub trait Behave${i} {\n    fn step(self, dt: f32) -> f32\n\n    fn name(self) -> string {\n        \"behave${i}\"\n    }\n}\n\n"
+    s = s + "pub struct Unit${i} {\n    pub id: int,\n    pub pos: V3,\n    pub vel: V3,\n    pub kind: Kind${i},\n    pub tags: Vec<string>,\n    pub weights: Vec<f32>,\n}\n\n"
+    s = s + "impl Unit${i} {\n"
+    s = s + "    pub fn new(id: int) -> Unit${i} {\n        Unit${i} { id: id, pos: V3::new(0.0, 0.0, 0.0), vel: V3::new(1.0, 0.0, 0.0), kind: Kind${i}::Idle, tags: Vec::new(), weights: Vec::new() }\n    }\n\n"
+    s = s + "    pub fn advance(self, dt: f32) {\n        self.pos = self.pos.add(self.vel.scale(dt))\n        self.weights.push(dt)\n    }\n\n"
+    s = s + "    pub fn label(self) -> string {\n        match self.kind {\n            Kind${i}::Idle => \"idle\",\n            Kind${i}::Move(_) => \"move\",\n            Kind${i}::Wait(_) => \"wait\",\n            Kind${i}::Tag(_) => \"tag\",\n        }\n    }\n\n"
+    s = s + "    pub fn total_weight(self) -> f32 {\n        let mut t = 0.0\n        for w in self.weights {\n            t = t + w\n        }\n        t\n    }\n"
+    if i > 0 {
+        s = s + "\n    pub fn follow(self, other: Unit${i - 1}) -> f32 {\n        let d = V3::new(other.pos.x - self.pos.x, other.pos.y - self.pos.y, other.pos.z - self.pos.z)\n        d.len2()\n    }\n"
+    }
+    s = s + "}\n\n"
+    s = s + "impl Behave${i} for Unit${i} {\n    fn step(self, dt: f32) -> f32 {\n        self.pos.len2() * dt\n    }\n}\n\n"
+    s = s + "pub struct Group${i} {\n    pub units: Vec<Unit${i}>,\n    pub center: V3,\n}\n\n"
+    s = s + "impl Group${i} {\n"
+    s = s + "    pub fn new() -> Group${i} {\n        Group${i} { units: Vec::new(), center: V3::new(0.0, 0.0, 0.0) }\n    }\n\n"
+    s = s + "    pub fn add(self, u: Unit${i}) {\n        self.units.push(u)\n    }\n\n"
+    s = s + "    pub fn count_moving(self) -> int {\n        let mut n = 0\n        for u in self.units {\n            if u.vel.len2() > 0.0 {\n                n = n + 1\n            }\n        }\n        n\n    }\n}\n"
+    s
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() < 3 {
+        println("usage: wj run gen_library.wj <N> <out-dir>")
+        return
+    }
+    let n = args[1].parse::<int>().unwrap_or(10)
+    let out = args[2]
+    let src = "${out}/src"
+    let _ = fs.create_dir_all(src)
+    let mut root = "// synthetic library for Q-MEM-1 (neutral content)\npub mod geom\n"
+    let mut i = 0
+    while i < n {
+        root = root + "pub mod m${i}\n"
+        let _ = fs::write("${src}/m${i}.wj", item_module(i))
+        i = i + 1
+    }
+    let _ = fs::write("${src}/geom.wj", geom_module())
+    let _ = fs::write("${src}/mod.wj", root)
+    println("wrote ${n} modules + geom.wj + mod.wj to ${src}")
+}

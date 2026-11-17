@@ -61,6 +61,22 @@ pub fn discover_nested_modules(root_path: &Path) -> Result<ModuleTree> {
     })
 }
 
+/// Whether `source` declares a top-level `fn main` (an executable entry, not a library module).
+pub fn source_has_top_level_main(source: &str) -> bool {
+    source.lines().any(|l| {
+        let l = l.trim_end();
+        ["fn main(", "pub fn main(", "async fn main(", "pub async fn main("].iter().any(|p| l.starts_with(p))
+    })
+}
+
+/// The crate's binary entry: `main.wj` or any other file with its own top-level `fn main`, directly in `root`
+/// (a runner or script beside the library modules; it builds as its own `[[bin]]`).
+pub fn is_bin_entry_file(file: &Path, root: &Path) -> bool {
+    file.parent() == Some(root)
+        && (file.file_name().and_then(|n| n.to_str()) == Some("main.wj")
+            || fs::read_to_string(file).is_ok_and(|t| source_has_top_level_main(&t)))
+}
+
 /// Recursively discover modules in a directory
 fn discover_modules_recursive(dir_path: &Path, is_root: bool) -> Result<Vec<Module>> {
     let mut modules = Vec::new();
@@ -119,6 +135,11 @@ fn discover_modules_recursive(dir_path: &Path, is_root: bool) -> Result<Vec<Modu
         }
 
         let module_name = file_name.strip_suffix(".wj").unwrap().to_string();
+
+        // A root-level file with its own `fn main` is a binary entry (`[[bin]]`), not a module of the library.
+        if is_root && fs::read_to_string(&file_path).is_ok_and(|t| source_has_top_level_main(&t)) {
+            continue;
+        }
 
         modules.push(Module {
             name: module_name,

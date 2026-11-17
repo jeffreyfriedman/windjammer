@@ -358,6 +358,32 @@ fn label() -> string {
         });
     }
 
+    /// ADR-0009: untrusted data reaching a command, a file path or SQL text (WJ0173).
+    fn register_taint_codes(&mut self) {
+        self.register(WjErrorCode {
+            code: "WJ0173".to_string(),
+            title: "Untrusted data reaches a command, file path or query".to_string(),
+            explanation: "Data the program did not produce (file contents, standard input, an HTTP request, a database row) flows into a command, the path of a file write or SQL text without passing through a sanitizer (ADR-0009). The environment and the command line belong to the operator and are not sources. `wj check`, `wj build` and `wj run` stop on it.".to_string(),
+            causes: vec![
+                "A value read from a file, standard input or a request is interpolated into the command of `process::run`".to_string(),
+                "Such a value names the file `fs::write` writes, or is concatenated into the SQL text of `query`/`execute`".to_string(),
+            ],
+            solutions: vec![
+                "Pass the program and its arguments separately: `process::run_with_args(program, args)` uses no shell".to_string(),
+                "Use SQL placeholders (`$1`, `?`) and pass the value in `params`; keep one path component with `path::file_name(..)`".to_string(),
+                "Validate in a function documented `/// wj-taint: sanitizer`; a reviewed function may be documented `/// wj-taint: trusted(<reason>)`".to_string(),
+            ],
+            example: Some(r#"// Wrong:
+let name = io::read_line().unwrap_or("")
+process::run("echo ${name}")
+
+// Correct:
+process::run_with_args("echo", [name])"#.to_string()),
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+    }
+
     /// ADR-0002: explicit `let mut` (WJ0051).
     fn register_mutability_codes(&mut self) {
         // WJ0051: local binding changed without `mut` (ADR-0002)
@@ -383,6 +409,7 @@ items.push(1)"#.to_string()),
             rust_codes: vec![],
             maturity: GuaranteeMaturity::HighConfidence,
         });
+        self.register_taint_codes();
     }
 
     /// Register an error code

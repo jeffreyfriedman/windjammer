@@ -128,12 +128,25 @@ impl Parser {
             } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {
                 // WINDJAMMER PHILOSOPHY: Reject `mut self` - ownership is inferred automatically
                 // Every line of a parser error carries its position (tests/lexer_parser_never_panic_test.rs).
-                let (line, col) = self.current_location().map(|loc| (loc.line, loc.column)).unwrap_or((0, 0));
-                return Err(format!(
-                    "error: `mut` is not needed for method parameters (at line {line}, column {col})\n\
-                     help: remove `mut`; ownership is inferred automatically (at line {line}, column {col})\n\
-                     note: Windjammer infers `&self`, `&mut self`, or owned based on usage; use `let mut x` for local variable mutability (at line {line}, column {col})"
-                ));
+                // Recoverable: one coded, located diagnostic with a machine-applicable fix (`wj check --fix` deletes
+                // `mut`), the same in `wj check`, `wj run` and `wj build`; the receiver parses as plain `self`.
+                let (line, col) = self.current_location().map(|loc| (loc.line, loc.column)).unwrap_or((1, 1));
+                self.emit_error_diagnostic(
+                    "WJ0011: `mut self` is not Windjammer: the receiver is always `self` and its ownership is inferred".to_string(),
+                    Some(self.filename.clone()),
+                    Some(line),
+                    Some(col),
+                );
+                self.advance();
+                self.expect(Token::Self_)?;
+                params.push(Parameter {
+                    name: "self".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("Self".to_string()),
+                    ownership: OwnershipHint::Inferred,
+                    is_mutable: false,
+                    decorators: decorators.clone(),
+                });
             } else {
                 // Regular parameter - could be a simple name or a pattern
                 // Check if this is a pattern parameter (starts with '(')

@@ -1,0 +1,13 @@
+// A reviewed function: the reason is the review record.
+use std::fs
+use std::process
+
+/// wj-taint: trusted(the job file is written by the deployment tool, never by a remote user)
+fn launch() -> string {
+    let job = fs::read_to_string("job.txt").unwrap_or("")
+    process::run("start ${job}").unwrap_or("")
+}
+
+fn main() {
+    println("${launch()}")
+}

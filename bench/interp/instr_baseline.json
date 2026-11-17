@@ -27,14 +27,15 @@
   }
  },
  "retired:Darwin-arm64": {
-  "closures": 783650996,
-  "fib30": 201090657,
-  "hashmap": 294886482,
-  "loop5m": 354828593,
-  "nbody": 735694461,
-  "sieve": 615612484,
-  "startup": 69135805,
-  "strings": 432990529,
-  "structs": 174023247
+  "agent_loop": 582158748,
+  "closures": 760827123,
+  "fib30": 181113862,
+  "hashmap": 228077751,
+  "loop5m": 334014542,
+  "nbody": 713800889,
+  "sieve": 595118881,
+  "startup": 57241363,
+  "strings": 416010411,
+  "structs": 153260985
  }
 }

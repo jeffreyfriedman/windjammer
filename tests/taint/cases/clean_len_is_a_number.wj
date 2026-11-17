@@ -1,0 +1,9 @@
+// The length of tainted text is a number.
+use std::fs
+use std::process
+
+fn main() {
+    let name = fs::read_to_string("user.txt").unwrap_or("")
+    let out = process::run("echo ${name.len()}")
+    println("${out}")
+}

@@ -1,0 +1,135 @@
+# backend <TAB> suite <TAB> program <TAB> reason. Every failing (backend, program) of backend_results.tsv is listed; the file only shrinks (scripts/wj/target_tiers.wj check).
+rust	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+rust	conformance	stdlib/async_runtime	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	conformance	stdlib/json_operations	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	conformance	stdlib/subprocess_echo	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
+rust	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
+rust	spec	attributes/SPEC-ATTR-001	error: cannot find attribute `custom_tag` in this scope
+rust	spec	attributes/SPEC-ATTR-003	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	spec	attributes/SPEC-ATTR-004	error: cannot find attribute `route` in this scope
+rust	spec	closures/SPEC-CLOS-009	error[E0308]: mismatched types
+rust	spec	collections/SPEC-COLL-005	error: lifetime may not live long enough
+rust	spec	collections/SPEC-COLL-009	error: lifetime may not live long enough
+rust	spec	collections/SPEC-COLL-011	error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize`
+rust	spec	concurrency/SPEC-CONC-001	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	spec	concurrency/SPEC-CONC-002	error[E0599]: no method named `wait` found for `async` block `{async block@concurrency_SPEC-CONC-002.rs:7:13}` in the current scope
+rust	spec	concurrency/SPEC-CONC-003	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	spec	concurrency/SPEC-CONC-004	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	spec	effects/SPEC-EFF-021	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	spec	execution/SPEC-EXEC-002	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	spec	numeric/SPEC-NUM-002	error: this arithmetic operation will overflow
+rust	spec	numeric/SPEC-NUM-003	error: this arithmetic operation will overflow
+rust	spec	numeric/SPEC-NUM-004	error: this arithmetic operation will overflow
+rust	spec	numeric/SPEC-NUM-006	error: this operation will panic at runtime
+rust	spec	numeric/SPEC-NUM-017	error: this arithmetic operation will overflow
+rust	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
+rust	spec	strings/SPEC-STR-018	needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+rust	spec	traits/SPEC-TRT-004	error[E0369]: cannot add `V` to `V`
+rust	spec	traits/SPEC-TRT-011	error[E0308]: mismatched types
+javascript	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+javascript	conformance	stdlib/async_runtime	Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
+javascript	conformance	stdlib/json_operations	Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
+javascript	conformance	stdlib/subprocess_echo	Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
+javascript	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
+javascript	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
+javascript	spec	attributes/SPEC-ATTR-002	Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
+javascript	spec	collections/SPEC-COLL-012	Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
+javascript	spec	concurrency/SPEC-CONC-001	Error: unsupported on this backend: async/await/spawn (line 5)
+javascript	spec	concurrency/SPEC-CONC-002	Error: unsupported on this backend: async/await/spawn (line 5)
+javascript	spec	concurrency/SPEC-CONC-003	Error: unsupported on this backend: call of unknown function `__wj_scope` (line 5)
+javascript	spec	concurrency/SPEC-CONC-004	Error: unsupported on this backend: unknown associated function `sync::channel` (line 6)
+javascript	spec	concurrency/SPEC-CONC-005	Error: unsupported on this backend: async fn `fetch`
+javascript	spec	execution/SPEC-EXEC-002	Error: unsupported on this backend: unknown associated function `process::exit` (line 8)
+javascript	spec	grammar/SPEC-GRAM-006	Error: unsupported on this backend: built-in method `fn(T) -> T::` is not supported (line 5)
+javascript	spec	modules/SPEC-MOD-006	Error: unsupported on this backend: call of unknown function `audit_fee` (line 51)
+javascript	spec	numeric/SPEC-NUM-018	Error: unsupported on this backend: built-in method `i64::checked_neg` is not supported (line 12)
+javascript	spec	numeric/SPEC-NUM-026	Error: unsupported on this backend: integer method `swap_bytes`
+javascript	spec	ownership/SPEC-OWN-010	Error: unsupported on this backend: call of unknown function `drop` (line 42)
+javascript	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `drop old`
+javascript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
+javascript	spec	statements/SPEC-STMT-007	Error: unsupported on this backend: defer
+javascript	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
+javascript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+javascript	spec	strings/SPEC-STR-016	Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
+javascript	spec	strings/SPEC-STR-017	Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
+javascript	spec	strings/SPEC-STR-018	Error: unsupported on this backend: unknown identifier `strings` (line 22)
+javascript	spec	traits/SPEC-TRT-004	Error: unsupported on this backend: compound operator on `V`
+javascript	spec	traits/SPEC-TRT-006	Error: unsupported on this backend: unknown associated function `T::make` (line 6)
+javascript	spec	traits/SPEC-TRT-009	Error: unsupported on this backend: no method `name` on `Greeter` (line 4)
+javascript	spec	traits/SPEC-TRT-011	Error: unsupported on this backend: built-in method `i64::describe` is not supported (line 40)
+typescript	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+typescript	conformance	stdlib/async_runtime	Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
+typescript	conformance	stdlib/json_operations	Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
+typescript	conformance	stdlib/subprocess_echo	Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
+typescript	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
+typescript	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
+typescript	spec	attributes/SPEC-ATTR-002	Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
+typescript	spec	collections/SPEC-COLL-012	Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
+typescript	spec	concurrency/SPEC-CONC-001	Error: unsupported on this backend: async/await/spawn (line 5)
+typescript	spec	concurrency/SPEC-CONC-002	Error: unsupported on this backend: async/await/spawn (line 5)
+typescript	spec	concurrency/SPEC-CONC-003	Error: unsupported on this backend: call of unknown function `__wj_scope` (line 5)
+typescript	spec	concurrency/SPEC-CONC-004	Error: unsupported on this backend: unknown associated function `sync::channel` (line 6)
+typescript	spec	concurrency/SPEC-CONC-005	Error: unsupported on this backend: async fn `fetch`
+typescript	spec	execution/SPEC-EXEC-002	Error: unsupported on this backend: unknown associated function `process::exit` (line 8)
+typescript	spec	grammar/SPEC-GRAM-006	Error: unsupported on this backend: built-in method `fn(T) -> T::` is not supported (line 5)
+typescript	spec	modules/SPEC-MOD-006	Error: unsupported on this backend: call of unknown function `audit_fee` (line 51)
+typescript	spec	numeric/SPEC-NUM-018	Error: unsupported on this backend: built-in method `i64::checked_neg` is not supported (line 12)
+typescript	spec	numeric/SPEC-NUM-026	Error: unsupported on this backend: integer method `swap_bytes`
+typescript	spec	ownership/SPEC-OWN-010	Error: unsupported on this backend: call of unknown function `drop` (line 42)
+typescript	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `drop old`
+typescript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
+typescript	spec	statements/SPEC-STMT-007	Error: unsupported on this backend: defer
+typescript	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
+typescript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+typescript	spec	strings/SPEC-STR-016	Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
+typescript	spec	strings/SPEC-STR-017	Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
+typescript	spec	strings/SPEC-STR-018	Error: unsupported on this backend: unknown identifier `strings` (line 22)
+typescript	spec	traits/SPEC-TRT-004	Error: unsupported on this backend: compound operator on `V`
+typescript	spec	traits/SPEC-TRT-006	Error: unsupported on this backend: unknown associated function `T::make` (line 6)
+typescript	spec	traits/SPEC-TRT-009	Error: unsupported on this backend: no method `name` on `Greeter` (line 4)
+typescript	spec	traits/SPEC-TRT-011	Error: unsupported on this backend: built-in method `i64::describe` is not supported (line 40)
+go	conformance	control_flow/control_flow	go vet or go build rejected the generated code
+go	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+go	conformance	stdlib/async_runtime	Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
+go	conformance	stdlib/json_operations	Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
+go	conformance	stdlib/subprocess_echo	Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
+go	conformance	types/enums_and_matching	Error: unsupported on this backend: a type could not be inferred (add a type annotation)
+go	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
+go	spec	attributes/SPEC-ATTR-002	Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
+go	spec	collections/SPEC-COLL-012	Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
+go	spec	concurrency/SPEC-CONC-001	Error: unsupported on this backend: async/await/spawn (line 5)
+go	spec	concurrency/SPEC-CONC-002	Error: unsupported on this backend: async/await/spawn (line 5)
+go	spec	concurrency/SPEC-CONC-003	Error: unsupported on this backend: call of unknown function `__wj_scope` (line 5)
+go	spec	concurrency/SPEC-CONC-004	Error: unsupported on this backend: unknown associated function `sync::channel` (line 6)
+go	spec	concurrency/SPEC-CONC-005	Error: unsupported on this backend: async fn `fetch`
+go	spec	execution/SPEC-EXEC-002	Error: unsupported on this backend: unknown associated function `process::exit` (line 8)
+go	spec	execution/SPEC-EXEC-003	panics with the expected exit status but the message does not contain the expected text
+go	spec	execution/SPEC-EXEC-011	output line 1: got `eval index`, wanted `eval value`
+go	spec	grammar/SPEC-GRAM-006	Error: unsupported on this backend: built-in method `fn(T) -> T::` is not supported (line 5)
+go	spec	intrinsics/SPEC-INTR-004	go vet or go build rejected the generated code
+go	spec	modules/SPEC-MOD-006	Error: unsupported on this backend: call of unknown function `audit_fee` (line 51)
+go	spec	numeric/SPEC-NUM-015	panics with the expected exit status but the message does not contain the expected text
+go	spec	numeric/SPEC-NUM-018	Error: unsupported on this backend: built-in method `i64::checked_neg` is not supported (line 12)
+go	spec	numeric/SPEC-NUM-026	Error: unsupported on this backend: integer method `swap_bytes`
+go	spec	ownership/SPEC-OWN-010	Error: unsupported on this backend: call of unknown function `drop` (line 42)
+go	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `drop old`
+go	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
+go	spec	statements/SPEC-STMT-009	go vet or go build rejected the generated code
+go	spec	statements/SPEC-STMT-011	go vet or go build rejected the generated code
+go	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
+go	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+go	spec	strings/SPEC-STR-014	panics with the expected exit status but the message does not contain the expected text
+go	spec	strings/SPEC-STR-016	Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
+go	spec	strings/SPEC-STR-017	Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
+go	spec	strings/SPEC-STR-018	Error: unsupported on this backend: unknown identifier `strings` (line 22)
+go	spec	traits/SPEC-TRT-002	go vet or go build rejected the generated code
+go	spec	traits/SPEC-TRT-004	go vet or go build rejected the generated code
+go	spec	traits/SPEC-TRT-006	Error: unsupported on this backend: unknown associated function `T::make` (line 6)
+go	spec	traits/SPEC-TRT-009	Error: unsupported on this backend: no method `name` on `Greeter` (line 4)
+go	spec	traits/SPEC-TRT-011	Error: unsupported on this backend: built-in method `i64::describe` is not supported (line 40)
+interpreter	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+interpreter	conformance	stdlib/async_runtime	panics with the expected exit status but the message does not contain the expected text
+interpreter	conformance	stdlib/subprocess_echo	panics with the expected exit status but the message does not contain the expected text
+interpreter	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
+interpreter	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`

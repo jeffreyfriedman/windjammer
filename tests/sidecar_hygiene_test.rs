@@ -124,6 +124,21 @@ fn project(with_manifest: bool) -> tempfile::TempDir {
     d
 }
 
+/// rustc (`--emit metadata`) on a crate made of the emitted `main.rs` (as module `app`) and util.wj's clean `util.rs`.
+fn rustc_accepts_main_with_util(main_rs: &str) -> Result<(), String> {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(d.path().join("lib.rs"), "mod util;\nmod app;\n").unwrap();
+    std::fs::write(d.path().join("app.rs"), main_rs).unwrap();
+    std::fs::write(d.path().join("util.rs"), "pub fn label(s: &str) -> i64 {\n    s.len() as i64\n}\n").unwrap();
+    let o = Command::new("rustc")
+        .args(["--crate-type", "lib", "--edition", "2021", "--emit", "metadata", "-A", "warnings", "-o"])
+        .arg(d.path().join("out.rmeta"))
+        .arg(d.path().join("lib.rs"))
+        .output()
+        .unwrap();
+    if o.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&o.stderr).to_string()) }
+}
+
 fn wj(dir: &Path, cache: &Path, args: &[&str]) -> std::process::Output {
     Command::new(WJ).args(args).current_dir(dir).env("WJ_CARGO_TARGET_ROOT", cache).output().unwrap()
 }
@@ -203,21 +218,32 @@ fn legacy_sidecar_is_never_read() {
         (rs, untouched)
     };
     let (clean, _) = build(None);
-    // Control: a current cache entry (written by building util.wj with this compiler) IS read, so a differing result
-    // is detectable at all. A hand-written poison in the cache is not: it carries no fingerprint of this compiler and
-    // of util.wj's text (tests/peer_meta_cache_gate_test.rs).
-    let cached = {
+    // The clean output is valid Rust (rustc), and it borrows the literal.
+    rustc_accepts_main_with_util(&clean).unwrap_or_else(|e| panic!("the clean build does not type-check: {e}"));
+    assert!(clean.contains("util::label(\"abc\")"), "the clean build borrows the literal:\n{clean}");
+    // Mutation control: the same poison in a CURRENT cache entry (fingerprinted by this compiler for util.wj's text)
+    // is read and changes the call, so a read of the poisoned sidecars below would be visible.
+    let read_poison = {
         let d = project(true);
         std::fs::write(d.path().join("src/util.wj"), "pub fn label(s: string) -> int {\n    s.len()\n}\n").unwrap();
         std::fs::write(d.path().join("src/main.wj"), "use crate::util\n\nfn main() {\n    let n = util::label(\"abc\")\n    println(\"${n}\")\n}\n").unwrap();
         let cache = tempfile::tempdir().unwrap();
         let o = wj(d.path(), cache.path(), &["build", "src/util.wj", "--no-cargo", "--no-lint", "--quiet", "-o", "out-util"]);
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let entry = d.path().join(".wj-cache/util.wj.meta");
+        let mut meta: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&entry).unwrap()).unwrap();
+        let label = &mut meta["functions"]["label"];
+        label["params"] = serde_json::json!(["String"]);
+        label["formal_params"] = serde_json::json!(["String"]);
+        label["param_ownership"] = serde_json::json!(["Owned"]);
+        label["emitted_rust_ref_params"] = serde_json::json!([false]);
+        std::fs::write(&entry, serde_json::to_string(&meta).unwrap()).unwrap();
         let o = wj(d.path(), cache.path(), &["build", "src/main.wj", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         std::fs::read_to_string(d.path().join("out/main.rs")).unwrap()
     };
-    assert_ne!(clean, cached, "a current cache entry is inert; the gate would be vacuous");
+    assert_ne!(clean, read_poison, "a current entry with the poison is not read: the gate would be vacuous");
+    assert!(rustc_accepts_main_with_util(&read_poison).is_err(), "the poisoned call must not type-check against util.rs");
     let (poisoned_cache, _) = build(Some(Path::new(".wj-cache/util.wj.meta")));
     assert_eq!(clean, poisoned_cache, "a cache entry without this compiler's fingerprint influenced the build");
     // The legacy location must behave exactly like no poison.

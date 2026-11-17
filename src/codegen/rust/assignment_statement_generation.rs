@@ -588,7 +588,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        value_str = self.copy_borrowed_text_into_owned_target(target, value, value_str);
+        value_str = self.copy_assigned_value(target, value, value_str);
 
         // Auto-clone when assigning one self field from another self field.
         // In Rust, `self.a = self.b` is E0507 when self is &mut self and b is non-Copy,
@@ -803,6 +803,18 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// The value of `target = value` as an owned value: borrowed text into an owned target is copied, and a field moved out of
+    /// a binding that is read again afterwards (`self.last = e2.text`, then `e2` returned) is copied so the binding stays
+    /// whole (CLONE-USE-AFTER-MOVE for partial moves; the IR's `field_copy_sites` decides, this prints it).
+    fn copy_assigned_value(&self, target: &Expression<'ast>, value: &Expression<'ast>, value_str: String) -> String {
+        let value_str = self.copy_borrowed_text_into_owned_target(target, value, value_str);
+        if matches!(value, Expression::FieldAccess { .. }) {
+            self.copy_if_read_again(value, value_str)
+        } else {
+            value_str
+        }
+    }
+
     /// `target = name` where the auto-clone analysis says `name` is used again: the value is copied (`.clone()`),
     /// or `.to_string()`-ed for a demoted `&str` formal going into an owned text field.
     fn auto_clone_identifier_assignment_value(&self, name: &str, target: &Expression<'ast>, value: &Expression<'ast>, mut value_str: String) -> String {

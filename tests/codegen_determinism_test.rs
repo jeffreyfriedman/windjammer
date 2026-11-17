@@ -170,6 +170,51 @@ fn every_build_is_byte_identical_across_runs_and_thread_counts() {
     assert!(stale.is_empty(), "now deterministic, remove from tests/determinism_known.txt: {stale:?}");
 }
 
+/// One `--library --module-file` build of a multi-module library (the multipass path, which also writes
+/// `metadata.json`) in a fresh process; `None` when the build fails.
+fn build_library_once(threads: usize) -> Option<BTreeMap<String, u64>> {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let proj = base.join("proj");
+    let mut root = String::new();
+    for i in 0..8 {
+        root.push_str(&format!("pub mod m{i}\n"));
+        let prev = if i > 0 { format!("use crate::m{}::Unit{}\n", i - 1, i - 1) } else { String::new() };
+        let follow = if i > 0 { format!("    pub fn follow(self, other: Unit{}) -> f32 {{\n        other.speed - self.speed\n    }}\n", i - 1) } else { String::new() };
+        let module = format!(
+            "{prev}\npub enum Kind{i} {{\n    Idle,\n    Wait(f32),\n    Tag(string),\n}}\n\npub struct Unit{i} {{\n    pub id: int,\n    pub speed: f32,\n    pub name: string,\n    pub tags: Vec<string>,\n    pub kind: Kind{i},\n}}\n\nimpl Unit{i} {{\n    pub fn new(id: int) -> Unit{i} {{\n        Unit{i} {{ id: id, speed: 1.0, name: \"u\", tags: Vec::new(), kind: Kind{i}::Idle }}\n    }}\n\n    pub fn rename(self, name: string) {{\n        self.name = name\n    }}\n{follow}}}\n"
+        );
+        std::fs::create_dir_all(proj.join("src")).unwrap();
+        std::fs::write(proj.join("src").join(format!("m{i}.wj")), module).unwrap();
+    }
+    std::fs::write(proj.join("src/mod.wj"), root).unwrap();
+    std::fs::write(proj.join("wj.toml"), "[package]\nname = \"determinism_lib\"\nversion = \"0.0.0\"\n").unwrap();
+    let st = Command::new(WJ)
+        .args(["build", "src/mod.wj", "--output", "gen", "--library", "--no-cargo", "--module-file", "--no-lint"])
+        .env("RAYON_NUM_THREADS", threads.to_string())
+        .current_dir(&proj)
+        .output()
+        .unwrap();
+    if !st.status.success() {
+        return None;
+    }
+    let out = proj.join("gen");
+    let mut h = BTreeMap::new();
+    hash_tree(&out, &out, base.to_str().unwrap(), &mut h);
+    Some(h)
+}
+
+/// Library mode (multipass) is byte-identical across runs and thread counts, metadata.json included (its maps
+/// were written in hash order, so every build of the same library differed).
+#[test]
+fn library_build_is_byte_identical_across_runs_and_thread_counts() {
+    let runs: Vec<_> = [1, 4, 1, 8].iter().map(|t| build_library_once(*t)).collect();
+    assert!(runs[0].as_ref().is_some_and(|h| h.contains_key("metadata.json")), "library build failed or wrote no metadata.json");
+    if let Some(d) = divergence(&runs) {
+        panic!("library build output is nondeterministic: {d}");
+    }
+}
+
 #[test]
 fn hash_iteration_in_codegen_paths_only_shrinks() {
     hash_iteration_lint::check_ratchet(&root());

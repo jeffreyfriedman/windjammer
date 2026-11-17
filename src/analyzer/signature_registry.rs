@@ -7,6 +7,7 @@ use crate::parser::Type;
 
 use super::OwnershipMode;
 
+mod derived;
 mod identity;
 mod snapshot;
 pub use snapshot::{install_layer_store, shared_entry, LayerStore};
@@ -26,7 +27,7 @@ fn param_types_are_ownership_refinement(a: &Type, b: &Type) -> bool {
     peel(a) == peel(b)
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FunctionSignature {
     pub name: String,
     pub param_types: Vec<Type>,
@@ -129,6 +130,10 @@ impl FunctionSignature {
 
 static STDLIB_BASELINE: OnceLock<SignatureRegistry> = OnceLock::new();
 
+use super::trait_key_set::TraitKeySet;
+
+mod aliases;
+
 #[derive(Debug, Clone)]
 pub struct SignatureRegistry {
     /// Ordered so every iteration (and every "first match" fallback) is deterministic.
@@ -141,13 +146,13 @@ pub struct SignatureRegistry {
     /// Keys registered from trait definitions (e.g. `AccountReader::list_accounts`).
     /// Used by `apply_trait_owned_string_call_site_contracts` to avoid matching
     /// unrelated impl methods with the same name suffix.
-    trait_method_keys: HashSet<String>,
+    trait_method_keys: TraitKeySet,
     /// `Type::method` keys from `impl Trait for Type` (not inherent impls).
     /// Write-back restores trait AST `string` onto these without touching
     /// inherent homonyms (`DbReportReader::report_lines`).
     trait_impl_method_keys: HashSet<String>,
     /// Types declared by dependencies, with whether their crate derives `Serialize` for them.
-    dependency_type_serde: HashMap<String, bool>,
+    dependency_type_serde: std::collections::BTreeMap<String, bool>,
     /// `Type::method` keys of inherent impls (`impl Type`) the program declares.
     pub(super) inherent_method_keys: HashSet<String>,
     /// WJ `std::module` names populated by the runtime scanner (`http`, `csv` from
@@ -172,6 +177,7 @@ pub struct SignatureRegistry {
     taint_sanitizer_callees: HashSet<String>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
     global_fallback: Option<std::sync::Arc<SignatureRegistry>>,
+    derived: derived::DerivedTables,
 }
 
 impl Default for SignatureRegistry {
@@ -199,21 +205,17 @@ impl SignatureRegistry {
     /// reading stdlib / meta signatures — avoids cloning the full HashMap.
     pub fn stdlib() -> &'static SignatureRegistry {
         STDLIB_BASELINE.get_or_init(|| {
-            // Runtime Rust APIs (`&str` / `AsRef<str>`) live in the fallback layer so
-            // WJ `.wj` / stdlib_meta stubs that declare owned `string` can shadow them
-            // in `signatures` without erasing the borrow contract — call sites consult
-            // `get_fallback_signature` via prefer_shared_ref.
+            // Runtime `&str` APIs live in the fallback layer: owned-`string` stubs shadow them in
+            // `signatures` without erasing the borrow contract (`get_fallback_signature`, prefer_shared_ref).
             crate::debug_env::phase("registry-start");
             let runtime = snapshot::scanned_runtime_layer();
             crate::debug_env::phase("registry-runtime-layer");
-
             let mut registry = SignatureRegistry::layered(std::sync::Arc::new(runtime));
             Self::load_stdlib_meta(&mut registry);
             crate::debug_env::phase("registry-stdlib-meta");
             super::primitive_float_signatures::register_primitive_float_signatures(&mut registry);
             super::primitive_int_signatures::register_primitive_int_signatures(&mut registry);
-            // WJ `std/strings.wj` / stdlib_meta stubs shadow the fallback layer.
-            // Re-apply runtime boundary last so `get_signature` is the Rust API
+            // Re-apply the runtime boundary last so `get_signature` is the Rust API
             // (`strings::contains` needle `&str`, not owned `string`).
             crate::stdlib_scanner::register_rust_std_boundary_signatures(&mut registry);
             registry.restore_runtime_borrowed_strings_signatures();
@@ -233,9 +235,9 @@ impl SignatureRegistry {
             type_collision_keys: HashSet::new(),
             ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
-            trait_method_keys: HashSet::new(),
+            trait_method_keys: TraitKeySet::default(),
             trait_impl_method_keys: HashSet::new(),
-            dependency_type_serde: HashMap::new(),
+            dependency_type_serde: std::collections::BTreeMap::new(),
             inherent_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
             runtime_std_rust_stems: HashMap::new(),
@@ -246,6 +248,7 @@ impl SignatureRegistry {
             runtime_non_clone_types: HashSet::new(),
             taint_sanitizer_callees: HashSet::new(),
             global_fallback: None,
+            derived: Default::default(),
         }
     }
 
@@ -804,6 +807,18 @@ impl SignatureRegistry {
     }
 
     /// Index `Type::method` under `method`; buckets stay sorted so "first homonym" is deterministic.
+    /// True when [`Self::add_function`]`(name, sig)` would leave this registry unchanged: this layer already
+    /// holds exactly `sig` under `name` and `name` is in the method index.
+    pub fn add_function_is_noop(&self, name: &str, sig: &FunctionSignature) -> bool {
+        if self.signatures.get(name) != Some(sig) {
+            return false;
+        }
+        let Some((_, suffix)) = name.rsplit_once("::") else { return true };
+        self.method_index
+            .get(suffix)
+            .is_some_and(|bucket| bucket.binary_search_by(|k| k.as_str().cmp(name)).is_ok())
+    }
+
     fn index_method_key(&mut self, name: &str) {
         let Some((_, suffix)) = name.rsplit_once("::") else { return };
         let bucket = self.method_index.entry(suffix.to_string()).or_default();
@@ -816,9 +831,20 @@ impl SignatureRegistry {
         self.get_signature(name).is_some_and(|sig| !sig.is_extern) && Self::stdlib().get_signature(name).is_none()
     }
 
+    /// Drop the read-through to the shared global registry, keeping only this layer. A registry kept
+    /// after its global has moved on must not pin the old global alive (one library-wide copy per file).
+    pub fn detach_shared_layers(&mut self) {
+        self.global_fallback = None;
+    }
+
     /// This registry, then each layer of its fallback chain.
     fn layers(&self) -> impl Iterator<Item = &SignatureRegistry> {
         std::iter::successors(Some(self), |reg| reg.global_fallback.as_deref())
+    }
+
+    /// The signature registered under exactly `key` (a declaration key from the registry's own key lists).
+    pub fn signature_declared_at(&self, key: &str) -> Option<&FunctionSignature> {
+        self.layers().find_map(|r| r.signatures.get(key))
     }
 
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
@@ -954,12 +980,10 @@ impl SignatureRegistry {
                 .is_some_and(|g| g.has_method_name_collision_for_type(type_name, method));
         };
         let filtered: Vec<&String> = if let Some(tn) = type_name {
+            // Patterns built once, not per key (this bucket holds every type's `method`).
+            let (suffix, exact, segment) = (format!("::{method}"), format!("{tn}::{method}"), format!("::{tn}::"));
             keys.iter()
-                .filter(|k| {
-                    k.ends_with(&format!("::{method}"))
-                        && (k.as_str() == format!("{tn}::{method}")
-                            || k.contains(&format!("::{tn}::")))
-                })
+                .filter(|k| k.ends_with(&suffix) && (k.as_str() == exact || k.contains(&segment)))
                 .collect()
         } else {
             keys.iter().collect()
@@ -1014,16 +1038,21 @@ impl SignatureRegistry {
         false
     }
 
-    /// Trait-definition keys on this layer plus `global_fallback`.
-    pub fn all_trait_method_keys(&self) -> Vec<String> {
-        let mut keys: std::collections::HashSet<String> =
-            self.trait_method_keys.iter().cloned().collect();
-        if let Some(g) = self.global_fallback.as_ref() {
-            keys.extend(g.all_trait_method_keys());
+    /// The trait-definition keys (this layer and the layers under it) that name `method`: the key itself or
+    /// any `…::method`, in key order, deduplicated across layers. Lookups never copy or sort every trait
+    /// key (that per-call copy made codegen quadratic in library size).
+    pub fn trait_method_keys_for_method(&self, method: &str) -> Vec<String> {
+        let suffix = format!("::{method}");
+        let mut found: std::collections::BTreeSet<&String> = std::collections::BTreeSet::new();
+        for reg in self.layers() {
+            if method.contains("::") {
+                found.extend(reg.trait_method_keys.keys_matching(|tk| tk.as_str() == method || tk.ends_with(&suffix)));
+            } else {
+                // A key names `method` exactly when its last path segment is `method`.
+                found.extend(reg.trait_method_keys.named(method));
+            }
         }
-        let mut out: Vec<String> = keys.into_iter().collect();
-        out.sort();
-        out
+        found.into_iter().cloned().collect()
     }
 
     /// Every local signature in key order (never hash order).
@@ -1391,37 +1420,8 @@ impl SignatureRegistry {
         file_stem: &str,
         module_path: &str,
     ) {
-        if file_stem.is_empty() {
-            return;
-        }
-        for (name, sig) in &source.signatures {
-            if !name.contains("::") {
-                let aliased = format!("{}::{}", file_stem, name);
-                if source.is_trait_method_key(name) {
-                    self.record_trait_method_key(aliased.clone());
-                }
-                if source.is_trait_impl_method_key(name) {
-                    self.record_trait_impl_method_key(aliased.clone());
-                }
-                // WJ `std/strings.wj` declaration stubs must not clobber scanned
-                // runtime AsRef/`&str` under `strings::fn` (P3.524).
-                if !self.runtime_strings_alias_would_clobber(&aliased, sig) {
-                    self.add_function(aliased, sig.clone());
-                }
-            }
-            if !module_path.is_empty() && !name.starts_with(&format!("{}::", module_path)) {
-                let aliased = format!("{}::{}", module_path, name);
-                if source.is_trait_method_key(name) {
-                    self.record_trait_method_key(aliased.clone());
-                }
-                if source.is_trait_impl_method_key(name) {
-                    self.record_trait_impl_method_key(aliased.clone());
-                }
-                if !self.runtime_strings_alias_would_clobber(&aliased, sig) {
-                    self.add_function(aliased, sig.clone());
-                }
-            }
-        }
+        let flags = source.trait_key_flags_of_own_signatures();
+        self.register_module_aliases_with_trait_flags(source, &flags, file_stem, module_path);
     }
 
     /// True when `aliased` is a `strings::*` key whose existing/fallback contract is

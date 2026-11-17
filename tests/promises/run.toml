@@ -369,7 +369,7 @@ needs = "toolchain"
 files = { "m.wj" = "fn main() {\n    println(\"v ${6 * 7}\")\n}\n" }
 args = ["run", "--verify", "{w}/m.wj"]
 stdout_has = ["v 42"]
-stderr_has = ["wj verify: compiled build OK; the compiled run matches"]
+stderr_has = ["wj verify: OK, the compiled run matches the interpreted run"]
 
 [[case]]
 name = "run --verify cannot be combined with --compiled"
@@ -479,11 +479,95 @@ stdout_has = ["row 0;", "row 1;"]
 output_lacks = ["error"]
 
 [[case]]
-name = "run --verify shows the output printed before a panic and keeps the exit status"
+name = "run --verify shows the output printed before a panic; agreeing runs exit 0 and the line names the status"
 polarity = "negative"
 needs = "toolchain"
 files = { "m.wj" = "fn main() {\n    println(\"before-panic\")\n    panic(\"verify boom\")\n}\n" }
 args = ["run", "--verify", "{w}/m.wj"]
-exit = 101
+exit = 0
 stdout_has = ["before-panic"]
-stderr_has = ["verify boom"]
+stderr_has = ["verify boom", "program exit status 101"]
+
+[[case]]
+name = "run --verify: a correct program that exits 1 on purpose verifies OK and exits 0"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "use std::process\n\nfn main() {\n    println(\"error: bad command\")\n    process::exit(1)\n}\n" }
+args = ["run", "--verify", "{w}/m.wj"]
+exit = 0
+stdout_has = ["error: bad command"]
+stderr_has = ["wj verify: OK, the compiled run matches the interpreted run", "program exit status 1"]
+
+[[case]]
+name = "run --verify: a field moved into a collection and the whole struct returned afterwards compiles (partial move copies the field)"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "struct Edit {\n    idx: int,\n    text: string,\n}\n\nstruct Editor {\n    lines: Vec<string>,\n}\n\nimpl Editor {\n    fn forward(self, e: Edit) -> Edit {\n        let mut e2 = Edit { idx: e.idx, text: e.text }\n        if e2.idx == 0 {\n            self.lines.push(e2.text)\n        } else {\n            self.lines[0] = e2.text\n        }\n        e2\n    }\n}\n\nfn main() {\n    let mut ed = Editor { lines: [\"x\"] }\n    let e = ed.forward(Edit { idx: 1, text: \"y\" })\n    println(\"${ed.lines.len()} ${e.idx}\")\n}\n" }
+args = ["run", "--verify", "{w}/m.wj"]
+exit = 0
+stdout_has = ["1 1"]
+stderr_has = ["wj verify: OK"]
+
+[[case]]
+name = "agent mode: run --verify output has stdout and stderr merged in order and ends with the exit status"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "use std::process\n\nfn main() {\n    println(\"error: bad command\")\n    process::exit(1)\n}\n" }
+args = ["run", "--error-format", "agent", "--verify", "{w}/m.wj"]
+exit = 0
+stdout_has = ["error: bad command", "wj verify: OK", "program exit status 1", "exit status: 0"]
+
+[[case]]
+name = "agent mode: a failing check reports its diagnostic on stdout and the exit status line"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let x: int = \"s\"\n    println(\"${x}\")\n}\n" }
+args = ["check", "--error-format", "agent", "{w}/m.wj"]
+exit = 1
+stdout_has = ["m.wj:2:", "error", "exit status: 1"]
+
+[[case]]
+name = "agent mode: a long output keeps its head and tail with an omitted-lines marker"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let mut i = 0\n    while i < 400 {\n        println(\"row ${i}\")\n        i += 1\n    }\n}\n" }
+args = ["run", "--error-format", "agent", "--interpret", "{w}/m.wj"]
+exit = 0
+stdout_has = ["row 0\n", "row 399", "output omitted (WJ_MAX_OUTPUT=160)", "exit status: 0"]
+output_lacks = ["row 200"]
+
+[[case]]
+name = "without agent mode the output is untouched (no exit line, no bound)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut i = 0\n    while i < 400 {\n        println(\"row ${i}\")\n        i += 1\n    }\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+exit = 0
+stdout_has = ["row 200"]
+output_lacks = ["exit status:", "omitted"]
+
+[[case]]
+name = "run --stdin-file gives a file as standard input"
+polarity = "positive"
+files = { "m.wj" = "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    println(\"got ${text.trim()}\")\n}\n", "in.txt" = "=A1*3\n" }
+args = ["run", "--interpret", "--stdin-file", "{w}/in.txt", "{w}/m.wj"]
+stdout_has = ["got =A1*3"]
+
+[[case]]
+name = "run --stdin-file with a missing file fails with its name"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--interpret", "--stdin-file", "{w}/nope.txt", "{w}/m.wj"]
+exit = 1
+output_has = ["--stdin-file", "nope.txt"]
+
+[[case]]
+name = "run --pair-list runs each listed program under both engines and prints a JSON line each"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"pair-ok\")\n}\n", "list.txt" = "{w}/m.wj\n" }
+args = ["run", "--pair-list", "{w}/list.txt"]
+stdout_has = ["\"engine\":\"walker\"", "\"engine\":\"resolved\"", "pair-ok"]
+
+[[case]]
+name = "run --pair-list of a missing list file fails"
+polarity = "negative"
+args = ["run", "--pair-list", "{w}/nope.txt"]
+exit = 1
+output_has = ["cannot read"]

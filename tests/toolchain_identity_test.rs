@@ -60,7 +60,7 @@ fn identity_matches_the_sources_when_built_from_a_checkout() {
         "the binary must report the sources it was built from"
     );
     match std::env::var("WJ_GIT_HASH") {
-        Ok(h) if !h.is_empty() => assert_eq!(j["commit"].as_str(), Some(h.as_str())),
+        Ok(h) if !h.is_empty() && h != "unknown" => assert_eq!(j["commit"].as_str(), Some(h.as_str())),
         _ => assert!(j["commit"].is_null(), "a commit appears only when the build stamps one: {j}"),
     }
     let profile = if cfg!(debug_assertions) { "debug" } else { "release" };

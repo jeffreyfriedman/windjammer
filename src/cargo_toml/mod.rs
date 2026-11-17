@@ -57,6 +57,24 @@ pub fn generate_single_file_cargo_toml(
     )
 }
 
+/// `[[bin]]` sections for the executables beside `lib.rs`: each root-level generated file with a `fn main`
+/// (not `main.rs`, which has its own section), named after the file, in file-name order.
+pub(crate) fn extra_bin_sections(output_dir: &Path) -> String {
+    let mut names: Vec<String> = std::fs::read_dir(output_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().to_str().map(str::to_string))
+        .filter(|f| f.ends_with(".rs") && !matches!(f.as_str(), "lib.rs" | "mod.rs" | "main.rs" | "build.rs"))
+        .filter(|f| matches!(detect_rust_file_type(&output_dir.join(f)), RustFileType::Binary))
+        .collect();
+    names.sort();
+    names
+        .iter()
+        .map(|f| format!("[[bin]]\nname = \"{}\"\npath = \"{}\"\n\n", f.trim_end_matches(".rs"), f))
+        .collect()
+}
+
 /// Generate Cargo.toml honoring `config` (`skip_cargo_toml_generation`, `runtime_path`).
 pub fn generate_single_file_cargo_toml_with_config(
     output_dir: &Path,
@@ -81,11 +99,11 @@ pub fn generate_single_file_cargo_toml_with_config(
     // Multi-file CLI: keep domain in [lib] and wire src/main.wj as [[bin]].
     let lib_or_bin_section = if has_lib_rs && has_main_rs {
         format!(
-            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
-            lib_name, project_name
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n{}",
+            lib_name, project_name, extra_bin_sections(output_dir)
         )
     } else if has_lib_rs {
-        format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n", lib_name)
+        format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n{}", lib_name, extra_bin_sections(output_dir))
     } else if has_mod_rs && has_main_rs {
         format!(
             "[lib]\nname = \"{}\"\npath = \"mod.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",

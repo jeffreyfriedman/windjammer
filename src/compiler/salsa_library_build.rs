@@ -56,7 +56,7 @@ pub fn build_library(
     crate_metadata: CrateMetadata,
     config: &CompilerConfig,
 ) -> Result<()> {
-    if config.legacy_multipass {
+    let built = if config.legacy_multipass {
         eprintln!("Using legacy multipass build (WJ_LEGACY_MULTIPASS=1)");
         build_library_multipass(
             wj_files,
@@ -81,5 +81,9 @@ pub fn build_library(
             crate_metadata,
             config,
         )
+    };
+    if built.is_ok() {
+        super::dependency_resolution::drop_unbuilt_sibling_modules(output, base_path, wj_files);
     }
+    built
 }

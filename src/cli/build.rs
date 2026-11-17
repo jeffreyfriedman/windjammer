@@ -55,6 +55,52 @@ fn report_local_mutability(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// A bare `use` of a module that does not exist stops the build before code generation (WJ0006, with the modules
+/// that do exist as suggestions), as `wj check` reports it.
+fn report_missing_modules(path: &Path) -> Result<()> {
+    let checked = crate::check::missing_modules(path)?;
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    for d in &checked.report.diagnostics {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    let errors = checked.report.diagnostics.iter().filter(|d| d.is_error()).count();
+    if errors > 0 {
+        anyhow::bail!("{errors} import(s) name a module that does not exist: the build stops before generating code");
+    }
+    Ok(())
+}
+
+/// ADR-0009: untrusted data reaching a command, a file path or SQL text (WJ0173), reported exactly as `wj check`
+/// reports it; an error stops the build before code generation.
+fn stop_on_taint(path: &Path) -> Result<()> {
+    let checked = crate::check::taint_findings(path)?;
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    let errors = checked.report.diagnostics.iter().filter(|d| d.is_error()).count();
+    for d in &checked.report.diagnostics {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    if errors > 0 {
+        anyhow::bail!("{errors} flow(s) of untrusted data into a command, file path or query (WJ0173): the build stops before generating code");
+    }
+    Ok(())
+}
+
+/// ADR-0010: a build follows `wj.lock` when there is one. Git dependencies stay at the recorded commit, a manifest that
+/// disagrees with the lock stops the build with the command that fixes it, and path dependencies whose files changed since
+/// the lock was written are reported (an error with `wj build --locked`).
+fn follow_lock(path: &Path, strict: bool) -> Result<()> {
+    let Some(root) = crate::module_system::project::find_manifest_dir(path) else { return Ok(()) };
+    match crate::package::lock::enforce(&root, strict) {
+        Ok(warnings) => {
+            for w in warnings {
+                eprintln!("warning: {w}");
+            }
+            Ok(())
+        }
+        Err(e) => anyhow::bail!("{e}\nwj.lock does not match the dependencies: the build stops before generating code"),
+    }
+}
+
 /// The compiler configuration of a build of `path`: `config` plus what the project's effects decide (ADR-0021).
 /// Shared with the in-process generator of the predictions (`cli::widths_gate`), which must build as `wj build` does.
 pub(crate) fn with_project_facts(config: crate::compiler_config::CompilerConfig, path: &Path, library: bool) -> Result<crate::compiler_config::CompilerConfig> {
@@ -70,6 +116,10 @@ pub struct BuildOptions {
     pub tree_shake: bool,
     pub source_maps: bool,
     pub unchecked_arithmetic: bool,
+    /// `--mem-report`: resident memory per build phase on stderr (`crate::mem_report`)
+    pub mem_report: bool,
+    /// `wj build --locked`: wj.lock must exist and match, path dependencies included.
+    pub locked: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -100,190 +150,200 @@ pub fn execute(
         .with_shadow_validate_strict(ir_shadow_validate)
         .with_skip_cargo_toml_generation(no_generate_cargo_toml)
         .with_unchecked_arithmetic(options.unchecked_arithmetic)
-        .with_emit_source_maps(options.source_maps || check);
-    let output_dir = output.unwrap_or_else(|| Path::new("./build"));
-    if !path.exists() {
-        anyhow::bail!("path not found: {}", path.display());
-    }
-    // ADR-0026: Rust crates without a hand-written surface get a generated one in .wj-cache (one note line each)
-    if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
-        for note in crate::package::rust_surface_gen::cache::ensure(&root, Some(output_dir), crate::toolchain::install::cargo_home().as_deref()) {
-            if !quiet {
-                eprintln!("note: {note}");
+        .with_emit_source_maps(options.source_maps || check)
+        .with_mem_report(options.mem_report);
+    let report = crate::mem_report::MemReport::new(config.mem_report);
+    report.phase("build start");
+    let result = (|| -> Result<()> {
+        let output_dir = output.unwrap_or_else(|| Path::new("./build"));
+        if !path.exists() {
+            anyhow::bail!("path not found: {}", path.display());
+        }
+        // ADR-0026: Rust crates without a hand-written surface get a generated one in .wj-cache (one note line each)
+        if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
+            for note in crate::package::rust_surface_gen::cache::ensure(&root, Some(output_dir), crate::toolchain::install::cargo_home().as_deref()) {
+                if !quiet {
+                    eprintln!("note: {note}");
+                }
             }
         }
-    }
-    // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
-    stop_on_rust_crate_errors(path)?;
-    report_local_mutability(path)?;
-    let config = with_project_facts(config, path, library)?;
+        // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
+        stop_on_rust_crate_errors(path)?;
+        report_local_mutability(path)?;
+        report_missing_modules(path)?;
+        stop_on_taint(path)?;
+        follow_lock(path, options.locked)?;
+        let config = with_project_facts(config, path, library)?;
 
-    if target_str.eq_ignore_ascii_case("rust") {
-        if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
-            crate::package::path_deps::build_missing(&root)?;
+        if target_str.eq_ignore_ascii_case("rust") {
+            if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
+                crate::package::path_deps::build_missing(&root)?;
+            }
         }
-    }
 
-    if json_output {
+        if json_output {
+            let external_metadata = parse_external_metadata_args(metadata)?;
+            return super::build_json::run(super::build_json::JsonBuild {
+                path,
+                output_dir,
+                target_str,
+                run_cargo_check: check,
+                library,
+                enable_lint,
+                config: &config,
+                external_metadata: &external_metadata,
+            });
+        }
+
+        println!(
+            "{} Windjammer project from {:?} (target: {})",
+            "Building".green().bold(),
+            path,
+            target_str
+        );
+        println!("Output: {:?}", output_dir);
+
+        // Parse target string
+        let target = match target_str.to_lowercase().as_str() {
+            "rust" => crate::CompilationTarget::Rust,
+            "javascript" | "js" | "typescript" | "ts" | "go" | "golang" => {
+                use crate::codegen::backend::{CodegenConfig, Target};
+                let target: Target = target_str.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+                // ADR-0021: capability findings stop the build; the program installs its grant only when needed
+                let flavor = if target == Target::Go { super::build_caps::Flavor::Go } else { super::build_caps::Flavor::JavaScript };
+                let config = CodegenConfig {
+                    target,
+                    output_dir: output_dir.to_path_buf(),
+                    tree_shake: options.tree_shake,
+                    capability_install: super::build_caps::prepare_for(path, library, flavor)?,
+                    ..Default::default()
+                };
+                return build_portable(path, &config, options.source_maps);
+            }
+            "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
+            "wgsl" => {
+                // Use WGSL backend for GPU shaders
+                use crate::codegen::backend::{CodegenConfig, Target};
+                let config = CodegenConfig {
+                    target: Target::Wgsl,
+                    output_dir: output_dir.to_path_buf(),
+                    ..Default::default()
+                };
+                return build_wgsl(path, &config);
+            }
+            _ => {
+                anyhow::bail!(
+                    "Unknown target: {}. Use 'rust', 'go', 'javascript' (js), 'typescript' (ts), 'wasm', or 'wgsl'",
+                    target_str
+                );
+            }
+        };
+
         let external_metadata = parse_external_metadata_args(metadata)?;
-        return super::build_json::run(super::build_json::JsonBuild {
+
+        crate::build_project_with_config(
             path,
             output_dir,
-            target_str,
-            run_cargo_check: check,
-            library,
+            target,
             enable_lint,
-            config: &config,
-            external_metadata: &external_metadata,
-        });
-    }
-
-    println!(
-        "{} Windjammer project from {:?} (target: {})",
-        "Building".green().bold(),
-        path,
-        target_str
-    );
-    println!("Output: {:?}", output_dir);
-
-    // Parse target string
-    let target = match target_str.to_lowercase().as_str() {
-        "rust" => crate::CompilationTarget::Rust,
-        "javascript" | "js" | "typescript" | "ts" | "go" | "golang" => {
-            use crate::codegen::backend::{CodegenConfig, Target};
-            let target: Target = target_str.parse().map_err(|e: String| anyhow::anyhow!(e))?;
-            // ADR-0021: capability findings stop the build; the program installs its grant only when needed
-            let flavor = if target == Target::Go { super::build_caps::Flavor::Go } else { super::build_caps::Flavor::JavaScript };
-            let config = CodegenConfig {
-                target,
-                output_dir: output_dir.to_path_buf(),
-                tree_shake: options.tree_shake,
-                capability_install: super::build_caps::prepare_for(path, library, flavor)?,
-                ..Default::default()
-            };
-            return build_portable(path, &config, options.source_maps);
-        }
-        "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
-        "wgsl" => {
-            // Use WGSL backend for GPU shaders
-            use crate::codegen::backend::{CodegenConfig, Target};
-            let config = CodegenConfig {
-                target: Target::Wgsl,
-                output_dir: output_dir.to_path_buf(),
-                ..Default::default()
-            };
-            return build_wgsl(path, &config);
-        }
-        _ => {
-            anyhow::bail!(
-                "Unknown target: {}. Use 'rust', 'go', 'javascript' (js), 'typescript' (ts), 'wasm', or 'wgsl'",
-                target_str
-            );
-        }
-    };
-
-    let external_metadata = parse_external_metadata_args(metadata)?;
-
-    crate::build_project_with_config(
-        path,
-        output_dir,
-        target,
-        enable_lint,
-        library,
-        &external_metadata,
-        &config,
-    )?;
-
-    crate::build_utils::apply_library_build_post_steps(path, output_dir, library, module_file)?;
-
-    println!("\n{} Transpilation complete!", "Success!".green().bold());
-
-    // Run cargo check if requested
-    if check {
-        check_with_cargo(
-            output_dir,
-            raw_errors,
-            fix,
-            verbose,
-            quiet,
-            filter_file,
-            filter_type,
+            library,
+            &external_metadata,
+            &config,
         )?;
-    }
 
-    // Run cargo build automatically for Rust target (unless disabled)
-    if (target_str == "rust") && run_cargo && !check {
-        let profile = if release { "release" } else { "dev" };
-        println!("\n{} Running cargo build ({})...", "⚙️".bold(), profile);
+        crate::build_utils::apply_library_build_post_steps(path, output_dir, library, module_file)?;
 
-        // Shared target tree + fast dev profile (docs/design/build-speed.md); the binary is still
-        // published at <output>/target/<profile>/ so the documented location holds.
-        let _ = crate::cargo_cache::reclaim();
-        let mut cargo = std::process::Command::new("cargo");
-        cargo.arg("build").arg("--message-format=json-render-diagnostics");
-        if release {
-            cargo.arg("--release");
-        } else {
-            crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cargo);
+        println!("\n{} Transpilation complete!", "Success!".green().bold());
+
+        // Run cargo check if requested
+        if check {
+            check_with_cargo(
+                output_dir,
+                raw_errors,
+                fix,
+                verbose,
+                quiet,
+                filter_file,
+                filter_type,
+            )?;
         }
-        let _tree = crate::cargo_cache::configure_cargo_command(&mut cargo, crate::cargo_cache::TargetKind::Shared);
-        let cargo_status = cargo
-            .current_dir(output_dir)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::inherit())
-            .output()
-            .and_then(|out| {
-                crate::cli::verdict::record_cargo_json(path, out.status.success(), &String::from_utf8_lossy(&out.stdout), release);
-                if out.status.success() {
-                    let exes = crate::cargo_cache::build_profile::executables_from_cargo_json(
-                        &String::from_utf8_lossy(&out.stdout),
+
+        // Run cargo build automatically for Rust target (unless disabled)
+        if (target_str == "rust") && run_cargo && !check {
+            let profile = if release { "release" } else { "dev" };
+            println!("\n{} Running cargo build ({})...", "⚙️".bold(), profile);
+
+            // Shared target tree + fast dev profile (docs/design/build-speed.md); the binary is still
+            // published at <output>/target/<profile>/ so the documented location holds.
+            let _ = crate::cargo_cache::reclaim();
+            let mut cargo = std::process::Command::new("cargo");
+            cargo.arg("build").arg("--message-format=json-render-diagnostics");
+            if release {
+                cargo.arg("--release");
+            } else {
+                crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cargo);
+            }
+            let _tree = crate::cargo_cache::configure_cargo_command(&mut cargo, crate::cargo_cache::TargetKind::Shared);
+            let cargo_status = cargo
+                .current_dir(output_dir)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::inherit())
+                .output()
+                .and_then(|out| {
+                    crate::cli::verdict::record_cargo_json(path, out.status.success(), &String::from_utf8_lossy(&out.stdout), release);
+                    if out.status.success() {
+                        let exes = crate::cargo_cache::build_profile::executables_from_cargo_json(
+                            &String::from_utf8_lossy(&out.stdout),
+                        );
+                        crate::cargo_cache::build_profile::publish_executables(output_dir, release, &exes)?;
+                    }
+                    Ok(out.status)
+                });
+            match cargo_status {
+                Ok(status) if status.success() => {
+                    println!("{} Cargo build complete!", "✅".green().bold());
+                    println!(
+                        "\n{} Your Windjammer project is ready!",
+                        "Success!".green().bold()
                     );
-                    crate::cargo_cache::build_profile::publish_executables(output_dir, release, &exes)?;
+                    println!("Run your project with:");
+                    if release {
+                        println!("  cd {:?} && cargo run --release", output_dir);
+                    } else {
+                        println!("  cd {:?} && cargo run", output_dir);
+                    }
                 }
-                Ok(out.status)
-            });
-        match cargo_status {
-            Ok(status) if status.success() => {
-                println!("{} Cargo build complete!", "✅".green().bold());
-                println!(
-                    "\n{} Your Windjammer project is ready!",
-                    "Success!".green().bold()
-                );
-                println!("Run your project with:");
-                if release {
-                    println!("  cd {:?} && cargo run --release", output_dir);
-                } else {
-                    println!("  cd {:?} && cargo run", output_dir);
+                Ok(status) => {
+                    println!(
+                        "{} Cargo build failed with exit code: {:?}",
+                        "❌".red().bold(),
+                        status.code()
+                    );
+                    println!("\nYou can:");
+                    println!("  • Fix the errors and run: cargo build");
+                    println!("  • Or use: wj build --no-run-cargo to skip cargo build");
+                    return Err(anyhow::anyhow!("Cargo build failed"));
+                }
+                Err(e) => {
+                    println!("{} Failed to run cargo: {}", "❌".red().bold(), e);
+                    println!("\nMake sure cargo is installed:");
+                    println!("  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh");
+                    return Err(anyhow::anyhow!("Failed to execute cargo: {}", e));
                 }
             }
-            Ok(status) => {
-                println!(
-                    "{} Cargo build failed with exit code: {:?}",
-                    "❌".red().bold(),
-                    status.code()
-                );
-                println!("\nYou can:");
-                println!("  • Fix the errors and run: cargo build");
-                println!("  • Or use: wj build --no-run-cargo to skip cargo build");
-                return Err(anyhow::anyhow!("Cargo build failed"));
-            }
-            Err(e) => {
-                println!("{} Failed to run cargo: {}", "❌".red().bold(), e);
-                println!("\nMake sure cargo is installed:");
-                println!("  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh");
-                return Err(anyhow::anyhow!("Failed to execute cargo: {}", e));
-            }
+        } else if !run_cargo && target_str == "rust" {
+            println!(
+                "\n{} Transpilation complete (cargo build skipped)!",
+                "Success!".green().bold()
+            );
+            println!("Run cargo build manually:");
+            println!("  cd {:?} && cargo build", output_dir);
         }
-    } else if !run_cargo && target_str == "rust" {
-        println!(
-            "\n{} Transpilation complete (cargo build skipped)!",
-            "Success!".green().bold()
-        );
-        println!("Run cargo build manually:");
-        println!("  cd {:?} && cargo build", output_dir);
-    }
 
-    Ok(())
+        Ok(())
+    })();
+    report.phase("build end");
+    result
 }
 
 /// Resolve the single `.wj` source of a portable-backend build (a file, or a directory with `main.wj`).

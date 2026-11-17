@@ -1,0 +1,20 @@
+// A struct's fields are tracked apart: the file name comes from the directory listing, only the body from the file.
+use std::fs
+
+struct Page {
+    name: string,
+    body: string,
+}
+
+fn load(name: string) -> Page {
+    let body = fs::read_to_string("${name}.md").unwrap_or("")
+    Page { name: name, body: body }
+}
+
+fn save(page: Page) {
+    let _ = fs::write("out/${page.name}.html", page.body)
+}
+
+fn main() {
+    save(load("index"))
+}

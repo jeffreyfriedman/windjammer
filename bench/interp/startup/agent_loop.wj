@@ -1,0 +1,191 @@
+// A typical agent-task program (ADR-0038 ladder 3, the agent loop rung): records parsed from text, validated,
+// grouped and summarised with structs, enums, a map, closures, `Result` errors and formatted output. It is what an
+// agent writes and runs again after each edit, so its end-to-end `wj run` (check + run) is the loop's cost.
+use std::collections::HashMap
+
+enum Category {
+    Hardware,
+    Software,
+    Service,
+}
+
+struct Item {
+    sku: string,
+    name: string,
+    category: Category,
+    price_cents: int,
+    quantity: int,
+}
+
+struct Order {
+    id: int,
+    customer: string,
+    lines: Vec<(string, int)>,
+}
+
+struct Summary {
+    orders: int,
+    revenue_cents: int,
+    units: int,
+    rejected: Vec<string>,
+}
+
+fn category_of(text: string) -> Result<Category, string> {
+    match text {
+        "hw" => Ok(Category::Hardware),
+        "sw" => Ok(Category::Software),
+        "svc" => Ok(Category::Service),
+        _ => Err("unknown category ${text}"),
+    }
+}
+
+fn category_name(c: Category) -> string {
+    match c {
+        Category::Hardware => "hardware",
+        Category::Software => "software",
+        Category::Service => "service",
+    }
+}
+
+fn parse_item(line: string) -> Result<Item, string> {
+    let fields: Vec<string> = line.split(",").map(|f| f.trim().to_string()).collect()
+    if fields.len() != 5 {
+        return Err("expected 5 fields in '${line}', found ${fields.len()}")
+    }
+    let price = match fields[3].parse::<int>() {
+        Ok(p) => p,
+        Err(_) => return Err("bad price '${fields[3]}'"),
+    }
+    let quantity = match fields[4].parse::<int>() {
+        Ok(q) => q,
+        Err(_) => return Err("bad quantity '${fields[4]}'"),
+    }
+    Ok(Item { sku: fields[0], name: fields[1], category: category_of(fields[2])?, price_cents: price, quantity: quantity })
+}
+
+fn parse_order(id: int, line: string) -> Result<Order, string> {
+    let parts: Vec<string> = line.split(":").map(|p| p.trim().to_string()).collect()
+    if parts.len() != 2 {
+        return Err("order ${id}: expected 'customer: sku*n, ...'")
+    }
+    let mut lines: Vec<(string, int)> = Vec::new()
+    for entry in parts[1].split(",") {
+        let e = entry.trim()
+        if e.is_empty() {
+            continue
+        }
+        let pieces: Vec<string> = e.split("*").map(|p| p.trim().to_string()).collect()
+        let count = if pieces.len() == 2 { pieces[1].parse::<int>().unwrap_or(0) } else { 1 }
+        if count <= 0 {
+            return Err("order ${id}: bad count in '${e}'")
+        }
+        lines.push((pieces[0], count))
+    }
+    Ok(Order { id: id, customer: parts[0], lines: lines })
+}
+
+fn load_catalog(text: string) -> (HashMap<string, Item>, Vec<string>) {
+    let mut catalog: HashMap<string, Item> = HashMap::new()
+    let mut errors: Vec<string> = Vec::new()
+    for line in text.lines() {
+        if line.trim().is_empty() || line.starts_with("#") {
+            continue
+        }
+        match parse_item(line.to_string()) {
+            Ok(item) => {
+                let _ = catalog.insert(item.sku, item)
+            }
+            Err(e) => errors.push(e),
+        }
+    }
+    (catalog, errors)
+}
+
+fn fill(catalog: HashMap<string, Item>, order: Order, summary: Summary) -> Result<int, string> {
+    let mut total = 0
+    for (sku, count) in order.lines {
+        let item = match catalog.get(&sku) {
+            Some(i) => i,
+            None => return Err("order ${order.id}: unknown sku ${sku}"),
+        }
+        if item.quantity < count {
+            return Err("order ${order.id}: only ${item.quantity} of ${sku} left, ${count} wanted")
+        }
+        total += item.price_cents * count
+    }
+    for (sku, count) in order.lines {
+        if let Some(item) = catalog.get_mut(&sku) {
+            item.quantity -= count
+        }
+        summary.units += count
+    }
+    summary.orders += 1
+    summary.revenue_cents += total
+    Ok(total)
+}
+
+fn money(cents: int) -> string {
+    let sign = if cents < 0 { "-" } else { "" }
+    let c = if cents < 0 { -cents } else { cents }
+    let rest = c % 100
+    let pad = if rest < 10 { "0" } else { "" }
+    "${sign}\$${c / 100}.${pad}${rest}"
+}
+
+fn by_category(catalog: HashMap<string, Item>) -> Vec<(string, int)> {
+    let mut stock: HashMap<string, int> = HashMap::new()
+    for (_, item) in catalog {
+        let key = category_name(item.category)
+        let now = stock.get(&key).copied().unwrap_or(0)
+        stock.insert(key, now + item.quantity)
+    }
+    let mut out: Vec<(string, int)> = stock.into_iter().collect()
+    out.sort_by(|a, b| a.0.cmp(&b.0))
+    out
+}
+
+fn main() {
+    let catalog_text = "# sku, name, category, price in cents, quantity
+k100, keyboard, hw, 4999, 12
+m200, mouse, hw, 1999, 30
+e300, editor licence, sw, 12900, 100
+s400, support hour, svc, 9000, 40
+x500, broken line, hw
+c600, cable, hw, 499, 200
+d700, debugger licence, sw, 25000, 5
+q800, query tool, sw, abc, 3"
+    let orders_text = "ann: k100*2, m200*2, c600*5
+bob: e300, s400*3
+cy: d700*6
+dee: z999
+eve: m200*10, c600*20, s400
+fay: k100, k100, e300*2"
+    let (mut catalog, errors) = load_catalog(catalog_text)
+    let mut summary = Summary { orders: 0, revenue_cents: 0, units: 0, rejected: errors }
+    let mut id = 1
+    for line in orders_text.lines() {
+        match parse_order(id, line.to_string()) {
+            Ok(order) => {
+                let who = order.customer
+                match fill(catalog, order, summary) {
+                    Ok(total) => println("order ${id} ${who}: ${money(total)}"),
+                    Err(e) => summary.rejected.push(e),
+                }
+            }
+            Err(e) => summary.rejected.push(e),
+        }
+        id += 1
+    }
+    println("orders filled: ${summary.orders}, units: ${summary.units}, revenue: ${money(summary.revenue_cents)}")
+    for (category, units) in by_category(catalog) {
+        println("  ${category}: ${units} in stock")
+    }
+    let expensive: Vec<string> = catalog.values().filter(|i| i.price_cents > 10000).map(|i| i.name.clone()).collect()
+    let mut sorted = expensive
+    sorted.sort()
+    println("over \$100: ${sorted.join(", ")}")
+    println("rejected (${summary.rejected.len()}):")
+    for r in summary.rejected {
+        println("  ${r}")
+    }
+}

@@ -1939,3 +1939,9 @@ tests/drift_corpus/repros/dyn_fn_box_return.wj#mainerr	none
 tests/drift_corpus/repros/dyn_fn_box_return.wj	exit0:2:18021	
 tests/drift_corpus/repros/text_slice_range_bounds_from_int.wj#mainerr	none	
 tests/drift_corpus/repros/text_slice_range_bounds_from_int.wj	exit0:9:391298496	
+tests/drift_corpus/repros/must_refuse_match_arm_option_next_to_unit.wj#mainerr	none	
+tests/drift_corpus/repros/must_refuse_match_arm_option_next_to_unit.wj#refused	rejected	
+tests/drift_corpus/repros/must_refuse_match_arm_option_next_to_unit.wj	exit1:0:17	
+tests/drift_corpus/repros/must_refuse_map_field_move_out_of_borrow.wj#mainerr	none	
+tests/drift_corpus/repros/must_refuse_map_field_move_out_of_borrow.wj#refused	rejected	
+tests/drift_corpus/repros/must_refuse_map_field_move_out_of_borrow.wj	exit1:0:17	

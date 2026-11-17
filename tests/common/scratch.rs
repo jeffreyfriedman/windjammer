@@ -73,6 +73,12 @@ impl Drop for Scratch {
     }
 }
 
+/// The OS temp directory path, for substituting into recorded text or labelling. Creates nothing: anything that
+/// needs a directory to write into uses [`Scratch`].
+pub fn os_temp_root() -> PathBuf {
+    std::env::temp_dir()
+}
+
 /// Stable cache location for expensive shared inputs (inside the shared cargo cache root).
 pub fn shared_cache_dir(name: &str) -> PathBuf {
     let d = windjammer::cargo_cache::cache_root().join("test-scratch").join(name);

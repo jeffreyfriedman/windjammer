@@ -1,0 +1,11 @@
+// A helper that runs its parameter is fine while every caller passes literals.
+use std::process
+
+fn execute(command: string) -> string {
+    process::run(command).unwrap_or("")
+}
+
+fn main() {
+    let out = execute("echo one")
+    println("${out}")
+}

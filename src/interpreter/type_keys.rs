@@ -79,6 +79,33 @@ impl Interpreter {
         join(&self.module_path_string(module), name)
     }
 
+    /// Does the module path in front of the type name `written` (`state_model` in `state_model::State`) name a module from
+    /// `module` (a child, an imported module, `crate`/`self`/`super`, or a dependency crate)? A bare name has no prefix: `true`.
+    pub(crate) fn module_prefix_resolves(&self, module: usize, written: &str) -> bool {
+        let segs: Vec<&str> = written.split("::").collect();
+        let Some((_, prefix)) = segs.split_last() else { return true };
+        let mut m = module;
+        for seg in prefix {
+            m = match *seg {
+                "crate" => self.crate_root_module(m),
+                "self" => m,
+                "super" => self.modules[m].parent.unwrap_or(0),
+                "std" => return true,
+                s => match self.modules[m].children.get(s).copied().or_else(|| match self.modules[m].imports.get(s) {
+                    Some(Import::Module(c)) | Some(Import::Both(c, _, _)) => Some(*c),
+                    _ => None,
+                }) {
+                    Some(c) => c,
+                    None => match self.modules[0].children.get(s) {
+                        Some(&c) => c,
+                        None => return false,
+                    },
+                },
+            };
+        }
+        true
+    }
+
     /// The key of the type that `written` (`P`, `b::P`, `crate::b::P`, an alias bound by `use`) denotes in `module`.
     pub(crate) fn type_key(&self, module: usize, written: &str) -> String {
         if self.dup_types.is_empty() {

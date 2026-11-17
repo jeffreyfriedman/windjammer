@@ -1,0 +1,26 @@
+// `.map(|i| i.name)` over a map's borrowed values moves a `string` field out of a reference. When the map is a
+// `let (mut m, ..)` binding written through `get_mut`, the compiled build rejects it (WJ0016, rustc E0507: write
+// `i.name.clone()`); without the mutation the generated Rust clones and both sides agree. `wj run` interprets it
+// either way. Found by the ADR-0038 agent-loop program (round 6), reduced.
+use std::collections::HashMap
+
+struct Item {
+    name: string,
+    price_cents: int,
+}
+
+fn load() -> (HashMap<string, Item>, int) {
+    let mut m: HashMap<string, Item> = HashMap::new()
+    m.insert("a", Item { name: "a", price_cents: 5 })
+    m.insert("b", Item { name: "b", price_cents: 50000 })
+    (m, 1)
+}
+
+fn main() {
+    let (mut catalog, n) = load()
+    if let Some(i) = catalog.get_mut("a") {
+        i.price_cents += n
+    }
+    let expensive: Vec<string> = catalog.values().filter(|i| i.price_cents > 10000).map(|i| i.name).collect()
+    println("${expensive.len()}")
+}

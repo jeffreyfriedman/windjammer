@@ -29,6 +29,8 @@ Every definition gets a `DefId`; every call expression resolves to a `Res`: `Def
 - A module re-exports the public items of its child modules (`pub mod http_server` in `adapters/mod.wj` makes `crate::adapters::serve` the function in `http_server`), the shape the generated `mod.rs` has.
 - `resolve_program_with_crates(files, crate_names)`: inside a dependency crate mounted at `crate_names`, `crate::` is that crate's root (`Collected::crate_root_of`); plain `resolve_program` has none.
 
+- A module-dot call (`fs.write(..)` with `use std::fs`, `util.save()` for a program module) is the same call as `fs::write(..)` / `util::save()`: same `CallKind::Path`, same `Res` (`walk::module_dot_call`), only when the receiver is in scope, not a local, and the path resolves outside the program or to a function. The effect and taint passes therefore have one classification for both spellings (gate: tests/effect_spelling_test.rs, scripts/wj/effect_spelling_gate.wj).
+
 ## Owns / never decides
 Owns: identity and lexical resolution. Never decides: types of expressions, ownership, codegen shape.
 

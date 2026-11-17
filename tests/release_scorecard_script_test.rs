@@ -8,6 +8,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
+
 const WJ: &str = env!("CARGO_BIN_EXE_wj");
 
 fn root() -> PathBuf {
@@ -27,7 +31,7 @@ fn ecosystem() -> Option<PathBuf> {
     }
 }
 
-fn run(eco: &Path, flag: &str) -> (bool, String) {
+fn run(eco: &Path, flag: &str, scratch: Option<&Path>) -> (bool, String) {
     let out = Command::new(WJ)
         .args([
             "run",
@@ -38,6 +42,7 @@ fn run(eco: &Path, flag: &str) -> (bool, String) {
         .arg("scripts/wj/release_scorecard.wj")
         .arg("--")
         .arg(flag)
+        .args(scratch.map(|d| vec!["--scratch".to_string(), d.display().to_string()]).unwrap_or_default())
         .env("WJ_ECOSYSTEM", eco)
         .current_dir(root())
         .output()
@@ -53,7 +58,8 @@ fn run(eco: &Path, flag: &str) -> (bool, String) {
 #[test]
 fn every_criterion_turns_red_green_stale_and_missing() {
     let Some(eco) = ecosystem() else { return };
-    let (ok, text) = run(&eco, "--selftest");
+    let scratch = Scratch::new("scorecard-selftest");
+    let (ok, text) = run(&eco, "--selftest", Some(scratch.path()));
     assert!(ok, "{text}");
     assert!(text.contains("0 failures"), "{text}");
 }
@@ -61,7 +67,7 @@ fn every_criterion_turns_red_green_stale_and_missing() {
 #[test]
 fn committed_page_and_json_match_the_definition() {
     let Some(eco) = ecosystem() else { return };
-    let (ok, text) = run(&eco, "--check");
+    let (ok, text) = run(&eco, "--check", None);
     assert!(
         ok,
         "regenerate with `wj run scripts/wj/release_scorecard.wj -- --write`:\n{text}"

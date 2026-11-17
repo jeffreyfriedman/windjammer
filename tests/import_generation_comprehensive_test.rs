@@ -58,23 +58,49 @@ pub struct Camera {
 
     println!("Generated code:\n{}", generated);
 
-    // WINDJAMMER FIX: Shared analyzer generates absolute crate:: paths
-    // This is more correct than relative super:: paths for cross-file compilation
+    // No `math` module exists anywhere: a file built alone has no declaration that says `math` is a module of this
+    // crate rather than another crate, so the path is emitted as written (Rust rejects both spellings; `wj check`
+    // reports the import of an undeclared module). The crate-path form is checked where `math` is declared:
+    // `test_declared_math_module_import_uses_crate_path`.
     assert!(
-        generated.contains("use crate::math::Vec3;"),
-        "Expected 'use crate::math::Vec3;' for absolute path but got:\n{}",
-        generated
-    );
-
-    // Should NOT contain unqualified math::Vec3
-    assert!(
-        !generated.contains("use math::Vec3;") || generated.contains("use crate::math::Vec3;"),
-        "Should use absolute crate:: path but got:\n{}",
+        generated.contains("use math::Vec3;"),
+        "an import of an undeclared module is emitted as written, got:\n{}",
         generated
     );
 
     // Cleanup
     fs::remove_dir_all(input_dir).ok();
+}
+
+/// `use math::Vec3` where the project declares `math` (math/vec3.wj): the import is a path of this crate.
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_declared_math_module_import_uses_crate_path() {
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let root = scratch.path().join("declared_math");
+    fs::create_dir_all(root.join("math")).expect("create math/");
+    fs::write(root.join("math/vec3.wj"), "pub struct Vec3 {\n    pub x: f32,\n}\n").expect("write vec3.wj");
+    fs::write(
+        root.join("main.wj"),
+        "use math::Vec3\n\npub struct Camera {\n    pub position: Vec3,\n}\n\nfn main() {\n    let c = Camera { position: Vec3 { x: 1.0 } }\n    println(\"${c.position.x}\")\n}\n",
+    )
+    .expect("write main.wj");
+    let out = root.join("gen");
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build"])
+        .arg(&root)
+        .arg("--output")
+        .arg(&out)
+        .arg("--no-cargo")
+        .output()
+        .expect("Failed to run compiler");
+    assert!(output.status.success(), "Compiler failed: {}", String::from_utf8_lossy(&output.stderr));
+    let generated = fs::read_to_string(out.join("main.rs")).expect("read main.rs");
+    assert!(
+        generated.contains("use crate::math::vec3::Vec3;") || generated.contains("use crate::math::Vec3;"),
+        "a declared module is imported by its crate path, got:\n{}",
+        generated
+    );
 }
 
 #[test]

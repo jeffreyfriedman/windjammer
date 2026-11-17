@@ -39,8 +39,9 @@ fn a_console_program_with_stdin_is_compared_and_printed_once() {
     );
     let (out, err, code) = verify(&f, "a\nb\n");
     assert_eq!(out, "got a\ngot b\n", "stdout once, from the interpreted run: {err}");
-    assert_eq!(code, Some(3), "the program's exit status: {err}");
-    assert!(err.contains("wj verify: compiled build OK; the compiled run matches"), "{err}");
+    // the runs agree, so verification passes (exit 0) and the line reports the program's own status
+    assert_eq!(code, Some(0), "agreeing runs exit 0 whatever the program's status is: {err}");
+    assert!(err.contains("wj verify: OK, the compiled run matches the interpreted run (stdout 12 bytes, program exit status 3)"), "{err}");
 }
 
 #[test]
@@ -191,6 +192,7 @@ fn a_program_that_prints_then_panics_streams_its_output_and_keeps_the_contract()
     // and through `wj run --verify`: stdout once, the interpreted status, the panic on stderr
     let (out, err, code) = verify(&f, "");
     assert_eq!(out, "before\n", "{err}");
-    assert_eq!(code, Some(101), "{err}");
+    assert_eq!(code, Some(0), "both runs panic the same way: they agree, and the line names status 101: {err}");
+    assert!(err.contains("program exit status 101"), "{err}");
     assert!(err.contains("boom now"), "{err}");
 }

@@ -1,0 +1,15 @@
+// A statement `match` whose arms disagree: one arm is `Option<int>` (a map insert's result), the other is unit.
+// The compiled build rejects it (WJ0003, rustc E0308); `wj run` interprets it. Found by the ADR-0038 agent-loop
+// program (round 6), reduced. The interpreter should flag what rustc rejects (predictions warn).
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<int, int> = HashMap::new()
+    for i in 0..3 {
+        match i % 2 {
+            0 => m.insert(i, i * 10),
+            _ => println("odd ${i}"),
+        }
+    }
+    println("${m.len()}")
+}

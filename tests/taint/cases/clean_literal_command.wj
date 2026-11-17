@@ -1,0 +1,7 @@
+// Nothing from outside the program reaches the command.
+use std::process
+
+fn main() {
+    let out = process::run("echo hello")
+    println("${out}")
+}

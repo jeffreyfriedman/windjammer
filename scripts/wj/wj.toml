@@ -15,18 +15,19 @@ wj_proc = { path = "${WJ_ECOSYSTEM:-../../windjammer-ecosystem}/packages/wj-proc
 wj_fs_walk = { path = "${WJ_ECOSYSTEM:-../../windjammer-ecosystem}/packages/wj-fs-walk" }
 
 # One grant covers every script in this directory (the union of what they need): the repository
-# (scripts run from its root), scratch space under /tmp, and the programs they start themselves.
+# (scripts run from its root), scratch space under /tmp and the system temp directory (`$TMP`: on macOS it is
+# /var/folders/.., not /tmp), and the programs they start themselves.
 [capabilities]
-fs.read = ["./**", "../../**", "/tmp/**"]
+fs.read = ["./**", "../../**", "/tmp/**", "$TMP/**"]
 # generated sources and manifests are named by suffix (`*.wj`, `wj.toml`): the pattern says so out loud, a bare `**` never reaches them
 # `add_missing_mut.wj` edits the repository's sources in place (`../../**/*.wj`)
-fs.write = ["./**", "../../**", "/tmp/**", "../../tests/check_negative/mutants/*.wj", "../../**/*.wj", "/tmp/**/*.wj", "/tmp/**/wj.toml"]
+fs.write = ["./**", "../../**", "/tmp/**", "$TMP/**", "../../tests/check_negative/mutants/*.wj", "../../**/*.wj", "/tmp/**/*.wj", "/tmp/**/wj.toml", "$TMP/**/*.wj", "$TMP/**/wj.toml"]
 process = ["bash", "cargo", "sh"]
 env.read = ["*"]
 
 # Packages get their own, narrower grants.
 [capabilities.dependencies.wj_fs_walk]
-fs.read = ["./**", "../../**", "/tmp/**"]
+fs.read = ["./**", "../../**", "/tmp/**", "$TMP/**"]
 
 [capabilities.dependencies.wj_proc]
 # `env` and `sh` stand in for the program a script is told to drive (a path cannot be named in a grant)

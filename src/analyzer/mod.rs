@@ -37,6 +37,7 @@ mod field_cloneability;
 mod implicit_self;
 mod self_return_and_consumption;
 mod signature_registry;
+mod trait_key_set;
 pub mod simd_loops;
 pub mod stdlib_method_traits;
 mod string_optimization;
@@ -435,9 +436,15 @@ impl<'ast> Analyzer<'ast> {
     /// Check for forbidden Rust-specific patterns that should not appear in Windjammer source.
     /// These are implementation details that the compiler should handle automatically.
     pub fn check_forbidden_rust_patterns(&self, program: &Program<'ast>) -> Result<(), String> {
-        forbidden_patterns::check_forbidden_rust_patterns(program)?;
-        arena_escape::gate(program)
+        forbidden_rust_patterns(program)
     }
+}
+
+/// `Analyzer::check_forbidden_rust_patterns` without an analyzer: the check reads only the AST, so `wj check` runs it
+/// without building the signature registry and the tables an `Analyzer` starts with.
+pub fn forbidden_rust_patterns(program: &Program<'_>) -> Result<(), String> {
+    forbidden_patterns::check_forbidden_rust_patterns(program)?;
+    arena_escape::gate(program)
 }
 
 #[cfg(test)]

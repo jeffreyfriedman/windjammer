@@ -1,4 +1,5 @@
 """Task loading: spec, visible samples, hidden vectors."""
+import re
 import json
 import os
 
@@ -32,7 +33,7 @@ def load_vectors(task_id):
         return json.load(f)
 
 
-def render_prompt(task_id, lang):
+def render_prompt(task_id, lang, agent_mode=False):
     """Natural-language prompt given to the agent (spec + visible samples only)."""
     t = load_task(task_id)
     samples = load_samples(task_id)
@@ -45,4 +46,8 @@ def render_prompt(task_id, lang):
             out += [f"File `{name}`:", "```", content.rstrip("\n"), "```"]
         out += ["Standard input:", "```", s.get("stdin", "").rstrip("\n"), "```",
                 "Expected standard output:", "```", s["stdout"].rstrip("\n"), "```", ""]
+    if agent_mode and any(re.search(r" =\S", x) for x in [t["spec"]] + [s.get("stdin", "") for s in samples]):
+        # the Bash safety check refuses a space followed by `=` anywhere in a command, quoted or not (measured, pilot 8)
+        out += ["Input for this task contains a space followed by `=`, which a shell command here cannot contain: write the input to a file "
+                "with the Write tool and pass it with `--stdin-file FILE`.", ""]
     return "\n".join(out)

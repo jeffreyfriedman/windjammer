@@ -61,25 +61,29 @@ struct Snapshot {
     taint_sanitizer_callees: BTreeSet<String>,
 }
 
+/// The registry's own collection types under short names: the stored layer is read straight into them (no iteration).
+type StrSet = HashSet<String>;
+type StrMap<V> = HashMap<String, V>;
+
 /// The stored runtime layer read back: `Snapshot`'s fields in its order, each in the collection type the registry
 /// keeps (a set or a map is a length and its items in bincode, whatever collection wrote it), so loading builds the
 /// registry's own collections directly. Written sorted (from `Snapshot`), so one build always stores the same bytes.
 #[derive(serde::Deserialize)]
 struct Stored {
     signatures: BTreeMap<String, FunctionSignature>,
-    type_collision_keys: HashSet<String>,
-    ownership_collision_keys: HashSet<String>,
-    method_index: HashMap<String, Vec<String>>,
-    trait_method_keys: HashSet<String>,
-    trait_impl_method_keys: HashSet<String>,
-    runtime_std_modules: HashSet<String>,
-    runtime_std_rust_stems: HashMap<String, String>,
-    runtime_type_modules: HashMap<String, String>,
-    runtime_exported_types: HashMap<String, Vec<String>>,
-    runtime_type_fields: HashMap<String, Vec<(String, String)>>,
-    runtime_non_copy_types: HashSet<String>,
-    runtime_non_clone_types: HashSet<String>,
-    taint_sanitizer_callees: HashSet<String>,
+    type_collision_keys: StrSet,
+    ownership_collision_keys: StrSet,
+    method_index: StrMap<Vec<String>>,
+    trait_method_keys: Vec<String>,
+    trait_impl_method_keys: StrSet,
+    runtime_std_modules: StrSet,
+    runtime_std_rust_stems: StrMap<String>,
+    runtime_type_modules: StrMap<String>,
+    runtime_exported_types: StrMap<Vec<String>>,
+    runtime_type_fields: StrMap<Vec<(String, String)>>,
+    runtime_non_copy_types: StrSet,
+    runtime_non_clone_types: StrSet,
+    taint_sanitizer_callees: StrSet,
 }
 
 impl Stored {
@@ -89,7 +93,7 @@ impl Stored {
         r.type_collision_keys = self.type_collision_keys;
         r.ownership_collision_keys = self.ownership_collision_keys;
         r.method_index = self.method_index;
-        r.trait_method_keys = self.trait_method_keys;
+        r.trait_method_keys = self.trait_method_keys.into_iter().collect();
         r.trait_impl_method_keys = self.trait_impl_method_keys;
         r.runtime_std_modules = self.runtime_std_modules;
         r.runtime_std_rust_stems = self.runtime_std_rust_stems;
@@ -199,7 +203,7 @@ mod tests {
         assert_eq!(format!("{:?}", back.signatures), format!("{:?}", scanned.signatures));
         let sorted = |s: &HashSetOfStrings| -> Vec<String> { let mut v: Vec<String> = s.iter().cloned().collect(); v.sort(); v };
         assert_eq!(sorted(&back.runtime_non_copy_types), sorted(&scanned.runtime_non_copy_types));
-        assert_eq!(sorted(&back.trait_method_keys), sorted(&scanned.trait_method_keys));
+        assert_eq!(back.trait_method_keys, scanned.trait_method_keys);
         assert_eq!(back.runtime_type_fields.len(), scanned.runtime_type_fields.len());
         let mut again = SignatureRegistry::empty();
         crate::stdlib_scanner::populate_runtime_signatures(&mut again).expect("scan");

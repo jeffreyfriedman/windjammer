@@ -180,6 +180,7 @@ pub const ADDR_VERIFIED_CONNECTS: &[&str] = &["TcpStream::connect", "TcpStream::
 pub static NOT_SINKS: &[&str] = &[
     "mcp::quote", "mcp::get_string", "mcp::get_int", "mcp::get_float", "mcp::get_bool", "mcp::get_raw", "mcp::get_items", "mcp::get_strings", "mcp::get_ints",
     "fs::join", "fs::extension", "fs::file_name", "fs::file_stem", "fs::parent", "fs::is_absolute", "fs::is_relative",
+    "http::content_type",
     "path::as_os_str", "path::components", "path::current_dir", "path::extension", "path::file_name_path", "path::file_stem",
     "path::from_str", "path::has_extension", "path::is_absolute", "path::is_relative", "path::join_path", "path::new",
     "path::parent", "path::strip_prefix", "path::to_string", "path::to_string_lossy",

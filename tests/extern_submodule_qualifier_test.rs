@@ -86,17 +86,16 @@ pub fn check() -> bool {
     )
     .unwrap();
 
-    let old = std::env::current_dir().expect("cwd");
-    std::env::set_current_dir(temp.path()).expect("chdir temp");
-    let outcome = build_project_ext(
-        Path::new("src"),
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    );
-    std::env::set_current_dir(old).expect("restore cwd");
+    let outcome = windjammer::test_utils::in_dir(temp.path(), || {
+        build_project_ext(
+            Path::new("src"),
+            &build,
+            CompilationTarget::Rust,
+            false,
+            true,
+            &[],
+        )
+    });
     outcome.expect("multipass build with relative src/");
 
     let usage = fs::read_to_string(build.join("usage.rs")).expect("usage.rs");

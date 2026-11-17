@@ -1,0 +1,10 @@
+// The tainted value is replaced before the sink.
+use std::fs
+use std::process
+
+fn main() {
+    let mut command = fs::read_to_string("cmd.txt").unwrap_or("")
+    command = "ls"
+    let out = process::run(command)
+    println("${out}")
+}

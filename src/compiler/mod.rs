@@ -126,6 +126,12 @@ pub(crate) fn parse_wj_source(
 pub(crate) fn emit_parser_warnings(parser: &crate::parser::Parser) -> Result<()> {
     let mut has_errors = false;
     for w in parser.warnings() {
+        // a coded syntax diagnostic with a fix (`mut self`): the same one `wj check` reports, in the same layout
+        if let Some(text) = w.file.as_deref().and_then(|f| crate::error_mapper::render_syntax_warning(f, &w.message, w.line.unwrap_or(1), w.column.unwrap_or(1))) {
+            eprint!("{text}");
+            has_errors = true;
+            continue;
+        }
         let level = if w.is_error { "error" } else { "warning" };
         eprintln!(
             "{}: {} [{}:{}:{}]",

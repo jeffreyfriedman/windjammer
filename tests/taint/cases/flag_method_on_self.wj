@@ -1,0 +1,19 @@
+// A method uses a field of self as a command; the caller built self from a source.
+use std::fs
+use std::process
+
+struct Runner {
+    program: string,
+}
+
+impl Runner {
+    fn go(self) -> string {
+        process::run(self.program).unwrap_or("")
+    }
+}
+
+fn main() {
+    let r = Runner { program: fs::read_to_string("program.txt").unwrap_or("") }
+    let out = r.go() //~ WJ0173
+    println("${out}")
+}

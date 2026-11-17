@@ -30,6 +30,12 @@ LOOP_TEXT = {
         "- `wj run --compiled main.wj` to build and run the program (pass program input on stdin)\n"
         "- `wj test .` if you write `*_test.wj` tests\n"
         "Do not use `--interpret`."),
+    "compiled-first-agent": (
+        "Development loop (required): iterate with the compiled production path.\n"
+        "- `wj build main.wj` to compile (this is what the final grade uses); it prints `run: wj run --compiled main.wj`\n"
+        "- `wj run --compiled --stdin-file in.txt main.wj` to build and run the program on the input you wrote to `in.txt`\n"
+        "- `wj test .` if you write `*_test.wj` tests\n"
+        "There is no `./build/main` to run. Do not use `--interpret`."),
     "interpreted-verify": (
         "Development loop (required): iterate with the fast interpreted tools.\n"
         "- `wj check main.wj` for diagnostics\n"
@@ -51,6 +57,13 @@ LOOP_TEXT = {
         "`printf '<input>' | wj run --verify main.wj`: it runs the program at once, builds it with the production compiler "
         "(the final grade uses that build), runs the build on the same input and compares. Read what it reports, fix, and run "
         "it again. You are done when it exits 0 and the output is what the task asks for. No other build or run command is needed."),
+    # pilot 8: `wj run --verify` exits 0 whenever the interpreted and compiled runs agree, whatever the program's own status
+    "verify-ok": (
+        "Development loop: one command does everything. After writing `main.wj`, run "
+        "`wj run --verify --stdin-file in.txt main.wj` (write the input to `in.txt` first): it runs the program at once, builds it with the production compiler "
+        "(the final grade uses that build), runs the build on the same input and compares. Read what it reports, fix, and run "
+        "it again. You are done when it prints `wj verify: OK` (it exits 0 then, even if your program exits 1 on purpose: the line "
+        "names the program's status) and the output is what the task asks for. No other build or run command is needed."),
     "native-python": (
         "Development loop: run the program with `python3 main.py` (pass program input on stdin)."),
     "native-go": (
@@ -90,6 +103,13 @@ ARMS = {
     # pilot 7: V3 = the loop agents actually follow (one command, measured in pilot 6) with compact diagnostics (ADR-0037)
     "V3": {"name": "verify-one-command", "loop": "verify-one-command", "pack_file": "pilot7/sheet_v3.md", "bash": "core+docs", "lang": "wj",
            "env": {"WJ_ERROR_FORMAT": "agent"}},
+    # pilot 8 (design: PILOT8_SHEET_AB.md, not run): idiom block (U8), idioms + sharper opening (U8s), verify exits 0 on agreement (V4)
+    "U8": {"name": "compiled-first+idioms", "loop": "compiled-first-agent", "pack_file": "pilot8/sheet_u8.md", "bash": "core+docs", "lang": "wj",
+           "env": {"WJ_AGENT": "1"}, "agent_mode": True},
+    "U8s": {"name": "compiled-first+idioms+sharp-opening", "loop": "compiled-first-agent", "pack_file": "pilot8/sheet_u8s.md", "bash": "core+docs", "lang": "wj",
+           "env": {"WJ_AGENT": "1"}, "agent_mode": True},
+    "V4": {"name": "verify-ok", "loop": "verify-ok", "pack_file": "pilot8/sheet_v4.md", "bash": "core+docs", "lang": "wj",
+           "env": {"WJ_ERROR_FORMAT": "agent", "WJ_AGENT": "1"}, "agent_mode": True},
     "U7": {"name": "compiled-first", "loop": "compiled-first", "pack_file": "pilot7/sheet_u.md", "bash": "core+docs", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
@@ -119,9 +139,20 @@ def head(lang):
             "Stop when you believe it is correct for all inputs.\n\n")
 
 
+# `wj run|check|build|test` in agent mode (WJ_AGENT=1, ADR-0037): one merged, bounded stream that ends with `exit status: N`
+AGENT_MODE_TEXT = (" One command, no redirects, no chains: `wj` output already includes stderr, is bounded, and ends with a line "
+                   "`exit status: N`, so do not use `2>&1`, pipes, `&&`, `;`, `$?` or `${PIPESTATUS}` (they are refused). Never write a space followed by `=` in a Bash command (refused even inside quotes): write multi-line input with the Write tool and pass it with `--stdin-file`.")
+
+
+def head_agent(lang):
+    """The pilot-8 task header: input through a file written with the Write tool (`--stdin-file`), no shell input pipes."""
+    return head(lang).replace("(pipe input with `printf 'a\\nb\\n' | ...`; shell variables such as `$?` are not available, so a command that fails ends its output with `[exit N]`)",
+        "(one plain command each, no pipes, redirects, chains, `$?`, `$()` or heredocs; write program input to a file with the Write tool and pass `--stdin-file FILE`)")
+
+
 def prompt(task_id, arm):
     lang = ARMS[arm]["lang"]
-    return head(lang) + LOOP_TEXT[ARMS[arm]["loop"]] + "\n\n" + T.render_prompt(task_id, lang)
+    return (head_agent(lang) if ARMS[arm].get("agent_mode") else head(lang)) + LOOP_TEXT[ARMS[arm]["loop"]] + AGENT_MODE_TEXT * bool(ARMS[arm].get("agent_mode")) + "\n\n" + T.render_prompt(task_id, lang, bool(ARMS[arm].get("agent_mode")))
 
 
 def _bash(arm):

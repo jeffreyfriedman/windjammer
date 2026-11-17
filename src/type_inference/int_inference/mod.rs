@@ -60,13 +60,14 @@ pub struct IntInference {
     pub inferred_types: HashMap<ExprId, IntType>,
     constraints: Vec<IntConstraint>,
     pub errors: Vec<String>,
-    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
+    function_signatures: crate::type_inference::sig_table::SigTable,
     var_assignments: HashMap<String, ExprId>,
     /// Element expr ids of `let v = vec![…]` / `[…]` so later `push`/`insert` args share that width.
     var_collection_elements: HashMap<String, Vec<ExprId>>,
     var_types: HashMap<String, Type>,
     next_seq_id: usize,
-    struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Shared between per-file clones; written via make_mut.
+    struct_field_types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
     /// Library multipass: module path for the current `.wj` file (`dialogue/examples` → `["dialogue","examples"]`).
     current_file_module_path: Vec<String>,
     /// For each bare struct name, all module prefixes where that name is defined (disambiguate duplicates).
@@ -98,12 +99,12 @@ impl IntInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: std::collections::BTreeMap::new(),
+            function_signatures: crate::type_inference::sig_table::SigTable::default(),
             var_assignments: HashMap::new(),
             var_collection_elements: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1,
-            struct_field_types: HashMap::new(),
+            struct_field_types: Default::default(),
             current_file_module_path: Vec::new(),
             struct_defining_module_paths: HashMap::new(),
             imported_type_registry_keys: HashMap::new(),
@@ -126,17 +127,24 @@ impl IntInference {
 
     /// Register stdlib method signatures from the shared SignatureRegistry baseline.
     fn register_stdlib_signatures(&mut self) {
-        use crate::analyzer::SignatureRegistry;
-
-        for (name, sig) in SignatureRegistry::stdlib().all_signatures_for_suffix_search() {
-            let param_types = if !sig.formal_param_types.is_empty() {
-                sig.formal_param_types.clone()
-            } else {
-                sig.param_types.clone()
-            };
-            self.function_signatures
-                .insert(name.clone(), (param_types, sig.return_type.clone()));
+        // the stdlib's part is shared by every inference of the process and built on first use (`sig_table`)
+        fn stdlib() -> &'static std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig> {
+            struct IntStdlibSigs(std::collections::BTreeMap<String, crate::type_inference::sig_table::Sig>);
+            let reg = crate::analyzer::SignatureRegistry::stdlib();
+            &reg.derived().get_or_build(|| IntStdlibSigs({
+                let mut table = std::collections::BTreeMap::new();
+                for (name, sig) in reg.all_signatures_for_suffix_search() {
+                    let param_types = if !sig.formal_param_types.is_empty() {
+                        sig.formal_param_types.clone()
+                    } else {
+                        sig.param_types.clone()
+                    };
+                    table.insert(name.clone(), (param_types, sig.return_type.clone()));
+                }
+                table
+            })).0
         }
+        self.function_signatures = crate::type_inference::sig_table::SigTable::over(stdlib);
     }
 
     pub fn set_current_file(&mut self, file: String) -> usize {
@@ -168,7 +176,7 @@ impl IntInference {
         field_types: &HashMap<String, HashMap<String, Type>>,
     ) {
         for (struct_name, fields) in field_types {
-            self.struct_field_types
+            std::sync::Arc::make_mut(&mut self.struct_field_types)
                 .insert(struct_name.clone(), fields.clone());
         }
     }
@@ -443,7 +451,7 @@ impl IntInference {
                 for field in &decl.fields {
                     field_map.insert(field.name.clone(), field.field_type.clone());
                 }
-                self.struct_field_types.insert(key, field_map);
+                std::sync::Arc::make_mut(&mut self.struct_field_types).insert(key, field_map);
             }
             Item::Mod { name, items, .. } => {
                 let mut next = module_prefix.to_vec();

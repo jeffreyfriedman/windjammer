@@ -854,6 +854,16 @@ fn extract_variable_from_message(msg: &str) -> Option<String> {
     None
 }
 
+/// A parser warning that is a coded syntax diagnostic with a fix (`WJ0011`, `mut self`), rendered as `wj check` reports it
+/// (excerpt, span, help); `None` for any other warning or when the file cannot be read.
+pub fn render_syntax_warning(file: &str, message: &str, line: usize, column: usize) -> Option<String> {
+    let rest = message.strip_prefix("WJ0011: ")?;
+    let text = std::fs::read_to_string(file).ok()?;
+    let ix = crate::diagnostics::SourceIndex::new(file.to_string(), &text);
+    let d = crate::diagnostics::convert::mut_self_diagnostic(&ix, rest, line, column);
+    Some(crate::diagnostics::render::render(&d, &|f| std::fs::read_to_string(f).ok()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
