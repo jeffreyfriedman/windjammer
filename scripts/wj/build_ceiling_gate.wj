@@ -4,8 +4,10 @@
 //
 //   wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' scripts/wj/build_ceiling_gate.wj <wj-binary> [--secs N] [--mb N]
 //
-// Defaults: 5 s and 2048 MB (macOS has no usable `ulimit -v`, so the ceiling is measured with `/usr/bin/time -l`, GNU `-v` elsewhere,
-// and the run is killed by an alarm at five times the wall-clock ceiling). `--selftest` judges planted measurements.
+// Defaults: 5 s and 2048 MB, for `wj check` and `wj build --no-cargo` only (the programs it builds). The ceiling is a measured
+// peak RSS (`/usr/bin/time -l`, GNU `-v` elsewhere), not a `ulimit -v`: macOS has no usable one, and `wj run --interpret` / `--verify`
+// cannot start their interpreter thread under 2 GB of virtual memory, so those need `ulimit -v` of at least 8 GB or an RSS watchdog.
+// The run is killed by an alarm at five times the wall-clock ceiling. `--selftest` judges planted measurements.
 use std::env
 use std::fs
 use std::process

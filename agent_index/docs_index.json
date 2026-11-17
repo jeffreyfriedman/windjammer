@@ -2834,6 +2834,15 @@
     "tags": []
   },
   {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0173",
+    "signature": "Untrusted data reaches a command, file path or query",
+    "source": "",
+    "summary": "Data the program did not produce (file contents, standard input, an HTTP request, a database row) flows into a command, the path of a file write or SQL text wit",
+    "tags": []
+  },
+  {
     "kind": "example",
     "module": "",
     "name": "algo_anagram",

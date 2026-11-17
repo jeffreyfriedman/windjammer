@@ -177,7 +177,6 @@ fn pad(n: int) -> string {
     if n < 10 { "0" + n.to_string() } else { n.to_string() }
 }
 
-/// wj-taint: trusted(the event directories are named after ids from this repository's own trial records, written by its own harness and never by outside input)
 fn main() {
     let args = env::args()
     let repo = if args.len() > 1 { args[1] } else { "." }

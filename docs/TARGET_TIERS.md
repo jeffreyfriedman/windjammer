@@ -11,7 +11,7 @@ What each backend can run today, measured by the conformance programs (`tests/co
 | javascript | Tier 2 | 17/23 | 204/229 | 31 | 0 |
 | typescript | Tier 2 | 17/23 | 204/229 | 31 | 0 |
 | go | Tier 2 | 16/23 | 197/229 | 39 | 0 |
-| wasm | not measured | 0/23 | 0/229 | 0 | 252 |
+| wasm | Tier 2 | 17/23 | 194/229 | 41 | 0 |
 | interpreter | Tier 2 | 18/23 | 229/229 | 5 | 0 |
 
 ## Failing programs (the ledger)
@@ -159,6 +159,50 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/traits/SPEC-TRT-009` (build): Error: unsupported on this backend: no method `name` on `Greeter` (line 4)
 - `spec/traits/SPEC-TRT-011` (build): Error: unsupported on this backend: built-in method `i64::describe` is not supported (line 40)
 
+### wasm
+
+- `conformance/error_handling/result_and_option` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+- `conformance/stdlib/async_runtime` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `conformance/stdlib/json_operations` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `conformance/stdlib/subprocess_echo` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `conformance/types/enums_and_matching` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
+- `conformance/types/traits_and_generics` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
+- `spec/attributes/SPEC-ATTR-001` (build): the same generated Rust as the rust backend is rejected or wrong: error: cannot find attribute `custom_tag` in this scope
+- `spec/attributes/SPEC-ATTR-003` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/attributes/SPEC-ATTR-004` (build): the same generated Rust as the rust backend is rejected or wrong: error: cannot find attribute `route` in this scope
+- `spec/closures/SPEC-CLOS-009` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0308]: mismatched types
+- `spec/collections/SPEC-COLL-005` (build): the same generated Rust as the rust backend is rejected or wrong: error: lifetime may not live long enough
+- `spec/collections/SPEC-COLL-009` (build): the same generated Rust as the rust backend is rejected or wrong: error: lifetime may not live long enough
+- `spec/collections/SPEC-COLL-011` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize`
+- `spec/concurrency/SPEC-CONC-001` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/concurrency/SPEC-CONC-002` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0599]: no method named `wait` found for `async` block `{async block@concurrency_SPEC-CONC-002.rs:7:13}` in the current scope
+- `spec/concurrency/SPEC-CONC-003` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/concurrency/SPEC-CONC-004` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/effects/SPEC-EFF-021` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/errors/SPEC-ERR-004` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/errors/SPEC-ERR-005` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/execution/SPEC-EXEC-002` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/execution/SPEC-EXEC-003` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/intrinsics/SPEC-INTR-002` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/intrinsics/SPEC-INTR-003` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/intrinsics/SPEC-INTR-004` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/intrinsics/SPEC-INTR-005` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/numeric/SPEC-NUM-002` (build): the same generated Rust as the rust backend is rejected or wrong: error: this arithmetic operation will overflow
+- `spec/numeric/SPEC-NUM-003` (build): the same generated Rust as the rust backend is rejected or wrong: error: this arithmetic operation will overflow
+- `spec/numeric/SPEC-NUM-004` (build): the same generated Rust as the rust backend is rejected or wrong: error: this arithmetic operation will overflow
+- `spec/numeric/SPEC-NUM-006` (build): the same generated Rust as the rust backend is rejected or wrong: error: this operation will panic at runtime
+- `spec/numeric/SPEC-NUM-015` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/numeric/SPEC-NUM-017` (build): the same generated Rust as the rust backend is rejected or wrong: error: this arithmetic operation will overflow
+- `spec/numeric/SPEC-NUM-021` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/numeric/SPEC-NUM-023` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/patterns/SPEC-PAT-009` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/stdlib/SPEC-STD-002` (build): the same generated Rust as the rust backend is rejected or wrong: error: W0010: use `string` instead of `str` -- Windjammer has one string type
+- `spec/strings/SPEC-STR-008` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/strings/SPEC-STR-013` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
+- `spec/strings/SPEC-STR-018` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/traits/SPEC-TRT-004` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0369]: cannot add `V` to `V`
+- `spec/traits/SPEC-TRT-011` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0308]: mismatched types
+
 ### interpreter
 
 - `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
@@ -167,9 +211,10 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `conformance/types/enums_and_matching` (fail): output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
 - `conformance/types/traits_and_generics` (fail): output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 
-## Not measured
+## Notes on wasm
 
-- `wasm`: measured as the Rust backend's output built for `wasm32-wasip1` and run under `wasmtime` (the WebAssembly platform). A machine with `wasmtime` and `rustup target add wasm32-wasip1` runs it; any other machine records `not-run`. `wj build -t wasm` itself emits a browser library (a wasm-bindgen cdylib crate) that has no headless runner, so that target is not covered by this row.
+- `wasm` is the Rust backend's output built for `wasm32-wasip1` and run under `wasmtime` (the WebAssembly platform); a machine without `wasmtime` and `rustup target add wasm32-wasip1` records `not-run` and keeps the rows another machine measured. The rows above were measured on the PC. `wj build -t wasm` itself emits a browser library (a wasm-bindgen cdylib crate) with no headless runner, so that target is not covered by this row.
+- Why wasm programs fail: every wasm failure is also a failure of the same program on the rust backend (the same generated Rust does not compile or is wrong: listed under rust), or a panic-mode program that passes on rust but whose wasm build aborts instead of unwinding, so the exit status is not 101 (the 13 panic cases below; expected cause, to be confirmed with `wasmtime run`).
 
 ## Measured with
 
@@ -178,6 +223,7 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - typescript with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
 - go with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
 - interpreter with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
+- wasm with wj 0.50.0+81a8c44b68 (wt-int-b2 a7e554549) on the PC (wasmtime 50.0.2, rustup target wasm32-wasip1)
 
 ## Filling in what this machine could not run
 

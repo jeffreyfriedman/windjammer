@@ -490,8 +490,9 @@ fn render(rows: Vec<Row>, ledger: Vec<Entry>, measured: Vec<string>) -> string {
     if !any {
         s = s + "\nNo backend has a failing program.\n"
     }
-    s = s + "\n## Not measured\n\n"
-    s = s + "- `wasm`: measured as the Rust backend's output built for `wasm32-wasip1` and run under `wasmtime` (the WebAssembly platform). A machine with `wasmtime` and `rustup target add wasm32-wasip1` runs it; any other machine records `not-run`. `wj build -t wasm` itself emits a browser library (a wasm-bindgen cdylib crate) that has no headless runner, so that target is not covered by this row.\n"
+    s = s + "\n## Notes on wasm\n\n"
+    s = s + "- `wasm` is the Rust backend's output built for `wasm32-wasip1` and run under `wasmtime` (the WebAssembly platform); a machine without `wasmtime` and `rustup target add wasm32-wasip1` records `not-run` and keeps the rows another machine measured. The rows above were measured on the PC. `wj build -t wasm` itself emits a browser library (a wasm-bindgen cdylib crate) with no headless runner, so that target is not covered by this row.\n"
+    s = s + "- Why wasm programs fail: every wasm failure is also a failure of the same program on the rust backend (the same generated Rust does not compile or is wrong: listed under rust), or a panic-mode program that passes on rust but whose wasm build aborts instead of unwinding, so the exit status is not 101 (the 13 panic cases below; expected cause, to be confirmed with `wasmtime run`).\n"
     s = s + "\n## Measured with\n\n"
     if measured.len() == 0 {
         s = s + "nothing yet (run `target_tiers.wj run`)\n"
