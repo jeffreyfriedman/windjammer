@@ -1,5 +1,5 @@
 // expect: Ok(5000)
-// expect: Ok(90000)
+// expect: Ok(250)
 use std::time
 
 pub fn parse_ms(text: string) -> Result<int, string> {
@@ -8,6 +8,6 @@ pub fn parse_ms(text: string) -> Result<int, string> {
 
 fn main() {
     println("${parse_ms("5s"):?}")
-    let t = "1m30s"
+    let t = "250ms"
     println("${parse_ms(t):?}")
 }
