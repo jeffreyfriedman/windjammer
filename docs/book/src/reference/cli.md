@@ -33,6 +33,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
+| `wj economics` | Report the economic dimensions of a file (docs/economics/DEFINITION.md); today the source dimension |
 | `wj optimize` | Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument |
 | `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) |
 | `wj rust-surface` | Generate the signature surface of a Rust crate dependency (ADR-0026) from its source |
@@ -473,6 +474,21 @@ Usage: wj explain-effects [OPTIONS] <PATH>
 |---|---|---|---|
 | `<PATH>` | PATH |  | Windjammer source file or project directory |
 | `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
+| `--json` | JSON |  | Machine-readable JSON output |
+
+## `wj economics`
+
+Report the economic dimensions of a file (docs/economics/DEFINITION.md); today the source dimension
+
+```text
+Usage: wj economics [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<FILE>` | FILE |  | Windjammer source file |
+| `--dims` | DIMS | static | Dimensions to report (comma-separated); `static` (source: lines, characters, tokens, ceremony) |
+| `--twin` | FILE.rs |  | A hand-written Rust twin of the program: also report its counts and the Windjammer / Rust ratios |
 | `--json` | JSON |  | Machine-readable JSON output |
 
 ## `wj optimize`

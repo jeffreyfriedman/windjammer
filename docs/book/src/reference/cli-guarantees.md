@@ -138,6 +138,10 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs | tested |
 | `wj explain-effects --fn` | Only this function (`name` or `Type::name`) | tested |
 | `wj explain-effects --json` | Machine-readable JSON output | tested |
+| `wj economics` | Report the economic dimensions of a file (docs/economics/DEFINITION.md); today the source dimension | tested |
+| `wj economics --dims` | Dimensions to report (comma-separated); `static` (source: lines, characters, tokens, ceremony) | tested |
+| `wj economics --twin` | A hand-written Rust twin of the program: also report its counts and the Windjammer / Rust ratios | tested |
+| `wj economics --json` | Machine-readable JSON output | tested |
 | `wj optimize` | Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument | tested |
 | `wj optimize --explain` | Report each pass that changed the file: edit count, soundness section, default state | tested |
 | `wj optimize --pass` | Only this pass (an unknown name is an error that lists the known passes) | tested |
