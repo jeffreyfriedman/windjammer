@@ -233,7 +233,6 @@ impl<'ast> CodeGenerator<'ast> {
         // E0507: borrowed `Option` adapters that Rust implements by-value
         // (`map` / `and_then` / …) lower via `.as_ref()` so `&T` methods stay borrowed.
         // Driven by Option stdlib_meta + method registry — not a bare method-name list.
-        // The receiver must be an Option: `items.map(..)` over a borrowed list is an iterator adapter.
         if self.expression_traces_to_borrowed_non_list_param(object)
             && !obj_str.contains(".as_ref()")
             && crate::codegen::rust::stdlib_method_traits::option_adapter_needs_as_ref(
