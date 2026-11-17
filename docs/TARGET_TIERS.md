@@ -7,12 +7,12 @@ What each backend can run today, measured by the conformance programs (`tests/co
 
 | Backend | Tier | conformance | spec run cases | failing | not run |
 |---|---|---|---|---|---|
-| rust | Tier 2 | 24/28 | 222/231 | 13 | 0 |
-| javascript | Tier 2 | 17/28 | 204/231 | 38 | 0 |
-| typescript | Tier 2 | 17/28 | 204/231 | 38 | 0 |
-| go | Tier 2 | 16/28 | 197/231 | 46 | 0 |
+| rust | Tier 2 | 27/28 | 222/231 | 10 | 0 |
+| javascript | Tier 2 | 20/28 | 204/231 | 35 | 0 |
+| typescript | Tier 2 | 20/28 | 204/231 | 35 | 0 |
+| go | Tier 2 | 18/28 | 197/231 | 44 | 0 |
 | wasm | Tier 2 | 17/28 | 194/231 | 48 | 0 |
-| interpreter | Tier 2 | 23/28 | 231/231 | 5 | 0 |
+| interpreter | Tier 2 | 26/28 | 231/231 | 2 | 0 |
 
 ## Failing programs (the ledger)
 
@@ -20,19 +20,16 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ### rust
 
-- `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
-- `conformance/stdlib/async_runtime` (build): error[E0433]: cannot find module or crate `async_runtime` in this scope (built through cargo): the program names `std::async_runtime`, which the std surface does not provide for compiled programs
-- `conformance/types/enums_and_matching` (fail): output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-- `conformance/types/traits_and_generics` (fail): output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
-- `spec/attributes/SPEC-ATTR-001` (build): error: cannot find attribute `custom_tag` in this scope
-- `spec/attributes/SPEC-ATTR-004` (build): error: cannot find attribute `route` in this scope
-- `spec/closures/SPEC-CLOS-009` (build): error[E0308]: mismatched types
-- `spec/collections/SPEC-COLL-005` (build): error: lifetime may not live long enough
-- `spec/collections/SPEC-COLL-009` (build): error: lifetime may not live long enough
-- `spec/collections/SPEC-COLL-011` (build): error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize`
-- `spec/stdlib/SPEC-STD-002` (build): error: W0010: use `string` instead of `str` -- Windjammer has one string type
-- `spec/traits/SPEC-TRT-004` (build): error[E0369]: cannot add `V` to `V`
-- `spec/traits/SPEC-TRT-011` (build): error[E0308]: mismatched types
+- `conformance/stdlib/async_runtime` (build): error[E0433]: cannot find module or crate `async_runtime` (built through cargo). Not a std module: the program's `use std::async_runtime` is the runtime crate's internal path (std/async.wj says `Implementation: windjammer_runtime::async_runtime`); the std module is `std::async`, which ASYNC_FN_REMOVAL.md keeps (`sleep_ms`, `sleep_ms_blocking` stay as plain blocking sleeps; `block_on` and `spawn` go). Not obsolete under ADR-0004, but written against the wrong module name: with `use std::async` / `async::sleep_ms_blocking(10)` the program prints its expected block interpreted; plan: rename the import in the program (the compiled build is not verified), then it should pass
+- `spec/attributes/SPEC-ATTR-001` (build): error: cannot find attribute `custom_tag` in this scope | owner: codegen (decorators): an unknown user decorator is emitted as `#[custom_tag(level = 3)]`, which rustc rejects; a user decorator must stay out of the Rust output
+- `spec/attributes/SPEC-ATTR-004` (build): error: cannot find attribute `route` in this scope | owner: codegen (decorators): `@route("/users", method = "GET")` is emitted as `#[route( = "/users", ...)]` (the positional argument is dropped and the attribute is unknown to rustc)
+- `spec/closures/SPEC-CLOS-009` (build): error[E0308]: mismatched types | owner: width: the closure `|x: int| x + base` captures a literal-typed `base` printed `i32` while the parameter is `i64` (drift family A, literal captured by a closure)
+- `spec/collections/SPEC-COLL-005` (build): error: lifetime may not live long enough | owner: std surface: the runtime helper `wj_chunk_by` takes a closure whose key is a borrowed element (`|x| x`: lifetime may not live long enough); the helper's signature must take the key by value or a higher-ranked bound
+- `spec/collections/SPEC-COLL-009` (build): error: lifetime may not live long enough | owner: std surface: `wj_sort_by_key_desc(|x| x)` has the same borrowed-key closure signature as `wj_chunk_by`
+- `spec/collections/SPEC-COLL-011` (build): error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize` | owner: width: `chunks(2).map(|p| p.len()).collect::<Vec<i64>>()` collects `usize` into `Vec<int>`; `.len()` of a slice needs the conversion the solver gives `len()` elsewhere
+- `spec/stdlib/SPEC-STD-002` (build): error: W0010: use `string` instead of `str` -- Windjammer has one string type | owner: std surface: `m.keys().collect::<Vec<string>>()` is emitted over `&String` items (HashMap `keys()` iterates borrowed keys; the Windjammer surface says owned)
+- `spec/traits/SPEC-TRT-004` (build): error[E0369]: cannot add `V` to `V` | owner: traits/codegen: `a + b` on a generic `V` (an operator on a type parameter bounded by the program's trait) is emitted without the `Add<Output = V>` bound rustc needs
+- `spec/traits/SPEC-TRT-011` (build): error[E0308]: mismatched types | owner: ownership/traits: a trait implemented for `bool` and `str` is emitted with `self` by reference (`if self` on `&bool`) and the method is not found on `&'static str`; primitives implementing a user trait take `self` by value
 
 ### javascript
 
@@ -41,12 +38,9 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `conformance/concurrency/select` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/concurrency/spawn_and_wait` (build): Error: unsupported on this backend: async/await/spawn (line 25) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/concurrency/task_handles` (build): Error: unsupported on this backend: async/await/spawn (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
-- `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 - `conformance/stdlib/json_operations` (build): Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
 - `conformance/stdlib/subprocess_echo` (build): Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
-- `conformance/types/enums_and_matching` (fail): output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-- `conformance/types/traits_and_generics` (fail): output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 - `spec/attributes/SPEC-ATTR-002` (build): Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
 - `spec/collections/SPEC-COLL-012` (build): Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
 - `spec/concurrency/SPEC-CONC-001` (build): Error: unsupported on this backend: async/await/spawn (line 5)
@@ -82,12 +76,9 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `conformance/concurrency/select` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/concurrency/spawn_and_wait` (build): Error: unsupported on this backend: async/await/spawn (line 25) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/concurrency/task_handles` (build): Error: unsupported on this backend: async/await/spawn (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
-- `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 - `conformance/stdlib/json_operations` (build): Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
 - `conformance/stdlib/subprocess_echo` (build): Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
-- `conformance/types/enums_and_matching` (fail): output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-- `conformance/types/traits_and_generics` (fail): output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 - `spec/attributes/SPEC-ATTR-002` (build): Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
 - `spec/collections/SPEC-COLL-012` (build): Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
 - `spec/concurrency/SPEC-CONC-001` (build): Error: unsupported on this backend: async/await/spawn (line 5)
@@ -124,12 +115,10 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `conformance/concurrency/spawn_and_wait` (build): Error: unsupported on this backend: async/await/spawn (line 25) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/concurrency/task_handles` (build): Error: unsupported on this backend: async/await/spawn (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/control_flow/control_flow` (build): go vet or go build rejected the generated code
-- `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 - `conformance/stdlib/json_operations` (build): Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
 - `conformance/stdlib/subprocess_echo` (build): Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
 - `conformance/types/enums_and_matching` (build): Error: unsupported on this backend: a type could not be inferred (add a type annotation)
-- `conformance/types/traits_and_generics` (fail): output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 - `spec/attributes/SPEC-ATTR-002` (build): Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
 - `spec/collections/SPEC-COLL-012` (build): Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
 - `spec/concurrency/SPEC-CONC-001` (build): Error: unsupported on this backend: async/await/spawn (line 5)
@@ -172,12 +161,12 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `conformance/concurrency/select` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 - `conformance/concurrency/spawn_and_wait` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 - `conformance/concurrency/task_handles` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
-- `conformance/error_handling/result_and_option` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+- `conformance/error_handling/result_and_option` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops` | the expected block of this program was wrong and is fixed (the compiler and every backend were right): re-measure on the PC
 - `conformance/stdlib/async_runtime` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `conformance/stdlib/json_operations` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 - `conformance/stdlib/subprocess_echo` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
-- `conformance/types/enums_and_matching` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-- `conformance/types/traits_and_generics` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
+- `conformance/types/enums_and_matching` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78` | the expected block of this program was wrong and is fixed (the compiler and every backend were right): re-measure on the PC
+- `conformance/types/traits_and_generics` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78` | the expected block of this program was wrong and is fixed (the compiler and every backend were right): re-measure on the PC
 - `spec/attributes/SPEC-ATTR-001` (build): the same generated Rust as the rust backend is rejected or wrong: error: cannot find attribute `custom_tag` in this scope
 - `spec/attributes/SPEC-ATTR-003` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 - `spec/attributes/SPEC-ATTR-004` (build): the same generated Rust as the rust backend is rejected or wrong: error: cannot find attribute `route` in this scope
@@ -218,11 +207,8 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ### interpreter
 
-- `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (fail): panics with the expected exit status but the message does not contain the expected text
 - `conformance/stdlib/subprocess_echo` (fail): panics with the expected exit status but the message does not contain the expected text
-- `conformance/types/enums_and_matching` (fail): output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-- `conformance/types/traits_and_generics` (fail): output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 
 ## Notes on wasm
 
@@ -232,11 +218,11 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 ## Measured with
 
 - wasm with wj 0.50.0+81a8c44b68 (wt-int-b2 a7e554549) on the PC (wasmtime 50.0.2, rustup target wasm32-wasip1)
+- interpreter with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
+- rust with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 - javascript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 - typescript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 - go with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
-- interpreter with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
-- rust with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 
 ## Filling in what this machine could not run
 

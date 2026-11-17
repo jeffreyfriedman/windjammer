@@ -1,13 +1,13 @@
 # backend <TAB> suite <TAB> maximum ledger entries; lower it when the ledger shrinks (scripts/wj/target_tiers.wj check)
-rust	conformance	4
+rust	conformance	1
 rust	spec	9
-javascript	conformance	11
+javascript	conformance	8
 javascript	spec	27
-typescript	conformance	11
+typescript	conformance	8
 typescript	spec	27
-go	conformance	12
+go	conformance	10
 go	spec	34
 wasm	conformance	11
 wasm	spec	37
-interpreter	conformance	5
+interpreter	conformance	2
 interpreter	spec	0

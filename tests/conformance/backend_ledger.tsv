@@ -1,23 +1,17 @@
 # backend <TAB> suite <TAB> program <TAB> reason. Every failing (backend, program) of backend_results.tsv is listed; the file only shrinks (scripts/wj/target_tiers.wj check).
-rust	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
-rust	conformance	stdlib/async_runtime	error[E0433]: cannot find module or crate `async_runtime` in this scope (built through cargo): the program names `std::async_runtime`, which the std surface does not provide for compiled programs
-rust	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-rust	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
-rust	spec	attributes/SPEC-ATTR-001	error: cannot find attribute `custom_tag` in this scope
-rust	spec	attributes/SPEC-ATTR-004	error: cannot find attribute `route` in this scope
-rust	spec	closures/SPEC-CLOS-009	error[E0308]: mismatched types
-rust	spec	collections/SPEC-COLL-005	error: lifetime may not live long enough
-rust	spec	collections/SPEC-COLL-009	error: lifetime may not live long enough
-rust	spec	collections/SPEC-COLL-011	error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize`
-rust	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
-rust	spec	traits/SPEC-TRT-004	error[E0369]: cannot add `V` to `V`
-rust	spec	traits/SPEC-TRT-011	error[E0308]: mismatched types
-javascript	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+rust	conformance	stdlib/async_runtime	error[E0433]: cannot find module or crate `async_runtime` (built through cargo). Not a std module: the program's `use std::async_runtime` is the runtime crate's internal path (std/async.wj says `Implementation: windjammer_runtime::async_runtime`); the std module is `std::async`, which ASYNC_FN_REMOVAL.md keeps (`sleep_ms`, `sleep_ms_blocking` stay as plain blocking sleeps; `block_on` and `spawn` go). Not obsolete under ADR-0004, but written against the wrong module name: with `use std::async` / `async::sleep_ms_blocking(10)` the program prints its expected block interpreted; plan: rename the import in the program (the compiled build is not verified), then it should pass
+rust	spec	attributes/SPEC-ATTR-001	error: cannot find attribute `custom_tag` in this scope | owner: codegen (decorators): an unknown user decorator is emitted as `#[custom_tag(level = 3)]`, which rustc rejects; a user decorator must stay out of the Rust output
+rust	spec	attributes/SPEC-ATTR-004	error: cannot find attribute `route` in this scope | owner: codegen (decorators): `@route("/users", method = "GET")` is emitted as `#[route( = "/users", ...)]` (the positional argument is dropped and the attribute is unknown to rustc)
+rust	spec	closures/SPEC-CLOS-009	error[E0308]: mismatched types | owner: width: the closure `|x: int| x + base` captures a literal-typed `base` printed `i32` while the parameter is `i64` (drift family A, literal captured by a closure)
+rust	spec	collections/SPEC-COLL-005	error: lifetime may not live long enough | owner: std surface: the runtime helper `wj_chunk_by` takes a closure whose key is a borrowed element (`|x| x`: lifetime may not live long enough); the helper's signature must take the key by value or a higher-ranked bound
+rust	spec	collections/SPEC-COLL-009	error: lifetime may not live long enough | owner: std surface: `wj_sort_by_key_desc(|x| x)` has the same borrowed-key closure signature as `wj_chunk_by`
+rust	spec	collections/SPEC-COLL-011	error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize` | owner: width: `chunks(2).map(|p| p.len()).collect::<Vec<i64>>()` collects `usize` into `Vec<int>`; `.len()` of a slice needs the conversion the solver gives `len()` elsewhere
+rust	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type | owner: std surface: `m.keys().collect::<Vec<string>>()` is emitted over `&String` items (HashMap `keys()` iterates borrowed keys; the Windjammer surface says owned)
+rust	spec	traits/SPEC-TRT-004	error[E0369]: cannot add `V` to `V` | owner: traits/codegen: `a + b` on a generic `V` (an operator on a type parameter bounded by the program's trait) is emitted without the `Add<Output = V>` bound rustc needs
+rust	spec	traits/SPEC-TRT-011	error[E0308]: mismatched types | owner: ownership/traits: a trait implemented for `bool` and `str` is emitted with `self` by reference (`if self` on `&bool`) and the method is not found on `&'static str`; primitives implementing a user trait take `self` by value
 javascript	conformance	stdlib/async_runtime	Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 javascript	conformance	stdlib/json_operations	Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
 javascript	conformance	stdlib/subprocess_echo	Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
-javascript	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-javascript	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 javascript	spec	attributes/SPEC-ATTR-002	Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
 javascript	spec	collections/SPEC-COLL-012	Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
 javascript	spec	concurrency/SPEC-CONC-001	Error: unsupported on this backend: async/await/spawn (line 5)
@@ -43,12 +37,9 @@ javascript	spec	traits/SPEC-TRT-004	Error: unsupported on this backend: compound
 javascript	spec	traits/SPEC-TRT-006	Error: unsupported on this backend: unknown associated function `T::make` (line 6)
 javascript	spec	traits/SPEC-TRT-009	Error: unsupported on this backend: no method `name` on `Greeter` (line 4)
 javascript	spec	traits/SPEC-TRT-011	Error: unsupported on this backend: built-in method `i64::describe` is not supported (line 40)
-typescript	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 typescript	conformance	stdlib/async_runtime	Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 typescript	conformance	stdlib/json_operations	Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
 typescript	conformance	stdlib/subprocess_echo	Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
-typescript	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-typescript	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 typescript	spec	attributes/SPEC-ATTR-002	Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
 typescript	spec	collections/SPEC-COLL-012	Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
 typescript	spec	concurrency/SPEC-CONC-001	Error: unsupported on this backend: async/await/spawn (line 5)
@@ -75,12 +66,10 @@ typescript	spec	traits/SPEC-TRT-006	Error: unsupported on this backend: unknown 
 typescript	spec	traits/SPEC-TRT-009	Error: unsupported on this backend: no method `name` on `Greeter` (line 4)
 typescript	spec	traits/SPEC-TRT-011	Error: unsupported on this backend: built-in method `i64::describe` is not supported (line 40)
 go	conformance	control_flow/control_flow	go vet or go build rejected the generated code
-go	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 go	conformance	stdlib/async_runtime	Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 go	conformance	stdlib/json_operations	Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
 go	conformance	stdlib/subprocess_echo	Error: unsupported on this backend: unknown associated function `subprocess::spawn` (line 11)
 go	conformance	types/enums_and_matching	Error: unsupported on this backend: a type could not be inferred (add a type annotation)
-go	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
 go	spec	attributes/SPEC-ATTR-002	Error: unsupported on this backend: unknown associated function `Cfg::default` (line 7)
 go	spec	collections/SPEC-COLL-012	Error: unsupported on this backend: built-in method `Iter<Vec<_>>::flatten` is not supported (line 40)
 go	spec	concurrency/SPEC-CONC-001	Error: unsupported on this backend: async/await/spawn (line 5)
@@ -113,17 +102,14 @@ go	spec	traits/SPEC-TRT-004	go vet or go build rejected the generated code
 go	spec	traits/SPEC-TRT-006	Error: unsupported on this backend: unknown associated function `T::make` (line 6)
 go	spec	traits/SPEC-TRT-009	Error: unsupported on this backend: no method `name` on `Greeter` (line 4)
 go	spec	traits/SPEC-TRT-011	Error: unsupported on this backend: built-in method `i64::describe` is not supported (line 40)
-interpreter	conformance	error_handling/result_and_option	output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 interpreter	conformance	stdlib/async_runtime	panics with the expected exit status but the message does not contain the expected text
 interpreter	conformance	stdlib/subprocess_echo	panics with the expected exit status but the message does not contain the expected text
-interpreter	conformance	types/enums_and_matching	output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-interpreter	conformance	types/traits_and_generics	output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
-wasm	conformance	error_handling/result_and_option	the same generated Rust as the rust backend is rejected or wrong: output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
+wasm	conformance	error_handling/result_and_option	the same generated Rust as the rust backend is rejected or wrong: output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops` | the expected block of this program was wrong and is fixed (the compiler and every backend were right): re-measure on the PC
 wasm	conformance	stdlib/async_runtime	the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 wasm	conformance	stdlib/json_operations	the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 wasm	conformance	stdlib/subprocess_echo	the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
-wasm	conformance	types/enums_and_matching	the same generated Rust as the rust backend is rejected or wrong: output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78`
-wasm	conformance	types/traits_and_generics	the same generated Rust as the rust backend is rejected or wrong: output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78`
+wasm	conformance	types/enums_and_matching	the same generated Rust as the rust backend is rejected or wrong: output line 4: got `[enum_data] Circle area: 75`, wanted `[enum_data] Circle area: 78` | the expected block of this program was wrong and is fixed (the compiler and every backend were right): re-measure on the PC
+wasm	conformance	types/traits_and_generics	the same generated Rust as the rust backend is rejected or wrong: output line 3: got `[trait_area] circle area: 75`, wanted `[trait_area] circle area: 78` | the expected block of this program was wrong and is fixed (the compiler and every backend were right): re-measure on the PC
 wasm	spec	attributes/SPEC-ATTR-001	the same generated Rust as the rust backend is rejected or wrong: error: cannot find attribute `custom_tag` in this scope
 wasm	spec	attributes/SPEC-ATTR-003	the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 wasm	spec	attributes/SPEC-ATTR-004	the same generated Rust as the rust backend is rejected or wrong: error: cannot find attribute `route` in this scope
