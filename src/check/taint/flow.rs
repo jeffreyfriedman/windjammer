@@ -1082,7 +1082,7 @@ fn scan_stmt(st: &Statement<'_>, on_stmt: &mut dyn FnMut(&Statement<'_>), on_exp
             scan_expr(condition, on_stmt, on_expr);
             scan(body, on_stmt, on_expr);
         }
-        Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => scan(body, on_stmt, on_expr),
+        Statement::Loop { body, .. } => scan(body, on_stmt, on_expr),
         Statement::Defer { statement, .. } => scan_stmt(statement, on_stmt, on_expr),
         Statement::Break { value: Some(v), .. } => scan_expr(v, on_stmt, on_expr),
         Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
@@ -1128,11 +1128,15 @@ fn scan_expr(e: &Expression<'_>, on_stmt: &mut dyn FnMut(&Statement<'_>), on_exp
         }
         Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements.iter().for_each(|x| scan_expr(x, on_stmt, on_expr)),
         Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| scan_expr(x, on_stmt, on_expr)),
-        Expression::ChannelSend { channel, value, .. } => {
-            scan_expr(channel, on_stmt, on_expr);
-            scan_expr(value, on_stmt, on_expr);
+        Expression::Scope { body, .. } => scan_expr(body, on_stmt, on_expr),
+        Expression::Select { arms, .. } => {
+            for arm in arms {
+                if let Some(source) = arm.source {
+                    scan_expr(source, on_stmt, on_expr);
+                }
+                scan_expr(arm.body, on_stmt, on_expr);
+            }
         }
-        Expression::ChannelRecv { channel, .. } => scan_expr(channel, on_stmt, on_expr),
         Expression::Block { statements, .. } => scan(statements, on_stmt, on_expr),
     }
 }
