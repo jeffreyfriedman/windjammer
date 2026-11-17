@@ -1,0 +1,27 @@
+# Library-scaling ceilings for tests/library_scaling_ceiling.rs (shrink-only; record per machine like
+# bench/economics/d2_baseline.json: a ceiling is 1.5x the value measured on that machine with the memory fix).
+#
+# The synthetic library (gen_library.wj) is built at N = 50, 100 and 200 modules with
+# `wj build src/mod.wj --output gen --library --no-cargo --module-file --mem-report`.
+#   peak_mib_n200       peak resident set of the N=200 build, MiB
+#   wall_s_n200         wall time of the N=200 build, seconds (loose: timing is noisy; a blow-up, not a 20% drift)
+#   max_peak_growth     peak(N=200) / peak(N=100): linear growth plus a fixed base stays under 2.3, quadratic is 3+
+#   max_wall_growth     wall(N=200) / wall(N=100): quadratic work is about 4
+#
+# A machine that has no table of its own uses [default]. To record one: run the test with WJ_CEILING_RECORD=1; it
+# prints the measured values and a ready-to-paste table (ceilings at 1.5x), then commit it under [machines."<uname -sm>"].
+# Lower a ceiling when the build improves; never raise one.
+
+[default]
+# Provisional: 1.5 x the 126 MiB measured at N=200 on the PC after the memory fix (Linux x86_64). macOS uses about half
+# the Linux resident set per module, so the Linux ceiling holds there until it is recorded.
+peak_mib_n200 = 189
+wall_s_n200 = 300
+max_peak_growth = 2.3
+max_wall_growth = 3.2
+
+[machines."Linux x86_64"]
+peak_mib_n200 = 189
+wall_s_n200 = 300
+max_peak_growth = 2.3
+max_wall_growth = 3.2
