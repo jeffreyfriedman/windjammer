@@ -106,3 +106,22 @@ fn a_method_does_not_take_the_formals_of_a_same_named_free_function() {
     assert!(rs.contains("pub fn contains(&self, x: f32, y: f32)"), "the method keeps its own by-value f32 formals:\n{rs}");
     test.cargo_check().expect("cargo-check");
 }
+
+/// Stage 1 class 1 (docs/design/ownership-decided-once.md, OWN-PUB-TEXT-UNUSED): an unused `string` formal of a `pub`
+/// free function is owned in the solver, so a caller in another file passes an owned value and the emitted callee
+/// agrees (DRAFT, unbuilt).
+#[test]
+fn an_unused_pub_text_formal_is_owned_for_every_caller() {
+    let mut test = MultiFileTest::new();
+    test.add_file("api/mod.wj", "pub mod text\n");
+    test.add_file("api/text.wj", "pub fn label(name: string) -> int {\n    3\n}\n");
+    test.add_file("app/mod.wj", "pub mod caller\n");
+    test.add_file(
+        "app/caller.wj",
+        "use crate::api::text::label\n\npub fn run(n: string) -> int {\n    let a = label(\"x\")\n    let b = label(n)\n    let c = label(n)\n    a + b + c\n}\n",
+    );
+    let map = test.compile().expect("compile");
+    let api = map.get("api/text.rs").expect("api/text.rs");
+    assert!(api.contains("pub fn label(name: String)") || api.contains("pub fn label(_name: String)"), "{api}");
+    test.cargo_check().expect("cargo-check");
+}
