@@ -120,8 +120,8 @@ fn drift_repros_of_the_families_are_predicted() {
         ("let_literal_captured_by_closure.wj", 5),
         // `shadow_match_binding_literal` and `shadowed_option_literal_arms` are no longer here: `wj build` (the
         // configuration the prediction now builds with) emits `1_i64` for both and rustc accepts them
-        // family B (a reference expected) and C (`String` against `&str`)
-        ("explicit_ref_literal_arg.wj", 9),
+        // family C (`String` against `&str`); family B (`&3` dropped on a map key) is fixed: explicit_ref_literal_arg.wj
+        // is no longer predicted
         ("closure_string_param_literal.wj", 6),
     ] {
         let d = predicted_widths(&repros.join(f));
@@ -237,7 +237,6 @@ fn predictions_across_the_corpora() {
         "tests/diagnostics_oracle/check/numeric_string_to_int.wj 1",
         "tests/dogfood/voxel_raymarch.wj 4",
         "tests/drift_corpus/repros/closure_string_param_literal.wj 1",
-        "tests/drift_corpus/repros/explicit_ref_literal_arg.wj 2",
         // Width repros of the drift corpus (family A: an `int` element against a `usize` length, a literal moved into an
         // `i32` field); rustc confirms E0308. Measured predictions, owner: width.
         "tests/drift_corpus/repros/int_element_compared_with_len_and_used_as_index.wj 2",
@@ -245,7 +244,6 @@ fn predictions_across_the_corpora() {
         "tests/drift_corpus/repros/struct_field_read_moves_literal_to_i32.wj 1",
         "tests/effects/corpus/fs_helper_and_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
-        "tests/engine_parity/map_get_match.wj 2",
         "tests/engine_parity/match_arms.wj 1",
         "tests/engine_parity/match_value.wj 3",
         "tests/engine_parity/option_arm_values.wj 1",

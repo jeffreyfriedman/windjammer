@@ -525,7 +525,7 @@ impl<'ast> CodeGenerator<'ast> {
                     emit_shared || self.inferred_borrowed_params.contains(name.as_str()),
                 )
             }
-            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } => {
+            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } if matches!(&**operand, Expression::Identifier { .. }) => { // `&0` / `&(q % 3)` borrow a value
                 let owned_key = self.ref_operand_is_owned_local(operand);
                 (!owned_key, !owned_key)
             }
