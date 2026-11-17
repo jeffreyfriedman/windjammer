@@ -153,7 +153,7 @@ impl<'ast> Analyzer<'ast> {
         // Step 1: Collect all trait implementations WITH their impl blocks
         // THE WINDJAMMER WAY: We need the impl block for proper ownership analysis
         // Map: trait_name -> Vec<(ImplBlock, functions)>
-        let mut trait_impls: HashMap<String, Vec<crate::parser::ast::ImplBlock>> = HashMap::new();
+        let mut trait_impls: std::collections::BTreeMap<String, Vec<crate::parser::ast::ImplBlock>> = std::collections::BTreeMap::new();
 
         for item in &program.items {
             if let Item::Impl {
