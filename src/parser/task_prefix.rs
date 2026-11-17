@@ -15,6 +15,9 @@ use crate::parser_impl::Parser;
 /// Diagnostic code of a removed concurrency form.
 pub const REMOVED_FORM_CODE: &str = "WJ0191";
 
+/// The type of a spawned task (`spawn f(x)` has type `Task<T>`): the one spelling the analyzer and the backends compare with.
+pub const TASK_TYPE: &str = "Task";
+
 /// A removed concurrency form the parser met, with the edits that migrate it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemovedForm {

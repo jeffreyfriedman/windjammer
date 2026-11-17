@@ -3,6 +3,8 @@ status: proposal
 ---
 # `wj economics` and `wj optimize`: command specification
 
+> **Proposal: `wj optimize` is implemented; `--diff` and `wj economics` are not implemented.** Read the rest as specification.
+
 - **Status:** `wj optimize` implemented (2026-11-16): `FILE`/`--explain`, `--pass`, `--json`, `--list`, with promise
   entries in `docs/promises.toml` and cases in `tests/promises/optimize.toml`. `--diff` and all of `wj economics` are
   specified, not implemented (the suite numbers come from `scripts/wj/economics.wj`).

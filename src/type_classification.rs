@@ -287,6 +287,12 @@ pub fn type_name_leaf(name: &str) -> &str {
     base.rsplit("::").next().unwrap_or(base)
 }
 
+/// A path into Rust's own `std::sync::mpsc` (`mpsc::Sender<T>`, `std.sync.mpsc.Receiver<T>`): those ends are not the
+/// ADR-0004 channel ends of the core surface (their `send` returns a `Result`).
+pub fn is_rust_channel_path(name: &str) -> bool {
+    name.starts_with("mpsc") || name.contains("mpsc::") || name.contains("mpsc.")
+}
+
 /// Map/associative container types.
 pub fn is_map_type(name: &str) -> bool {
     MAP_TYPE_NAMES.contains(&name)

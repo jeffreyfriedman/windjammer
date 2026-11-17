@@ -293,7 +293,7 @@ fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
         Type::Int | Type::Int32 | Type::Uint => Some(("Integer", vec![receiver.clone()])),
         Type::Custom(n) if is_integer_name(n) => Some(("Integer", vec![receiver.clone()])),
         // Rust's own `std::sync::mpsc` ends are not the ADR-0004 channel ends (their `send` returns a `Result`)
-        Type::Parameterized(n, _) if n.starts_with("mpsc") || n.contains("mpsc::") || n.contains("mpsc.") => None,
+        Type::Parameterized(n, _) if crate::type_classification::is_rust_channel_path(n) => None,
         Type::Parameterized(n, args) => known(n).map(|k| (k, args.clone())),
         _ => None,
     }

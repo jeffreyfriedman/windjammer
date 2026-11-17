@@ -3,6 +3,8 @@ status: proposal
 ---
 # C3a: read-only aggregate parameters become borrows (design note for the ownership/solver stream)
 
+> **Proposal: not implemented.** A design note for the ownership and solver stream; the compiler does not do this yet.
+
 - **Related:** [ADVANTAGES.md](ADVANTAGES.md) C3, [ADR-0001](../adr/0001-ownership-truth.md) (the solver decides
   ownership), `src/ir/constraint_gen.rs` (`OWN-ANALYZER-SEED`), [PASSES.md](../optimization/PASSES.md) (soundness rules)
 

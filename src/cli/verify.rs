@@ -96,7 +96,7 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     // build would only add its cost to the loop. Stop here; fix the panic first (docs/economics C1).
     if stops_before_build(interp_code) {
         say(&format!(
-            "the interpreted run panicked (exit status {interp_code}); fix that first: the compiled build is skipped, it would panic the same way"
+            "the interpreted run panicked (exit status {interp_code}); fix that first: nothing is built, the program would panic the same way"
         ));
         return interp_code;
     }
