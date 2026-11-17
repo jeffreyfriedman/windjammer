@@ -7,12 +7,12 @@ What each backend can run today, measured by the conformance programs (`tests/co
 
 | Backend | Tier | conformance | spec run cases | failing | not run |
 |---|---|---|---|---|---|
-| rust | Tier 2 | 17/23 | 207/229 | 28 | 0 |
-| javascript | Tier 2 | 17/23 | 204/229 | 31 | 0 |
-| typescript | Tier 2 | 17/23 | 204/229 | 31 | 0 |
-| go | Tier 2 | 16/23 | 197/229 | 39 | 0 |
-| wasm | Tier 2 | 17/23 | 194/229 | 41 | 0 |
-| interpreter | Tier 2 | 18/23 | 229/229 | 5 | 0 |
+| rust | Tier 2 | 17/28 | 207/231 | 35 | 0 |
+| javascript | Tier 2 | 17/28 | 204/231 | 38 | 0 |
+| typescript | Tier 2 | 17/28 | 204/231 | 38 | 0 |
+| go | Tier 2 | 16/28 | 197/231 | 46 | 0 |
+| wasm | Tier 2 | 17/28 | 194/231 | 48 | 0 |
+| interpreter | Tier 2 | 23/28 | 231/231 | 5 | 0 |
 
 ## Failing programs (the ledger)
 
@@ -20,6 +20,11 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ### rust
 
+- `conformance/concurrency/channels` (build): error[E0433]: cannot find module or crate `windjammer_runtime` in this scope | plan: the rust and wasm rows use a plain-rustc harness that does not link windjammer_runtime; the same programs build and run under cargo (the drift gates); the harness gains a cargo build for programs that need the runtime (BETA item, shrinks every rust and wasm concurrency row)
+- `conformance/concurrency/scope_waits` (build): error[E0433]: cannot find module or crate `windjammer_runtime` in this scope | plan: the rust and wasm rows use a plain-rustc harness that does not link windjammer_runtime; the same programs build and run under cargo (the drift gates); the harness gains a cargo build for programs that need the runtime (BETA item, shrinks every rust and wasm concurrency row)
+- `conformance/concurrency/select` (build): error[E0433]: cannot find module or crate `windjammer_runtime` in this scope | plan: the rust and wasm rows use a plain-rustc harness that does not link windjammer_runtime; the same programs build and run under cargo (the drift gates); the harness gains a cargo build for programs that need the runtime (BETA item, shrinks every rust and wasm concurrency row)
+- `conformance/concurrency/spawn_and_wait` (build): error[E0433]: cannot find module or crate `windjammer_runtime` in this scope | plan: the rust and wasm rows use a plain-rustc harness that does not link windjammer_runtime; the same programs build and run under cargo (the drift gates); the harness gains a cargo build for programs that need the runtime (BETA item, shrinks every rust and wasm concurrency row)
+- `conformance/concurrency/task_handles` (build): error[E0433]: cannot find module or crate `windjammer_runtime` in this scope | plan: the rust and wasm rows use a plain-rustc harness that does not link windjammer_runtime; the same programs build and run under cargo (the drift gates); the harness gains a cargo build for programs that need the runtime (BETA item, shrinks every rust and wasm concurrency row)
 - `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `conformance/stdlib/json_operations` (build): needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
@@ -37,6 +42,8 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/concurrency/SPEC-CONC-002` (build): error[E0599]: no method named `wait` found for `async` block `{async block@concurrency_SPEC-CONC-002.rs:7:13}` in the current scope
 - `spec/concurrency/SPEC-CONC-003` (build): needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `spec/concurrency/SPEC-CONC-004` (build): needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/concurrency/SPEC-CONC-009` (build): error[E0433]: cannot find module or crate `windjammer_runtime` in this scope | plan: the rust and wasm rows use a plain-rustc harness that does not link windjammer_runtime; the same programs build and run under cargo (the drift gates); the harness gains a cargo build for programs that need the runtime (BETA item, shrinks every rust and wasm concurrency row)
+- `spec/concurrency/SPEC-CONC-010` (build): error[E0433]: cannot find module or crate `windjammer_runtime` in this scope | plan: the rust and wasm rows use a plain-rustc harness that does not link windjammer_runtime; the same programs build and run under cargo (the drift gates); the harness gains a cargo build for programs that need the runtime (BETA item, shrinks every rust and wasm concurrency row)
 - `spec/effects/SPEC-EFF-021` (build): needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `spec/execution/SPEC-EXEC-002` (build): needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `spec/numeric/SPEC-NUM-002` (build): error: this arithmetic operation will overflow
@@ -51,6 +58,11 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ### javascript
 
+- `conformance/concurrency/channels` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 17) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/scope_waits` (build): Error: unsupported on this backend: scope blocks (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/select` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/spawn_and_wait` (build): Error: unsupported on this backend: async/await/spawn (line 25) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/task_handles` (build): Error: unsupported on this backend: async/await/spawn (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 - `conformance/stdlib/json_operations` (build): Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
@@ -64,6 +76,8 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/concurrency/SPEC-CONC-003` (build): Error: unsupported on this backend: call of unknown function `__wj_scope` (line 5)
 - `spec/concurrency/SPEC-CONC-004` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 6)
 - `spec/concurrency/SPEC-CONC-005` (build): Error: unsupported on this backend: async fn `fetch`
+- `spec/concurrency/SPEC-CONC-009` (build): Error: unsupported on this backend: scope blocks (line 6) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `spec/concurrency/SPEC-CONC-010` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 7) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `spec/execution/SPEC-EXEC-002` (build): Error: unsupported on this backend: unknown associated function `process::exit` (line 8)
 - `spec/grammar/SPEC-GRAM-006` (build): Error: unsupported on this backend: built-in method `fn(T) -> T::` is not supported (line 5)
 - `spec/modules/SPEC-MOD-006` (build): Error: unsupported on this backend: call of unknown function `audit_fee` (line 51)
@@ -85,6 +99,11 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ### typescript
 
+- `conformance/concurrency/channels` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 17) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/scope_waits` (build): Error: unsupported on this backend: scope blocks (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/select` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/spawn_and_wait` (build): Error: unsupported on this backend: async/await/spawn (line 25) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/task_handles` (build): Error: unsupported on this backend: async/await/spawn (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
 - `conformance/stdlib/json_operations` (build): Error: unsupported on this backend: unknown associated function `json::parse` (line 13)
@@ -98,6 +117,8 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/concurrency/SPEC-CONC-003` (build): Error: unsupported on this backend: call of unknown function `__wj_scope` (line 5)
 - `spec/concurrency/SPEC-CONC-004` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 6)
 - `spec/concurrency/SPEC-CONC-005` (build): Error: unsupported on this backend: async fn `fetch`
+- `spec/concurrency/SPEC-CONC-009` (build): Error: unsupported on this backend: scope blocks (line 6) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `spec/concurrency/SPEC-CONC-010` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 7) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `spec/execution/SPEC-EXEC-002` (build): Error: unsupported on this backend: unknown associated function `process::exit` (line 8)
 - `spec/grammar/SPEC-GRAM-006` (build): Error: unsupported on this backend: built-in method `fn(T) -> T::` is not supported (line 5)
 - `spec/modules/SPEC-MOD-006` (build): Error: unsupported on this backend: call of unknown function `audit_fee` (line 51)
@@ -119,6 +140,11 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ### go
 
+- `conformance/concurrency/channels` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 17) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/scope_waits` (build): Error: unsupported on this backend: scope blocks (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/select` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/spawn_and_wait` (build): Error: unsupported on this backend: async/await/spawn (line 25) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `conformance/concurrency/task_handles` (build): Error: unsupported on this backend: async/await/spawn (line 21) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `conformance/control_flow/control_flow` (build): go vet or go build rejected the generated code
 - `conformance/error_handling/result_and_option` (fail): output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): Error: unsupported on this backend: unknown associated function `async_runtime::sleep_ms_blocking` (line 10)
@@ -133,6 +159,8 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/concurrency/SPEC-CONC-003` (build): Error: unsupported on this backend: call of unknown function `__wj_scope` (line 5)
 - `spec/concurrency/SPEC-CONC-004` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 6)
 - `spec/concurrency/SPEC-CONC-005` (build): Error: unsupported on this backend: async fn `fetch`
+- `spec/concurrency/SPEC-CONC-009` (build): Error: unsupported on this backend: scope blocks (line 6) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
+- `spec/concurrency/SPEC-CONC-010` (build): Error: unsupported on this backend: unknown associated function `sync::channel` (line 7) | plan: ADR-0004 stage 3 (docs/concurrency/JS_WASM.md: model A nested run, model B async transform): a BETA item, not post-beta
 - `spec/execution/SPEC-EXEC-002` (build): Error: unsupported on this backend: unknown associated function `process::exit` (line 8)
 - `spec/execution/SPEC-EXEC-003` (fail): panics with the expected exit status but the message does not contain the expected text
 - `spec/execution/SPEC-EXEC-011` (fail): output line 1: got `eval index`, wanted `eval value`
@@ -161,6 +189,11 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ### wasm
 
+- `conformance/concurrency/channels` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item
+- `conformance/concurrency/scope_waits` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item
+- `conformance/concurrency/select` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item
+- `conformance/concurrency/spawn_and_wait` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item
+- `conformance/concurrency/task_handles` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item
 - `conformance/error_handling/result_and_option` (fail): the same generated Rust as the rust backend is rejected or wrong: output line 11: got `[result_match] Err -> failure: invalid number`, wanted `[result_match] Err -> failure: oops`
 - `conformance/stdlib/async_runtime` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `conformance/stdlib/json_operations` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
@@ -178,6 +211,8 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/concurrency/SPEC-CONC-002` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0599]: no method named `wait` found for `async` block `{async block@concurrency_SPEC-CONC-002.rs:7:13}` in the current scope
 - `spec/concurrency/SPEC-CONC-003` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `spec/concurrency/SPEC-CONC-004` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
+- `spec/concurrency/SPEC-CONC-009` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item
+- `spec/concurrency/SPEC-CONC-010` (build): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item
 - `spec/effects/SPEC-EFF-021` (build): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it
 - `spec/errors/SPEC-ERR-004` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
 - `spec/errors/SPEC-ERR-005` (fail): a panic-mode program that passes on rust (exit 101): the wasm32-wasip1 build has no unwinding, so a panic aborts and the exit status differs (expected cause, to confirm with `wasmtime run`); post-beta: a per-target exit-status mapping for traps in ADR-0007, or build the wasm target with an unwinding panic
@@ -218,12 +253,12 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 
 ## Measured with
 
-- rust with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
-- javascript with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
-- typescript with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
-- go with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
-- interpreter with wj 0.50.0+b2fe8d1256 (commit unknown unknown, clean, release, built 2026-11-16T15:31:01Z) on Darwin arm64
 - wasm with wj 0.50.0+81a8c44b68 (wt-int-b2 a7e554549) on the PC (wasmtime 50.0.2, rustup target wasm32-wasip1)
+- rust with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
+- javascript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
+- typescript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
+- go with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
+- interpreter with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 
 ## Filling in what this machine could not run
 
