@@ -49,7 +49,7 @@ fn main() {
     m.insert("b", 2)
     m.insert("a", 1)
     m.insert("b", 20)
-    let mut keys = m.keys().collect::<Vec<&str>>()
+    let mut keys = m.keys().collect::<Vec<string>>()
     keys.sort()
     println("${keys.len()} ${keys[0]} ${m.get("b").unwrap()} ${m.contains_key("z")}")
     let old = m.remove("a")
