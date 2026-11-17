@@ -730,7 +730,72 @@ fn d2_value(m: M) -> int {
     if m.cycles > 0 { m.cycles } else { (m.cpu * 1000000.0) as int }
 }
 
-// Verify-loop cost of one program: (`wj run --interpret`, `rustc -O0` + run), each the smallest of `runs`.
+// Meters without counters (GNU time, the rusage helper) report CPU in 10 ms steps, so an agent-sized program can read
+// 0.00 s. Such a command is repeated k times inside one timed measurement until the CPU reaches MIN_TIMED_CPU, and the
+// per-run value is the total over k. A reading that stays below resolution at MAX_REPEAT is never an abort.
+const MIN_TIMED_CPU: f64 = 0.5
+const MAX_REPEAT: int = 1024
+
+// The next repetition count after a reading of `cpu` seconds for `k` runs: 0 = enough, -1 = give up (below
+// resolution even at MAX_REPEAT), else the larger k to try.
+fn next_repeat(cpu: f64, k: int) -> int {
+    if cpu >= MIN_TIMED_CPU {
+        return 0
+    }
+    if k >= MAX_REPEAT {
+        return -1
+    }
+    // aim at twice the minimum from the reading when there is one, else grow eightfold
+    let want = if cpu > 0.0 { ((2.0 * MIN_TIMED_CPU / cpu) * (k as f64)) as int + 1 } else { k * 8 }
+    let cap = MAX_REPEAT
+    if want > cap {
+        return cap
+    }
+    if want <= k {
+        return k * 2
+    }
+    want
+}
+
+// `cmd` run `k` times in one shell loop (stdin from `input` each time, output discarded), for the timed meters.
+fn repeated(cmd: string, input: string, k: int) -> string {
+    let inp = if input == "" { "/dev/null" } else { quote(input) }
+    "sh -c " + quote("s=0; i=0; while [ $i -lt ${k} ]; do " + cmd + " <" + inp + " >/dev/null 2>&1 || s=1; i=$((i+1)); done; exit $s")
+}
+
+// Per-run value of `cmd`: cycles when the meter has them; else CPU microseconds, from a repeated measurement when one
+// run is below the meter's resolution; 0 when it stays below resolution.
+fn robust_value(dir: string, cmd: string, input: string, single: M, flag: string) -> int {
+    if single.cycles > 0 {
+        return single.cycles
+    }
+    if single.cpu >= MIN_TIMED_CPU {
+        return (single.cpu * 1000000.0) as int
+    }
+    let meter = if flag.ends_with("+cg") { flag[0..flag.len() - 3].to_string() } else { flag }
+    let mut k = 4
+    loop {
+        let m = measure_once(dir, repeated(cmd, input, k), "", meter)
+        if m.status != 0 {
+            // a failing repetition measures nothing: report it, and the program is excluded with its reason
+            eprintln("  repeated measurement failed (status ${m.status}): ${cmd}")
+            return 0
+        }
+        let next = next_repeat(m.cpu, k)
+        if next == 0 {
+            return ((m.cpu * 1000000.0) / (k as f64)) as int
+        }
+        if next < 0 {
+            return 0
+        }
+        k = next
+    }
+    0
+}
+
+// Verify-loop cost of one program: (`wj run --interpret`, `rustc -O0` + run), each the smallest of `runs`; per-run
+// values from robust_value. A side that stays below the meter's resolution is re-measured with callgrind (both
+// sides, so the program's ratio keeps one unit) when valgrind is installed, else reported as 0 (excluded by the caller).
 fn d2_pair(p: Prog, wj: string, scratch: string, runs: int, flag: string) -> (int, int, string) {
     let root = run_sh("pwd").trim().to_string()
     let work = scratch + "/" + strings.replace(p.id, "/", "_")
@@ -738,16 +803,49 @@ fn d2_pair(p: Prog, wj: string, scratch: string, runs: int, flag: string) -> (in
     let _ = run_sh("rm -rf " + quote(work) + " && mkdir -p " + quote(run_dir))
     let input = prepare_dir(p, run_dir)
     let _ = run_sh("cp " + quote(root + "/" + p.wj) + " " + quote(run_dir + "/main.wj"))
-    let wi = measure(run_dir, quote(wj) + " run --interpret main.wj" + argv(p), input, runs, flag)
+    let wcmd = quote(wj) + " run --interpret main.wj" + argv(p)
+    let wi = measure(run_dir, wcmd, input, runs, flag)
     let rbin = work + "/rs_dbg"
-    let rc = measure(work, "rustc " + DEBUG_FLAGS + " -o " + quote(rbin) + " " + quote(root + "/" + p.rs), "", runs, flag)
+    let ccmd = "rustc " + DEBUG_FLAGS + " -o " + quote(rbin) + " " + quote(root + "/" + p.rs)
+    let rc = measure(work, ccmd, "", runs, flag)
     let _ = prepare_dir(p, run_dir)
-    let rr = measure(run_dir, quote(rbin) + argv(p), input, runs, flag)
+    let rcmd = quote(rbin) + argv(p)
+    let rr = measure(run_dir, rcmd, input, runs, flag)
     let mut problem = ""
     if wi.status != 0 || norm(wi.stdout) != norm(p.expected) { problem = "${p.id}: interpreted run differs or failed" }
     if rc.status != 0 || rr.status != 0 { problem = "${p.id}: rust twin failed" }
+    let c = robust_value(work, ccmd, "", rc, flag)
+    let r = robust_value(run_dir, rcmd, input, rr, flag)
+    // the run directory was re-prepared for the Rust run: the program goes back in before its repeated measurement
+    let _ = prepare_dir(p, run_dir)
+    let _ = run_sh("cp " + quote(root + "/" + p.wj) + " " + quote(run_dir + "/main.wj"))
+    let mut w = robust_value(run_dir, wcmd, input, wi, flag)
+    let mut rust = if c > 0 && r > 0 { c + r } else { 0 }
+    if (w <= 0 || rust <= 0) && problem == "" && run_sh("command -v valgrind").len() > 0 {
+        eprintln("  ${p.id}: below the meter's resolution; measuring instructions with callgrind instead")
+        w = measure_once(run_dir, wcmd, input, "callgrind").instr
+        rust = measure_once(work, ccmd, "", "callgrind").instr + measure_once(run_dir, rcmd, input, "callgrind").instr
+    }
     let _ = run_sh("rm -rf " + quote(work))
-    (d2_value(wi), d2_value(rc) + d2_value(rr), problem)
+    (w, rust, problem)
+}
+
+// Geometric mean of the per-program ratios over the programs with a value on both sides; the others are listed as
+// excluded ("below meter resolution"), never dropped silently. (ratio, programs used, excluded ids)
+fn d2_combine(vals: Vec<(string, int, int)>) -> (f64, int, Vec<string>) {
+    let mut logs = 0.0
+    let mut n = 0
+    let mut excluded: Vec<string> = Vec::new()
+    for (id, w, r) in vals {
+        if w <= 0 || r <= 0 {
+            excluded.push(id)
+        } else {
+            logs += ((w as f64) / (r as f64)).ln()
+            n += 1
+        }
+    }
+    let ratio = if n > 0 { (logs / (n as f64)).exp() } else { 0.0 }
+    (ratio, n, excluded)
 }
 
 fn ln_of(x: f64) -> f64 {
@@ -758,26 +856,29 @@ fn ln_of(x: f64) -> f64 {
 // --check fails when the ratio exceeds the recorded one by more than D2_SLACK_PCT; --write records it (lower only,
 // unless --allow-raise). The baseline keeps one entry per meter and machine; another meter's entry is never compared.
 fn run_d2(args: Vec<string>, wj: string, scratch: string, runs: int, flag: string, meter_key: string) -> int {
-    let mut logs = 0.0
-    let mut n = 0
+    let mut vals: Vec<(string, int, int)> = Vec::new()
     let mut rows = array()
+    let only = long_flag_value_or(args, "only", "")
     for p in programs() {
         if !("," + D2_SET + ",").contains("," + p.id + ",") { continue }
+        if only != "" && !("," + only + ",").contains("," + p.id + ",") { continue }
         let (w, r, problem) = d2_pair(p, wj, scratch, runs, flag)
         if problem != "" {
             eprintln("economics --d2: " + problem)
             return 1
         }
-        if w <= 0 || r <= 0 {
-            eprintln("economics --d2: ${p.id}: no counter value (meter ${meter_key})")
-            return 1
-        }
-        logs += ln_of((w as f64) / (r as f64))
-        n += 1
+        vals.push((p.id, w, r))
         rows = push(rows, with(with(with(object(), "id", from_str(p.id)), "wj", from_int(w as i64)), "rust", from_int(r as i64)))
         eprintln("  ${p.id}: interpreted ${w} / rustc+run ${r}")
     }
-    let ratio = (logs / (n as f64)).exp()
+    let (ratio, n, excluded) = d2_combine(vals)
+    for id in excluded {
+        println("excluded ${id}: below meter resolution (meter ${meter_key}; no callgrind)")
+    }
+    if n < (if only == "" { 6 } else { 1 }) {
+        eprintln("economics --d2: only ${n} programs have a value on this meter; not enough for a ratio (install valgrind, or use --meter rusage/time with more CPU)")
+        return 1
+    }
     println("D2 verify-loop ratio (interpreted / rustc debug + run), ${n} programs, meter ${meter_key}: ${fixed(ratio, 3)}")
     let check = long_flag_value_or(args, "check", "")
     let write = long_flag_value_or(args, "write", "")
@@ -927,6 +1028,24 @@ fn selftest(scratch: string, wj: string) -> int {
     meters.push("wall")
     if run_sh("command -v valgrind").len() > 0 { meters.push("callgrind") }
     let mut failed = 0
+    // the tiny-program path of the D2 meter: a 0.00 s reading repeats, never aborts; a reading that stays at zero is
+    // excluded with a printed reason; the ratio uses the rest
+    let bad = measure_once(scratch, repeated("false", "", 2), "", "wall")
+    let tiny_ok = bad.status != 0 && next_repeat(0.0, 4) == 32 && next_repeat(0.01, 32) > 32 && next_repeat(0.6, 64) == 0 && next_repeat(0.0, MAX_REPEAT) == -1
+    let (ratio, n, excl) = d2_combine([("a", 50, 100), ("b", 0, 120), ("c", 30, 0), ("d", 25, 100)])
+    let combine_ok = n == 2 && excl.len() == 2 && excl[0] == "b" && excl[1] == "c" && ratio > 0.35 && ratio < 0.36
+    let rep = measure_once(scratch, repeated("true", "", 3), "", "wall")
+    if tiny_ok && combine_ok && rep.status == 0 {
+        println("ok   D2 tiny-program path: below-resolution readings repeat, then exclude with a reason (fake 0.00 s meter)")
+    } else {
+        println("FAIL D2 tiny-program path: repeat plan ${tiny_ok}, exclusion ${combine_ok} (ratio ${fixed(ratio, 3)}, used ${n}), repeated command status ${rep.status}")
+        failed += 1
+    }
+    // the wj under test must exist (`--wj PATH`, default `wj` on PATH)
+    if run_sh("command -v " + quote(wj) + " >/dev/null 2>&1; echo $?").trim() != "0" {
+        println("FAIL wj not found: `${wj}` is not on PATH; pass --wj /path/to/wj")
+        return 1
+    }
     // the suite's own scripts pass `wj check` (taint rules included) with the wj under test
     for script in ["scripts/wj/economics.wj", "scripts/wj/economics_report.wj"] {
         let chk = run_sh(quote(wj) + " check " + script + " > /dev/null 2>&1; echo $?")
