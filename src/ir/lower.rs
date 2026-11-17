@@ -44,9 +44,7 @@ fn lower_statement(stmt: &Statement) -> Vec<IrNode> {
         }
         Statement::For { body, .. }
         | Statement::While { body, .. }
-        | Statement::Loop { body, .. }
-        | Statement::Thread { body, .. }
-        | Statement::Async { body, .. } => lower_block(body),
+        | Statement::Loop { body, .. } => lower_block(body),
         Statement::Assignment { value, .. } => vec![lower_expression(value)],
         _ => Vec::new(),
     }

@@ -1,0 +1,10 @@
+// spec: SPEC-CONC-008
+// mode: check-error
+// expect-error: WJ0190
+// oracle: check
+fn work(n: int) -> int { n }
+fn main() {
+    spawn work(1)
+//~ ^^^^^ ERROR WJ0190 never waited on
+    println("x")
+}

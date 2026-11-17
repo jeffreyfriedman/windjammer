@@ -132,9 +132,8 @@ tail_expr    = ( IDENT | INT_LIT | STRING_LIT | "true" | "false" | call_expr | m
 (*@ctx fn main() { $$ } *)
 (*@nl *)
 statement    = let_stmt | assign_stmt | return_stmt | if_stmt | while_stmt | loop_stmt | for_stmt
-               | break_stmt | continue_stmt | defer_stmt | match_stmt | expr_stmt | thread_stmt ;
-(* deprecated by ADR-0004 (accepted); still parsed *)
-thread_stmt  = "thread" block ;
+               | break_stmt | continue_stmt | defer_stmt | match_stmt | expr_stmt ;
+(* ADR-0004 removed `thread { }`, `ch <- v` and `<-ch` (WJ0191); tasks are expressions, see task_expr *)
 
 let_stmt     = "let" [ "mut" ] binding [ ":" type ] "=" expression
              | "let" pattern "=" expression "else" block ;
@@ -214,8 +213,23 @@ method_call  = IDENT "." IDENT "(" [ args ] ")" ;
 primary      = INT_LIT | FLOAT_LIT | STRING_LIT | CHAR_LIT | "true" | "false" | IDENT
              | "(" expression ")" | "(" expression "," [ args ] ")" | "[" [ args ] "]" | "[" expression ";" INT_LIT "]"
              | TYPE_IDENT "::" IDENT | TYPE_IDENT "::" IDENT "(" [ args ] ")"
-             | IDENT "(" [ call_args ] ")" [ trailing_block ] | struct_lit | if_expr | match_expr | guard_match | closure | loop_expr | "unsafe" block ;
+             | IDENT "(" [ call_args ] ")" [ trailing_block ] | struct_lit | if_expr | match_expr | guard_match | closure | loop_expr | "unsafe" block | task_expr ;
 loop_expr    = [ label ] "loop" block ;
+(* ADR-0004: a task (`Task<T>`) or a scope that waits for the tasks started inside it. `spawn` and `scope` are
+   soft keywords: a prefix only before a name, `self` or `{` on the same line. *)
+task_expr    = ( "spawn" | "async" ) ( call_expr | block ) | "scope" block ;
+(* `select { }` (SPEC-CONC-010): an arm's source must be `rx.recv()`, `t.wait()` or `timeout(d)` and at most one arm
+   is `else`, which a context-free derivation cannot express, so the production is informative (the spec example and
+   tests/conformance/concurrency/select.wj exercise it). *)
+(*@status informative *)
+select_expr  = "select" "{" { select_arm } "}" ;
+(*@status informative *)
+select_arm   = ( pattern "=" postfix_expr | "else" ) "=>" ( expression "," | block ) ;
+(* ADR-0004 removed these forms: the parser rejects each with WJ0191 and `wj fix` rewrites them
+   (`spawn { }`, `ch.send(v)`, `ch.recv()`). *)
+(*@status unparsed *)
+(*@ctx fn main() { $$ } *)
+removed_conc = "thread" block | IDENT "<-" INT_LIT | "let" IDENT "=" "<-" IDENT ;
 
 (* An expression in an `if`/`while`/`for`/`match` head: a struct literal there would swallow the body's `{`,
    so the head grammar excludes struct literals and block-like expressions (wrap them in parentheses). *)

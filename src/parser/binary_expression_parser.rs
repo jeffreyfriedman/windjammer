@@ -61,16 +61,9 @@ impl Parser {
         let mut left = self.parse_prefixed_or_primary()?;
 
         loop {
-            // Check for channel send: ch <- value
+            // `ch <- value` was removed (WJ0191)
             if self.current_token() == &Token::LeftArrow {
-                self.advance();
-                let value = self.parse_expression()?;
-                left = self.alloc_expr(Expression::ChannelSend {
-                    channel: left,
-                    value,
-                    location: self.current_location(),
-                });
-                continue;
+                return Err(self.removed_channel_send(left));
             }
 
             // ADR-0018 `x ?? d`: right-associative, between comparison (7) and additive (8).

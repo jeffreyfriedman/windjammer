@@ -53,14 +53,3 @@ fn test_pure_closures_no_move() {
     );
 }
 
-#[test]
-#[cfg_attr(tarpaulin, ignore)]
-fn test_thread_blocks_always_move() {
-    let generated = test_utils::compile_fixture("move_closures").expect("Compilation failed");
-
-    assert!(
-        generated.contains("std::thread::spawn(move ||"),
-        "Thread blocks should always use `move`. Generated:\n{}",
-        generated
-    );
-}

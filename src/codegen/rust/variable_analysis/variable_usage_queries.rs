@@ -4,6 +4,13 @@ use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
+    /// True when `name` is a parameter, `let` binding, or match-arm binding in the current fn.
+    pub(in crate::codegen::rust) fn identifier_is_local_binding(&self, name: &str) -> bool {
+        self.local_var_types.contains_key(name)
+            || self.match_arm_bindings.contains(name)
+            || self.current_function_params.iter().any(|p| p.name == name)
+    }
+
     /// Recursively find unused let bindings and for-loop variables in a block of statements.
     pub(crate) fn find_unused_bindings(
         stmts: &[&Statement],
@@ -195,13 +202,13 @@ impl<'ast> CodeGenerator<'ast> {
             | Expression::SpawnCall { expr, .. } => {
                 Self::variable_used_in_expression(expr, var_name)
             }
-            Expression::ChannelSend { channel, value, .. } => {
-                Self::variable_used_in_expression(channel, var_name)
-                    || Self::variable_used_in_expression(value, var_name)
+            Expression::Scope { body, .. } => {
+                Self::variable_used_in_expression(body, var_name)
             }
-            Expression::ChannelRecv { channel, .. } => {
-                Self::variable_used_in_expression(channel, var_name)
-            }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::variable_used_in_expression(s, var_name))
+                    || Self::variable_used_in_expression(a.body, var_name)
+            }),
         }
     }
 }

@@ -106,13 +106,44 @@ fn join(it: &mut Interpreter, id: usize) -> R {
     })
 }
 
-/// Start `f()` as an ADR-0004 task; it joins the innermost `scope { }` if there is one.
+/// Start `f()` as an ADR-0004 task; it joins the innermost `scope { }` of the spawning task if there is one.
 pub(crate) fn start_task(it: &mut Interpreter, f: Value) -> R {
+    let me = it.sched.current;
     let id = it.spawn_task(f, None)?;
-    if let Some(top) = it.sched.scopes.last_mut() {
-        top.push(id);
+    if let Some(top) = it.sched.tasks[me].scopes.last() {
+        top.borrow_mut().push(id);
     }
     Ok(Value::Native(Rc::new(TaskObj(id))))
+}
+
+/// `scope { body }` (ADR-0004): evaluate the block in place (so `return`, `?` and `break` leave it as from any block),
+/// then wait for every task started inside it, also by those tasks and also when the block ended early. The first
+/// panic of a task propagates after all of them have finished; an error of the block itself wins.
+pub(crate) fn run_scope(it: &mut Interpreter, body: &'static crate::parser::Expression<'static>, at: Option<&'static crate::source_map::Location>) -> R {
+    let list: crate::interpreter::sched::TaskList = Rc::new(RefCell::new(Vec::new()));
+    let me = it.sched.current;
+    it.sched.tasks[me].scopes.push(list.clone());
+    let out = it.eval(body);
+    it.sched.tasks[me].scopes.pop();
+    let mut first_panic = None;
+    let mut i = 0;
+    loop {
+        let next = list.borrow().get(i).copied();
+        let Some(id) = next else { break };
+        i += 1;
+        it.block_on(Wait::Join(id))?;
+        if let Some(Err(msg)) = &it.sched.tasks[id].result {
+            first_panic.get_or_insert_with(|| msg.clone());
+        }
+    }
+    let v = out?;
+    match first_panic {
+        Some(msg) => {
+            it.mark(at); // the panic leaves the program at the scope
+            Err(panic_ctl(msg))
+        }
+        None => Ok(v),
+    }
 }
 
 fn wait_task(it: &mut Interpreter, id: usize) -> R {
@@ -137,21 +168,6 @@ pub fn register(r: &mut Registry) {
         let id = downcast::<TaskObj>(v).map(|t| t.0).ok_or_else(|| semantic("not a Task"))?;
         Ok(Value::Bool(it.sched.tasks[id].done))
     });
-    // `scope { body }`: run the body, then wait for every task it started; a task's panic propagates
-    r.func(crate::parser::task_prefix::SCOPE_FN, |it, a| {
-        let body = arg(&a, 0, "scope")?;
-        it.sched.scopes.push(Vec::new());
-        let out = it.call_value(&body, vec![]);
-        let ids = it.sched.scopes.pop().unwrap_or_default();
-        for id in ids {
-            it.block_on(Wait::Join(id))?;
-            if let Some(Err(msg)) = it.sched.tasks[id].result.clone() {
-                return Err(panic_ctl(msg));
-            }
-        }
-        out
-    });
-
     for t in ["thread", "JoinHandle"] {
         r.type_name(t);
     }
@@ -252,4 +268,89 @@ impl Native for ThreadIdObj {
     fn debug(&self) -> String {
         format!("ThreadId({})", self.0)
     }
+}
+
+/// `select { }` (ADR-0004, docs/concurrency/PLAN.md stage 2a): evaluate the arms' sources once, then run the first
+/// ready arm in source order (also under a schedule seed: the choice is part of the semantics, SPEC-CONC-010), or
+/// `else` when none is ready; wait
+/// on all of them otherwise. A closed, empty channel is never ready; when nothing can become ready the select panics.
+pub(crate) fn run_select(it: &mut Interpreter, arms: &'static [crate::parser::SelectArm<'static>]) -> R {
+    use crate::parser::SelectKind as K;
+    enum Src {
+        Chan(Rc<super::channel::Chan>),
+        Task(usize),
+        Until(u64),
+        Else,
+    }
+    let mut srcs = Vec::with_capacity(arms.len());
+    for a in arms {
+        srcs.push(match (a.kind, a.source) {
+            (K::Recv, Some(e)) => {
+                let v = it.eval(e)?;
+                Src::Chan(super::channel::chan_of(&v)?.0)
+            }
+            (K::Wait, Some(e)) => {
+                let v = it.eval(e)?;
+                Src::Task(downcast::<TaskObj>(&v).map(|t| t.0).ok_or_else(|| semantic("`select`: `.wait()` on a value that is not a Task"))?)
+            }
+            (K::Timeout, Some(e)) => {
+                let d = it.eval(e)?;
+                let ns = super::time::duration_ns(&d)?.max(0) as u64;
+                Src::Until(it.sched.clock.saturating_add(ns))
+            }
+            _ => Src::Else,
+        });
+    }
+    it.preempt()?;
+    loop {
+        let ready: Vec<usize> = srcs
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| match s {
+                Src::Chan(c) => c.has_message(),
+                Src::Task(t) => it.sched.tasks[*t].done,
+                Src::Until(u) => it.sched.clock >= *u,
+                Src::Else => false,
+            })
+            .map(|(i, _)| i)
+            .collect();
+        if let Some(&first) = ready.first() {
+            let i = first;
+            let v = match &srcs[i] {
+                Src::Chan(c) => it.chan_recv_item(c, true)?.unwrap_or(Value::Unit),
+                Src::Task(t) => wait_task(it, *t)?,
+                _ => Value::Unit,
+            };
+            return select_arm(it, &arms[i], v);
+        }
+        if let Some(i) = srcs.iter().position(|s| matches!(s, Src::Else)) {
+            return select_arm(it, &arms[i], Value::Unit);
+        }
+        let waits: Vec<Wait> = srcs
+            .iter()
+            .filter_map(|s| match s {
+                Src::Chan(c) if c.senders_alive() => Some(Wait::Recv(c.clone(), None)),
+                Src::Task(t) => Some(Wait::Join(*t)),
+                Src::Until(u) => Some(Wait::Sleep(*u)),
+                _ => None,
+            })
+            .collect();
+        if waits.is_empty() {
+            return Err(panic_ctl("every channel of this `select` is closed"));
+        }
+        it.block_on(Wait::Any(waits))?;
+    }
+}
+
+fn select_arm(it: &mut Interpreter, arm: &'static crate::parser::SelectArm<'static>, v: Value) -> R {
+    it.push_scope();
+    let mut binds = Vec::new();
+    if !it.match_pattern(&arm.pattern, &v, None, false, &mut binds) {
+        return it.pop_scope(Err(semantic("`select`: the arm's pattern does not match the value")));
+    }
+    for (n, b) in binds {
+        it.define(n, b);
+    }
+    let r = it.eval(arm.body);
+    it.pop_scope(r)
 }

@@ -890,10 +890,8 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Await { expr: inner, .. } => self.generate_await(inner),
             Expression::AsyncCall { expr: inner, .. } => self.generate_async_call(inner),
             Expression::SpawnCall { expr: inner, .. } => self.generate_spawn_call(inner),
-            Expression::ChannelSend { channel, value, .. } => {
-                self.generate_channel_send(channel, value)
-            }
-            Expression::ChannelRecv { channel, .. } => self.generate_channel_recv(channel),
+            Expression::Scope { body, .. } => self.generate_scope(body),
+            Expression::Select { arms, .. } => self.generate_select(arms),
             Expression::Range {
                 start,
                 end,

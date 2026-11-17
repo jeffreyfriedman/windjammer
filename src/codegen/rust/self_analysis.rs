@@ -131,9 +131,7 @@ fn collect_locals_from_statement(stmt: &Statement, locals: &mut HashSet<String>)
             }
         }
         Statement::While { body, .. }
-        | Statement::Loop { body, .. }
-        | Statement::Thread { body, .. }
-        | Statement::Async { body, .. } => {
+        | Statement::Loop { body, .. } => {
             for s in body {
                 collect_locals_from_statement(s, locals);
             }
@@ -1799,10 +1797,11 @@ pub fn expression_accesses_fields(ctx: &AnalysisContext, expr: &Expression) -> b
         Expression::Range { start, end, .. } => {
             expression_accesses_fields(ctx, start) || expression_accesses_fields(ctx, end)
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            expression_accesses_fields(ctx, channel) || expression_accesses_fields(ctx, value)
-        }
-        Expression::ChannelRecv { channel, .. } => expression_accesses_fields(ctx, channel),
+        Expression::Scope { body, .. } => expression_accesses_fields(ctx, body),
+        Expression::Select { arms, .. } => arms.iter().any(|a| {
+            a.source.is_some_and(|s| expression_accesses_fields(ctx, s))
+                || expression_accesses_fields(ctx, a.body)
+        }),
         Expression::Block { statements, .. } => {
             // Check if any statement in the block accesses fields
             statements.iter().any(|s| statement_accesses_fields(ctx, s))

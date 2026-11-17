@@ -266,6 +266,38 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// ADR-0004: the value a task hands back (`t.wait()`) is its operand's value.
+    pub(super) fn task_value(&mut self, task: ConstraintVar, value: ConstraintVar) {
+        self.part(task, Part::Elem, value, "NUM-TASK");
+    }
+
+    /// `spawn f(x)` / `async { .. }`: a `Task<T>` whose `T` is the operand's value.
+    pub(super) fn walk_task(&mut self, expr: &Expression<'ast>, mode: ExecutionMode, location: &crate::parser::SourceLocation) -> ConstraintVar {
+        let inner = self.walk_expression(expr);
+        self.emit_execution_call_mode(expr, mode, location);
+        let result = self.cs.fresh_var();
+        self.task_value(result, inner);
+        result
+    }
+
+    /// `select { pat = src => body, .. }`: each arm's pattern binds its source's element (`rx.recv()`, `t.wait()`) and
+    /// every arm's value is the select's.
+    pub(super) fn walk_select(&mut self, arms: &[crate::parser::SelectArm<'ast>]) -> ConstraintVar {
+        let result = self.cs.fresh_var();
+        for a in arms {
+            let source = a.source.map(|s| self.walk_expression(s));
+            self.scopes.push(HashMap::new());
+            let bound = self.bind_pattern(&a.pattern);
+            if let (Some(src), crate::parser::SelectKind::Recv | crate::parser::SelectKind::Wait) = (source, a.kind) {
+                self.task_value(src, bound);
+            }
+            let body = self.walk_expression(a.body);
+            self.scopes.pop();
+            self.cs.add_because(Constraint::TypeEquals(result, body), tagged("TY-UNIFY"));
+        }
+        result
+    }
+
     /// `Vec::new()`, `Vec::with_capacity(n)`: an associated function of a core type, typed by `std/rust_core.wji`
     /// (its result is a fresh container whose parts are related to the arguments). Returns whether it was typed.
     pub(super) fn emit_surface_static_call(
@@ -385,6 +417,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
         match expr {
             Expression::Array { .. } => Some(Type::Vec(Box::new(Type::Infer))),
+            // ADR-0004: `spawn ..` / `async ..` is a `Task<T>` (std/rust_core.wji): `t.wait()` is the operand's value
+            Expression::SpawnCall { .. } | Expression::AsyncCall { .. } => Some(Type::Parameterized("Task".to_string(), vec![Type::Infer])),
             Expression::Range { .. } => Some(Type::Parameterized("Iterator".to_string(), vec![Type::Infer])),
             Expression::MapLiteral { .. } => Some(Type::Parameterized("HashMap".to_string(), vec![Type::Infer, Type::Infer])),
             Expression::MacroInvocation { delimiter: MacroDelimiter::Brackets, .. } => Some(Type::Vec(Box::new(Type::Infer))),

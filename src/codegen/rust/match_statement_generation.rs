@@ -110,13 +110,13 @@ impl<'ast> CodeGenerator<'ast> {
             | Expression::Await { expr, .. }
             | Expression::AsyncCall { expr, .. }
             | Expression::SpawnCall { expr, .. }
-            | Expression::ChannelRecv { channel: expr, .. } => {
+            | Expression::Scope { body: expr, .. } => {
                 Self::match_arm_body_uses_binding(expr, name)
             }
-            Expression::ChannelSend { channel, value, .. } => {
-                Self::match_arm_body_uses_binding(channel, name)
-                    || Self::match_arm_body_uses_binding(value, name)
-            }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::match_arm_body_uses_binding(s, name))
+                    || Self::match_arm_body_uses_binding(a.body, name)
+            }),
             Expression::MacroInvocation { args, .. } => args
                 .iter()
                 .any(|e| Self::match_arm_body_uses_binding(e, name)),
@@ -179,9 +179,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .iter()
                         .any(|s| Self::match_arm_statement_uses_binding(s, name))
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
+            Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| Self::match_arm_statement_uses_binding(s, name)),
             Statement::Defer { statement, .. } => {

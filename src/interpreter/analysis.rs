@@ -176,7 +176,7 @@ fn scan_stmt(it: &mut Interpreter, module: usize, s: &'static Statement<'static>
                 scan_stmt(it, module, x, out);
             }
         }
-        Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => {
+        Statement::Loop { body, .. } => {
             for x in body {
                 scan_stmt(it, module, x, out);
             }
@@ -278,7 +278,16 @@ fn scan_expr(it: &mut Interpreter, module: usize, e: &'static Expression<'static
         | Expression::TryOp { expr, .. }
         | Expression::Await { expr, .. }
         | Expression::AsyncCall { expr, .. }
-        | Expression::SpawnCall { expr, .. } => scan_expr(it, module, expr, out),
+        | Expression::SpawnCall { expr, .. }
+        | Expression::Scope { body: expr, .. } => scan_expr(it, module, expr, out),
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    scan_expr(it, module, s, out);
+                }
+                scan_expr(it, module, a.body, out);
+            }
+        }
         Expression::Index { object, index, .. } => {
             scan_expr(it, module, object, out);
             scan_expr(it, module, index, out);
@@ -293,11 +302,6 @@ fn scan_expr(it: &mut Interpreter, module: usize, e: &'static Expression<'static
                 scan_expr(it, module, a, out);
             }
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            scan_expr(it, module, channel, out);
-            scan_expr(it, module, value, out);
-        }
-        Expression::ChannelRecv { channel, .. } => scan_expr(it, module, channel, out),
         Expression::Block { statements, .. } => {
             for s in statements {
                 scan_stmt(it, module, s, out);

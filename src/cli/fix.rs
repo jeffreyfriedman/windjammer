@@ -97,6 +97,25 @@ fn fix_trailing_returns(name: &str, text: String) -> String {
     }
 }
 
+/// ADR-0004: `thread { }` -> `spawn { }`, `ch <- v` -> `ch.send(v)`, `<-ch` -> `ch.recv()` (WJ0191), then a task nobody
+/// waits on is started inside a `scope { }` that ends with its block (WJ0190). Runs before the parse guard: a file
+/// with a removed form does not parse until it is migrated. Returns the text and the number of edits.
+fn migrate_concurrency(name: &str, mut text: String) -> (String, usize) {
+    let mut n = 0;
+    for _ in 0..16 {
+        let diags = crate::check::concurrency_diagnostics(name, &text);
+        let edits: Vec<_> = crate::diagnostics::apply::collect_edits(&diags).into_values().flatten().collect();
+        match crate::diagnostics::apply::apply_edits(&text, &edits) {
+            Some(t) if !edits.is_empty() && t != text => {
+                n += edits.len();
+                text = t;
+            }
+            _ => break,
+        }
+    }
+    (text, n)
+}
+
 /// ADR-0018: `Option<T>` -> `T?` and `x.unwrap_or(d)` -> `x ?? d` (conservative; see `intrinsics::option_fix`).
 fn surface_fix_options(text: String) -> String {
     crate::intrinsics::option_fix::fix_options(&text).text
@@ -225,6 +244,7 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
     let verdicts = vec_verdicts(&sources);
     for (idx, (file, (_, source))) in files.iter().zip(sources).enumerate() {
         let source = source;
+        let mut conc_rewrites = 0;
         summary.files_scanned += 1;
         let is_md = file.extension().is_some_and(|e| e == "md");
         let out = if is_md {
@@ -234,7 +254,9 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
                 text,
             }
         } else {
-            let mut out = surface_fix::fix_source_with(&source, &verdicts[idx]);
+            let (migrated, conc) = migrate_concurrency(&name_of(file), source.clone());
+            conc_rewrites = conc;
+            let mut out = surface_fix::fix_source_with(&migrated, &verdicts[idx]);
             out.text = fix_trailing_returns(&name_of(file), out.text);
             out.text = surface_fix_options(out.text);
             out.text = crate::linter::redundant_as_str::fix(&out.text);
@@ -248,16 +270,17 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
             continue;
         }
         let name = file.display().to_string();
-        if !is_md && !(parses(&name, &source) && parses(&name, &out.text)) {
+        // a file the ADR-0004 migration changed did not parse before it; the result must parse
+        if !is_md && !((conc_rewrites > 0 || parses(&name, &source)) && parses(&name, &out.text)) {
             eprintln!("warning: {name}: does not parse before/after rewrite; left unchanged");
             continue;
         }
         summary.files_changed += 1;
-        summary.rewrites += out.changed_count().max(1);
+        summary.rewrites += (out.changed_count() + conc_rewrites).max(1);
         if !check {
             fs::write(file, &out.text)?;
         }
-        println!("fixed {} ({} rewrite(s))", name, out.changed_count());
+        println!("fixed {} ({} rewrite(s))", name, out.changed_count() + conc_rewrites);
     }
     // ADR-0002: every local binding the program changes is declared `mut` (WJ0051), after the rewrites above
     let (mut_files, mut_edits) = add_missing_mut(path, check, docs)?;

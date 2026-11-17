@@ -129,3 +129,17 @@ impl<'ast> CodeGenerator<'ast> {
         needs_lifetime
     }
 }
+
+/// The trait bounds of a function's type parameters, from `<T: A>` and its `where` clause together.
+pub(in crate::codegen::rust) fn type_bounds(func: &FunctionDecl<'_>) -> Vec<(String, Vec<String>)> {
+    let mut all_bounds: Vec<(String, Vec<String>)> =
+        func.type_params.iter().filter(|tp| !tp.bounds.is_empty()).map(|tp| (tp.name.clone(), tp.bounds.clone())).collect();
+    for (name, bounds) in &func.where_clause {
+        if let Some(existing) = all_bounds.iter_mut().find(|(n, _)| n == name) {
+            existing.1.extend(bounds.iter().cloned());
+        } else {
+            all_bounds.push((name.clone(), bounds.clone()));
+        }
+    }
+    all_bounds
+}

@@ -315,6 +315,12 @@ match value {
         });
 
         self.register_mutability_codes();
+        self.register_arena_codes();
+        self.register_concurrency_codes();
+    }
+
+    /// ADR-0025: `std::arena` (WJ0160, WJ0161).
+    fn register_arena_codes(&mut self) {
         // WJ0160: arena value escapes its arena (ADR-0025, `std::arena`, unstable)
         self.register(WjErrorCode {
             code: "WJ0160".to_string(),
@@ -379,6 +385,51 @@ process::run("echo ${name}")
 
 // Correct:
 process::run_with_args("echo", [name])"#.to_string()),
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+    }
+
+    /// ADR-0004: structured concurrency (WJ0190) and the removed `thread { }` / `<-` forms (WJ0191).
+    fn register_concurrency_codes(&mut self) {
+        // WJ0190 / WJ0191: ADR-0004 structured concurrency and removed forms
+        self.register(WjErrorCode {
+            code: "WJ0190".to_string(),
+            title: "Task is never waited on".to_string(),
+            explanation: "Every task (`spawn`, `async`, or a call returning `Task<T>`) is waited on: inside a `scope { }`, which waits for it, or through `.wait()` (ADR-0004).".to_string(),
+            causes: vec!["A `spawn` used as a statement outside a `scope { }`".to_string(), "A task bound to a name nothing uses".to_string()],
+            solutions: vec!["Wrap the work in `scope { ... }`".to_string(), "Keep the task and call `.wait()`".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0191".to_string(),
+            title: "Removed concurrency syntax".to_string(),
+            explanation: "`thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them.".to_string(),
+            causes: vec!["Code written before ADR-0004".to_string()],
+            solutions: vec!["Run `wj fix <path>`".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::Proven,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0192".to_string(),
+            title: "Task changes a captured variable".to_string(),
+            explanation: "A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004).".to_string(),
+            causes: vec!["`spawn { total += x }` with `total` a local of the enclosing code".to_string()],
+            solutions: vec!["Return the value and read it with `t.wait()`, or send it on a channel".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0193".to_string(),
+            title: "Value cannot move to another thread".to_string(),
+            explanation: "A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004).".to_string(),
+            causes: vec!["`spawn { .. }` reading a local made with `Rc::new`".to_string()],
+            solutions: vec!["Start the task with `async`".to_string(), "Build the value inside the task".to_string()],
+            example: None,
             rust_codes: vec![],
             maturity: GuaranteeMaturity::HighConfidence,
         });

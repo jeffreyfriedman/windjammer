@@ -267,5 +267,63 @@ stdout_has = ["\"code\": \"WJ0173\"", "file contents", "run_with_args"]
 name = "check accepts the same flow once the value is an argument, not a command (WJ0173)"
 polarity = "positive"
 files = { "m.wj" = "use std::fs\nuse std::process\n\nfn main() {\n    let name = fs::read_to_string(\"name.txt\").unwrap_or(\"\")\n    let out = process::run_with_args(\"echo\", [name])\n    println(\"${out}\")\n}\n" }
+
+[[case]]
+name = "check rejects a task nobody waits on (WJ0190), with the scope fix"
+polarity = "negative"
+files = { "m.wj" = "fn work(n: int) -> int {\n    n * 2\n}\n\nfn main() {\n    spawn work(1)\n    println(\"done\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0190\"", "scope {"]
+
+[[case]]
+name = "check accepts tasks inside a scope or waited on (WJ0190)"
+polarity = "positive"
+files = { "m.wj" = "fn work(n: int) -> int {\n    n * 2\n}\n\nfn main() {\n    let t = spawn work(2)\n    scope {\n        spawn work(1)\n    }\n    println(\"${t.wait()}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
+name = "check rejects the removed channel send operator (WJ0191), with its fix"
+polarity = "negative"
+files = { "m.wj" = "use std::sync\n\nfn main() {\n    let (tx, rx) = sync::channel()\n    tx <- 5\n    println(\"${rx.recv()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0191\"", "\"replacement\": \".send(\""]
+
+[[case]]
+name = "check accepts channel methods (WJ0191)"
+polarity = "positive"
+files = { "m.wj" = "use std::sync\n\nfn main() {\n    let (tx, rx) = sync::channel()\n    tx.send(5)\n    println(\"${rx.recv()}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
+name = "check rejects a task that changes a captured variable (WJ0192)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut total = 0\n    scope {\n        spawn { total += 1 }\n    }\n    println(\"${total}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0192\""]
+
+[[case]]
+name = "check rejects a spawned task that captures an Rc (WJ0193) and accepts async"
+polarity = "negative"
+files = { "m.wj" = "use std::rc::Rc\n\nfn main() {\n    let r = Rc::new(5)\n    let a = async { *r + 1 }\n    let t = spawn { *r + 1 }\n    println(\"${a.wait() + t.wait()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0193\""]
+
+[[case]]
+name = "check accepts a task that returns its result instead of changing a captured variable (WJ0192)"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let t = spawn { 1 }\n    let total = t.wait()\n    println(\"${total}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
+name = "check accepts an Rc captured by an async task (WJ0193)"
+polarity = "positive"
+files = { "m.wj" = "use std::rc::Rc\n\nfn main() {\n    let r = Rc::new(5)\n    let t = async { *r + 1 }\n    println(\"${t.wait()}\")\n}\n" }
 args = ["check", "{w}/m.wj"]
 output_has = ["0 error(s)"]

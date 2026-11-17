@@ -56,7 +56,7 @@ pub(crate) fn check(e: &Expression<'_>) -> Result<(), String> {
         },
         E::MacroInvocation { name, .. } => Err(refuse(&format!("the macro `{name}!`"))),
         E::Closure { .. } | E::Block { .. } => Err(refuse("a closure or block")),
-        E::Await { .. } | E::AsyncCall { .. } | E::SpawnCall { .. } | E::ChannelSend { .. } | E::ChannelRecv { .. } => Err(refuse("a task or channel operation")),
+        E::Await { .. } | E::AsyncCall { .. } | E::SpawnCall { .. } | E::Scope { .. } | E::Select { .. } => Err(refuse("a task operation")),
     }
 }
 

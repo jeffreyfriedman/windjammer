@@ -1,0 +1,52 @@
+// Conformance Test: tasks and their results (ADR-0004, SPEC-CONC-001, SPEC-CONC-002)
+//
+// `spawn f(x)`, `spawn { }`, `async f(x)` and `async { }` evaluate to a `Task<T>`; `t.wait()` returns the task's
+// value and `t.await` is the same. The output depends only on `wait()`, never on the interleaving.
+//
+// EXPECTED OUTPUT:
+// [spawn_call] 8
+// [spawn_block] 7
+// [async_call] 5
+// [async_block] hello world
+// [await_sugar] 42
+// [many] 0 2 4 6 8
+// [all] PASSED
+
+fn double(n: int) -> int {
+    n * 2
+}
+
+fn add_one(n: int) -> int {
+    n + 1
+}
+
+fn main() {
+    let sep = " "
+    let t = spawn double(4)
+    println("[spawn_call] ${t.wait()}")
+
+    let base = 3
+    let b = spawn { base + 4 }
+    println("[spawn_block] ${b.wait()}")
+
+    let a = async add_one(4)
+    println("[async_call] ${a.wait()}")
+
+    let greeting = "hello"
+    let s = async { "${greeting} world" }
+    println("[async_block] ${s.wait()}")
+
+    let w = spawn double(21)
+    println("[await_sugar] ${w.await}")
+
+    let mut tasks = Vec::new()
+    for i in 0..5 {
+        tasks.push(spawn double(i))
+    }
+    let mut out = Vec::new()
+    for task in tasks {
+        out.push("${task.wait()}")
+    }
+    println("[many] ${out.join(sep)}")
+    println("[all] PASSED")
+}

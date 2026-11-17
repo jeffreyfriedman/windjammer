@@ -1,0 +1,70 @@
+// Conformance Test: channels are values with methods (ADR-0004, SPEC-CONC-004)
+//
+// `ch.send(v)` sends and `ch.recv()` receives (blocking until a value arrives); values from one sender arrive in
+// the order they were sent. Producers and a consumer run as tasks in a scope.
+//
+// EXPECTED OUTPUT:
+// [fifo] 1 2 3 4 5
+// [fan_in] sum 55 from 10 values
+// [pipeline] 2 4 6
+// [all] PASSED
+
+use std::sync
+
+fn main() {
+    let sep = " "
+    let (tx, rx) = sync::channel()
+    scope {
+        spawn {
+            for i in 1..6 {
+                tx.send(i)
+            }
+        }
+        let mut got = Vec::new()
+        for _ in 0..5 {
+            got.push("${rx.recv()}")
+        }
+        println("[fifo] ${got.join(sep)}")
+    }
+
+    let (ptx, prx) = sync::channel()
+    scope {
+        spawn {
+            for i in 1..6 {
+                ptx.send(i)
+            }
+        }
+        spawn {
+            for i in 6..11 {
+                ptx.send(i)
+            }
+        }
+    }
+    let mut sum = 0
+    let mut count = 0
+    for _ in 0..10 {
+        sum += prx.recv()
+        count += 1
+    }
+    println("[fan_in] sum ${sum} from ${count} values")
+
+    let (a_tx, a_rx) = sync::channel()
+    let (b_tx, b_rx) = sync::channel()
+    scope {
+        spawn {
+            for _ in 0..3 {
+                let x: int = a_rx.recv()
+                b_tx.send(x * 2)
+            }
+        }
+        for i in 1..4 {
+            a_tx.send(i)
+        }
+        let mut out = Vec::new()
+        for _ in 0..3 {
+            out.push("${b_rx.recv()}")
+        }
+        println("[pipeline] ${out.join(sep)}")
+    }
+    println("[all] PASSED")
+}

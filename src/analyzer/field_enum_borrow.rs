@@ -158,12 +158,16 @@ fn expr_scan_field_enum_match_scrutinee(
                 expr_scan_field_enum_match_scrutinee(name, arg, saw_scrutinee, other_use);
             }
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            expr_scan_field_enum_match_scrutinee(name, channel, saw_scrutinee, other_use);
-            expr_scan_field_enum_match_scrutinee(name, value, saw_scrutinee, other_use);
+        Expression::Scope { body, .. } => {
+            expr_scan_field_enum_match_scrutinee(name, body, saw_scrutinee, other_use);
         }
-        Expression::ChannelRecv { channel, .. } => {
-            expr_scan_field_enum_match_scrutinee(name, channel, saw_scrutinee, other_use);
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    expr_scan_field_enum_match_scrutinee(name, s, saw_scrutinee, other_use);
+                }
+                expr_scan_field_enum_match_scrutinee(name, a.body, saw_scrutinee, other_use);
+            }
         }
         _ => {}
     }

@@ -17,6 +17,7 @@
 //!   seed: N                 simulation seed (simulate mode, default 1)
 //!   faults: P               probability that a file or network call fails (simulate mode, default 0)
 //!   profile: local         run under the default local profile (project directory + time/random/console), enforced
+//!   oracle: check           the span-oracle annotations (`//~` lines) are for the `wj check` producer only
 //!   xfail: Q-NNN            the implementation currently contradicts the spec (docs/spec/OPEN_QUESTIONS.md);
 //!                           the example must FAIL, and the run fails if it starts passing
 //!
@@ -426,7 +427,7 @@ fn rule_examples_in_chapters_match_the_test_files() {
 }
 
 fn is_header(l: &str) -> bool {
-    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed", "faults", "profile"]
+    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed", "faults", "profile", "oracle"]
         .iter()
         .any(|k| l.strip_prefix("// ").is_some_and(|r| r.starts_with(&format!("{k}:"))))
 }

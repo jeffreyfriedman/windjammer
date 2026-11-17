@@ -23,6 +23,7 @@ mod match_variants;
 pub mod shared_cache;
 mod std_calls;
 pub mod taint;
+mod tasks;
 mod semantic;
 pub mod watch;
 pub mod widths;
@@ -197,6 +198,18 @@ pub fn taint_findings_sources(root: &Path, sources: &[(String, String)]) -> Vec<
     taint::run(root, &refs, &by_file, &mut found);
     std::panic::set_hook(previous);
     finish(found)
+}
+
+/// ADR-0004 migration (`wj fix`): the WJ0191 (removed `thread { }` / `<-`) and WJ0190 (un-waited task) diagnostics
+/// of one file, from the front end alone.
+pub fn concurrency_diagnostics(file: &str, text: &str) -> Vec<crate::diagnostics::Diagnostic> {
+    let mut out = Vec::new();
+    if let Some(p) = front::parse(file, text, &mut out) {
+        let ix = crate::diagnostics::SourceIndex::new(file, text);
+        tasks::unwaited(&p, &ix, &mut out);
+    }
+    out.retain(|d| d.code == crate::analyzer::task_structure::CODE || d.code == crate::parser::task_prefix::REMOVED_FORM_CODE);
+    out
 }
 
 /// Check in-memory sources (used by tests and the LSP).

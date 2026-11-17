@@ -899,10 +899,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.walk_scoped(body);
             }
 
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                self.walk_scoped(body);
-            }
-
             Statement::Defer { statement, .. } => {
                 self.walk_statement(statement);
             }
@@ -1227,34 +1223,14 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 result
             }
 
-            Expression::AsyncCall { expr, location, .. } => {
-                let inner = self.walk_expression(expr);
-                self.emit_execution_call_mode(expr, ExecutionMode::Async, location);
-                let result = self.cs.fresh_var();
-                let _ = inner;
-                result
+            // ADR-0004 tasks, scopes and `select` (constraint_gen/structure.rs)
+            Expression::AsyncCall { expr, location, .. } => self.walk_task(expr, ExecutionMode::Async, location),
+            Expression::SpawnCall { expr, location, .. } => self.walk_task(expr, ExecutionMode::Spawn, location),
+            Expression::Scope { body, .. } => {
+                self.walk_expression(body);
+                self.cs.fresh_var()
             }
-
-            Expression::SpawnCall { expr, location, .. } => {
-                let inner = self.walk_expression(expr);
-                self.emit_execution_call_mode(expr, ExecutionMode::Spawn, location);
-                let result = self.cs.fresh_var();
-                let _ = inner;
-                result
-            }
-
-            Expression::ChannelSend { channel, value, .. } => {
-                self.walk_expression(channel);
-                self.walk_expression(value);
-                let result = self.cs.fresh_var();
-                result
-            }
-
-            Expression::ChannelRecv { channel, .. } => {
-                self.walk_expression(channel);
-                let result = self.cs.fresh_var();
-                result
-            }
+            Expression::Select { arms, .. } => self.walk_select(arms),
 
             Expression::Block { statements, .. } => {
                 let tails = self.walk_scoped_block_value(statements);

@@ -285,7 +285,7 @@ impl<'f> Walker<'f> {
                 self.expr(condition);
                 self.block(body);
             }
-            Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => self.block(body),
+            Statement::Loop { body, .. } => self.block(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
             Statement::Continue { .. } | Statement::Use { .. } => {}
         }
@@ -439,7 +439,18 @@ impl<'f> Walker<'f> {
                 self.expr(left);
                 self.expr(right);
             }
-            Expression::FieldAccess { object, .. } | Expression::Cast { expr: object, .. } | Expression::TryOp { expr: object, .. } | Expression::Await { expr: object, .. } | Expression::AsyncCall { expr: object, .. } | Expression::SpawnCall { expr: object, .. } | Expression::ChannelRecv { channel: object, .. } => self.expr(object),
+            Expression::FieldAccess { object, .. } | Expression::Cast { expr: object, .. } | Expression::TryOp { expr: object, .. } | Expression::Await { expr: object, .. } | Expression::AsyncCall { expr: object, .. } | Expression::SpawnCall { expr: object, .. } | Expression::Scope { body: object, .. } => self.expr(object),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        self.expr(s);
+                    }
+                    self.scopes.push(Vec::new());
+                    self.bind_pattern(&a.pattern, None, Kind::Other, false, &None);
+                    self.expr(a.body);
+                    self.scopes.pop();
+                }
+            }
             Expression::Index { object, index, .. } => {
                 self.expr(object);
                 self.expr(index);
@@ -463,10 +474,6 @@ impl<'f> Walker<'f> {
                 for x in elements {
                     self.expr(x);
                 }
-            }
-            Expression::ChannelSend { channel, value, .. } => {
-                self.expr(channel);
-                self.expr(value);
             }
             Expression::Identifier { .. } | Expression::Literal { .. } => {}
         }

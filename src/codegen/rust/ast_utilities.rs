@@ -30,8 +30,6 @@ pub fn count_statements<'ast>(body: &[&'ast Statement<'ast>]) -> usize {
             Statement::For { .. } => 3,
             Statement::Match { .. } => 5, // Match statements are complex
             Statement::Assignment { .. } => 1,
-            Statement::Thread { .. } => 2, // Thread spawn
-            Statement::Async { .. } => 2,  // Async spawn
             Statement::Defer { .. } => 1,
             Statement::Break { .. } => 1,
             Statement::Continue { .. } => 1,

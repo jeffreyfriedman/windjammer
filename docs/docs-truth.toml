@@ -89,6 +89,7 @@ defs = "docs/spec/**/*.md"
 # docs/windjammer.ebnf is cross-checked against the parser (tools/docs_truth/ebnf.rs, docs/CONTRIBUTING-docs.md).
 # Lexer keywords deliberately absent from the grammar: "keyword" = "reason". May only shrink.
 [ebnf.unlisted_keywords]
+thread = "only the `std::thread` module path (`thread::sleep(..)`); the `thread { }` block was removed by ADR-0004 (WJ0191), so the keyword has no production of its own"
 
 # Grammar sentences the parser rejects: "production#alternative" = "reason". An entry the parser accepts fails the check.
 [ebnf.divergences]

@@ -153,7 +153,6 @@ pub struct Interpreter {
     pub(crate) methods: HashMap<(String, String), Rc<FuncDef>>,
     /// `impl From<S> for T`: every impl of a target type with its source type (several coexist; see `from_impls.rs`).
     /// The synthesized `{ ... }` block of each `thread {}` / `async {}` statement, by statement address.
-    pub(crate) task_blocks: HashMap<usize, &'static crate::parser::Expression<'static>>,
     /// Struct/enum names declared in several modules, and the key (`module::Name`) of each declaration (`type_keys.rs`).
     pub(crate) dup_types: HashSet<String>,
     pub(crate) dup_decls: HashSet<String>,
@@ -318,7 +317,6 @@ impl Interpreter {
             from_impls: HashMap::new(),
             dup_types: HashSet::new(),
             dup_decls: HashSet::new(),
-            task_blocks: HashMap::new(),
             user_mutating: HashSet::new(),
             type_aliases: HashMap::new(),
             globals: HashMap::new(),

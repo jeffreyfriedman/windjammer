@@ -32,8 +32,8 @@ pub(crate) fn expr_loc(e: &'static Expression<'static>) -> Option<&'static Locat
         | Await { location, .. }
         | AsyncCall { location, .. }
         | SpawnCall { location, .. }
-        | ChannelSend { location, .. }
-        | ChannelRecv { location, .. }
+        | Scope { location, .. }
+        | Select { location, .. }
         | Block { location, .. } => location.as_ref(),
     }
 }
@@ -52,8 +52,6 @@ pub(crate) fn stmt_loc(s: &'static Statement<'static>) -> Option<&'static Locati
         | For { location, .. }
         | Loop { location, .. }
         | While { location, .. }
-        | Thread { location, .. }
-        | Async { location, .. }
         | Defer { location, .. }
         | Break { location, .. }
         | Continue { location, .. }
@@ -344,12 +342,13 @@ impl Interpreter {
                 super::builtins::thread::start_task(self, body)
             }
 
-            Expression::ChannelSend { location, .. }
-            | Expression::ChannelRecv { location, .. } => {
+            Expression::Select { arms, location } => {
                 self.mark(location.as_ref());
-                Err(unsupported(
-                    "`async expr`, `spawn`, channels and `<-` (ADR-0004: the concurrency surface is not settled; only `async fn` + `.await` run, sequentially)",
-                ))
+                super::builtins::thread::run_select(self, arms)
+            }
+            Expression::Scope { body, location } => {
+                self.mark(location.as_ref());
+                super::builtins::thread::run_scope(self, body, location.as_ref())
             }
         }
     }

@@ -8,6 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub mod arena_escape;
+pub mod task_captures;
+pub mod task_structure;
 mod borrow_analysis;
 mod spawn_capture;
 pub(crate) use spawn_capture::param_captured_by_spawned_closure;
@@ -444,7 +446,9 @@ impl<'ast> Analyzer<'ast> {
 /// without building the signature registry and the tables an `Analyzer` starts with.
 pub fn forbidden_rust_patterns(program: &Program<'_>) -> Result<(), String> {
     forbidden_patterns::check_forbidden_rust_patterns(program)?;
-    arena_escape::gate(program)
+    arena_escape::gate(program)?;
+    // ADR-0004: every task is waited on (WJ0190); `wj check` reports it with a fix (check/tasks.rs)
+    task_structure::gate(program)
 }
 
 #[cfg(test)]

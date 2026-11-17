@@ -153,7 +153,7 @@ fn width_sensitive(program: &crate::parser::Program<'_>) -> bool {
             S::Match { value, arms, .. } => expr(value) || arms.iter().any(|a| a.guard.is_some_and(expr) || expr(a.body)),
             S::For { iterable, body, .. } => expr(iterable) || block(body),
             S::While { condition, body, .. } => expr(condition) || block(body),
-            S::Loop { body, .. } | S::Thread { body, .. } | S::Async { body, .. } => block(body),
+            S::Loop { body, .. } => block(body),
             S::Break { value, .. } => matches!(value, Some(v) if expr(v)),
             S::Continue { .. } | S::Use { .. } => false,
             _ => true,

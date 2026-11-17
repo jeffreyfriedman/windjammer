@@ -227,11 +227,15 @@ fn accumulate_identifier_usages(
         | Expression::SpawnCall { expr, .. } => {
             accumulate_identifier_usages(expr, counts);
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            accumulate_identifier_usages(channel, counts);
-            accumulate_identifier_usages(value, counts);
+        Expression::Scope { body, .. } => accumulate_identifier_usages(body, counts),
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    accumulate_identifier_usages(s, counts);
+                }
+                accumulate_identifier_usages(a.body, counts);
+            }
         }
-        Expression::ChannelRecv { channel, .. } => accumulate_identifier_usages(channel, counts),
         Expression::Closure { body, .. } => accumulate_identifier_usages(body, counts),
         Expression::Literal { .. } => {}
     }

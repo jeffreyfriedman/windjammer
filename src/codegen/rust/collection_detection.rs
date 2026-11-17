@@ -291,9 +291,7 @@ impl CodeGenerator<'_> {
                         .iter()
                         .any(|s| Self::stmt_references_collection(s, type_name))
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
+            Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| Self::stmt_references_collection(s, type_name)),
             Statement::Defer { statement, .. } => {
@@ -380,13 +378,13 @@ impl CodeGenerator<'_> {
             | Expression::SpawnCall { expr, .. } => {
                 Self::expr_references_collection(expr, type_name)
             }
-            Expression::ChannelSend { channel, value, .. } => {
-                Self::expr_references_collection(channel, type_name)
-                    || Self::expr_references_collection(value, type_name)
+            Expression::Scope { body, .. } => {
+                Self::expr_references_collection(body, type_name)
             }
-            Expression::ChannelRecv { channel, .. } => {
-                Self::expr_references_collection(channel, type_name)
-            }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::expr_references_collection(s, type_name))
+                    || Self::expr_references_collection(a.body, type_name)
+            }),
             Expression::MacroInvocation { args, .. } => args
                 .iter()
                 .any(|e| Self::expr_references_collection(e, type_name)),
@@ -842,9 +840,7 @@ impl CodeGenerator<'_> {
                     );
                 }
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 for s in body {
                     Self::stmt_collect_runtime_std_modules(
                         s,

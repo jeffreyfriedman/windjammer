@@ -53,9 +53,9 @@ pub const KEYWORDS: &[KeywordInfo] = &[
     k("use", K, "import"),
     k("mod", K, "module declaration"),
     k("extern", K, "foreign declaration"),
-    k("thread", K, "`thread { }` block"),
-    k("async", K, "async function or block"),
-    k("await", K, "await a future"),
+    k("thread", K, "the `std::thread` module path (`thread { }` was removed: write `spawn { }`)"),
+    k("async", K, "`async f()` / `async { }`: a task on the current executor; `async fn`"),
+    k("await", K, "`t.await`: sugar for `t.wait()`"),
     k("defer", K, "run a statement at scope exit"),
     k("pub", K, "public visibility"),
     k("self", K, "the receiver value"),
@@ -75,6 +75,9 @@ pub const KEYWORDS: &[KeywordInfo] = &[
     k("_", L, "wildcard pattern"),
     k("Self", S, "the implementing type (lexes as an identifier)"),
     k("bound", S, "`bound Alias = Trait + ...` item (identifier elsewhere)"),
+    k("spawn", S, "`spawn f()` / `spawn { }`: a task that runs in parallel (identifier elsewhere)"),
+    k("scope", S, "`scope { }`: waits for every task started inside (identifier elsewhere)"),
+    k("select", S, "`select { x = rx.recv() => .., else => .. }`: waits for the first ready arm (identifier elsewhere)"),
 ];
 
 #[cfg(test)]

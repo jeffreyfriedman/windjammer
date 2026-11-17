@@ -91,9 +91,7 @@ pub fn walk_stmt<V: Visitor>(v: &mut V, s: &Statement<'_>) {
             walk_pattern(v, pattern);
             walk_block(v, body);
         }
-        Statement::Loop { body, .. }
-        | Statement::Thread { body, .. }
-        | Statement::Async { body, .. } => walk_block(v, body),
+        Statement::Loop { body, .. } => walk_block(v, body),
         Statement::While {
             condition, body, ..
         } => {
@@ -148,7 +146,17 @@ pub fn walk_expr<V: Visitor>(v: &mut V, e: &Expression<'_>) {
         | Expression::TryOp { expr, .. }
         | Expression::Await { expr, .. }
         | Expression::AsyncCall { expr, .. }
-        | Expression::SpawnCall { expr, .. } => walk_expr(v, expr),
+        | Expression::SpawnCall { expr, .. }
+        | Expression::Scope { body: expr, .. } => walk_expr(v, expr),
+        Expression::Select { arms, .. } => {
+            for a in arms {
+                if let Some(s) = a.source {
+                    walk_expr(v, s);
+                }
+                walk_pattern(v, &a.pattern);
+                walk_expr(v, a.body);
+            }
+        }
         Expression::Index { object, index, .. } => {
             walk_expr(v, object);
             walk_expr(v, index);
@@ -161,11 +169,6 @@ pub fn walk_expr<V: Visitor>(v: &mut V, e: &Expression<'_>) {
             args.iter().for_each(|x| walk_expr(v, x));
             v.macro_exit();
         }
-        Expression::ChannelSend { channel, value, .. } => {
-            walk_expr(v, channel);
-            walk_expr(v, value);
-        }
-        Expression::ChannelRecv { channel, .. } => walk_expr(v, channel),
         Expression::Block { statements, .. } => walk_block(v, statements),
     }
 }

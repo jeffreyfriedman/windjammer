@@ -1,7 +1,11 @@
 // spec: SPEC-CONC-002
 // expect: 5
+// expect: hello world
 fn work(n: int) -> int { n + 1 }
 fn main() {
     let t = async work(4)
     println("${t.wait()}")
+    let name = "world"
+    let b = async { "hello ${name}" }
+    println("${b.await}")
 }

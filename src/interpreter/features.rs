@@ -146,8 +146,8 @@ pub const FEATURES: &[Feature] = &[
        "fn main() {\n    let m = u128::MAX\n    println(\"${m} ${m / 3}\")\n}\n", "340282366920938463463374607431768211455 113427455640312821154458202477256070485"),
     ok("collections.ordered", "Collections", "`OrderedMap`/`OrderedSet`: insertion order, `remove` keeps the order of the rest; `HashMap`/`HashSet` order is unspecified (`--hash-seed N` permutes it)",
        "fn main() {\n    let mut m: OrderedMap<string, int> = OrderedMap::new()\n    m.insert(\"b\", 2)\n    m.insert(\"a\", 1)\n    m.insert(\"c\", 3)\n    m.remove(\"a\")\n    for k in m.keys() { println(k) }\n}\n", "b\nc"),
-    ok("concurrency.thread_block", "Concurrency", "`thread { }` and `async { }` statements: the body runs as a `move` task started like `thread::spawn(move || { ... })`; nothing joins it",
-       "use std::sync::mpsc\nfn main() {\n    let (tx, rx) = mpsc::channel()\n    thread {\n        tx.send(42)\n    }\n    println(\"${rx.recv().unwrap_or(0)}\")\n}\n", "42"),
+    ok("concurrency.tasks", "Concurrency", "the ADR-0004 surface: `spawn f()`/`spawn { }`/`async f()`/`async { }` tasks with `t.wait()`/`t.await`; `scope { }` waits for every task started inside it (each task keeps its own open scopes, inherited by the tasks it starts); `std::sync::channel()` with `send`/`recv` methods",
+       "use std::sync\nfn main() {\n    let (tx, rx) = sync::channel()\n    let t = spawn { 20 + 1 }\n    scope {\n        spawn { tx.send(21) }\n    }\n    println(\"${t.wait() + rx.recv()}\")\n}\n", "42"),
     ok("ffi.extern_fn", "FFI", "`extern fn`: host-bridge functions (a cached bridge library links the project's Rust, ADR-0023) and scalar C-library symbols (`abs`, `sqrt`, ...) called through the dynamic loader, as the compiled path links them; a symbol neither provides is refused before `main` (it would not link when compiled either)",
        "extern fn abs(x: i32) -> i32\nextern fn sqrt(x: f64) -> f64\nfn main() {\n    println(\"${abs(-7)} ${sqrt(9.0)}\")\n}\n", "7 3"),
 ];

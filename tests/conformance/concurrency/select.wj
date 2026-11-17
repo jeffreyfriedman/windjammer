@@ -1,0 +1,88 @@
+// Conformance Test: select { } (ADR-0004, SPEC-CONC-010)
+//
+// `select` waits until one arm's source is ready and runs that arm: `pat = rx.recv()`, `pat = t.wait()`,
+// `_ = timeout(d)`; `else` runs when nothing is ready. Among ready arms the first in source order wins.
+//
+// EXPECTED OUTPUT:
+// [first_ready] b 2
+// [source_order] a 1
+// [else] nothing ready
+// [timeout] timed out
+// [task] task 7
+// [multiplex] 4 values, sum 10
+// [value] 15
+// [all] PASSED
+
+use std::sync
+use std::time::Duration
+
+fn main() {
+    let (a_tx, a_rx) = sync::channel()
+    let (b_tx, b_rx) = sync::channel()
+    b_tx.send(2)
+    select {
+        x = a_rx.recv() => println("[first_ready] a ${x}"),
+        y = b_rx.recv() => println("[first_ready] b ${y}"),
+    }
+
+    a_tx.send(1)
+    b_tx.send(3)
+    select {
+        x = a_rx.recv() => println("[source_order] a ${x}"),
+        y = b_rx.recv() => println("[source_order] b ${y}"),
+    }
+    let _drain: int = b_rx.recv()
+
+    select {
+        x = a_rx.recv() => println("[else] got ${x}"),
+        else => println("[else] nothing ready"),
+    }
+
+    select {
+        x = a_rx.recv() => println("[timeout] got ${x}"),
+        _ = timeout(Duration::from_millis(10)) => println("[timeout] timed out"),
+    }
+
+    let t = spawn { 3 + 4 }
+    select {
+        v = t.wait() => println("[task] task ${v}"),
+        _ = timeout(Duration::from_secs(5)) => println("[task] too slow"),
+    }
+
+    let (n_tx, n_rx) = sync::channel()
+    let (m_tx, m_rx) = sync::channel()
+    let mut sum = 0
+    let mut count = 0
+    scope {
+        spawn {
+            n_tx.send(1)
+            n_tx.send(2)
+        }
+        spawn {
+            m_tx.send(3)
+            m_tx.send(4)
+        }
+        for _ in 0..4 {
+            select {
+                x = n_rx.recv() => {
+                    sum += x
+                    count += 1
+                }
+                y = m_rx.recv() => {
+                    sum += y
+                    count += 1
+                }
+            }
+        }
+    }
+    println("[multiplex] ${count} values, sum ${sum}")
+
+    let (v_tx, v_rx) = sync::channel()
+    v_tx.send(5)
+    let got = select {
+        x = v_rx.recv() => x * 3,
+        else => 0,
+    }
+    println("[value] ${got}")
+    println("[all] PASSED")
+}

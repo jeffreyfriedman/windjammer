@@ -10,9 +10,11 @@ fn test_arc_mutex() {
     let counter_clone = counter.clone()
     
     // Spawn thread
-    thread {
-        let guard = sync::lock(counter_clone)
-        // Increment
+    scope {
+        spawn {
+            let guard = sync::lock(counter_clone)
+            // Increment
+        }
     }
 }
 
@@ -20,11 +22,13 @@ fn test_channel() {
     // Create a channel
     let (tx, rx) = sync::channel()
     
-    thread {
-        tx.send(42)
+    scope {
+        spawn {
+            tx.send(42)
+        }
+
+        let value = rx.recv()
     }
-    
-    let value = rx.recv()
 }
 
 

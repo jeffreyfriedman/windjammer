@@ -119,7 +119,7 @@ fn make_channel(cap: Option<usize>, wj: bool) -> Value {
     Value::tuple(vec![tx, rx])
 }
 
-fn chan_of(v: &Value) -> R<(Rc<Chan>, bool)> {
+pub(crate) fn chan_of(v: &Value) -> R<(Rc<Chan>, bool)> {
     if let Some(s) = downcast::<SenderObj>(v) {
         return Ok((s.chan.clone(), true));
     }
@@ -206,6 +206,14 @@ pub fn register(r: &mut Registry) {
     r.native("Sender", "send", |it, v, a| send(it, v, &a, true));
     r.native("Sender", "try_send", |it, v, a| send(it, v, &a, false));
     r.native("Sender", "clone", |_, v, _| Ok(new_sender(&chan_of(v)?.0)));
+    // ADR-0004: another handle on the same queue (competing consumers), as in the compiled runtime
+    r.native("Receiver", "clone", |_, v, _| {
+        if chan_of(v)?.0.wj {
+            Ok(v.clone())
+        } else {
+            Err(semantic("no method named `clone` found for `std::sync::mpsc::Receiver` (Rust's receivers are not clonable; `std::sync::channel()` receivers are)"))
+        }
+    });
     r.native("Receiver", "recv", |it, v, _| {
         let (chan, _) = chan_of(v)?;
         Ok(match (it.chan_recv_item(&chan, false)?, chan.wj) {

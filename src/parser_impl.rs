@@ -122,6 +122,8 @@ pub struct Parser {
     /// Errors already reported and recovered from (statement-level recovery); `parse()` fails
     /// with all of them plus the final one.
     pub(crate) recovered_errors: Vec<String>,
+    /// Removed concurrency forms met while parsing (WJ0191, `parser/task_prefix.rs`), with their migration edits.
+    pub(crate) removed_forms: Vec<crate::parser::task_prefix::RemovedForm>,
     /// Statement-level error recovery is only on inside `parse()`, which reports the errors.
     pub(crate) recovering: bool,
     /// True while parsing the operand of a prefix operator (stops before `as`).
@@ -179,6 +181,7 @@ impl Parser {
             arenas: Arc::new(AstArenas::new()),
             _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
+            removed_forms: Vec::new(),
             recovering: false,
             in_unary_operand: false,
             span_log: std::cell::RefCell::new(None),
@@ -207,6 +210,7 @@ impl Parser {
             arenas: Arc::new(AstArenas::new()),
             _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
+            removed_forms: Vec::new(),
             recovering: false,
             in_unary_operand: false,
             span_log: std::cell::RefCell::new(Some(crate::parser::span_log::SpanLog::default())),
@@ -334,6 +338,11 @@ impl Parser {
             i += 1;
         }
         self.position = i.max(start + 1).min(self.tokens.len().saturating_sub(1));
+    }
+
+    /// Removed concurrency forms (`thread { }`, `<-`) this parse met; each is also a parse error (WJ0191).
+    pub fn removed_forms(&self) -> &[crate::parser::task_prefix::RemovedForm] {
+        &self.removed_forms
     }
 
     pub fn warnings(&self) -> &[ParseWarning] {
@@ -546,6 +555,13 @@ impl Parser {
         }
         self.recovering = false;
         errors.append(&mut self.recovered_errors);
+        // a removed form is always an error, also when a speculative parse that met it was rewound
+        for f in &self.removed_forms {
+            let text = f.error_text();
+            if !errors.contains(&text) {
+                errors.push(text);
+            }
+        }
         if !errors.is_empty() {
             return Err(errors.join("\n"));
         }

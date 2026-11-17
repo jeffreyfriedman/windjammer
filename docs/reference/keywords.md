@@ -30,9 +30,9 @@ Generated from `src/lexer/keywords.rs` (pinned to the lexer by unit tests) and f
 | `use` | import |
 | `mod` | module declaration |
 | `extern` | foreign declaration |
-| `thread` | `thread { }` block |
-| `async` | async function or block |
-| `await` | await a future |
+| `thread` | the `std::thread` module path (`thread { }` was removed: write `spawn { }`) |
+| `async` | `async f()` / `async { }`: a task on the current executor; `async fn` |
+| `await` | `t.await`: sugar for `t.wait()` |
 | `defer` | run a statement at scope exit |
 | `pub` | public visibility |
 | `self` | the receiver value |
@@ -67,6 +67,9 @@ Generated from `src/lexer/keywords.rs` (pinned to the lexer by unit tests) and f
 |---|---|
 | `Self` | the implementing type (lexes as an identifier) |
 | `bound` | `bound Alias = Trait + ...` item (identifier elsewhere) |
+| `spawn` | `spawn f()` / `spawn { }`: a task that runs in parallel (identifier elsewhere) |
+| `scope` | `scope { }`: waits for every task started inside (identifier elsewhere) |
+| `select` | `select { x = rx.recv() => .., else => .. }`: waits for the first ready arm (identifier elsewhere) |
 
 ## Operators and punctuation
 

@@ -425,9 +425,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .iter()
                         .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
+            Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem)),
             Statement::Match { value, arms, .. } => {
@@ -557,13 +555,14 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MacroInvocation { args, .. } => args
                 .iter()
                 .any(|a| self.expr_contains_mut_dispatch_on_var(a, loop_var, elem)),
-            Expression::ChannelSend { channel, value, .. } => {
-                self.expr_contains_mut_dispatch_on_var(channel, loop_var, elem)
-                    || self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
+            Expression::Scope { body, .. } => {
+                self.expr_contains_mut_dispatch_on_var(body, loop_var, elem)
             }
-            Expression::ChannelRecv { channel, .. } => {
-                self.expr_contains_mut_dispatch_on_var(channel, loop_var, elem)
-            }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source
+                    .is_some_and(|s| self.expr_contains_mut_dispatch_on_var(s, loop_var, elem))
+                    || self.expr_contains_mut_dispatch_on_var(a.body, loop_var, elem)
+            }),
             _ => false,
         }
     }

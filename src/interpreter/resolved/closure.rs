@@ -93,7 +93,7 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
     // slot while it runs: its free names may be plain slots holding a copy of the value at the call (no reference
     // boxed per name per call). Whatever still needs a walker slot (an island naming it) is boxed by the fixpoint.
     let by_value = !it.fast_off("closurecopy")
-        && !["Call {", "MethodCall {", "Closure {", "Assignment", "MacroInvocation", "Block {", "Await", "Spawn", "Async", "ChannelSend", "ChannelRecv"].iter().any(|w| text.contains(w));
+        && !["Call {", "MethodCall {", "Closure {", "Assignment", "MacroInvocation", "Block {", "Await", "Spawn", "Async", "Scope {", "Select {"].iter().any(|w| text.contains(w));
     let boxed_init: HashSet<usize> = if by_value { HashSet::new() } else { (0..free.len()).collect() };
     let (nslots, pslots, body_code, boxed, free_boxed) = fixpoint(it, &unit, boxed_init, |cx| {
         let free_slots: Vec<usize> = free.iter().map(|n| cx.declare_local(n)).collect();

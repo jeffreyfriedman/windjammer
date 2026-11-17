@@ -90,6 +90,7 @@ impl Interpreter {
     ) -> Result<(), RuntimeError> {
         // `std::arena` (ADR-0025): the compiler's feature gate and escape check apply here too.
         crate::analyzer::arena_escape::gate(program).map_err(|e| RuntimeError::new(super::error::ErrorKind::Semantic, e))?;
+        crate::analyzer::task_structure::gate(program).map_err(|e| RuntimeError::new(super::error::ErrorKind::Semantic, e))?;
         self.note_duplicate_types(&[(self.module_path_string(module), &program.items)]);
         self.programs.insert(module, program);
         self.register_items(module, &program.items)?;

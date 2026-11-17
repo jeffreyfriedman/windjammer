@@ -115,8 +115,8 @@ fn positions_are_exhaustive(e: &Expression<'_>, s: &Statement<'_>) -> (&'static 
         Expression::Await { .. } => "(await: below)",
         Expression::AsyncCall { .. } => "(async: below)",
         Expression::SpawnCall { .. } => "spawn",
-        Expression::ChannelSend { .. } => "(channel: below)",
-        Expression::ChannelRecv { .. } => "(channel: below)",
+        Expression::Scope { .. } => "(scope: below)",
+        Expression::Select { .. } => "(no case: select)",
         Expression::Block { .. } => "block, unsafe-block, match-arm-block",
     };
     let st = match s {
@@ -131,8 +131,6 @@ fn positions_are_exhaustive(e: &Expression<'_>, s: &Statement<'_>) -> (&'static 
         Statement::For { .. } => "for",
         Statement::While { .. } => "while, while-let",
         Statement::Loop { .. } => "loop",
-        Statement::Thread { .. } => "(thread: below)",
-        Statement::Async { .. } => "(async: below)",
         Statement::Defer { .. } => "defer",
         Statement::Use { .. } => "(no calls)",
         Statement::Break { .. } | Statement::Continue { .. } => "(no calls)",

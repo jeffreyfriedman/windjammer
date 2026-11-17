@@ -1,0 +1,18 @@
+// spec: SPEC-CONC-010
+// expect: b 2
+// expect: nothing ready
+use std::sync
+fn main() {
+    let (a_tx, a_rx) = sync::channel()
+    let (b_tx, b_rx) = sync::channel()
+    b_tx.send(2)
+    select {
+        x = a_rx.recv() => println("a ${x}"),
+        y = b_rx.recv() => println("b ${y}"),
+    }
+    select {
+        x = a_rx.recv() => println("a ${x}"),
+        else => println("nothing ready"),
+    }
+    a_tx.send(0)
+}

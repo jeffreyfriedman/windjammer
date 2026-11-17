@@ -199,14 +199,6 @@ pub enum Statement<'ast> {
         label: Option<String>,
         location: SourceLocation,
     },
-    Thread {
-        body: Vec<&'ast Statement<'ast>>,
-        location: SourceLocation,
-    },
-    Async {
-        body: Vec<&'ast Statement<'ast>>,
-        location: SourceLocation,
-    },
     Defer {
         statement: &'ast Statement<'ast>,
         location: SourceLocation,
@@ -244,8 +236,6 @@ impl<'ast> Statement<'ast> {
             Statement::For { location, .. } => location.clone(),
             Statement::Loop { location, .. } => location.clone(),
             Statement::While { location, .. } => location.clone(),
-            Statement::Thread { location, .. } => location.clone(),
-            Statement::Async { location, .. } => location.clone(),
             Statement::Defer { location, .. } => location.clone(),
             Statement::Break { location, .. } => location.clone(),
             Statement::Continue { location, .. } => location.clone(),
@@ -258,6 +248,30 @@ impl<'ast> Statement<'ast> {
 pub struct MatchArm<'ast> {
     pub pattern: Pattern<'ast>,
     pub guard: Option<&'ast Expression<'ast>>, // Optional guard: if condition
+    pub body: &'ast Expression<'ast>,
+}
+
+/// What a `select` arm waits on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SelectKind {
+    /// `pat = rx.recv()`: `source` is the receiver.
+    Recv,
+    /// `pat = t.wait()`: `source` is the task.
+    Wait,
+    /// `_ = timeout(d)`: `source` is the duration.
+    Timeout,
+    /// `else`: runs when no arm is ready; `source` is `None`.
+    Else,
+}
+
+/// One arm of `select { }`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SelectArm<'ast> {
+    pub kind: SelectKind,
+    /// Bound to the received value / the task's value (`_` for a timeout); `Wildcard` for `else`.
+    pub pattern: Pattern<'ast>,
+    /// The receiver, task or duration expression (`None` for `else`).
+    pub source: Option<&'ast Expression<'ast>>,
     pub body: &'ast Expression<'ast>,
 }
 
@@ -389,23 +403,28 @@ pub enum Expression<'ast> {
         expr: &'ast Expression<'ast>, // The .await
         location: SourceLocation,
     },
-    /// Caller-controlled async: `async fetch_user(1)` returns `Future<T>`
+    /// ADR-0004: `async f(x)` / `async { ... }` overlaps work on the current executor; evaluates to a `Task<T>`.
+    /// `expr` is the call or the `Block`.
     AsyncCall {
         expr: &'ast Expression<'ast>,
         location: SourceLocation,
     },
-    /// Caller-controlled spawn: `spawn fetch_user(1)` returns `JoinHandle<T>`
+    /// ADR-0004: `spawn f(x)` / `spawn { ... }` runs work in parallel; evaluates to a `Task<T>`.
+    /// `expr` is the call or the `Block`.
     SpawnCall {
         expr: &'ast Expression<'ast>,
         location: SourceLocation,
     },
-    ChannelSend {
-        channel: &'ast Expression<'ast>,
-        value: &'ast Expression<'ast>,
+    /// ADR-0004 structured concurrency: `scope { ... }` runs its block, then waits for every task started inside it
+    /// (also by those tasks); a task's panic propagates out of the scope. `body` is a `Block`; its value is the scope's.
+    Scope {
+        body: &'ast Expression<'ast>,
         location: SourceLocation,
     },
-    ChannelRecv {
-        channel: &'ast Expression<'ast>,
+    /// ADR-0004 `select { pat = rx.recv() => .., pat = t.wait() => .., _ = timeout(d) => .., else => .. }`: waits until
+    /// one arm's source is ready and evaluates that arm (the first ready one in source order).
+    Select {
+        arms: Vec<SelectArm<'ast>>,
         location: SourceLocation,
     },
     Block {
@@ -439,8 +458,8 @@ impl<'ast> Expression<'ast> {
             Expression::Await { location, .. } => location.clone(),
             Expression::AsyncCall { location, .. } => location.clone(),
             Expression::SpawnCall { location, .. } => location.clone(),
-            Expression::ChannelSend { location, .. } => location.clone(),
-            Expression::ChannelRecv { location, .. } => location.clone(),
+            Expression::Scope { location, .. } => location.clone(),
+            Expression::Select { location, .. } => location.clone(),
             Expression::Block { location, .. } => location.clone(),
         }
     }

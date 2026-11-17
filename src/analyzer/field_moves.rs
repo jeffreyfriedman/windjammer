@@ -51,13 +51,21 @@ impl<'ast> Analyzer<'ast> {
                 each(left, false);
                 each(right, false);
             }
-            Expression::ChannelSend { value, .. } => each(value, true),
             Expression::Unary { operand, .. } => each(operand, false),
             Expression::TryOp { expr: operand, .. }
             | Expression::Await { expr: operand, .. }
             | Expression::Cast { expr: operand, .. }
             | Expression::AsyncCall { expr: operand, .. }
-            | Expression::SpawnCall { expr: operand, .. } => each(operand, true),
+            | Expression::SpawnCall { expr: operand, .. }
+            | Expression::Scope { body: operand, .. } => each(operand, true),
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    if let Some(s) = a.source {
+                        each(s, false);
+                    }
+                    each(a.body, true);
+                }
+            }
             _ => {}
         }
     }

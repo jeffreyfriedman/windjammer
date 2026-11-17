@@ -765,6 +765,17 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         bound_var: ConstraintVar,
         static_ty: Option<Type>,
     ) {
+        // `let (tx, rx) = sync::channel()`: each name has its part of the value's surface shape (`Sender<T>`, ...)
+        if let (Pattern::Tuple(parts), Some(Type::Tuple(types))) = (pattern, self.surface_shape(value)) {
+            for (p, t) in parts.iter().zip(types) {
+                if let Pattern::Identifier(n) | Pattern::MutBinding(n) = p {
+                    if let Some(v) = self.scopes.last().and_then(|s| s.get(n)).copied() {
+                        self.var_static_types.insert(v, t);
+                    }
+                }
+            }
+            return;
+        }
         let (Pattern::Identifier(n) | Pattern::MutBinding(n)) = pattern else { return };
         if let Some(t) = static_ty {
             self.var_static_types.insert(bound_var, t);

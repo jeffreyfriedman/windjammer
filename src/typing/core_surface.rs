@@ -204,7 +204,7 @@ pub fn is_element_container(name: &str) -> bool {
 
 /// The surface types whose one type parameter is the value they hand back (`JoinHandle<T>`: `join` returns it); the
 /// solver relates it as an element, but they have no sequence methods.
-const HANDLE_TYPES: [&str; 1] = ["JoinHandle"];
+const HANDLE_TYPES: [&str; 4] = ["JoinHandle", "Task", "Sender", "Receiver"];
 
 /// Whether a surface type name holds one value of its type parameter (the solver's `Part::Elem`).
 pub fn has_element_part(name: &str) -> bool {
@@ -232,11 +232,13 @@ pub fn self_type(type_name: &str, generics: &[String]) -> Type {
 
 /// The surface type a receiver type names, with its type arguments (`&Vec<int>` -> `Vec`, `[int]`).
 fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
-    const NAMES: [&str; 13] =
-        ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List", "JoinHandle", "thread"];
+    const NAMES: [&str; 17] = [
+        "Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List", "JoinHandle", "Task",
+        "Sender", "Receiver", "thread", "sync",
+    ];
     // Windjammer's `List<T>` (the enumerable methods' result) is the surface's `Vec<T>`; the `thread` module's
     // functions are declared on the surface trait `Thread` (`thread` is a keyword, so it cannot name a trait).
-    const SYNONYMS: [(&str, &str); 2] = [("List", "Vec"), ("thread", "Thread")];
+    const SYNONYMS: [(&str, &str); 3] = [("List", "Vec"), ("thread", "Thread"), ("sync", "Sync")];
     let known = |n: &str| {
         let k = NAMES.iter().copied().find(|k| *k == crate::type_classification::type_name_leaf(n))?;
         Some(SYNONYMS.iter().find(|(s, _)| *s == k).map_or(k, |(_, v)| *v))
@@ -252,6 +254,8 @@ fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
         Type::Custom(n) if matches!(n.as_str(), "f64" | "f32" | "float") => Some(("Float", vec![receiver.clone()])),
         Type::Int | Type::Int32 | Type::Uint => Some(("Integer", vec![receiver.clone()])),
         Type::Custom(n) if is_integer_name(n) => Some(("Integer", vec![receiver.clone()])),
+        // Rust's own `std::sync::mpsc` ends are not the ADR-0004 channel ends (their `send` returns a `Result`)
+        Type::Parameterized(n, _) if n.starts_with("mpsc") || n.contains("mpsc::") || n.contains("mpsc.") => None,
         Type::Parameterized(n, args) => known(n).map(|k| (k, args.clone())),
         _ => None,
     }

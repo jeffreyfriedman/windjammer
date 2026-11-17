@@ -45,3 +45,9 @@ Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test
 
 ## Spans and locations
 `Expression::location()` / `Statement::location()` are the position of the token *after* a node and are shared by nested nodes: they are the identity key of the numeric inference passes, **not** spans. Never use them for diagnostics. True spans come from the span log: `Parser::enable_span_log()` before `parse()`, then `expr_span`, `stmt_span`, or `span_snapshot()` (cheap clone, used by the linter and the source map). Spans are recorded in `span_log.rs`: the start is the first token of the innermost parse entry (`parse_expression`, `parse_binary_expression`, `parse_primary_expression`, `parse_match_value*`, `parse_statement`) that allocated the node, the end is the end of the last token consumed. String-interpolation errors carry `file:line:col:` of the failing token inside the interpolation (`Parser::locate_error`). String-interpolation bodies are lexed with `Lexer::with_origin` so their nodes have real file positions. Gate: tests/span_oracle_suite.rs (docs/testing/INVARIANTS.md).
+
+## Concurrency forms (ADR-0004)
+`task_prefix.rs` parses `spawn`/`async` prefixes and blocks into `SpawnCall`/`AsyncCall` and `scope { }` into `Scope`
+(`spawn` and `scope` are soft keywords). The removed forms `thread { }`, `ch <- v` and `<-ch` are parse errors
+(`WJ0191: ...`) recorded as `RemovedForm`s with the byte edits that migrate them; `parse()` fails whenever one was met,
+and `check/tasks.rs` turns them into diagnostics with machine-applicable fixes.

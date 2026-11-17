@@ -2,7 +2,8 @@
 //!
 //! Handles generation of:
 //! - Await expressions (.await)
-//! - Channel operations (send/recv)
+//! - ADR-0004 tasks: `spawn`/`async` (closures over cloned captures), `scope` (a joining guard), `select`
+//!   over `windjammer_runtime::task` (docs/concurrency/PLAN.md stage 2b)
 //! - Range expressions (start..end, start..=end)
 
 use crate::parser::{Expression, Type};
@@ -10,47 +11,113 @@ use crate::parser::{Expression, Type};
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `t.await`: inside an `async fn` (tokio, until stage 2b removes `async fn`) Rust's `.await`; elsewhere it is
+    /// sugar for `t.wait()` on an ADR-0004 `Task`.
     pub(in crate::codegen::rust) fn generate_await(&mut self, expr: &Expression<'ast>) -> String {
-        format!("{}.await", self.generate_expression(expr))
+        let inner = self.generate_expression(expr);
+        if self.current_function_is_async {
+            format!("{}.await", inner)
+        } else {
+            format!("{}.wait()", inner)
+        }
     }
 
-    /// Generate caller-controlled async call: `async fetch_user(1)` → `async move { fetch_user(1) }`
-    pub(in crate::codegen::rust) fn generate_async_call(
-        &mut self,
-        expr: &Expression<'ast>,
-    ) -> String {
-        format!("async move {{ {} }}", self.generate_expression(expr))
+    /// The names a task operand reads from the enclosing function: each is cloned into the task's `move` closure, so
+    /// the task owns what it uses (`Send + 'static`); functions, intrinsics, paths and types are not values to copy.
+    fn task_captures(&self, expr: &Expression<'ast>) -> Vec<String> {
+        let (read, called) = crate::analyzer::task_captures::task_free_names(expr);
+        read.into_iter()
+            .filter(|n| {
+                !n.contains("::")
+                    && !n.contains('.')
+                    && n != "self"
+                    && n.chars().next().is_some_and(|c| c.is_lowercase() || c == '_')
+                    && (!called.contains(n) || self.identifier_is_local_binding(n))
+                    // a std module used as `http.get(url)` is a path, not a value
+                    && !self.signature_registry.has_runtime_std_module(n)
+            })
+            .collect()
     }
 
-    /// Generate caller-controlled spawn call: `spawn fetch_user(1)` → `tokio::spawn(async move { ... })`
-    pub(in crate::codegen::rust) fn generate_spawn_call(
-        &mut self,
-        expr: &Expression<'ast>,
-    ) -> String {
-        format!(
-            "tokio::spawn(async move {{ {} }})",
-            self.generate_expression(expr)
-        )
+    /// `{ let x = x.clone(); ...; <ctor>(move || <operand>) }`
+    fn generate_task(&mut self, ctor: &str, expr: &Expression<'ast>) -> String {
+        let prelude: String = self.task_captures(expr).iter().map(|n| format!("let {n} = {n}.clone(); ")).collect();
+        let body = self.generate_expression(expr);
+        format!("{{ {prelude}windjammer_runtime::task::{ctor}(move || {body}) }}")
     }
 
-    /// Generate code for channel send expression (channel.send(value))
-    pub(in crate::codegen::rust) fn generate_channel_send(
-        &mut self,
-        channel: &Expression<'ast>,
-        value: &Expression<'ast>,
-    ) -> String {
-        let ch_str = self.generate_expression(channel);
-        let val_str = self.generate_expression(value);
-        format!("{}.send({})", ch_str, val_str)
+    /// `async f(x)` / `async { }` (ADR-0004): a task on this thread's local queue.
+    pub(in crate::codegen::rust) fn generate_async_call(&mut self, expr: &Expression<'ast>) -> String {
+        self.generate_task("local", expr)
     }
 
-    /// Generate code for channel receive expression (channel.recv())
-    pub(in crate::codegen::rust) fn generate_channel_recv(
-        &mut self,
-        channel: &Expression<'ast>,
-    ) -> String {
-        let ch_str = self.generate_expression(channel);
-        format!("{}.recv()", ch_str)
+    /// `spawn f(x)` / `spawn { }` (ADR-0004): a task on its own thread.
+    pub(in crate::codegen::rust) fn generate_spawn_call(&mut self, expr: &Expression<'ast>) -> String {
+        self.generate_task("spawn", expr)
+    }
+
+    /// `scope { body }` (ADR-0004): a guard whose drop (at the block's end, also on `return`/`?`/`break`) waits for
+    /// every task started inside and re-raises the first panic; the block's value is the scope's.
+    pub(in crate::codegen::rust) fn generate_scope(&mut self, body: &Expression<'ast>) -> String {
+        let inner = self.generate_expression(body);
+        format!("{{ let _wj_scope = windjammer_runtime::task::Scope::enter(); {inner} }}")
+    }
+
+    /// `select { arms }` (ADR-0004): sources evaluated once in order, `task::select` returns the first ready one
+    /// (or the `else` arm), then that arm binds its pattern and runs.
+    pub(in crate::codegen::rust) fn generate_select(&mut self, arms: &[crate::parser::SelectArm<'ast>]) -> String {
+        use crate::parser::SelectKind as K;
+        let mut out = String::from("{ ");
+        let mut sources = Vec::new();
+        let mut cases = Vec::new();
+        let mut else_body = None;
+        for arm in arms {
+            let Some(src) = arm.source else {
+                else_body = Some(self.generate_expression(arm.body));
+                continue;
+            };
+            let i = sources.len();
+            let var = format!("__wj_sel{i}");
+            let src_code = self.generate_expression(src);
+            let take = match arm.kind {
+                K::Timeout => {
+                    out.push_str(&format!("let {var} = windjammer_runtime::task::Deadline::after({src_code}); "));
+                    sources.push(format!("&{var}"));
+                    String::new()
+                }
+                K::Recv => {
+                    out.push_str(&format!("let {var} = &({src_code}); "));
+                    sources.push(var.clone());
+                    format!("let {} = {var}.recv(); ", self.pattern_to_rust(&arm.pattern))
+                }
+                _ => {
+                    out.push_str(&format!("let {var} = &({src_code}); "));
+                    sources.push(var.clone());
+                    format!("let {} = {var}.wait(); ", self.pattern_to_rust(&arm.pattern))
+                }
+            };
+            let body = self.generate_expression(arm.body);
+            cases.push(format!("{i} => {{ {take}{body} }}"));
+        }
+        let n = sources.len();
+        if n == 0 {
+            return format!("{{ {} }}", else_body.unwrap_or_else(|| "()".to_string()));
+        }
+        let list: Vec<String> = sources
+            .iter()
+            .enumerate()
+            .map(|(i, s)| if i == 0 { format!("{s} as &dyn windjammer_runtime::task::Selectable") } else { s.clone() })
+            .collect();
+        out.push_str(&format!("match windjammer_runtime::task::select(&[{}], {}) {{ ", list.join(", "), else_body.is_some()));
+        for c in cases {
+            out.push_str(&c);
+            out.push_str(", ");
+        }
+        if let Some(e) = else_body {
+            out.push_str(&format!("{n} => {{ {e} }}, "));
+        }
+        out.push_str("_ => unreachable!(\"select\"), } }");
+        out
     }
 
     /// Generate code for range expression (start..end or start..=end)

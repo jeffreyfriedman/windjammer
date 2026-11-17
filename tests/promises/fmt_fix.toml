@@ -159,3 +159,18 @@ polarity = "positive"
 files = { "d.md" = "# t\n\n```wj\nfn main() {\n    let n = 0\n    n += 1\n    println(\"${n}\")\n}\n```\n" }
 args = ["fix", "--docs", "{w}/d.md"]
 file_has = { "d.md" = "    let mut n = 0" }
+
+[[case]]
+name = "fix migrates thread blocks and channel operators to the ADR-0004 surface (WJ0191, WJ0190)"
+polarity = "positive"
+files = { "m.wj" = "use std::sync\nfn main() {\n    let (tx, rx) = sync::channel()\n    thread {\n        tx <- 1\n    }\n    let v = <-rx\n    println(\"${v}\")\n}\n" }
+args = ["fix", "{w}/m.wj"]
+file_has = { "m.wj" = "    scope {\n        spawn {\n            tx.send(1)\n        }\n        let v = rx.recv()\n" }
+
+[[case]]
+name = "fix --check fails on a removed thread block (WJ0191) and does not write"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    thread {\n        println(\"x\")\n    }\n}\n" }
+args = ["fix", "--check", "{w}/m.wj"]
+exit = 1
+file_has = { "m.wj" = "thread {" }

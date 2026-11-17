@@ -1,23 +1,64 @@
-// ADR-0004 concurrency prefixes (SPEC-CONC-001..003):
-//   spawn f(x) / spawn { ... }   -> Expression::SpawnCall
-//   async f(x)                   -> Expression::AsyncCall      (`async { }` keeps its block form)
-//   scope { ... }                -> call of the scope runtime with a closure over the block
-// `spawn` and `scope` are contextual: only followed by a name or `{` on the same line.
+// ADR-0004 concurrency surface (SPEC-CONC-001..003, docs/spec/concurrency.md):
+//   spawn f(x) / spawn { ... }   -> Expression::SpawnCall   (a `Task<T>`)
+//   async f(x) / async { ... }   -> Expression::AsyncCall   (a `Task<T>`)
+//   scope { ... }                -> Expression::Scope       (waits for every task started inside)
+//   select { pat = rx.recv() => .., else => .. }  -> Expression::Select
+// `spawn` and `scope` are contextual: only followed by a name, `self` or `{` on the same line.
+//
+// Removed forms (WJ0191, SPEC-CONC-007): `thread { }`, `ch <- v` and `<-ch`. The parser reports each with a
+// machine-applicable edit (`RemovedForm`) that `wj check --fix` and `wj fix` apply; it never accepts them.
 
 use crate::lexer::Token;
 use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
-/// Name of the runtime entry that runs a `scope { }` body and waits for its tasks.
-pub const SCOPE_FN: &str = "__wj_scope";
+/// Diagnostic code of a removed concurrency form.
+pub const REMOVED_FORM_CODE: &str = "WJ0191";
+
+/// A removed concurrency form the parser met, with the edits that migrate it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemovedForm {
+    /// Position of the removed token (`thread` or `<-`), 1-based.
+    pub line: usize,
+    pub column: usize,
+    /// Byte range of the removed token.
+    pub byte_start: usize,
+    pub byte_end: usize,
+    pub message: String,
+    pub help: String,
+    /// `(byte_start, byte_end, replacement)` edits that turn the old form into the new one; empty when the
+    /// operand could not be delimited (then the fix is manual).
+    pub edits: Vec<(usize, usize, String)>,
+}
+
+impl RemovedForm {
+    /// The parse error text: code, message and position (`check/front.rs` reads the position back).
+    pub fn error_text(&self) -> String {
+        format!("{}: {} (at line {}, column {})", REMOVED_FORM_CODE, self.message, self.line, self.column)
+    }
+}
 
 impl Parser {
-    /// A primary expression, or a `spawn`/`async`/`scope` task form.
+    /// A primary expression (task forms are primaries: `parse_primary_expression` recognises them, so they also
+    /// work as operands of unary operators and take postfix operators: `spawn { 1 }.wait()`).
     pub(in crate::parser) fn parse_prefixed_or_primary(&mut self) -> Result<&'static Expression<'static>, String> {
-        match self.try_parse_task_prefix()? {
-            Some(e) => Ok(e),
-            None => self.parse_primary_expression(),
-        }
+        self.parse_primary_expression()
+    }
+
+    /// The current token starts a task form: `spawn`/`async` before a name, `self` or `{`, `scope` before `{`, with
+    /// the next token on the same line.
+    pub(in crate::parser) fn task_prefix_follows(&self) -> bool {
+        let kw = match self.current_token() {
+            Token::Ident(n) if n == "spawn" || n == "scope" || n == "select" => n.as_str(),
+            Token::Async => "async",
+            _ => return false,
+        };
+        let starts_operand = match (self.peek(1), kw) {
+            (Some(Token::LBrace), _) => true,
+            (Some(Token::Ident(_) | Token::Self_), "spawn" | "async") => true,
+            _ => false,
+        };
+        starts_operand && self.next_on_same_line()
     }
 
     fn next_on_same_line(&self) -> bool {
@@ -29,38 +70,187 @@ impl Parser {
 
     /// Called with the current token on `spawn`/`scope`/`async`; `None` when it is not a prefix.
     pub(in crate::parser) fn try_parse_task_prefix(&mut self) -> Result<Option<&'static Expression<'static>>, String> {
-        let kw = match self.current_token() {
-            Token::Ident(n) if n == "spawn" || n == "scope" => n.clone(),
-            Token::Async => "async".to_string(),
-            _ => return Ok(None),
-        };
-        let next = self.peek(1).cloned();
-        let starts_operand = match (&next, kw.as_str()) {
-            (Some(Token::LBrace), "spawn" | "scope") => true,
-            (Some(Token::Ident(_)), "spawn" | "async") => true,
-            _ => false,
-        };
-        if !starts_operand || !self.next_on_same_line() {
+        if !self.task_prefix_follows() {
             return Ok(None);
         }
+        let kw = match self.current_token() {
+            Token::Ident(n) => n.clone(),
+            _ => "async".to_string(),
+        };
+        // node spans (span log): the task starts at its keyword, a block operand at its `{`
+        self.span_enter();
+        let r = self.parse_task_form(&kw);
+        self.span_exit();
+        r.map(Some)
+    }
+
+    fn parse_task_form(&mut self, kw: &str) -> Result<&'static Expression<'static>, String> {
         let location = self.current_location();
         self.advance(); // the prefix
+        if kw == "select" {
+            let arms = self.parse_select_arms()?;
+            return Ok(self.alloc_expr(Expression::Select { arms, location }));
+        }
         let operand = if self.current_token() == &Token::LBrace {
-            self.advance();
-            let statements = self.parse_block_statements()?;
-            self.expect(Token::RBrace)?;
-            self.alloc_expr(Expression::Block { statements, is_unsafe: false, location: location.clone() })
+            self.span_enter();
+            let block = self.parse_task_block();
+            self.span_exit();
+            block?
         } else {
             self.parse_binary_expression(100)?
         };
-        Ok(Some(match kw.as_str() {
+        Ok(match kw {
             "spawn" => self.alloc_expr(Expression::SpawnCall { expr: operand, location }),
             "async" => self.alloc_expr(Expression::AsyncCall { expr: operand, location }),
-            _ => {
-                let function = self.alloc_expr(Expression::Identifier { name: SCOPE_FN.to_string(), location: location.clone() });
-                let body = self.alloc_expr(Expression::Closure { parameters: vec![], body: operand, location: location.clone() });
-                self.alloc_expr(Expression::Call { function, arguments: vec![(None, body)], location })
+            _ => self.alloc_expr(Expression::Scope { body: operand, location }),
+        })
+    }
+
+    /// `{ pat = rx.recv() => body, pat = t.wait() => body, _ = timeout(d) => body, else => body }` (commas optional).
+    fn parse_select_arms(&mut self) -> Result<Vec<SelectArm<'static>>, String> {
+        self.expect(Token::LBrace)?;
+        let mut arms = Vec::new();
+        loop {
+            while matches!(self.current_token(), Token::Newline | Token::Comma) {
+                self.advance();
             }
-        }))
+            if self.current_token() == &Token::RBrace {
+                self.advance();
+                break;
+            }
+            let (kind, pattern, source) = if self.current_token() == &Token::Else {
+                self.advance();
+                (SelectKind::Else, Pattern::Wildcard, None)
+            } else {
+                let pattern = self.parse_pattern()?;
+                self.expect(Token::Assign)?;
+                let at = self.pos_desc();
+                let e = self.parse_expression()?;
+                let (kind, source) = select_source(e).ok_or_else(|| {
+                    format!("a `select` arm waits on `rx.recv()`, `t.wait()` or `timeout(d)` (at {at})")
+                })?;
+                (kind, pattern, Some(source))
+            };
+            self.expect(Token::FatArrow)?;
+            let body = if self.current_token() == &Token::LBrace {
+                self.span_enter();
+                let block = self.parse_task_block();
+                self.span_exit();
+                block?
+            } else {
+                self.parse_expression()?
+            };
+            arms.push(SelectArm { kind, pattern, source, body });
+        }
+        if arms.iter().filter(|a| a.kind == SelectKind::Else).count() > 1 {
+            return Err(self.with_position("a `select` has at most one `else` arm".to_string()));
+        }
+        Ok(arms)
+    }
+
+    fn parse_task_block(&mut self) -> Result<&'static Expression<'static>, String> {
+        let location = self.current_location();
+        self.advance(); // `{`
+        let statements = self.parse_block_statements()?;
+        self.expect(Token::RBrace)?;
+        Ok(self.alloc_expr(Expression::Block { statements, is_unsafe: false, location }))
+    }
+
+    fn removed_form(&mut self, form: RemovedForm) -> String {
+        let text = form.error_text();
+        if !self.removed_forms.iter().any(|f| f.byte_start == form.byte_start) {
+            self.removed_forms.push(form);
+        }
+        text
+    }
+
+    /// (line, column, byte_start, byte_end) of token `i` (the last token when past the end).
+    fn token_at(&self, i: usize) -> (usize, usize, usize, usize) {
+        let t = &self.tokens[i.min(self.tokens.len().saturating_sub(1))];
+        (t.src_line, t.src_column, t.byte_start, t.byte_end)
+    }
+
+    /// `thread { ... }` (current token `thread`, next `{`): WJ0191, fixed to `spawn { ... }`.
+    pub(in crate::parser) fn removed_thread_block(&mut self) -> String {
+        let (line, column, b0, b1) = self.token_at(self.position);
+        self.removed_form(RemovedForm {
+            line,
+            column,
+            byte_start: b0,
+            byte_end: b1,
+            message: "`thread { }` was removed: write `spawn { }` (ADR-0004)".into(),
+            help: "`spawn { }` starts the block as a `Task`; inside a `scope { }` the scope waits for it, elsewhere keep the task and call `.wait()` (WJ0190)".into(),
+            edits: vec![(b0, b1, "spawn".into())],
+        })
+    }
+
+    /// `<-ch` (current token `<-`): WJ0191, fixed to `ch.recv()`.
+    pub(in crate::parser) fn removed_channel_recv(&mut self) -> String {
+        let arrow = self.position;
+        let (line, column, b0, b1) = self.token_at(arrow);
+        self.advance();
+        let edits = match self.parse_unary_operand() {
+            Ok(_) if self.position > arrow + 1 => {
+                let (_, _, _, end) = self.token_at(self.position - 1);
+                vec![(b0, b1, String::new()), (end, end, ".recv()".into())]
+            }
+            _ => Vec::new(),
+        };
+        self.removed_form(RemovedForm {
+            line,
+            column,
+            byte_start: b0,
+            byte_end: b1,
+            message: "the `<-ch` receive operator was removed: write `ch.recv()` (ADR-0004)".into(),
+            help: "channels are values with methods: `ch.recv()` receives, `ch.send(v)` sends; to compare with a negative number write `x < -1`".into(),
+            edits,
+        })
+    }
+
+    /// `left <- value` (current token `<-`): WJ0191, fixed to `left.send(value)`.
+    pub(in crate::parser) fn removed_channel_send(&mut self, left: &Expression<'static>) -> String {
+        let arrow = self.position;
+        let (line, column, b0, b1) = self.token_at(arrow);
+        let (_, _, _, left_end) = self.token_at(arrow.saturating_sub(1));
+        self.advance();
+        let simple_left = matches!(
+            left,
+            Expression::Identifier { .. }
+                | Expression::FieldAccess { .. }
+                | Expression::MethodCall { .. }
+                | Expression::Call { .. }
+                | Expression::Index { .. }
+        );
+        let value_start = self.position;
+        let edits = match self.parse_expression() {
+            Ok(_) if simple_left && self.position > value_start => {
+                let (_, _, v0, _) = self.token_at(value_start);
+                let (_, _, _, v1) = self.token_at(self.position - 1);
+                vec![(left_end, v0, ".send(".into()), (v1, v1, ")".into())]
+            }
+            _ => Vec::new(),
+        };
+        self.removed_form(RemovedForm {
+            line,
+            column,
+            byte_start: b0,
+            byte_end: b1,
+            message: "the `ch <- v` send operator was removed: write `ch.send(v)` (ADR-0004)".into(),
+            help: "channels are values with methods: `ch.send(v)` sends, `ch.recv()` receives; to compare with a negative number write `x < -1`".into(),
+            edits,
+        })
+    }
+}
+
+/// The source of a `select` arm: `x.recv()`, `x.wait()` / `x.await`, `timeout(d)`.
+fn select_source(e: &'static Expression<'static>) -> Option<(SelectKind, &'static Expression<'static>)> {
+    match e {
+        Expression::MethodCall { object, method, arguments, .. } if arguments.is_empty() && method == "recv" => Some((SelectKind::Recv, *object)),
+        Expression::MethodCall { object, method, arguments, .. } if arguments.is_empty() && method == "wait" => Some((SelectKind::Wait, *object)),
+        Expression::Await { expr, .. } => Some((SelectKind::Wait, *expr)),
+        Expression::Call { function: Expression::Identifier { name, .. }, arguments, .. } if name == "timeout" && arguments.len() == 1 => {
+            Some((SelectKind::Timeout, arguments[0].1))
+        }
+        _ => None,
     }
 }

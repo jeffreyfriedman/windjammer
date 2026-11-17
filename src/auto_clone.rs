@@ -729,9 +729,7 @@ impl AutoCloneAnalysis {
                 Self::expression_uses_binding(iterable, name)
                     || body.iter().any(|s| Self::statement_uses_binding(s, name))
             }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. } => {
                 body.iter().any(|s| Self::statement_uses_binding(s, name))
             }
             Statement::Defer { statement, .. } => Self::statement_uses_binding(statement, name),
@@ -793,13 +791,13 @@ impl AutoCloneAnalysis {
             | Expression::Await { expr, .. }
             | Expression::AsyncCall { expr, .. }
             | Expression::SpawnCall { expr, .. }
-            | Expression::ChannelRecv { channel: expr, .. } => {
+            | Expression::Scope { body: expr, .. } => {
                 Self::expression_uses_binding(expr, name)
             }
-            Expression::ChannelSend { channel, value, .. } => {
-                Self::expression_uses_binding(channel, name)
-                    || Self::expression_uses_binding(value, name)
-            }
+            Expression::Select { arms, .. } => arms.iter().any(|a| {
+                a.source.is_some_and(|s| Self::expression_uses_binding(s, name))
+                    || Self::expression_uses_binding(a.body, name)
+            }),
             Expression::MacroInvocation { args, .. } => {
                 args.iter().any(|e| Self::expression_uses_binding(e, name))
             }
@@ -850,9 +848,7 @@ impl AutoCloneAnalysis {
             }
             Statement::While { body, .. }
             | Statement::For { body, .. }
-            | Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => {
+            | Statement::Loop { body, .. } => {
                 for s in body {
                     Self::detect_match_scrutinee_reuse_stmt(s, counter, analysis);
                 }
@@ -1333,33 +1329,29 @@ impl AutoCloneAnalysis {
                     registry,
                 );
             }
-            Expression::ChannelSend { channel, value, .. } => {
+            Expression::Scope { body, .. } => {
                 Self::collect_usages_from_expression(
-                    channel,
+                    body,
                     idx,
                     UsageKind::Read,
-                    in_loop,
-                    map,
-                    registry,
-                );
-                Self::collect_usages_from_expression(
-                    value,
-                    idx,
-                    UsageKind::Move,
                     in_loop,
                     map,
                     registry,
                 );
             }
-            Expression::ChannelRecv { channel, .. } => {
-                Self::collect_usages_from_expression(
-                    channel,
-                    idx,
-                    UsageKind::Read,
-                    in_loop,
-                    map,
-                    registry,
-                );
+            Expression::Select { arms, .. } => {
+                for a in arms {
+                    for e in a.source.into_iter().chain(std::iter::once(a.body)) {
+                        Self::collect_usages_from_expression(
+                            e,
+                            idx,
+                            UsageKind::Read,
+                            in_loop,
+                            map,
+                            registry,
+                        );
+                    }
+                }
             }
             Expression::MacroInvocation { name, args, .. } => {
                 Self::collect_macro_arg_usages(name, args, idx, in_loop, map, registry)

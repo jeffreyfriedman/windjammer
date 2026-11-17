@@ -108,6 +108,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_function_params: Vec<crate::parser::Parameter<'ast>>,
     pub(crate) current_field_moved_params: std::collections::HashSet<String>,
     pub(crate) current_function_name: Option<String>,
+    pub(crate) current_function_is_async: bool, // `async fn`: Rust `.await`; elsewhere `t.await` is `t.wait()` (ADR-0004)
     pub(crate) current_function_type_bounds: Vec<(String, Vec<String>)>,
     pub(crate) current_function_return_type: Option<Type>,
     // WINDJAMMER TRAIT INFERENCE: Analyzed trait methods with inferred signatures from ALL impls
@@ -559,13 +560,6 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
-    /// True when `name` is a parameter, `let` binding, or match-arm binding in the current fn.
-    pub(in crate::codegen::rust) fn identifier_is_local_binding(&self, name: &str) -> bool {
-        self.local_var_types.contains_key(name)
-            || self.match_arm_bindings.contains(name)
-            || self.current_function_params.iter().any(|p| p.name == name)
-    }
-
     /// Identifier should use `::` for associated/static calls (`tokio::spawn`, `Vec::new`).
     /// Import- and declaration-driven — not a crate/method name list.
     pub(in crate::codegen::rust) fn identifier_is_static_call_root(&self, name: &str) -> bool {
@@ -651,6 +645,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_params: Vec::new(),
             current_field_moved_params: std::collections::HashSet::new(),
             current_function_name: None,
+            current_function_is_async: false,
             current_function_type_bounds: Vec::new(),
             current_function_return_type: None,
             current_function_body: Vec::new(),
@@ -3883,9 +3878,7 @@ impl<'ast> CodeGenerator<'ast> {
                     })
             }
             crate::parser::Statement::While { body, .. }
-            | crate::parser::Statement::Loop { body, .. }
-            | crate::parser::Statement::Thread { body, .. }
-            | crate::parser::Statement::Async { body, .. } => {
+            | crate::parser::Statement::Loop { body, .. } => {
                 self.param_used_in_any_if_condition(body.as_slice(), param_name)
             }
             crate::parser::Statement::For { body, .. } => {
