@@ -1,0 +1,443 @@
+use std::fs
+use std::process
+
+struct FNode {
+    kind: int,
+    n: int,
+    s: string,
+    line: int,
+    kids: Vec<int>,
+}
+
+// k: 0 int, 1 bool, 2 closure
+struct Val {
+    k: int,
+    n: int,
+}
+
+struct Frame {
+    parent: int,
+    names: Vec<string>,
+    vals: Vec<Val>,
+}
+
+struct Clo {
+    params: Vec<string>,
+    body: Vec<int>,
+    env: int,
+}
+
+struct Interp {
+    forms: Vec<FNode>,
+    frames: Vec<Frame>,
+    clos: Vec<Clo>,
+    failed: bool,
+    err_line: int,
+    err_msg: string,
+    steps: int,
+    depth: int,
+    out: Vec<string>,
+}
+
+fn reserved(s: string) -> bool {
+    s == "define" || s == "set!" || s == "lambda" || s == "let" || s == "if" || s == "begin" || s == "while" || s == "and" || s == "or" || s == "not" || s == "print" || s == "+" || s == "*" || s == "-" || s == "/" || s == "%" || s == "<" || s == ">" || s == "<=" || s == ">=" || s == "="
+}
+
+fn ival(n: int) -> Val {
+    Val { k: 0, n: n }
+}
+
+fn bval(b: bool) -> Val {
+    Val { k: 1, n: if b { 1 } else { 0 } }
+}
+
+fn is_digits(s: string) -> bool {
+    if s.len() == 0 { return false }
+    for c in s.chars() {
+        if c < '0' || c > '9' { return false }
+    }
+    true
+}
+
+fn abs(x: int) -> int {
+    if x < 0 { 0 - x } else { x }
+}
+
+fn show(v: Val) -> string {
+    if v.k == 0 { return "${v.n}" }
+    if v.k == 1 { return if v.n == 1 { "#t" } else { "#f" } }
+    "<closure>"
+}
+
+impl Interp {
+    fn fail(self, line: int, msg: string) -> Val {
+        if !self.failed {
+            self.failed = true
+            self.err_line = line
+            self.err_msg = msg
+        }
+        ival(0)
+    }
+
+    fn lookup_frame(self, env: int, name: string) -> int {
+        let mut e = env
+        while e >= 0 {
+            let mut i = 0
+            while i < self.frames[e].names.len() {
+                if self.frames[e].names[i] == name { return e }
+                i += 1
+            }
+            e = self.frames[e].parent
+        }
+        -1
+    }
+
+    fn slot(self, frame: int, name: string) -> int {
+        let mut i = 0
+        while i < self.frames[frame].names.len() {
+            if self.frames[frame].names[i] == name { return i }
+            i += 1
+        }
+        -1
+    }
+
+    fn bind(self, frame: int, name: string, v: Val) {
+        let i = self.slot(frame, name)
+        if i >= 0 {
+            self.frames[frame].vals[i] = v
+        } else {
+            self.frames[frame].names.push(name)
+            self.frames[frame].vals.push(v)
+        }
+    }
+
+    fn new_frame(self, parent: int) -> int {
+        self.frames.push(Frame { parent: parent, names: [], vals: [] })
+        self.frames.len() as int - 1
+    }
+
+    // collects names of forms; returns false when any is not a fresh non-reserved symbol
+    fn names_of(self, ids: Vec<int>, out: Vec<string>) -> bool {
+        for id in ids {
+            if self.forms[id].kind != 2 { return false }
+            let s = self.forms[id].s
+            if reserved(s) { return false }
+            for o in out {
+                if o == s { return false }
+            }
+            out.push(s)
+        }
+        true
+    }
+
+    fn eval(self, f: int, env: int) -> Val {
+        let k = self.forms[f].kind
+        if k == 0 { return ival(self.forms[f].n) }
+        if k == 1 { return bval(self.forms[f].n == 1) }
+        let line = self.forms[f].line
+        if k == 2 {
+            let s = self.forms[f].s
+            if reserved(s) { return self.fail(line, "unbound variable ${s}") }
+            let fr = self.lookup_frame(env, s)
+            if fr < 0 { return self.fail(line, "unbound variable ${s}") }
+            return self.frames[fr].vals[self.slot(fr, s)]
+        }
+        self.steps += 1
+        if self.steps > 200000 { return self.fail(line, "step limit") }
+        let items = self.forms[f].kids
+        if items.len() == 0 { return self.fail(line, "bad syntax") }
+        let h = items[0]
+        let n = items.len() - 1
+        if self.forms[h].kind == 2 && reserved(self.forms[h].s) {
+            return self.special(self.forms[h].s, items, line, env)
+        }
+        let callee = self.eval(h, env)
+        if self.failed { return ival(0) }
+        if callee.k != 2 { return self.fail(line, "not a function") }
+        let mut args: Vec<Val> = []
+        let mut i = 1
+        while i <= n {
+            let v = self.eval(items[i], env)
+            if self.failed { return ival(0) }
+            args.push(v)
+            i += 1
+        }
+        let cid = callee.n
+        if args.len() != self.clos[cid].params.len() { return self.fail(line, "wrong number of arguments") }
+        if self.depth >= 100 { return self.fail(line, "stack overflow") }
+        let ne = self.new_frame(self.clos[cid].env)
+        i = 0
+        while i < args.len() {
+            self.bind(ne, self.clos[cid].params[i], args[i])
+            i += 1
+        }
+        self.depth += 1
+        let mut last = ival(0)
+        for b in self.clos[cid].body {
+            last = self.eval(b, ne)
+            if self.failed { return ival(0) }
+        }
+        self.depth -= 1
+        last
+    }
+
+    fn special(self, op: string, items: Vec<int>, line: int, env: int) -> Val {
+        let n = items.len() - 1
+        if op == "define" || op == "set!" {
+            if n != 2 || self.forms[items[1]].kind != 2 || reserved(self.forms[items[1]].s) { return self.fail(line, "bad syntax") }
+            let name = self.forms[items[1]].s
+            let v = self.eval(items[2], env)
+            if self.failed { return ival(0) }
+            if op == "define" {
+                self.bind(env, name, v)
+                return ival(0)
+            }
+            let fr = self.lookup_frame(env, name)
+            if fr < 0 { return self.fail(line, "unbound variable ${name}") }
+            let i = self.slot(fr, name)
+            let old = self.frames[fr].vals[i]
+            self.frames[fr].vals[i] = v
+            return old
+        }
+        if op == "lambda" {
+            if n < 2 || self.forms[items[1]].kind != 3 { return self.fail(line, "bad syntax") }
+            let mut ps: Vec<string> = []
+            if !self.names_of(self.forms[items[1]].kids, ps) { return self.fail(line, "bad syntax") }
+            let mut body: Vec<int> = []
+            let mut i = 2
+            while i <= n {
+                body.push(items[i])
+                i += 1
+            }
+            self.clos.push(Clo { params: ps, body: body, env: env })
+            return Val { k: 2, n: self.clos.len() as int - 1 }
+        }
+        if op == "let" {
+            if n < 2 || self.forms[items[1]].kind != 3 { return self.fail(line, "bad syntax") }
+            let mut ids: Vec<int> = []
+            let mut exprs: Vec<int> = []
+            for b in self.forms[items[1]].kids {
+                if self.forms[b].kind != 3 || self.forms[b].kids.len() != 2 { return self.fail(line, "bad syntax") }
+                ids.push(self.forms[b].kids[0])
+                exprs.push(self.forms[b].kids[1])
+            }
+            let mut ns: Vec<string> = []
+            if !self.names_of(ids, ns) { return self.fail(line, "bad syntax") }
+            let mut vals: Vec<Val> = []
+            for e in exprs {
+                let v = self.eval(e, env)
+                if self.failed { return ival(0) }
+                vals.push(v)
+            }
+            let ne = self.new_frame(env)
+            let mut i = 0
+            while i < ns.len() {
+                self.bind(ne, ns[i], vals[i])
+                i += 1
+            }
+            let mut last = ival(0)
+            i = 2
+            while i <= n {
+                last = self.eval(items[i], ne)
+                if self.failed { return ival(0) }
+                i += 1
+            }
+            return last
+        }
+        if op == "if" {
+            if n != 2 && n != 3 { return self.fail(line, "bad syntax") }
+            let c = self.eval(items[1], env)
+            if self.failed { return ival(0) }
+            if c.k != 1 { return self.fail(line, "type error") }
+            if c.n == 1 { return self.eval(items[2], env) }
+            if n == 3 { return self.eval(items[3], env) }
+            return ival(0)
+        }
+        if op == "begin" {
+            let mut last = ival(0)
+            let mut i = 1
+            while i <= n {
+                last = self.eval(items[i], env)
+                if self.failed { return ival(0) }
+                i += 1
+            }
+            return last
+        }
+        if op == "while" {
+            if n < 2 { return self.fail(line, "bad syntax") }
+            while true {
+                let c = self.eval(items[1], env)
+                if self.failed { return ival(0) }
+                if c.k != 1 { return self.fail(line, "type error") }
+                if c.n == 0 { return ival(0) }
+                let mut i = 2
+                while i <= n {
+                    self.eval(items[i], env)
+                    if self.failed { return ival(0) }
+                    i += 1
+                }
+            }
+            return ival(0)
+        }
+        if op == "and" || op == "or" {
+            let is_and = op == "and"
+            let mut result = is_and
+            let mut i = 1
+            while i <= n {
+                let v = self.eval(items[i], env)
+                if self.failed { return ival(0) }
+                if v.k != 1 { return self.fail(line, "type error") }
+                result = v.n == 1
+                if result != is_and { break }
+                i += 1
+            }
+            return bval(result)
+        }
+        if op == "not" {
+            if n != 1 { return self.fail(line, "bad syntax") }
+            let v = self.eval(items[1], env)
+            if self.failed { return ival(0) }
+            if v.k != 1 { return self.fail(line, "type error") }
+            return bval(v.n == 0)
+        }
+        if op == "print" {
+            if n != 1 { return self.fail(line, "bad syntax") }
+            let v = self.eval(items[1], env)
+            if self.failed { return ival(0) }
+            self.out.push(show(v))
+            return ival(0)
+        }
+        let fixed2 = op == "/" || op == "%" || op == "<" || op == ">" || op == "<=" || op == ">=" || op == "="
+        if (fixed2 && n != 2) || (op == "-" && n < 1) { return self.fail(line, "bad syntax") }
+        let mut vals: Vec<Val> = []
+        let mut i = 1
+        while i <= n {
+            let v = self.eval(items[i], env)
+            if self.failed { return ival(0) }
+            vals.push(v)
+            i += 1
+        }
+        for v in vals {
+            if v.k != 0 { return self.fail(line, "type error") }
+        }
+        let limit = 1000000000000000
+        if op == "+" {
+            let mut t = 0
+            for v in vals {
+                t += v.n
+                if abs(t) > limit { return self.fail(line, "overflow") }
+            }
+            return ival(t)
+        }
+        if op == "*" {
+            let mut t = 1
+            for v in vals {
+                // |t| <= 10^15 and |v| <= 10^15 here, so check before multiplying
+                if v.n != 0 && abs(t) > limit / abs(v.n) { return self.fail(line, "overflow") }
+                t = t * v.n
+            }
+            return ival(t)
+        }
+        if op == "-" {
+            if vals.len() == 1 { return ival(0 - vals[0].n) }
+            let mut t = vals[0].n
+            i = 1
+            while i < vals.len() {
+                t -= vals[i].n
+                if abs(t) > limit { return self.fail(line, "overflow") }
+                i += 1
+            }
+            return ival(t)
+        }
+        let x = vals[0].n
+        let y = vals[1].n
+        if op == "/" || op == "%" {
+            if y == 0 { return self.fail(line, "division by zero") }
+            if op == "/" { return ival(x / y) }
+            return ival(x % y)
+        }
+        if op == "<" { return bval(x < y) }
+        if op == ">" { return bval(x > y) }
+        if op == "<=" { return bval(x <= y) }
+        if op == ">=" { return bval(x >= y) }
+        bval(x == y)
+    }
+}
+
+fn main() {
+    let src = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let cs: Vec<char> = src.chars().collect()
+    let mut it = Interp { forms: [], frames: [], clos: [], failed: false, err_line: 0, err_msg: "", steps: 0, depth: 0, out: [] }
+    // parse
+    let mut stack: Vec<Vec<int>> = []
+    let mut stack_line: Vec<int> = []
+    let mut top: Vec<int> = []
+    let mut line = 1
+    let mut i = 0
+    while i < cs.len() {
+        let c = cs[i]
+        if c == '\n' {
+            line += 1
+            i += 1
+        } else if c == ' ' || c == '\t' || c == '\r' {
+            i += 1
+        } else if c == ';' {
+            while i < cs.len() && cs[i] != '\n' { i += 1 }
+        } else if c == '(' {
+            stack.push(top)
+            stack_line.push(line)
+            top = []
+            i += 1
+        } else if c == ')' {
+            if stack.len() == 0 {
+                println("parse error line ${line}: unexpected )")
+                process::exit(2)
+            }
+            let kids = top
+            let open_line = stack_line[stack_line.len() - 1]
+            top = stack[stack.len() - 1]
+            stack.remove(stack.len() - 1)
+            stack_line.remove(stack_line.len() - 1)
+            it.forms.push(FNode { kind: 3, n: 0, s: "", line: open_line, kids: kids })
+            top.push(it.forms.len() as int - 1)
+            i += 1
+        } else {
+            let mut t = ""
+            while i < cs.len() && cs[i] != ' ' && cs[i] != '\t' && cs[i] != '\r' && cs[i] != '\n' && cs[i] != '(' && cs[i] != ')' && cs[i] != ';' {
+                t = t + cs[i].to_string()
+                i += 1
+            }
+            let digits = if t.len() > 0 && t[0..1] == "-" { t[1..t.len()] } else { t }
+            if is_digits(digits) {
+                if digits.len() > 15 {
+                    println("parse error line ${line}: number too large")
+                    process::exit(2)
+                }
+                it.forms.push(FNode { kind: 0, n: t.parse::<int>().unwrap_or(0), s: "", line: line, kids: [] })
+            } else if t == "#t" {
+                it.forms.push(FNode { kind: 1, n: 1, s: "", line: line, kids: [] })
+            } else if t == "#f" {
+                it.forms.push(FNode { kind: 1, n: 0, s: "", line: line, kids: [] })
+            } else {
+                it.forms.push(FNode { kind: 2, n: 0, s: t, line: line, kids: [] })
+            }
+            top.push(it.forms.len() as int - 1)
+        }
+    }
+    if stack.len() > 0 {
+        println("parse error line ${stack_line[0]}: unclosed (")
+        process::exit(2)
+    }
+    let g = it.new_frame(-1)
+    for f in top {
+        it.eval(f, g)
+        if it.failed { break }
+    }
+    for o in it.out {
+        println(o)
+    }
+    if it.failed {
+        println("error line ${it.err_line}: ${it.err_msg}")
+        process::exit(1)
+    }
+}

@@ -93,3 +93,30 @@ fn every_source_row_is_a_known_std_function() {
         assert!(known, "sanitizer `{}` is not a std function the effect table classifies", s.path);
     }
 }
+
+/// Regression: a mini Scheme interpreter (nested loops, recursion, struct-heavy values) made the analysis grow without bound
+/// (values wrapped again on every pass, loop bodies walked once per nesting level). It must finish in a second or two.
+#[test]
+fn programs_with_nested_loops_and_recursive_values_are_analyzed_in_bounded_time() {
+    let dir = root().join("tests/perf_ceiling");
+    let mut n = 0;
+    for e in fs::read_dir(&dir).unwrap().flatten() {
+        let p = e.path();
+        if p.extension().is_none_or(|x| x != "wj") {
+            continue;
+        }
+        n += 1;
+        let text = fs::read_to_string(&p).unwrap();
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || {
+            let start = std::time::Instant::now();
+            let found = taint_findings_sources(Path::new("."), &[(name.clone(), text)]);
+            let _ = tx.send((name, found.len(), start.elapsed()));
+        });
+        let (name, _found, took) = rx.recv_timeout(std::time::Duration::from_secs(30)).unwrap_or_else(|_| panic!("{} did not finish in 30 s: the taint analysis is unbounded again", p.display()));
+        assert!(took.as_secs() < 5, "{name} took {took:?}");
+        drop(handle);
+    }
+    assert!(n >= 1, "tests/perf_ceiling is empty");
+}

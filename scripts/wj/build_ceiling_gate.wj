@@ -1,0 +1,156 @@
+// Build ceiling gate: `wj build` of each program in tests/perf_ceiling must finish within a wall-clock and a memory ceiling.
+// A pass that walks code without a bound (a call graph without a visited set, a loop body walked once per nesting level, a value
+// wrapped again on every pass) shows up here as time and resident memory, long before it fills the machine.
+//
+//   wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' scripts/wj/build_ceiling_gate.wj <wj-binary> [--secs N] [--mb N]
+//
+// Defaults: 5 s and 2048 MB (macOS has no usable `ulimit -v`, so the ceiling is measured with `/usr/bin/time -l`, GNU `-v` elsewhere,
+// and the run is killed by an alarm at five times the wall-clock ceiling). `--selftest` judges planted measurements.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+struct Measure {
+    status: int,
+    secs: f64,
+    mb: int,
+}
+
+// the peak resident size in MB from the output of `/usr/bin/time -l` (bytes) or GNU `time -v` (kilobytes)
+fn parse_rss_mb(text: string) -> int {
+    for line in strings.split_lines(text) {
+        let t = strings.trim(line)
+        if strings.contains(t, "maximum resident set size") {
+            let n = strings.split_whitespace(t)[0].parse::<int>().unwrap_or(0)
+            return n / 1048576
+        }
+        if strings.starts_with(t, "Maximum resident set size") {
+            let parts = strings.split(t, ":")
+            return strings.trim(parts[1]).parse::<int>().unwrap_or(0) / 1024
+        }
+    }
+    -1
+}
+
+fn within(m: Measure, secs: int, mb: int) -> bool {
+    m.status == 0 && m.secs <= (secs as f64) && m.mb >= 0 && m.mb <= mb
+}
+
+fn measure(cmd: string, limit: int) -> Measure {
+    let wrapped = "perl -e 'alarm ${limit * 5}; exec @ARGV' ${cmd}"
+    let start = match sh("perl -MTime::HiRes=time -e 'print time'") {
+        Ok(r) => strings.trim(r.stdout).parse::<f64>().unwrap_or(0.0),
+        Err(_) => 0.0,
+    }
+    let probe = match sh("/usr/bin/time -l true 2>&1") {
+        Ok(r) => r.status == 0,
+        Err(_) => false,
+    }
+    let timer = if probe { "/usr/bin/time -l" } else { "/usr/bin/time -v" }
+    let (status, err) = match sh("${timer} ${wrapped} > /dev/null") {
+        Ok(r) => (r.status, r.stderr),
+        Err(e) => (-1, e),
+    }
+    let end = match sh("perl -MTime::HiRes=time -e 'print time'") {
+        Ok(r) => strings.trim(r.stdout).parse::<f64>().unwrap_or(0.0),
+        Err(_) => 0.0,
+    }
+    Measure { status: status, secs: end - start, mb: parse_rss_mb(err) }
+}
+
+// N mutually recursive functions that loop, match on `Result`s and rebuild a struct value in every pass: the shape that made the
+// taint walk grow. The ceiling holds for every N, so the cost is not super-linear in the size of the program.
+fn synthetic(n: int) -> string {
+    let mut out = "use std::fs\nuse std::process\n\nstruct Val {\n    a: string,\n    k: int,\n}\n"
+    let mut i = 0
+    while i < n {
+        let j = (i + 1) % n
+        let k = (i + 2) % n
+        out = out + "\nfn f${i}(x: string, d: int) -> Result<Val, string> {\n    let mut acc = Val { a: x, k: d }\n    let mut i = 0\n    while i < d {\n        for c in acc.a.chars() {\n            for e in acc.a.chars() {\n                match f${j}(acc.a, d - 1) {\n                    Ok(v) => { acc = Val { a: v.a, k: v.k + 1 } },\n                    Err(m) => { acc = Val { a: m, k: 0 } },\n                }\n                match f${k}(acc.a, d - 1) {\n                    Ok(v) => { acc = Val { a: v.a, k: v.k } },\n                    Err(m) => { return Err(m) },\n                }\n            }\n        }\n        i += 1\n    }\n    Ok(acc)\n}\n"
+        i += 1
+    }
+    out + "\nfn main() {\n    let _ = f0(\"a\", 3)\n    let _ = fs::read_to_string(\"x\")\n    let _ = process::run(\"true\")\n}\n"
+}
+
+fn selftest() -> bool {
+    strings.contains(synthetic(2), "fn f1(") && !strings.contains(synthetic(2), "fn f2(") &&
+    parse_rss_mb("  3145728  maximum resident set size\n") == 3
+        && parse_rss_mb("\tMaximum resident set size (kbytes): 2048\n") == 2
+        && parse_rss_mb("nothing") == -1
+        && within(Measure { status: 0, secs: 0.4, mb: 37 }, 5, 2048)
+        && !within(Measure { status: 0, secs: 87.0, mb: 37 }, 5, 2048)
+        && !within(Measure { status: 0, secs: 0.4, mb: 6000 }, 5, 2048)
+        && !within(Measure { status: 137, secs: 0.4, mb: 37 }, 5, 2048)
+        && !within(Measure { status: 0, secs: 0.4, mb: -1 }, 5, 2048)
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() >= 2 && args[1] == "--selftest" {
+        if selftest() {
+            println("build-ceiling selftest: planted measurements judged correctly")
+            return
+        }
+        println("build-ceiling selftest: FAILED")
+        process.exit(1)
+    }
+    if args.len() < 2 {
+        println("usage: build_ceiling_gate.wj <wj-binary> [--secs N] [--mb N] | --selftest")
+        process.exit(2)
+    }
+    let wj = quote(args[1])
+    let mut secs = 5
+    let mut mb = 2048
+    let mut i = 2
+    while i + 1 < args.len() {
+        if args[i] == "--secs" {
+            secs = args[i + 1].parse::<int>().unwrap_or(5)
+        } else if args[i] == "--mb" {
+            mb = args[i + 1].parse::<int>().unwrap_or(2048)
+        }
+        i += 2
+    }
+    let scratch = match sh("mktemp -d") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-ceiling",
+    }
+    let mut failed = 0
+    let mut n = 0
+    for f in strings.split_lines(sh("ls tests/perf_ceiling/*.wj").map(|r| r.stdout).unwrap_or("")) {
+        if f == "" {
+            continue
+        }
+        n += 1
+        let m = measure("${wj} build ${quote(f)} --no-cargo --no-generate-cargo-toml -o ${quote(scratch)}/out", secs)
+        if within(m, secs, mb) {
+            println("  ok    ${f}: ${m.secs} s, ${m.mb} MB")
+        } else {
+            println("  FAIL  ${f}: exit ${m.status}, ${m.secs} s (ceiling ${secs}), ${m.mb} MB (ceiling ${mb})")
+            failed += 1
+        }
+    }
+    for size in [4, 16, 64] {
+        let file = "${scratch}/synthetic_${size}.wj"
+        let _ = fs.write(file, synthetic(size))
+        n += 1
+        let m = measure("${wj} build ${quote(file)} --no-cargo --no-generate-cargo-toml -o ${quote(scratch)}/out_${size}", secs)
+        if within(m, secs, mb) {
+            println("  ok    ${size} mutually recursive functions: ${m.secs} s, ${m.mb} MB")
+        } else {
+            println("  FAIL  ${size} mutually recursive functions: exit ${m.status}, ${m.secs} s (ceiling ${secs}), ${m.mb} MB (ceiling ${mb})")
+            failed += 1
+        }
+    }
+    let _ = sh("rm -rf ${quote(scratch)}")
+    if n == 0 {
+        println("build-ceiling gate: no programs in tests/perf_ceiling")
+        process.exit(1)
+    }
+    if failed > 0 {
+        process.exit(1)
+    }
+    println("build-ceiling gate: ${n} program(s) within ${secs} s and ${mb} MB")
+}

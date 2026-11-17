@@ -39,6 +39,44 @@ pub enum Origin {
 
 pub type Taint = BTreeSet<Origin>;
 
+/// How deep struct/`Ok`/`Err` wrapping and parameter paths are tracked, and how many origins one value keeps. Past these the
+/// value is flattened to its base origins: coarser, never smaller, and it bounds the analysis (a loop or recursion that wraps
+/// a value in every pass would otherwise grow it without end).
+const MAX_WRAP_DEPTH: usize = 3;
+const MAX_PATH: usize = 3;
+const MAX_ORIGINS: usize = 48;
+
+fn wrap_depth(o: &Origin) -> usize {
+    match o {
+        Origin::Field(_, inner) => 1 + wrap_depth(inner),
+        _ => 0,
+    }
+}
+
+/// `o` held in field `name`, unless it is already wrapped `MAX_WRAP_DEPTH` deep.
+pub fn wrap(name: &str, o: Origin) -> Origin {
+    if wrap_depth(&o) >= MAX_WRAP_DEPTH {
+        return flatten_one(&o);
+    }
+    Origin::Field(name.to_string(), Box::new(o))
+}
+
+fn flatten_one(o: &Origin) -> Origin {
+    let mut cur = o;
+    while let Origin::Field(_, inner) = cur {
+        cur = inner;
+    }
+    cur.clone()
+}
+
+/// Keep a value's origin set bounded.
+fn bound(t: Taint) -> Taint {
+    if t.len() <= MAX_ORIGINS {
+        return t;
+    }
+    t.iter().map(flatten_one).collect()
+}
+
 /// The taint of member `name` of a value with taint `t`: the field's own origins, whole-value origins, and a parameter's
 /// member. Other fields' origins do not reach it.
 pub fn select(t: &Taint, name: &str) -> Taint {
@@ -47,7 +85,9 @@ pub fn select(t: &Taint, name: &str) -> Taint {
             Origin::Field(n, inner) => (n == name).then(|| (**inner).clone()),
             Origin::Param(i, path) => {
                 let mut p = path.clone();
-                p.push(name.to_string());
+                if p.len() < MAX_PATH {
+                    p.push(name.to_string());
+                }
                 Some(Origin::Param(*i, p))
             }
             src => Some(src.clone()),
@@ -179,7 +219,13 @@ type Env = HashMap<String, Taint>;
 
 fn join_into(a: &mut Env, b: &Env) {
     for (k, v) in b {
-        a.entry(k.clone()).or_default().extend(v.iter().cloned());
+        let slot = a.entry(k.clone()).or_default();
+        if slot != v {
+            slot.extend(v.iter().cloned());
+            if slot.len() > MAX_ORIGINS {
+                *slot = bound(std::mem::take(slot));
+            }
+        }
     }
 }
 
@@ -195,6 +241,8 @@ pub struct Walker<'w, 'p, 'a> {
     sinks: BTreeMap<(usize, Vec<String>), BTreeSet<SinkSite>>,
     pub findings: Vec<Finding>,
     quiet: bool,
+    /// Loops being walked (a body is walked twice, so deep nesting is walked once to stay linear in the program).
+    loop_depth: usize,
     request_cache: HashMap<String, bool>,
 }
 
@@ -218,6 +266,7 @@ pub fn analyze_fn(prog: &Program<'_, '_>, summaries: &HashMap<DefId, Summary>, d
         sinks: BTreeMap::new(),
         findings: Vec::new(),
         quiet: matches!(pr, Pragma::Trusted),
+        loop_depth: 0,
         request_cache: HashMap::new(),
     };
     for (i, p) in decl.parameters.iter().enumerate() {
@@ -257,6 +306,11 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
             .map(|l| (l.line, crate::source_map::display_column(l.column)))
             .unwrap_or((0, 0));
         Place { file: self.file.clone(), line, column, word: word.to_string() }
+    }
+
+    /// Passes over a loop body: two (a value assigned late in the body reaches its start), one when already three loops deep.
+    fn passes(&self) -> usize {
+        if self.loop_depth > 3 { 1 } else { 2 }
     }
 
     fn block(&mut self, stmts: &[&Statement<'_>]) -> Taint {
@@ -384,29 +438,35 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
             }
             Statement::For { pattern, iterable, body, .. } => {
                 let it = self.expr(iterable);
-                for _ in 0..2 {
+                self.loop_depth += 1;
+                for _ in 0..self.passes() {
                     let base = self.env.clone();
                     self.bind(pattern, &it);
                     self.block(body);
                     join_into(&mut self.env, &base);
                 }
+                self.loop_depth -= 1;
                 Taint::new()
             }
             Statement::While { condition, body, .. } => {
-                for _ in 0..2 {
+                self.loop_depth += 1;
+                for _ in 0..self.passes() {
                     self.expr(condition);
                     let base = self.env.clone();
                     self.block(body);
                     join_into(&mut self.env, &base);
                 }
+                self.loop_depth -= 1;
                 Taint::new()
             }
             Statement::Loop { body, .. } => {
-                for _ in 0..2 {
+                self.loop_depth += 1;
+                for _ in 0..self.passes() {
                     let base = self.env.clone();
                     self.block(body);
                     join_into(&mut self.env, &base);
                 }
+                self.loop_depth -= 1;
                 Taint::new()
             }
             Statement::Thread { body, .. } | Statement::Async { body, .. } => {
@@ -500,7 +560,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                 let mut out = Taint::new();
                 for (n, v) in fields {
                     let t = self.expr(v);
-                    out.extend(t.into_iter().map(|o| Origin::Field(n.clone(), Box::new(o))));
+                    out.extend(t.into_iter().map(|o| wrap(n, o)));
                 }
                 out
             }
@@ -682,7 +742,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         let variant = path.rsplit("::").next().unwrap_or(path);
         if matches!(variant, "Ok" | "Err") {
             let all = args.iter().cloned().fold(Taint::new(), union);
-            return all.into_iter().map(|o| Origin::Field(variant.to_string(), Box::new(o))).collect();
+            return all.into_iter().map(|o| wrap(variant, o)).collect();
         }
         if catalog::std_sanitizer(path).is_some() {
             return Taint::new();
@@ -690,7 +750,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         if let Some(src) = catalog::source(path) {
             let t = self.source(src.what, &canonical(path), loc, word);
             if src.result {
-                return t.into_iter().map(|o| Origin::Field("Ok".to_string(), Box::new(o))).collect();
+                return t.into_iter().map(|o| wrap("Ok", o)).collect();
             }
             return t;
         }
@@ -744,7 +804,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                         let mut one = Taint::new();
                         one.insert((**inner).clone());
                         let resolved = self.resolve_in_callee(&one, &param);
-                        result.extend(resolved.into_iter().map(|r| Origin::Field(n.clone(), Box::new(r))));
+                        result.extend(resolved.into_iter().map(|r| wrap(n, r)));
                     }
                     src => {
                         result.insert(src.clone());
@@ -795,7 +855,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
 
 fn union(mut a: Taint, b: Taint) -> Taint {
     a.extend(b);
-    a
+    bound(a)
 }
 
 fn root_ident(e: &Expression<'_>) -> Option<String> {
