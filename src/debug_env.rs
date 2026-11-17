@@ -26,18 +26,23 @@ pub fn phase(name: &str) {
 
 /// True when the diagnostics variable is set to any value.
 pub fn enabled(name: &str) -> bool {
-    std::env::var_os(name).is_some()
+    read(name).is_some()
+}
+
+/// The one read of the environment in this module.
+fn read(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name)
 }
 
 /// True when the variable is set to exactly `value`.
 pub fn equals(name: &str, value: &str) -> bool {
-    std::env::var_os(name).is_some_and(|v| v == value)
+    read(name).is_some_and(|v| v == value)
 }
 
 /// True when the diagnostics variable is set to `1`, `true` or `yes`.
 pub fn truthy(name: &str) -> bool {
     matches!(
-        std::env::var(name).ok().as_deref(),
+        read(name).and_then(|v| v.into_string().ok()).as_deref(),
         Some("1") | Some("true") | Some("yes")
     )
 }
