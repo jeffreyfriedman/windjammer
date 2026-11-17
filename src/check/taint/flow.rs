@@ -39,6 +39,60 @@ pub enum Origin {
 
 pub type Taint = BTreeSet<Origin>;
 
+
+/// Bounds on the walk. Every one of them OVER-approximates: a value may only get more origins, never fewer, so a flow that
+/// exists is never dropped (this is a security analysis).
+/// * wrapping deeper than `MAX_WRAP_DEPTH` flattens the value to its base origins: `select` of a field then keeps it, where the
+///   wrapped form would have dropped it for a different field, so the flattened set is a superset of every selection;
+/// * a parameter path longer than `MAX_PATH` stops growing: `Param(i, p)` stands for everything reachable from that member, so the
+///   truncated origin includes every deeper one;
+/// * more than `MAX_ORIGINS` origins in one value collapse to TOP, the function's `top` set: every source call textually in the
+///   function, the return origins of every function it calls, and every parameter. Any origin a value of this function can hold
+///   is in it, so a sink fed by the collapsed value still fires;
+/// * a loop is walked until a pass adds nothing (a fixpoint, at most four passes, then TOP for what it assigns); a loop nested more
+///   than three deep is walked once after every variable it assigns first received TOP (`havoc`), so a flow carried from one
+///   iteration to the next, however long the chain of assignments, is present.
+/// A sanitizer is a declaration (`std` table, `/// wj-taint: sanitizer`): its result is clean for every input, TOP included, exactly
+/// as for any other value; the bounds never turn a declared sanitizer into a non-sanitizer nor the reverse.
+const MAX_WRAP_DEPTH: usize = 3;
+const MAX_PATH: usize = 3;
+const MAX_ORIGINS: usize = 48;
+
+fn wrap_depth(o: &Origin) -> usize {
+    match o {
+        Origin::Field(_, inner) => 1 + wrap_depth(inner),
+        _ => 0,
+    }
+}
+
+/// `o` held in field `name`, unless it is already wrapped `MAX_WRAP_DEPTH` deep.
+pub fn wrap(name: &str, o: Origin) -> Origin {
+    if wrap_depth(&o) >= MAX_WRAP_DEPTH {
+        return flatten_one(&o);
+    }
+    Origin::Field(name.to_string(), Box::new(o))
+}
+
+fn flatten_one(o: &Origin) -> Origin {
+    let mut cur = o;
+    while let Origin::Field(_, inner) = cur {
+        cur = inner;
+    }
+    cur.clone()
+}
+
+/// Keep a value's origin set bounded.
+fn bound(t: Taint, top: &Taint) -> Taint {
+    if t.len() <= MAX_ORIGINS {
+        return t;
+    }
+    let mut out: Taint = t.iter().map(flatten_one).collect();
+    if out.len() > MAX_ORIGINS {
+        out = top.clone();
+    }
+    out
+}
+
 /// The taint of member `name` of a value with taint `t`: the field's own origins, whole-value origins, and a parameter's
 /// member. Other fields' origins do not reach it.
 pub fn select(t: &Taint, name: &str) -> Taint {
@@ -47,7 +101,9 @@ pub fn select(t: &Taint, name: &str) -> Taint {
             Origin::Field(n, inner) => (n == name).then(|| (**inner).clone()),
             Origin::Param(i, path) => {
                 let mut p = path.clone();
-                p.push(name.to_string());
+                if p.len() < MAX_PATH {
+                    p.push(name.to_string());
+                }
                 Some(Origin::Param(*i, p))
             }
             src => Some(src.clone()),
@@ -177,9 +233,15 @@ fn pattern_names(p: &Pattern<'_>, out: &mut Vec<String>) {
 
 type Env = HashMap<String, Taint>;
 
-fn join_into(a: &mut Env, b: &Env) {
+fn join_into(a: &mut Env, b: &Env, top: &Taint) {
     for (k, v) in b {
-        a.entry(k.clone()).or_default().extend(v.iter().cloned());
+        let slot = a.entry(k.clone()).or_default();
+        if slot != v {
+            slot.extend(v.iter().cloned());
+            if slot.len() > MAX_ORIGINS {
+                *slot = bound(std::mem::take(slot), top);
+            }
+        }
     }
 }
 
@@ -195,6 +257,10 @@ pub struct Walker<'w, 'p, 'a> {
     sinks: BTreeMap<(usize, Vec<String>), BTreeSet<SinkSite>>,
     pub findings: Vec<Finding>,
     quiet: bool,
+    /// Loops being walked.
+    loop_depth: usize,
+    /// Any origin a value of this function can hold (see `MAX_ORIGINS`).
+    top: Taint,
     request_cache: HashMap<String, bool>,
 }
 
@@ -218,6 +284,8 @@ pub fn analyze_fn(prog: &Program<'_, '_>, summaries: &HashMap<DefId, Summary>, d
         sinks: BTreeMap::new(),
         findings: Vec::new(),
         quiet: matches!(pr, Pragma::Trusted),
+        loop_depth: 0,
+        top: Taint::new(),
         request_cache: HashMap::new(),
     };
     for (i, p) in decl.parameters.iter().enumerate() {
@@ -237,6 +305,7 @@ pub fn analyze_fn(prog: &Program<'_, '_>, summaries: &HashMap<DefId, Summary>, d
         t.insert(Origin::Param(i, Vec::new()));
         w.env.insert(p.name.clone(), t);
     }
+    w.compute_top(decl);
     let tail = w.block(&decl.body);
     w.ret.extend(tail);
     let mut summary = Summary { ret: std::mem::take(&mut w.ret), sinks: std::mem::take(&mut w.sinks), sanitizer: pr == Pragma::Sanitizer };
@@ -257,6 +326,119 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
             .map(|l| (l.line, crate::source_map::display_column(l.column)))
             .unwrap_or((0, 0));
         Place { file: self.file.clone(), line, column, word: word.to_string() }
+    }
+
+    /// Walk a loop. The environment after the loop is the least fixpoint of "join the body's effect into it", so a flow carried
+    /// from one iteration to the next, however many assignments long, is found: the body is walked until a pass adds nothing. Two
+    /// bounds keep that linear, and both over-approximate: after `MAX_LOOP_PASSES` passes that still change something, and for
+    /// every loop nested more than three deep, each variable the body assigns first receives TOP (`havoc`) and the body is walked
+    /// once more (everything a later iteration could hold is already in TOP).
+    fn run_loop(&mut self, body: &[&Statement<'_>], head: &mut dyn FnMut(&mut Self)) {
+        const MAX_LOOP_PASSES: usize = 4;
+        self.loop_depth += 1;
+        if self.loop_depth > 3 {
+            self.havoc(body);
+            let before = self.env.clone();
+            head(self);
+            self.block(body);
+            join_into(&mut self.env, &before, &self.top);
+        } else {
+            let mut stable = false;
+            for _ in 0..MAX_LOOP_PASSES {
+                let before = self.env.clone();
+                head(self);
+                self.block(body);
+                join_into(&mut self.env, &before, &self.top);
+                if self.env == before {
+                    stable = true;
+                    break;
+                }
+            }
+            if !stable {
+                self.havoc(body);
+                let before = self.env.clone();
+                head(self);
+                self.block(body);
+                join_into(&mut self.env, &before, &self.top);
+            }
+        }
+        self.loop_depth -= 1;
+    }
+
+    /// Give every variable the body assigns (or stores into) TOP.
+    fn havoc(&mut self, body: &[&Statement<'_>]) {
+        let names: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
+        scan(
+            body,
+            &mut |st| {
+                if let Statement::Assignment { target, .. } = st {
+                    names.borrow_mut().extend(root_ident(target));
+                }
+            },
+            &mut |e| {
+                if let Expression::MethodCall { object, method, .. } = e {
+                    if catalog::STORING_METHODS.contains(&method.as_str()) {
+                        names.borrow_mut().extend(root_ident(object));
+                    }
+                }
+            },
+        );
+        for n in names.into_inner() {
+            let slot = self.env.entry(n).or_default();
+            slot.extend(self.top.iter().cloned());
+        }
+    }
+
+    /// Every origin a value of this function can hold: the std source calls in its text, what the functions it calls return, what
+    /// an HTTP request parameter yields, and its parameters.
+    fn compute_top(&mut self, decl: &FunctionDecl<'_>) {
+        type Site = (ExprKey, crate::parser::ast::types::SourceLocation, Option<(String, String)>);
+        let mut sites: Vec<Site> = Vec::new();
+        scan(&decl.body, &mut |_| {}, &mut |e| {
+            let member = match e {
+                Expression::MethodCall { object, method, .. } => Some((&**object, method.as_str())),
+                Expression::FieldAccess { object, field, .. } => Some((&**object, field.as_str())),
+                _ => None,
+            };
+            let request = match member {
+                Some((Expression::Identifier { name, .. }, m)) => Some((name.clone(), m.to_string())),
+                _ => None,
+            };
+            sites.push((ExprKey(e as *const Expression<'_> as usize), e.location(), request));
+        });
+        let mut top = Taint::new();
+        let (prog, summaries) = (self.prog, self.summaries);
+        for (key, loc, request) in sites {
+            if let Some(c) = prog.by_key.get(&key) {
+                match &c.res {
+                    Res::Def(id) => top.extend(summaries.get(id).into_iter().flat_map(|s| s.ret.iter().map(flatten_one)).filter(|o| matches!(o, Origin::Source { .. }))),
+                    Res::MethodCandidates(ids) => {
+                        for id in ids {
+                            top.extend(summaries.get(id).into_iter().flat_map(|s| s.ret.iter().map(flatten_one)).filter(|o| matches!(o, Origin::Source { .. })));
+                        }
+                    }
+                    Res::Unresolved(Reason::External(p)) | Res::Prim(p) => {
+                        let path = full(p, &c.callee);
+                        if let Some(src) = catalog::source(&path) {
+                            let word = path.rsplit("::").next().unwrap_or(&path).to_string();
+                            top.extend(self.source(src.what, &canonical(&path), &loc, &word));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if let Some((name, m)) = request {
+                if let Some(t) = self.request_member_at(&name, &m, &loc) {
+                    top.extend(t.iter().map(flatten_one));
+                }
+            }
+        }
+        for (i, p) in decl.parameters.iter().enumerate() {
+            if !is_scalar(strip_refs(&p.type_)) {
+                top.insert(Origin::Param(i, Vec::new()));
+            }
+        }
+        self.top = top;
     }
 
     fn block(&mut self, stmts: &[&Statement<'_>]) -> Taint {
@@ -322,14 +504,22 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                 match target {
                     Expression::Identifier { name, .. } => {
                         if compound_op.is_some() {
-                            self.env.entry(name.clone()).or_default().extend(t);
+                            let slot = self.env.entry(name.clone()).or_default();
+                            slot.extend(t);
+                            if slot.len() > MAX_ORIGINS {
+                                *slot = bound(std::mem::take(slot), &self.top);
+                            }
                         } else {
                             self.env.insert(name.clone(), t);
                         }
                     }
                     other => {
                         if let Some(root) = root_ident(other) {
-                            self.env.entry(root).or_default().extend(t);
+                            let slot = self.env.entry(root).or_default();
+                            slot.extend(t);
+                            if slot.len() > MAX_ORIGINS {
+                                *slot = bound(std::mem::take(slot), &self.top);
+                            }
                         }
                         self.sub_exprs(other);
                     }
@@ -351,10 +541,10 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                 match else_block {
                     Some(e) => {
                         let (env2, t2) = self.branch(e, &base);
-                        join_into(&mut env, &env2);
+                        join_into(&mut env, &env2, &self.top);
                         tail.extend(t2);
                     }
-                    None => join_into(&mut env, &base),
+                    None => join_into(&mut env, &base, &self.top),
                 }
                 self.env = env;
                 tail
@@ -373,7 +563,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                     tail.extend(self.expr(arm.body));
                     let e = std::mem::replace(&mut self.env, saved);
                     match joined.as_mut() {
-                        Some(j) => join_into(j, &e),
+                        Some(j) => join_into(j, &e, &self.top),
                         None => joined = Some(e),
                     }
                 }
@@ -384,29 +574,17 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
             }
             Statement::For { pattern, iterable, body, .. } => {
                 let it = self.expr(iterable);
-                for _ in 0..2 {
-                    let base = self.env.clone();
-                    self.bind(pattern, &it);
-                    self.block(body);
-                    join_into(&mut self.env, &base);
-                }
+                self.run_loop(body, &mut |w| w.bind(pattern, &it));
                 Taint::new()
             }
             Statement::While { condition, body, .. } => {
-                for _ in 0..2 {
-                    self.expr(condition);
-                    let base = self.env.clone();
-                    self.block(body);
-                    join_into(&mut self.env, &base);
-                }
+                self.run_loop(body, &mut |w| {
+                    w.expr(condition);
+                });
                 Taint::new()
             }
             Statement::Loop { body, .. } => {
-                for _ in 0..2 {
-                    let base = self.env.clone();
-                    self.block(body);
-                    join_into(&mut self.env, &base);
-                }
+                self.run_loop(body, &mut |_| {});
                 Taint::new()
             }
             Statement::Defer { statement, .. } => {
@@ -462,7 +640,20 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         }
     }
 
+    fn cap(&self, t: Taint) -> Taint {
+        if t.len() <= MAX_ORIGINS {
+            t
+        } else {
+            bound(t, &self.top)
+        }
+    }
+
     fn expr(&mut self, e: &Expression<'_>) -> Taint {
+        let t = self.expr_inner(e);
+        self.cap(t)
+    }
+
+    fn expr_inner(&mut self, e: &Expression<'_>) -> Taint {
         match e {
             Expression::Literal { .. } => Taint::new(),
             Expression::Identifier { name, .. } => self.env.get(name).cloned().unwrap_or_default(),
@@ -496,7 +687,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                 let mut out = Taint::new();
                 for (n, v) in fields {
                     let t = self.expr(v);
-                    out.extend(t.into_iter().map(|o| Origin::Field(n.clone(), Box::new(o))));
+                    out.extend(t.into_iter().map(|o| wrap(n, o)));
                 }
                 out
             }
@@ -559,13 +750,17 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
 
     /// `req.body`, `req.query`: a member of a value of an HTTP request type (decided by the std struct's fields).
     fn request_member(&mut self, var: &str, member: &str, at: &Expression<'_>) -> Option<Taint> {
+        self.request_member_at(var, member, &at.location())
+    }
+
+    fn request_member_at(&mut self, var: &str, member: &str, at: &crate::parser::ast::types::SourceLocation) -> Option<Taint> {
         let ty = self.request_types.get(var)?.clone();
         let key = format!("{ty}::{member}");
         let hit = *self.request_cache.entry(key.clone()).or_insert_with(|| crate::ir::taint::taint_source_for_callee(&key).is_some());
         hit.then(|| {
             let kind = crate::ir::taint::taint_source_for_callee(&key);
             let what = format!("an HTTP request ({})", member_what(&kind));
-            self.source(&what, &key, &at.location(), member)
+            self.source(&what, &key, at, member)
         })
     }
 
@@ -669,7 +864,11 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         }
         if catalog::STORING_METHODS.contains(&method) {
             if let Some(root) = root_ident(object) {
-                self.env.entry(root).or_default().extend(all.clone());
+                let slot = self.env.entry(root).or_default();
+                slot.extend(all.clone());
+                if slot.len() > MAX_ORIGINS {
+                    *slot = bound(std::mem::take(slot), &self.top);
+                }
             }
         }
         all
@@ -682,7 +881,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         let variant = path.rsplit("::").next().unwrap_or(path);
         if matches!(variant, "Ok" | "Err") {
             let all = args.iter().cloned().fold(Taint::new(), union);
-            return all.into_iter().map(|o| Origin::Field(variant.to_string(), Box::new(o))).collect();
+            return all.into_iter().map(|o| wrap(variant, o)).collect();
         }
         if catalog::std_sanitizer(path).is_some() {
             return Taint::new();
@@ -690,7 +889,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
         if let Some(src) = catalog::source(path) {
             let t = self.source(src.what, &canonical(path), loc, word);
             if src.result {
-                return t.into_iter().map(|o| Origin::Field("Ok".to_string(), Box::new(o))).collect();
+                return t.into_iter().map(|o| wrap("Ok", o)).collect();
             }
             return t;
         }
@@ -744,7 +943,7 @@ impl<'w, 'p, 'a> Walker<'w, 'p, 'a> {
                         let mut one = Taint::new();
                         one.insert((**inner).clone());
                         let resolved = self.resolve_in_callee(&one, &param);
-                        result.extend(resolved.into_iter().map(|r| Origin::Field(n.clone(), Box::new(r))));
+                        result.extend(resolved.into_iter().map(|r| wrap(n, r)));
                     }
                     src => {
                         result.insert(src.clone());
@@ -828,5 +1027,112 @@ fn member_what(kind: &Option<crate::ir::taint::TaintSourceKind>) -> &'static str
         Some(K::HttpRequestQuery) => "query",
         Some(K::HttpRequestHeader) => "headers",
         _ => "request",
+    }
+}
+
+
+/// Visit every statement and every expression of `stmts` (nested blocks, branches, loops, closures, arguments, interpolation parts).
+fn scan(stmts: &[&Statement<'_>], on_stmt: &mut dyn FnMut(&Statement<'_>), on_expr: &mut dyn FnMut(&Expression<'_>)) {
+    for st in stmts {
+        scan_stmt(st, on_stmt, on_expr);
+    }
+}
+
+fn scan_stmt(st: &Statement<'_>, on_stmt: &mut dyn FnMut(&Statement<'_>), on_expr: &mut dyn FnMut(&Expression<'_>)) {
+    on_stmt(st);
+    match st {
+        Statement::Let { value, else_block, .. } => {
+            scan_expr(value, on_stmt, on_expr);
+            if let Some(b) = else_block {
+                scan(b, on_stmt, on_expr);
+            }
+        }
+        Statement::Const { value, .. } | Statement::Static { value, .. } => scan_expr(value, on_stmt, on_expr),
+        Statement::Assignment { target, value, .. } => {
+            scan_expr(target, on_stmt, on_expr);
+            scan_expr(value, on_stmt, on_expr);
+        }
+        Statement::Return { value, .. } => {
+            if let Some(v) = value {
+                scan_expr(v, on_stmt, on_expr);
+            }
+        }
+        Statement::Expression { expr, .. } => scan_expr(expr, on_stmt, on_expr),
+        Statement::If { condition, then_block, else_block, .. } => {
+            scan_expr(condition, on_stmt, on_expr);
+            scan(then_block, on_stmt, on_expr);
+            if let Some(b) = else_block {
+                scan(b, on_stmt, on_expr);
+            }
+        }
+        Statement::Match { value, arms, .. } => {
+            scan_expr(value, on_stmt, on_expr);
+            for a in arms {
+                if let Some(g) = a.guard {
+                    scan_expr(g, on_stmt, on_expr);
+                }
+                scan_expr(a.body, on_stmt, on_expr);
+            }
+        }
+        Statement::For { iterable, body, .. } => {
+            scan_expr(iterable, on_stmt, on_expr);
+            scan(body, on_stmt, on_expr);
+        }
+        Statement::While { condition, body, .. } => {
+            scan_expr(condition, on_stmt, on_expr);
+            scan(body, on_stmt, on_expr);
+        }
+        Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => scan(body, on_stmt, on_expr),
+        Statement::Defer { statement, .. } => scan_stmt(statement, on_stmt, on_expr),
+        Statement::Break { value: Some(v), .. } => scan_expr(v, on_stmt, on_expr),
+        Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
+    }
+}
+
+fn scan_expr(e: &Expression<'_>, on_stmt: &mut dyn FnMut(&Statement<'_>), on_expr: &mut dyn FnMut(&Expression<'_>)) {
+    on_expr(e);
+    match e {
+        Expression::Literal { .. } | Expression::Identifier { .. } => {}
+        Expression::Binary { left, right, .. } => {
+            scan_expr(left, on_stmt, on_expr);
+            scan_expr(right, on_stmt, on_expr);
+        }
+        Expression::Unary { operand, .. } => scan_expr(operand, on_stmt, on_expr),
+        Expression::Call { function, arguments, .. } => {
+            scan_expr(function, on_stmt, on_expr);
+            arguments.iter().for_each(|(_, a)| scan_expr(a, on_stmt, on_expr));
+        }
+        Expression::MethodCall { object, arguments, .. } => {
+            scan_expr(object, on_stmt, on_expr);
+            arguments.iter().for_each(|(_, a)| scan_expr(a, on_stmt, on_expr));
+        }
+        Expression::FieldAccess { object, .. } => scan_expr(object, on_stmt, on_expr),
+        Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, v)| scan_expr(v, on_stmt, on_expr)),
+        Expression::MapLiteral { pairs, .. } => pairs.iter().for_each(|(k, v)| {
+            scan_expr(k, on_stmt, on_expr);
+            scan_expr(v, on_stmt, on_expr);
+        }),
+        Expression::Range { start, end, .. } => {
+            scan_expr(start, on_stmt, on_expr);
+            scan_expr(end, on_stmt, on_expr);
+        }
+        Expression::Closure { body, .. } => scan_expr(body, on_stmt, on_expr),
+        Expression::Cast { expr, .. }
+        | Expression::TryOp { expr, .. }
+        | Expression::Await { expr, .. }
+        | Expression::AsyncCall { expr, .. }
+        | Expression::SpawnCall { expr, .. } => scan_expr(expr, on_stmt, on_expr),
+        Expression::Index { object, index, .. } => {
+            scan_expr(object, on_stmt, on_expr);
+            scan_expr(index, on_stmt, on_expr);
+        }
+        Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements.iter().for_each(|x| scan_expr(x, on_stmt, on_expr)),
+        Expression::MacroInvocation { args, .. } => args.iter().for_each(|x| scan_expr(x, on_stmt, on_expr)),
+        Expression::ChannelSend { channel, value, .. } => {
+            scan_expr(channel, on_stmt, on_expr);
+            scan_expr(value, on_stmt, on_expr);
+        }
+        Expression::ChannelRecv { channel, .. } => scan_expr(channel, on_stmt, on_expr),
+        Expression::Block { statements, .. } => scan(statements, on_stmt, on_expr),
     }
 }

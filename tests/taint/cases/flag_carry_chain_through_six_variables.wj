@@ -1,0 +1,24 @@
+// A value reaches the sink only after it has been carried through five assignments, one per iteration: a fixed number of walks
+// of the loop body misses it, the walk continues until nothing changes.
+use std::fs
+use std::process
+
+fn main() {
+    let items = ["x", "y", "z"]
+    let mut a = ""
+    let mut b = ""
+    let mut c = ""
+    let mut d = ""
+    let mut e = ""
+    let mut f = ""
+    for item in items {
+        let out = process::run(a) //~ WJ0173
+        println("${out} ${item}")
+        a = b
+        b = c
+        c = d
+        d = e
+        e = f
+        f = fs::read_to_string("next.txt").unwrap_or("")
+    }
+}

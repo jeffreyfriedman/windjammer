@@ -42,6 +42,7 @@ step "untrusted data into sinks (WJ0173 oracle cases)" t taint_flow_test::
 step "untrusted data precision (tests, examples, scripts, pinned ecosystem snapshot)" wj run --allow process --allow 'fs.read=**' --allow env.read scripts/wj/taint_precision.wj "$WJ_BIN_DIR/wj"
 step "effect spellings (module-dot calls = path calls)" t effect_spelling_test::
 step "effect spelling gate (check, build, run refuse an ungranted effect in both spellings)" wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' scripts/wj/effect_spelling_gate.wj "$WJ_BIN_DIR/wj"
+step "build ceiling (tests/perf_ceiling build within 5 s and 2 GB)" wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' scripts/wj/build_ceiling_gate.wj "$WJ_BIN_DIR/wj"
 step "target tiers table current (ADR-0007)" wj run --allow process --allow 'fs.read=**' scripts/wj/target_tiers.wj check
 step "wj.lock reproducibility (ADR-0010)" wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' --allow env.read scripts/wj/lock_gate.wj "$WJ_BIN_DIR/wj"
 step "dead capabilities" t capability_reachability_test::
