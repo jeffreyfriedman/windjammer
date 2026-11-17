@@ -680,6 +680,22 @@ id = "wj explain-effects --json"
 statement = "Machine-readable JSON output"
 
 [[promise]]
+id = "wj economics"
+statement = "Report the economic dimensions of a file (docs/economics/DEFINITION.md); today the source dimension"
+
+[[promise]]
+id = "wj economics --dims"
+statement = "Dimensions to report (comma-separated); `static` (source: lines, characters, tokens, ceremony)"
+
+[[promise]]
+id = "wj economics --twin"
+statement = "A hand-written Rust twin of the program: also report its counts and the Windjammer / Rust ratios"
+
+[[promise]]
+id = "wj economics --json"
+statement = "Machine-readable JSON output"
+
+[[promise]]
 id = "wj optimize"
 statement = "Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument"
 

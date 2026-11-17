@@ -1,0 +1,31 @@
+# Acceptance cases for `wj economics` (tests/promise_registry_test.rs; spec: docs/economics/COMMANDS.md).
+
+[[case]]
+name = "economics reports the source dimension of a file with the suite's counting rules"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v = [1, 2]\n    // note\n    println(\"${v.len()}\")\n}\n" }
+args = ["economics", "{w}/m.wj"]
+stdout_has = ["lines          4", "chars         41", "tokens        18", "ceremony       0"]
+
+[[case]]
+name = "economics --twin --json reports both counts and the Windjammer / Rust ratios"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v = [1, 2]\n    // note\n    println(\"${v.len()}\")\n}\n", "m.rs" = "fn main() {\n    let v = vec![1, 2];\n    println!(\"{}\", v.len());\n    let w: Vec<i64> = v.iter().map(|x| *x).collect();\n    let s = &w;\n}\n" }
+args = ["economics", "{w}/m.wj", "--twin", "{w}/m.rs", "--json", "--dims", "static"]
+json = true
+stdout_has = ["\"tokens\": 18", "\"tokens\": 62", "\"ceremony\": 2", "\"ratio\""]
+
+[[case]]
+name = "economics --dims rejects an unknown dimension and lists the available ones"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["economics", "{w}/m.wj", "--dims", "nope"]
+exit = 1
+output_has = ["unknown dimension `nope`", "static"]
+
+[[case]]
+name = "economics reports a missing file"
+polarity = "negative"
+args = ["economics", "{w}/missing.wj"]
+exit = 1
+output_has = ["reading"]

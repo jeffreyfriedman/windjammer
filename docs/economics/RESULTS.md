@@ -236,6 +236,28 @@ Owner decision (2026-11-16): overflow checks stay **on** by default in release b
 interpreter, which panics on overflow). Every D5 number in this file states its setting: "same flags" rows are
 without checks on both sides; "shipped" rows are Windjammer with checks against the Rust twin without.
 
+### LTO on programs that use the runtime (measured)
+
+`economics.wj --lto-study` (`bench/economics/results/mac-20261116-lto.json`): 11 programs (9 `dx` programs that use the
+runtime crate, 2 std-only kernels) built `cargo build --release` with the generated profile (overflow checks on) with
+LTO on and off, each into its own empty target directory. Geometric means, LTO on / off:
+
+| | ratio | per program |
+|---|---:|---|
+| cold release build CPU (dependencies included) | 1.55 | runtime users 5.6-6.7 s vs 5.1-6.5 s; std-only 2.1 s vs 0.2-0.3 s |
+| incremental release rebuild CPU (`main.rs` touched) | **6.74** | 2.8-3.6 s vs 0.3-1.1 s |
+| run instructions | 0.99 | 0.96-1.01 |
+| run cycles | 0.98 | |
+| stripped binary size | 0.86 | e.g. 369 KB vs 430 KB |
+
+(`dx/t009_rpn_eval` did not build with the lean-runtime compiler in this run and is excluded; under investigation.)
+
+Default change (implemented, `wt-econ`): `[profile.release] lto` unset is automatic: on when the project depends on
+another Windjammer package (the cross-crate case LTO was chosen for), off for a single crate, where it bought about 1%
+run time and 14% size for about 7x the CPU of every release rebuild. `lto = true` / `false` decides explicitly
+(`docs/book/src/reference/wj-toml.md`). Gate: `tests/lean_manifest.rs`
+(`release_lto_is_automatic_and_an_explicit_setting_wins`).
+
 Proposal (owner decision; no default changed yet):
 
 - **Overflow checks stay on** in shipped Windjammer binaries. The spec says integer overflow panics; dropping the checks

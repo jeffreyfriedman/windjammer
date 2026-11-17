@@ -236,6 +236,11 @@ path = "tests/optimizer_bounded_counter.rs"
 name = "optimize_cli"
 path = "tests/optimize_cli.rs"
 
+# wj economics counts what the suite recorded: cargo test --release --test economics_cli
+[[test]]
+name = "economics_cli"
+path = "tests/economics_cli.rs"
+
 # Resolved engine vs the walker on every corpus program: cargo test --release --test engine_parity
 [[test]]
 name = "engine_parity"

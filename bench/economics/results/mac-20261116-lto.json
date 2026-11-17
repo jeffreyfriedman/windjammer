@@ -1,0 +1,745 @@
+{
+ "env": {
+  "wj_version": "wj 0.50.0+c174f69b0e (commit unknown unknown, clean, release, built 2026-11-16T22:15:55Z)",
+  "rustc": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)",
+  "uname": "Darwin arm64",
+  "head": "73b8a6ebc9c3",
+  "load_start": "18:22  up 21 days, 19:28, 6 users, load averages: 40.16 67.66 74.89",
+  "counter": "macOS /usr/bin/time -l: cpu (children included), peak rss, instructions and cycles of the process",
+  "meter": "-l"
+ },
+ "lto": [
+  {
+   "id": "dx/t001_gcd_lcm",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 289259449,
+     "cycles": 169762112,
+     "rss": 226279424,
+     "cpu": 6.42,
+     "wall": 18.92,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 190849581,
+     "cycles": 125289113,
+     "rss": 196034560,
+     "cpu": 2.85,
+     "wall": 8.1,
+     "status": 0
+    },
+    "run": {
+     "instr": 8682759,
+     "cycles": 4641783,
+     "rss": 1327104,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 369264,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 229439152,
+     "cycles": 163452621,
+     "rss": 239288320,
+     "cpu": 5.61,
+     "wall": 12.14,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 179603692,
+     "cycles": 122811331,
+     "rss": 113688576,
+     "cpu": 0.29000000000000004,
+     "wall": 0.56,
+     "status": 0
+    },
+    "run": {
+     "instr": 9005177,
+     "cycles": 4683830,
+     "rss": 1474560,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 429504,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t009_rpn_eval",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 264998185,
+     "cycles": 156838722,
+     "rss": 235143168,
+     "cpu": 3.13,
+     "wall": 6.18,
+     "status": 101
+    },
+    "incremental": {
+     "instr": 161769411,
+     "cycles": 90381324,
+     "rss": 85917696,
+     "cpu": 0.05,
+     "wall": 0.67,
+     "status": 101
+    },
+    "run": {
+     "instr": 1076184,
+     "cycles": 824218,
+     "rss": 966656,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 127
+    },
+    "stripped": 0,
+    "ok": "no"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 208957906,
+     "cycles": 146630292,
+     "rss": 235880448,
+     "cpu": 5.4399999999999995,
+     "wall": 13.29,
+     "status": 101
+    },
+    "incremental": {
+     "instr": 180180431,
+     "cycles": 122903454,
+     "rss": 85393408,
+     "cpu": 0.08,
+     "wall": 0.31,
+     "status": 101
+    },
+    "run": {
+     "instr": 1130571,
+     "cycles": 1563229,
+     "rss": 999424,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 127
+    },
+    "stripped": 0,
+    "ok": "no"
+   }
+  },
+  {
+   "id": "dx/t011_lru_cache",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 278005672,
+     "cycles": 175369533,
+     "rss": 237846528,
+     "cpu": 6.12,
+     "wall": 11.43,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 178900182,
+     "cycles": 107805659,
+     "rss": 218284032,
+     "cpu": 2.98,
+     "wall": 5.01,
+     "status": 0
+    },
+    "run": {
+     "instr": 8612735,
+     "cycles": 4189487,
+     "rss": 1359872,
+     "cpu": 0.0,
+     "wall": 0.03,
+     "status": 0
+    },
+    "stripped": 369264,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 212414543,
+     "cycles": 145250109,
+     "rss": 256409600,
+     "cpu": 5.26,
+     "wall": 7.9,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 165976637,
+     "cycles": 103680875,
+     "rss": 137052160,
+     "cpu": 0.48000000000000004,
+     "wall": 0.99,
+     "status": 0
+    },
+    "run": {
+     "instr": 8892354,
+     "cycles": 5491642,
+     "rss": 1474560,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 429648,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t013_bst",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 276591987,
+     "cycles": 180314561,
+     "rss": 252526592,
+     "cpu": 5.71,
+     "wall": 6.8,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 183206037,
+     "cycles": 129358987,
+     "rss": 223117312,
+     "cpu": 2.94,
+     "wall": 3.97,
+     "status": 0
+    },
+    "run": {
+     "instr": 8731956,
+     "cycles": 4344341,
+     "rss": 1343488,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 369264,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 214466547,
+     "cycles": 150331823,
+     "rss": 241352704,
+     "cpu": 5.58,
+     "wall": 6.64,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 171378219,
+     "cycles": 120537680,
+     "rss": 134021120,
+     "cpu": 0.43,
+     "wall": 1.12,
+     "status": 0
+    },
+    "run": {
+     "instr": 8745482,
+     "cycles": 4963845,
+     "rss": 1474560,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 429424,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t018_word_freq",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 276384293,
+     "cycles": 180284558,
+     "rss": 238485504,
+     "cpu": 6.05,
+     "wall": 8.74,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 179113588,
+     "cycles": 108530541,
+     "rss": 190595072,
+     "cpu": 3.41,
+     "wall": 5.62,
+     "status": 0
+    },
+    "run": {
+     "instr": 8645389,
+     "cycles": 4717536,
+     "rss": 1392640,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 369360,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 212766794,
+     "cycles": 139659378,
+     "rss": 235339776,
+     "cpu": 6.49,
+     "wall": 8.44,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 178551491,
+     "cycles": 113462342,
+     "rss": 139427840,
+     "cpu": 0.53,
+     "wall": 0.64,
+     "status": 0
+    },
+    "run": {
+     "instr": 8777054,
+     "cycles": 4415750,
+     "rss": 1458176,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 429696,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t023_expr_eval",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 275358338,
+     "cycles": 176401599,
+     "rss": 252395520,
+     "cpu": 5.6899999999999995,
+     "wall": 6.51,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 183496987,
+     "cycles": 125292432,
+     "rss": 206913536,
+     "cpu": 2.85,
+     "wall": 3.62,
+     "status": 0
+    },
+    "run": {
+     "instr": 8678925,
+     "cycles": 3385029,
+     "rss": 1327104,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 369264,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 216789008,
+     "cycles": 140027293,
+     "rss": 239075328,
+     "cpu": 5.55,
+     "wall": 5.94,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 168406898,
+     "cycles": 122001460,
+     "rss": 122568704,
+     "cpu": 0.33999999999999997,
+     "wall": 5.77,
+     "status": 0
+    },
+    "run": {
+     "instr": 8804089,
+     "cycles": 4866260,
+     "rss": 1474560,
+     "cpu": 0.0,
+     "wall": 0.02,
+     "status": 0
+    },
+    "stripped": 429504,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t030_bank_ledger",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 296789322,
+     "cycles": 210059942,
+     "rss": 242597888,
+     "cpu": 6.6899999999999995,
+     "wall": 24.41,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 189731994,
+     "cycles": 136964832,
+     "rss": 203161600,
+     "cpu": 3.61,
+     "wall": 29.67,
+     "status": 0
+    },
+    "run": {
+     "instr": 8745416,
+     "cycles": 5285856,
+     "rss": 1392640,
+     "cpu": 0.0,
+     "wall": 0.01,
+     "status": 0
+    },
+    "stripped": 385904,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 234696343,
+     "cycles": 166448616,
+     "rss": 243286016,
+     "cpu": 5.8500000000000005,
+     "wall": 8.98,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 178846059,
+     "cycles": 127779457,
+     "rss": 145358848,
+     "cpu": 0.77,
+     "wall": 1.39,
+     "status": 0
+    },
+    "run": {
+     "instr": 8829038,
+     "cycles": 3929040,
+     "rss": 1441792,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 446240,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t043_channel_pipeline",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 274360534,
+     "cycles": 156097675,
+     "rss": 253198336,
+     "cpu": 6.260000000000001,
+     "wall": 6.4,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 167663413,
+     "cycles": 86564450,
+     "rss": 234192896,
+     "cpu": 3.4,
+     "wall": 3.82,
+     "status": 0
+    },
+    "run": {
+     "instr": 9660579,
+     "cycles": 4230361,
+     "rss": 1556480,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 419536,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 212674407,
+     "cycles": 112271453,
+     "rss": 253902848,
+     "cpu": 5.75,
+     "wall": 4.67,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 171628637,
+     "cycles": 107378379,
+     "rss": 144179200,
+     "cpu": 1.13,
+     "wall": 21.71,
+     "status": 0
+    },
+    "run": {
+     "instr": 9652496,
+     "cycles": 3670493,
+     "rss": 1671168,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 498256,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t048_wc_clone",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 296650553,
+     "cycles": 202754528,
+     "rss": 253378560,
+     "cpu": 6.01,
+     "wall": 16.12,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 183579784,
+     "cycles": 130203249,
+     "rss": 220282880,
+     "cpu": 2.9499999999999997,
+     "wall": 16.04,
+     "status": 0
+    },
+    "run": {
+     "instr": 8804378,
+     "cycles": 4614397,
+     "rss": 1327104,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 369392,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 228050838,
+     "cycles": 144328684,
+     "rss": 253984768,
+     "cpu": 5.079999999999999,
+     "wall": 9.73,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 165344910,
+     "cycles": 85203065,
+     "rss": 116178944,
+     "cpu": 0.3,
+     "wall": 0.45,
+     "status": 0
+    },
+    "run": {
+     "instr": 8796083,
+     "cycles": 3773930,
+     "rss": 1441792,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 430080,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "dx/t057_inventory",
+   "suite": "dx",
+   "uses_runtime": "yes",
+   "lto_on": {
+    "cold": {
+     "instr": 278123233,
+     "cycles": 162160357,
+     "rss": 253575168,
+     "cpu": 5.58,
+     "wall": 9.86,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 167647356,
+     "cycles": 95735723,
+     "rss": 240566272,
+     "cpu": 2.83,
+     "wall": 2.87,
+     "status": 0
+    },
+    "run": {
+     "instr": 8968033,
+     "cycles": 3304081,
+     "rss": 1392640,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 385888,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 217260557,
+     "cycles": 113254893,
+     "rss": 253739008,
+     "cpu": 5.08,
+     "wall": 3.61,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 168509190,
+     "cycles": 82025212,
+     "rss": 144719872,
+     "cpu": 0.6100000000000001,
+     "wall": 0.38,
+     "status": 0
+    },
+    "run": {
+     "instr": 8899410,
+     "cycles": 3591786,
+     "rss": 1458176,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 446256,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "parity/string_build",
+   "suite": "parity",
+   "uses_runtime": "no",
+   "lto_on": {
+    "cold": {
+     "instr": 156397936,
+     "cycles": 82934438,
+     "rss": 201031680,
+     "cpu": 2.11,
+     "wall": 2.2,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 117912316,
+     "cycles": 54215324,
+     "rss": 201703424,
+     "cpu": 2.09,
+     "wall": 2.19,
+     "status": 0
+    },
+    "run": {
+     "instr": 34624841,
+     "cycles": 9217777,
+     "rss": 3817472,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 302688,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 158273706,
+     "cycles": 87883021,
+     "rss": 104382464,
+     "cpu": 0.24000000000000002,
+     "wall": 0.3,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 116985649,
+     "cycles": 54753793,
+     "rss": 104480768,
+     "cpu": 0.18000000000000002,
+     "wall": 0.16,
+     "status": 0
+    },
+    "run": {
+     "instr": 36177845,
+     "cycles": 9108536,
+     "rss": 3915776,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 343088,
+    "ok": "yes"
+   }
+  },
+  {
+   "id": "interp/hashmap",
+   "suite": "interp",
+   "uses_runtime": "no",
+   "lto_on": {
+    "cold": {
+     "instr": 154407029,
+     "cycles": 73497592,
+     "rss": 203358208,
+     "cpu": 2.1399999999999997,
+     "wall": 2.24,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 115197732,
+     "cycles": 54931473,
+     "rss": 202997760,
+     "cpu": 2.09,
+     "wall": 2.12,
+     "status": 0
+    },
+    "run": {
+     "instr": 53124124,
+     "cycles": 14881547,
+     "rss": 1916928,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 302800,
+    "ok": "yes"
+   },
+   "lto_off": {
+    "cold": {
+     "instr": 155237992,
+     "cycles": 76627352,
+     "rss": 107511808,
+     "cpu": 0.32,
+     "wall": 1.85,
+     "status": 0
+    },
+    "incremental": {
+     "instr": 114981170,
+     "cycles": 61030580,
+     "rss": 112934912,
+     "cpu": 0.27,
+     "wall": 0.36,
+     "status": 0
+    },
+    "run": {
+     "instr": 52956705,
+     "cycles": 15799548,
+     "rss": 2031616,
+     "cpu": 0.0,
+     "wall": 0.0,
+     "status": 0
+    },
+    "stripped": 360032,
+    "ok": "yes"
+   }
+  }
+ ]
+}
