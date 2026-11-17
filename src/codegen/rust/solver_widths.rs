@@ -117,6 +117,9 @@ impl<'ast> CodeGenerator<'ast> {
             _ => None,
         };
         self.maybe_cast_usize_to_int_target(expr_str, expr, target);
+        if let Some(ret) = self.current_function_return_type.as_ref().filter(|t| matches!(t, Type::Option(_))) {
+            self.convert_usize_into_declared_int(expr_str, expr, ret);
+        }
         self.maybe_cast_to_function_return_int_width(expr_str, expr);
         crate::codegen::rust::type_classification_utilities::strip_redundant_same_width_int_cast(expr_str);
     }
