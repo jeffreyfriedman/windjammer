@@ -1,3 +1,4 @@
+// oracle: check
 // A helper returns data from a source; the caller uses it as a command.
 use std::fs
 use std::process
@@ -8,5 +9,6 @@ fn job_name() -> string {
 
 fn main() {
     let out = process::run(job_name()) //~ WJ0173
+//~@24+3 ERROR WJ0173 data from file contents
     println("${out}")
 }

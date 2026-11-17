@@ -1,10 +1,13 @@
+// oracle: check
 // A request parameter is concatenated into SQL text.
 use std::db
 use std::fs
 
 fn main() {
     let id = fs::read_to_string("id.txt").unwrap_or("")
+//~@43+6 ERROR W0002 explicit .unwrap() call
     let conn = db::connect("sqlite::memory:").unwrap()
     let rows = conn.query("select * from users where id = ${id}", []) //~ WJ0173
+//~@21+5 ERROR WJ0173 data from file contents
     println("${rows}")
 }

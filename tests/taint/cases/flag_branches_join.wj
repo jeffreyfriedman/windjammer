@@ -1,3 +1,4 @@
+// oracle: check
 // One branch assigns tainted data: after the join the value may be tainted.
 use std::fs
 use std::process
@@ -8,5 +9,6 @@ fn main() {
         target = fs::read_to_string("target.txt").unwrap_or("")
     }
     let out = process::run("ls ${target}") //~ WJ0173
+//~@24+3 ERROR WJ0173 data from file contents
     println("${out}")
 }

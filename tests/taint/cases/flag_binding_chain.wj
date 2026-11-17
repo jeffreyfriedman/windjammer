@@ -1,3 +1,4 @@
+// oracle: check
 // The value passes through several bindings, a method and a concatenation before the sink.
 use std::fs
 use std::process
@@ -8,5 +9,6 @@ fn main() {
     let line = "run " + trimmed
     let final_line = "${line} now"
     let out = process::run(final_line) //~ WJ0173
+//~@24+3 ERROR WJ0173 data from file contents
     println("${out}")
 }

@@ -1,3 +1,4 @@
+// oracle: check
 // A value read from a file becomes part of a shell command.
 use std::fs
 use std::process
@@ -5,5 +6,6 @@ use std::process
 fn main() {
     let name = fs::read_to_string("user.txt").unwrap_or("")
     let out = process::run("echo hello ${name}") //~ WJ0173
+//~@24+3 ERROR WJ0173 data from file contents
     println("${out}")
 }

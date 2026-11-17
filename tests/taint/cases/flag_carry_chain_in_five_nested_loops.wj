@@ -1,3 +1,4 @@
+// oracle: check
 // A 14-assignment carry chain in the innermost of five loops. Loops nested more than three deep are not walked to a fixpoint:
 // every variable they assign first receives TOP, which includes the file read below, so the sink at the top of the body fires.
 use std::fs
@@ -25,6 +26,7 @@ fn main() {
                 for s in items {
                     for t in items {
                         let out = process::run(v0) //~ WJ0173
+//~@44+3 ERROR WJ0173 data from file contents
                         println("${out} ${p}${q}${r}${s}${t}")
                         v0 = v1
                         v1 = v2

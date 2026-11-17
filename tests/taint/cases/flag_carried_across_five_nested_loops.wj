@@ -1,3 +1,4 @@
+// oracle: check
 // A flow carried from one iteration to the next, five loops deep: the command used at the top of the innermost body was read
 // at the bottom of the previous iteration. Loops nested more than three deep are not walked twice, so the analysis gives every
 // variable they assign TOP first; the flow must still be found.
@@ -13,6 +14,7 @@ fn main() {
                 for d in items {
                     for e in items {
                         let out = process::run(cmd) //~ WJ0173
+//~@44+3 ERROR WJ0173 data from file contents
                         println("${out} ${a}${b}${c}${d}${e}")
                         cmd = fs::read_to_string("next.txt").unwrap_or("")
                     }

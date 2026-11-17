@@ -1,3 +1,4 @@
+// oracle: check
 // More than 48 distinct sources merge into one value and one command is built from it: the value collapses to TOP, the sink still fires.
 use std::fs
 use std::process
@@ -65,5 +66,6 @@ fn main() {
     all = all + fs::read_to_string("f58.txt").unwrap_or("")
     all = all + fs::read_to_string("f59.txt").unwrap_or("")
     let out = process::run(all) //~ WJ0173
+//~@24+3 ERROR WJ0173 data from file contents
     println("${out}")
 }

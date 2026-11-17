@@ -1,3 +1,4 @@
+// oracle: check
 // The field that holds file contents is the one used as the path.
 use std::fs
 
@@ -17,4 +18,5 @@ fn save(page: Page) {
 
 fn main() {
     save(load("index")) //~ WJ0173
+//~@5+4 ERROR WJ0173 data from file contents
 }

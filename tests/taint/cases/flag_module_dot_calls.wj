@@ -1,3 +1,4 @@
+// oracle: check
 // Module-dot calls (`fs.read_to_string`, `process.run`) are the same functions as `fs::read_to_string`.
 use std::fs
 use std::process
@@ -5,5 +6,6 @@ use std::process
 fn main() {
     let name = fs.read_to_string("user.txt").unwrap_or("")
     let out = process.run("whoami ${name}") //~ WJ0173
+//~@23+3 ERROR WJ0173 data from file contents
     println("${out}")
 }
