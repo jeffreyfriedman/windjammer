@@ -7,7 +7,7 @@ typescript	conformance	6
 typescript	spec	25
 go	conformance	7
 go	spec	32
-wasm	conformance	0
-wasm	spec	0
+wasm	conformance	6
+wasm	spec	35
 interpreter	conformance	5
 interpreter	spec	0
