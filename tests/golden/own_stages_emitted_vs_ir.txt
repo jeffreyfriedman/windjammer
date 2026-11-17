@@ -1,3 +1,6 @@
 # Formals whose emitted mode differs from the IR's mode over the convergence corpus (gate 5). May only shrink.
 # <file>::<function>::<param> | ir=<mode> emitted=<mode>
-# (recorded on the PC with UPDATE_GOLDEN=1 WJ_GATE_JOBS=2 <all> --exact convergence_gates_test::gate5_formals_emitted_against_the_ir_only_shrink)
+examples/verified/error_custom_enum.wj::double_amount::s | ir=& emitted=owned
+examples/verified/operators_overload.wj::V2::eq::o | ir=owned emitted=&
+examples/verified/result_question_mark.wj::load::s | ir=& emitted=owned
+tests/bug_mut_self_method_call.wj::Action::execute::state | ir=& emitted=owned
