@@ -174,6 +174,7 @@ fn missing_module_imports(root: &Path, parsed: &[&Parsed], by_file: &HashMap<Str
                 || super::semantic::is_std_name(head)
                 || STD_LIKE_HEADS.contains(&head.as_str())
                 || deps.contains(head)
+                || manifest_deps(&loc.file).contains(head)
                 || modules.iter().any(|m| m == head)
                 || loc.file.parent().is_some_and(|d| on_disk(d, head))
                 || on_disk(base, head);

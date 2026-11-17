@@ -7,7 +7,7 @@ use axum::response::Response
 use axum::extract::Path as UrlPath
 use axum::http::StatusCode
 use axum::http::header
-use tokio
+use tokio::net::TcpListener
 
 @get("/")
 async fn index() -> Html<string> {
@@ -96,7 +96,7 @@ async fn main() {
         .route("/", get(index))
         .route("/:filename", get(serve_file))
     
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await.unwrap()
+    let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap()
     
     println("🚀 Windjammer File Server running on http://127.0.0.1:8080")
     println("📁 Serving UI examples")
