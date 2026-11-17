@@ -19,8 +19,9 @@ Every number below is labelled **measured** (a command in this repository produc
   (`/usr/bin/time -l`), **user+sys CPU** (children included), **peak RSS**. Instructions alone mislead across different
   programs (`wj check` retires 253M instructions in 96M cycles, rustc runs at a third of that IPC), so cross-program
   ratios use cycles and CPU; rustc's linker is a child process, so only CPU includes it.
-- Same flags on both sides: debug `-C opt-level=0 -C debuginfo=0`; release `-C opt-level=3 -C lto` (the generated
-  crate's dependencies are LTO bitcode, so the twin gets LTO too). "Shipped" = the generated `Cargo.toml` as is
+- Same flags on both sides: debug `-C opt-level=0 -C debuginfo=0`; release `-C opt-level=3 -C lto` in this run (the
+  generated crate's dependencies were LTO bitcode then). Since the automatic LTO default (2026-11-17) a single crate's
+  dependencies carry no bitcode, and the runner compares release builds at `-C opt-level=3` without LTO on both sides. "Shipped" = the generated `Cargo.toml` as is
   (LTO, overflow checks on) against the twin's release build.
 - Every number is the smallest of 3 runs (dx) or 1 run (kernels' slow variants); every output was checked.
 - Ratio = Windjammer / Rust; below 1.00 is cheaper. `geo` = geometric mean over programs.
