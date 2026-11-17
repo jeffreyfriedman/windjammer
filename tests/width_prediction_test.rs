@@ -238,13 +238,13 @@ fn predictions_across_the_corpora() {
         "tests/dogfood/voxel_raymarch.wj 4",
         "tests/drift_corpus/repros/closure_string_param_literal.wj 1",
         "tests/drift_corpus/repros/explicit_ref_literal_arg.wj 2",
-        // Width repros of the drift corpus (family A: an `int` element against a `usize` length, a literal moved into an
-        // `i32` field); rustc confirms E0308. Measured predictions, owner: width.
-        "tests/drift_corpus/repros/int_element_compared_with_len_and_used_as_index.wj 2",
+        // `int_element_compared_with_len_and_used_as_index` and `struct_field_read_moves_literal_to_i32` were pinned here while
+        // rustc rejected their build; the width-13 merge (23231c430) fixed the emitted widths, so they are no longer predicted.
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
-        "tests/drift_corpus/repros/struct_field_read_moves_literal_to_i32.wj 1",
         "tests/effects/corpus/fs_helper_and_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
+        // rustc rejects the build with two E0308 (a width mix): a width bug the program exposes, measured and pinned until fixed
+        "tests/engine_parity/jit_map_ops.wj 2",
         "tests/engine_parity/map_get_match.wj 2",
         "tests/engine_parity/match_arms.wj 1",
         "tests/engine_parity/match_value.wj 3",
