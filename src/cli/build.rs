@@ -250,7 +250,6 @@ pub fn execute(
             &external_metadata,
             &config,
         )?;
-        crate::metadata::scan_stats::report_if_requested();
 
         crate::build_utils::apply_library_build_post_steps(path, output_dir, library, module_file)?;
 

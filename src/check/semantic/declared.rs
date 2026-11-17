@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 /// `std/rust_core.wji` parsed, on the first `String` method a check asks about (once per process, kept with the stdlib
 /// registry; a check that asks about none, such as `hello`'s, never parses it: 4.5M instructions, ADR-0038 P2).
-fn core() -> &'static CoreSurface {
+pub(super) fn core() -> &'static CoreSurface {
     struct Core(CoreSurface);
     &crate::analyzer::SignatureRegistry::stdlib().derived().get_or_build(|| Core(CoreSurface::parse())).0
 }

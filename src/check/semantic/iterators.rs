@@ -7,12 +7,10 @@
 use crate::ir::stdlib_tables::{surface_type_name, CoreSurface, ITERATOR};
 use crate::parser::{Expression, Literal};
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
-/// The std surface, parsed once per process.
+/// The std surface, parsed once per process (kept with the stdlib registry, shared with the declarations).
 fn surface() -> &'static CoreSurface {
-    static S: OnceLock<CoreSurface> = OnceLock::new();
-    S.get_or_init(CoreSurface::parse)
+    super::declared::core()
 }
 
 /// Iterators that know their length (`ExactSizeIterator`): the surface does not model sizes, so `len` is not judged on

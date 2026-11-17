@@ -31,7 +31,7 @@ fn project(root: &Path, junk: usize) -> std::path::PathBuf {
     file
 }
 
-/// (directories listed, metadata files opened) by `wj <cmd>` on `file`: the last `meta-scan:` line (cumulative).
+/// (directories listed, metadata files opened) by `wj <cmd>` on `file`: the `meta-scan: dir` and `meta-scan: file` lines.
 fn scan_counts_cmd(cmd: &str, file: &Path, out: &Path) -> (usize, usize) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_wj"));
     match cmd {
@@ -42,13 +42,8 @@ fn scan_counts_cmd(cmd: &str, file: &Path, out: &Path) -> (usize, usize) {
     let o = c.env("WJ_META_SCAN_STATS", "1").output().expect("run wj");
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(o.status.success(), "wj {cmd} failed:\n{err}");
-    let Some(line) = err.lines().filter(|l| l.starts_with("meta-scan: ")).last() else {
-        return (0, 0); // this command merged no metadata at all
-    };
-    let num = |k: &str| -> usize {
-        line.split_whitespace().find_map(|w| w.strip_prefix(k)).and_then(|v| v.parse().ok()).unwrap()
-    };
-    (num("dirs="), num("meta_files="))
+    let count = |kind: &str| err.lines().filter(|l| *l == format!("meta-scan: {kind}")).count();
+    (count("dir"), count("file"))
 }
 
 fn scan_counts(file: &Path, out: &Path) -> (usize, usize) {
