@@ -20,6 +20,7 @@ mod loop_writes;
 mod stored;
 mod opaque_receiver;
 mod structure;
+mod text_formals;
 use numeric::{emit_numeric_class_constraint, is_int_literal_tree, literal_rule, literal_to_base_type};
 
 use crate::ir::constraints::{Constraint, ConstraintOrigin, ConstraintSet, ConstraintVar};
@@ -1517,6 +1518,7 @@ pub fn generate_constraints_typed(
     walker.walk_body();
     walker.emit_return_field_consumption_constraints();
     walker.emit_clone_constraints();
+    walker.emit_owned_for_unused_pub_text_formals();
     walker.emit_mutation_constraints();
     walker.finish()
 }

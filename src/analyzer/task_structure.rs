@@ -326,7 +326,8 @@ fn expr_mentions(e: &Expression<'_>, name: &str) -> bool {
     }
 }
 
-fn block_mentions(b: &[&Statement<'_>], name: &str) -> bool {
+/// Whether `name` is read anywhere in `b` (an identifier use, including interpolations).
+pub(crate) fn block_mentions(b: &[&Statement<'_>], name: &str) -> bool {
     b.iter().any(|s| stmt_mentions(s, name))
 }
 

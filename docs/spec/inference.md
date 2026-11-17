@@ -98,6 +98,12 @@ no signature describes, keeps its declared owned mode: the method may consume it
 `base: &RailItem` (which `RailItem::active(self, ..)` rejects).
 **Status.** Conforms.
 
+### OWN-PUB-TEXT-UNUSED
+**Rule.** A `string` parameter of a `pub` free function that the body never reads is owned: it is part of the module's
+API, and the solver decides it, so callers in other files read the same formal the callee emits.
+**Example.** `pub fn label(name: string) -> int { 3 }` emits `name: String`; a caller passes `"x".to_string()`.
+**Status.** Draft (docs/design/ownership-decided-once.md, stage 1 class 1).
+
 ### OWN-MUT-PARAM-COPY
 **Rule.** A parameter declared `mut` (`fn f(mut s: S)`) is owned: the callee changes its own copy and the caller's
 value is unchanged (SPEC-OWN-008). The caller moves its value at its last use and passes a copy otherwise.

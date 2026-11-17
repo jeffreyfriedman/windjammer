@@ -46,6 +46,7 @@ pub const RULES: &[Rule] = rules![
     ("OWN-RETURNED", ParamMode, "A parameter (or a non-Copy field of it) that is returned is owned"),
     ("OWN-STORED", ParamMode, "A parameter moved into a struct, enum, tuple or collection is owned"),
     ("OWN-OPAQUE-RECEIVER", ParamMode, "A by-value parameter of an undeclared type receiving a method with no signature stays owned"),
+    ("OWN-PUB-TEXT-UNUSED", ParamMode, "An unused `string` formal of a `pub` function is owned (module API)"),
     ("OWN-MUT-PARAM-COPY", ParamMode, "A parameter declared `mut` is the callee's own copy: owned"),
     ("OWN-COPY-SEED", ParamMode, "Copy scalars are passed by value"),
     ("OWN-READ-FIELD", ParamMode, "Reading a field of a parameter borrows it"),
