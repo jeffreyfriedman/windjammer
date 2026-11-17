@@ -1255,7 +1255,6 @@ impl<'ast> Analyzer<'ast> {
             let Some(formal) = idx.checked_sub(decl_offset).and_then(|d| func.decl.parameters.get(d)).map(|p| &p.type_) else {
                 continue;
             };
-            if std::env::var_os("WJ_DBG_CAM").is_some() { eprintln!("TMPDBG sig {} idx={idx} formal={formal:?} copy={} own={:?} ty={:?} offset={decl_offset}", func.decl.name, self.is_copy_type(formal), param_ownership.get(idx), param_types.get(idx)); }
             // Copy scalars pass by value. Copy aggregates borrow only for field-enum-match
             // (`&T`) or mutation/passthrough (`&mut T`). Ref analysis may attach spurious
             // `Reference(T)` after field reads (e.g. `other.x`) — strip those to Owned.
