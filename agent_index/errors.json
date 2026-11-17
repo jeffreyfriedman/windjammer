@@ -261,5 +261,64 @@
       "Validate in a function documented `/// wj-taint: sanitizer`; a reviewed function may be documented `/// wj-taint: trusted(<reason>)`"
     ],
     "title": "Untrusted data reaches a command, file path or query"
+  },
+  "WJ0190": {
+    "causes": [
+      "A `spawn` used as a statement outside a `scope { }`",
+      "A task bound to a name nothing uses"
+    ],
+    "code": "WJ0190",
+    "example": null,
+    "explanation": "Every task (`spawn`, `async`, or a call returning `Task<T>`) is waited on: inside a `scope { }`, which waits for it, or through `.wait()` (ADR-0004).",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Wrap the work in `scope { ... }`",
+      "Keep the task and call `.wait()`"
+    ],
+    "title": "Task is never waited on"
+  },
+  "WJ0191": {
+    "causes": [
+      "Code written before ADR-0004"
+    ],
+    "code": "WJ0191",
+    "example": null,
+    "explanation": "`thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them.",
+    "maturity": "Proven",
+    "rust_codes": [],
+    "solutions": [
+      "Run `wj fix <path>`"
+    ],
+    "title": "Removed concurrency syntax"
+  },
+  "WJ0192": {
+    "causes": [
+      "`spawn { total += x }` with `total` a local of the enclosing code"
+    ],
+    "code": "WJ0192",
+    "example": null,
+    "explanation": "A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004).",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Return the value and read it with `t.wait()`, or send it on a channel"
+    ],
+    "title": "Task changes a captured variable"
+  },
+  "WJ0193": {
+    "causes": [
+      "`spawn { .. }` reading a local made with `Rc::new`"
+    ],
+    "code": "WJ0193",
+    "example": null,
+    "explanation": "A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004).",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Start the task with `async`",
+      "Build the value inside the task"
+    ],
+    "title": "Value cannot move to another thread"
   }
 }

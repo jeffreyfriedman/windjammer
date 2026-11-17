@@ -2843,6 +2843,42 @@
     "tags": []
   },
   {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0190",
+    "signature": "Task is never waited on",
+    "source": "",
+    "summary": "Every task (`spawn`, `async`, or a call returning `Task<T>`) is waited on: inside a `scope { }`, which waits for it, or through `.wait()` (ADR-0004).",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0191",
+    "signature": "Removed concurrency syntax",
+    "source": "",
+    "summary": "`thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them.",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0192",
+    "signature": "Task changes a captured variable",
+    "source": "",
+    "summary": "A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004).",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0193",
+    "signature": "Value cannot move to another thread",
+    "source": "",
+    "summary": "A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004).",
+    "tags": []
+  },
+  {
     "kind": "example",
     "module": "",
     "name": "algo_anagram",
@@ -5153,13 +5189,13 @@
       "needs",
       "run",
       "server",
-      "wrong",
       "above",
       "acting",
       "allow",
       "another",
       "anything",
-      "arguments"
+      "arguments",
+      "before"
     ]
   },
   {
@@ -5426,10 +5462,10 @@
       "form",
       "implemented",
       "input",
-      "instead",
       "interpret",
       "interpreter",
-      "iterator"
+      "iterator",
+      "lines"
     ]
   },
   {
@@ -5558,7 +5594,7 @@
     "name": "Where to look next",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_REFERENCE.md",
-    "summary": "`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_rust.md`, `_python`, `_go`, `_typescript`),",
+    "summary": "`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_*.md`),",
     "tags": [
       "docs",
       "design",
@@ -5567,7 +5603,7 @@
       "adr",
       "built",
       "cheat",
-      "cheatsheet_from_rust",
+      "cheatsheet_from_",
       "decisions",
       "guide",
       "indexed",
@@ -7842,17 +7878,6 @@
     "summary": "",
     "tags": [
       "struct"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::http",
-    "name": "content_type",
-    "signature": "fn content_type(value: string) -> HashMap<string, string>",
-    "source": "std/http.wj",
-    "summary": "ServerResponse - Build Responses",
-    "tags": [
-      "fn"
     ]
   },
   {
