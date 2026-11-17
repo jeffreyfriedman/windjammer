@@ -29,6 +29,11 @@ pub fn enabled(name: &str) -> bool {
     std::env::var_os(name).is_some()
 }
 
+/// True when the variable is set to exactly `value`.
+pub fn equals(name: &str, value: &str) -> bool {
+    std::env::var_os(name).is_some_and(|v| v == value)
+}
+
 /// True when the diagnostics variable is set to `1`, `true` or `yes`.
 pub fn truthy(name: &str) -> bool {
     matches!(

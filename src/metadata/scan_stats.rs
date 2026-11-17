@@ -24,7 +24,7 @@ pub fn counts() -> (usize, usize) {
 
 /// Print the counts to stderr when `WJ_META_SCAN_STATS=1`.
 pub fn report_if_requested() {
-    if std::env::var_os("WJ_META_SCAN_STATS").is_some_and(|v| v == "1") {
+    if crate::debug_env::equals("WJ_META_SCAN_STATS", "1") {
         let (d, m) = counts();
         eprintln!("meta-scan: dirs={d} meta_files={m}");
     }

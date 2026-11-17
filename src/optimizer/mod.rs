@@ -85,7 +85,7 @@ pub fn run_default(rust_source: &str) -> String {
 /// `WJ_OPTIMIZER=off`: the build hooks emit the code generator's output unchanged. Set only by `wj optimize` on the
 /// child build it runs to obtain the pre-optimizer text (src/cli/optimize.rs); not a user setting.
 fn disabled_for_explain() -> bool {
-    std::env::var_os("WJ_OPTIMIZER").is_some_and(|v| v == "off")
+    crate::debug_env::equals("WJ_OPTIMIZER", "off")
 }
 
 #[cfg(test)]
