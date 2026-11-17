@@ -393,7 +393,7 @@ fn compile_file_impl(
             // module's placeholder struct of the same name (std/time.wj's chrono-era `struct Duration`) is not a
             // user declaration and must not shadow the surface's typing of `Duration::from_millis(10)` (u64).
             let std_file = !module_compiler.stdlib_path.as_os_str().is_empty() && input_path.starts_with(&module_compiler.stdlib_path);
-            if std_file && crate::typing::core_surface::surface_type_name(&parser::Type::Parameterized(decl.name.clone(), Vec::new())).is_some() {
+            if std_file && crate::ir::stdlib_tables::surface_type_name(&parser::Type::Parameterized(decl.name.clone(), Vec::new())).is_some() {
                 continue;
             }
             let mut field_types = HashMap::new();
