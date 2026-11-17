@@ -512,7 +512,7 @@ impl<'ast> Analyzer<'ast> {
                             // Callers like `obj.method()` resolve to the direct impl in Rust,
                             // so the registry's Type::method entry must reflect the direct impl's
                             // signature (parameter types and ownership).
-                            registry.record_trait_impl_method_key(qualified_name.clone());
+                            registry.record_trait_impl_method_key(qualified_name.clone(), impl_block.trait_name.as_deref());
                             if registry.get_signature(&qualified_name).is_none() {
                                 registry.add_function(qualified_name.clone(), signature.clone());
                             }
@@ -803,7 +803,7 @@ impl<'ast> Analyzer<'ast> {
                             format!("{}::{}", impl_block.type_name, func.name);
                         if is_trait_impl {
                             registry
-                                .record_trait_impl_method_key(qualified_name.clone());
+                                .record_trait_impl_method_key(qualified_name.clone(), impl_block.trait_name.as_deref());
                             if registry.get_signature(&qualified_name).is_none() {
                                 registry
                                     .add_function(qualified_name, signature.clone());

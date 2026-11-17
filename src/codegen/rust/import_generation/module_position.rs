@@ -36,9 +36,9 @@ impl CodeGenerator<'_> {
     }
 
     /// The source directory of the module `dirs` (relative to the source root): where its child modules are declared
-    /// (`<src>/a/b`). `None` when the driver did not name the source root.
+    /// (`<src>/a/b`). A file built alone (no source root named) is its own crate root: its directory.
     fn source_dir_of(&self, dirs: &[String]) -> Option<PathBuf> {
-        let mut dir = self.module_source_root.clone()?;
+        let mut dir = self.module_source_root.clone().or_else(|| self.current_wj_file.parent().map(PathBuf::from))?;
         for d in dirs {
             dir.push(d);
         }

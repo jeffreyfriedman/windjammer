@@ -150,8 +150,27 @@ impl SignatureRegistry {
         self.layers().find_map(|reg| reg.dependency_type_serde.get(name).copied())
     }
 
-    /// Record that `key` is a `Type::method` from `impl Trait for Type`.
-    pub fn record_trait_impl_method_key(&mut self, key: String) {
+    /// Record that `key` is a `Type::method` from `impl Trait for Type`, and the trait it declares it implements.
+    pub fn record_trait_impl_method_key(&mut self, key: String, trait_name: Option<&str>) {
+        if let Some(t) = trait_name {
+            self.impl_method_traits.insert(key.clone(), t.split('<').next().unwrap_or(t).to_string());
+        }
         self.trait_impl_method_keys.insert(key);
+    }
+
+    /// The trait an impl method `Type::method` implements, as its `impl Trait for Type` declares it.
+    pub fn impl_method_trait(&self, impl_key: &str) -> Option<&str> {
+        self.layers().find_map(|reg| reg.impl_method_traits.get(impl_key)).map(String::as_str)
+    }
+
+    /// The trait's own declaration of the method an impl method implements (`Trait::method`, by the trait the impl
+    /// declares): `None` when the impl names no trait known to this registry.
+    pub fn trait_definition_of_impl_method(&self, impl_key: &str) -> Option<(String, &FunctionSignature)> {
+        let trait_path = self.impl_method_trait(impl_key)?;
+        let member = impl_key.rsplit("::").next()?;
+        let trait_leaf = trait_path.rsplit("::").next().unwrap_or(trait_path);
+        [format!("{trait_path}::{member}"), format!("{trait_leaf}::{member}")]
+            .into_iter()
+            .find_map(|key| self.signature_declared_at(&key).map(|sig| (key, sig)))
     }
 }

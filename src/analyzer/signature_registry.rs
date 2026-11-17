@@ -151,6 +151,7 @@ pub struct SignatureRegistry {
     /// Write-back restores trait AST `string` onto these without touching
     /// inherent homonyms (`DbReportReader::report_lines`).
     trait_impl_method_keys: HashSet<String>,
+    impl_method_traits: HashMap<String, String>, // `Type::method` of `impl Trait for Type` -> the declared `Trait`
     /// Types declared by dependencies, with whether their crate derives `Serialize` for them.
     dependency_type_serde: std::collections::BTreeMap<String, bool>,
     /// `Type::method` keys of inherent impls (`impl Type`) the program declares.
@@ -237,6 +238,7 @@ impl SignatureRegistry {
             method_index: HashMap::new(),
             trait_method_keys: TraitKeySet::default(),
             trait_impl_method_keys: HashSet::new(),
+            impl_method_traits: HashMap::new(),
             dependency_type_serde: std::collections::BTreeMap::new(),
             inherent_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
@@ -1543,7 +1545,7 @@ impl SignatureRegistry {
                             )
                         };
                         if block.trait_name.is_some() {
-                            registry.record_trait_impl_method_key(qualified_name.clone());
+                            registry.record_trait_impl_method_key(qualified_name.clone(), block.trait_name.as_deref());
                         } else {
                             registry.inherent_method_keys.insert(format!("{base_type_name}::{}", func.name));
                         }
@@ -1878,14 +1880,11 @@ impl SignatureRegistry {
             }
             self.signatures.insert(name.clone(), sig.clone());
         }
-        self.type_collision_keys
-            .extend(other.type_collision_keys.iter().cloned());
-        self.ownership_collision_keys
-            .extend(other.ownership_collision_keys.iter().cloned());
-        self.trait_method_keys
-            .extend(other.trait_method_keys.iter().cloned());
-        self.trait_impl_method_keys
-            .extend(other.trait_impl_method_keys.iter().cloned());
+        self.type_collision_keys.extend(other.type_collision_keys.iter().cloned());
+        self.ownership_collision_keys.extend(other.ownership_collision_keys.iter().cloned());
+        self.trait_method_keys.extend(other.trait_method_keys.iter().cloned());
+        self.trait_impl_method_keys.extend(other.trait_impl_method_keys.iter().cloned());
+        self.impl_method_traits.extend(other.impl_method_traits.iter().map(|(k, v)| (k.clone(), v.clone())));
         self.dependency_type_serde
             .extend(other.dependency_type_serde.iter().map(|(k, v)| (k.clone(), *v)));
         self.inherent_method_keys.extend(other.inherent_method_keys.iter().cloned());
