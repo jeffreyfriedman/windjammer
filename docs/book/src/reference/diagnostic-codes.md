@@ -22,6 +22,10 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0160` | Arena value escapes its arena | HighConfidence | E0597, E0505 | A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function that declares the arena, stored in a variable, field or collection declared outside the arena's scope, used as the value of the block that declares the arena, or used after the arena's `reset()` |
 | `WJ0161` | `std::arena` is unstable | Proven |  | Arenas (ADR-0025) are behind the compiler feature `unstable_arenas` |
 | `WJ0173` | Untrusted data reaches a command, file path or query | HighConfidence |  | Data the program did not produce (file contents, standard input, an HTTP request, a database row) flows into a command, the path of a file write or SQL text without passing through a sanitizer (ADR-0009) |
+| `WJ0190` | Task is never waited on | HighConfidence |  | Every task (`spawn`, `async`, or a call returning `Task<T>`) is waited on: inside a `scope { }`, which waits for it, or through `.wait()` (ADR-0004) |
+| `WJ0191` | Removed concurrency syntax | Proven |  | `thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them |
+| `WJ0192` | Task changes a captured variable | HighConfidence |  | A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004) |
+| `WJ0193` | Value cannot move to another thread | HighConfidence |  | A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004) |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

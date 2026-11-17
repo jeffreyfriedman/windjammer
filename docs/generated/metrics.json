@@ -10,20 +10,20 @@
     "book.features_uncovered": 0,
     "book.pages": 62,
     "book.promises_uncovered": 0,
-    "cli.subcommands": 43,
+    "cli.subcommands": 44,
     "conformance.backends": 3,
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 27,
     "drift.corpus_cases": 1946,
-    "errors.codes_total": 75,
+    "errors.codes_total": 79,
     "interpreter.features_supported": 44,
     "interpreter.features_unsupported": 0,
     "intrinsics.count": 13,
-    "lexer.keywords": 44,
+    "lexer.keywords": 47,
     "lints.w_codes": 7,
-    "spec.example_files": 294,
+    "spec.example_files": 299,
     "stdlib.files": 43,
-    "tests.rust_files": 2076,
-    "tests.wj_programs": 2169
+    "tests.rust_files": 2089,
+    "tests.wj_programs": 2219
   }
 }

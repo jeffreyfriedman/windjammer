@@ -90,7 +90,7 @@ lists them all.
 The agent sheet is a single page, written to fit in the first moments of a session:
 
 <!-- wj:gen name=file_bytes path=docs/agent/WINDJAMMER_FOR_AGENTS.md -->
-1936 bytes
+2314 bytes
 <!-- wj:end -->
 
 Its examples run in the same test suite as this book, and a size ratchet keeps it from growing. The full reference behind
