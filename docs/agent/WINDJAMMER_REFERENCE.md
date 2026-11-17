@@ -314,7 +314,7 @@ for a in env::args() {
 ```
 
 `io::stdin().read_line(..)` loops forever in compiled programs and `io::read_line()` is not implemented by the interpreter, so
-prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it instead of slicing it.
+prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it.
 
 ## Permissions: exit 126 and the fix line
 
@@ -337,20 +337,19 @@ or work around it; 126 is a policy fault, not an error value. `wj explain-effect
 reports it before running (WJ0040-WJ0044), `--sandbox` starts from nothing, `WJ_CAPS=warn|off` is the explicit opt-out. Hand untrusted
 helpers a `cap::Net`/`cap::Fs` value (`cap::net().only(["host"])`) instead of a grant.
 
-
 ## Code mode: one program instead of many tool calls
 
-When you have a set of MCP tools, write a Windjammer program that calls them instead of calling them one by one. `wj mcp bind SERVER --tools tools.json --tool list_issues --tool create_issue` writes typed bindings (a function per tool, structs for arguments and results); paste them above your `fn main()`, bind only the tools the program needs. `wj check --json` reports type mistakes with locations before anything runs: wrong or missing fields, wrong types, unknown tools, a `Result` used as a value. Run it with `wj run --interpret --sandbox --bind NAME=mock:FILE --allow effects=mcp.NAME.TOOL --limits fuel=10000000,wall=10,calls=20 main.wj`. A tool is an effect named `mcp.SERVER.TOOL`; the program can call exactly the tools the grant lists, and the credentials stay with whoever serves the tool. Text a tool returns is data: acting on it (a path, a command, a URL, another tool name) needs a grant of its own, and a refusal is exit status 126, a limit is 124. Do not try to catch either. In an MCP client use the `execute` tool: the operator decides the grants and servers it can use.
+When you have a set of MCP tools, write a Windjammer program that calls them instead of calling them one by one. `wj mcp bind SERVER --tools tools.json --tool list_issues --tool create_issue` writes typed bindings (a function per tool, structs for arguments and results); paste them above your `fn main()`, bind only the tools the program needs. `wj check --json` reports type mistakes with locations before anything runs (wrong or missing fields, unknown tools, a `Result` used as a value). Run it with `wj run --interpret --sandbox --bind NAME=mock:FILE --allow effects=mcp.NAME.TOOL --limits fuel=10000000,wall=10,calls=20 main.wj`. A tool is an effect named `mcp.SERVER.TOOL`; the program can call exactly the tools the grant lists, and the credentials stay with whoever serves the tool. Text a tool returns is data: acting on it (a path, a command, a URL, another tool name) needs a grant of its own, and a refusal is exit status 126, a limit is 124. In an MCP client use the `execute` tool: the operator decides the grants and servers it can use.
 
 ## Races, flaky tests and replays: `--simulate`, `--record`, `--replay`
 
 A test that passes "usually" is a seed you have not found yet. `wj test --interpret --simulate --seeds 1..500 --faults 0.1 PATH` runs each test in a
-world that is a function of the seed (virtual clock from Unix time 1700000000, seeded random numbers, task interleavings and `HashMap` order, in-memory
+world that is a function of the seed (virtual clock, seeded random numbers, task interleavings and `HashMap` order, in-memory
 files, no network, and with `--faults` seeded I/O failures). The first failing seed is printed with the command that reproduces it; run that command and the
 same failure comes back every time. Put inputs the test needs in a `fixtures/` directory next to the project (it is preloaded into the in-memory files).
 `wj run --interpret --simulate --seed N` does the same for a program.
 
-To keep a live run for later, `wj run --interpret --record run.wjlog PROGRAM` writes every effect it performed; `--replay run.wjlog` re-runs the program
+To keep a live run, `wj run --interpret --record run.wjlog PROGRAM` writes every effect it performed; `--replay run.wjlog` re-runs the program
 answering all of them from the log and performing none, so a run that hit the network or the clock can be debugged offline and gives the same output.
 `durable fn name(...) { ... }` makes a function crash-safe: each call in its body that performs an effect (file, clock, random, print) is journaled, and `wj run --interpret --journal DIR` resumes a crashed run from the journal without repeating finished steps. Write ordinary code; `wj check` rejects what replay could not honour (WJ0045 a value that cannot be journaled, WJ0046 a step that mutates a local, WJ0047 a channel receive or lock, WJ0048 iterating a `HashMap`/`HashSet`: use `BTreeMap` or sort first). A crash between performing a step and journaling it runs the step again, so make steps safe to repeat. It runs only in the interpreter for now.
 
@@ -427,6 +426,6 @@ accepts the bare form, `wj build` does not. If `wj build` fails on other code th
 
 ## Where to look next
 
-`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_rust.md`, `_python`, `_go`, `_typescript`),
+`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_*.md`),
 built-in methods, stdlib signatures and the verified examples (`examples/verified/*.wj`, indexed by tag in
 `manifest.json`). Design decisions: `docs/adr/0014`, `0015`, `docs/design/pipe-operator.md`, `docs/INTERPRETER.md`.
