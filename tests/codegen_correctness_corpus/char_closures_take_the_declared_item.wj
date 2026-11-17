@@ -1,0 +1,18 @@
+// expect: true false 2 ABC
+// expect: true 1 2
+// A closure over `s.chars()` receives each `char` by value (Iterator<char>), one over a `Vec<char>` (iterated by
+// reference) receives `&char`, one over its `into_iter()` receives `char`: the adapter's declaration decides whether the
+// parameter is dereferenced (rustc E0614 on `*c` for a `char`).
+fn main() {
+    let tok = "-123"
+    let digits = tok.chars().all(|c| c == '-' || (c >= '0' && c <= '9'))
+    let letters = tok.chars().any(|c| c >= 'a' && c <= 'z')
+    let dashes_or_ones = "a-1b".chars().filter(|c| c == '-' || c == '1').count()
+    let upper: string = "abc".chars().map(|c| c.to_ascii_uppercase()).collect()
+    println("${digits} ${letters} ${dashes_or_ones} ${upper}")
+    let v: Vec<char> = ['x', 'y', 'x']
+    let has_y = v.any(|c| c == 'y')
+    let ys = v.filter(|c| c == 'y').count()
+    let xs = v.into_iter().filter(|c| c == 'x').count()
+    println("${has_y} ${ys} ${xs}")
+}

@@ -105,7 +105,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// The declared parameter types of the closure passed as argument `arg_index` of `object.method(..)`, when the
     /// call is an iterator adapter whose item type is known.
-    fn adapter_closure_param_types(&self, object: &Expression<'ast>, method: &str, arg_index: usize, receiver: &Option<Type>) -> Option<Vec<Type>> {
+    pub(super) fn adapter_closure_param_types(&self, object: &Expression<'ast>, method: &str, arg_index: usize, receiver: &Option<Type>) -> Option<Vec<Type>> {
         let surface = self.core_surface();
         surface.declared(ITERATOR, method)?;
         // A receiver the declarations type as an iterator (`s.chars()`, `v.iter()`) gets nothing inserted.

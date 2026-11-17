@@ -299,8 +299,7 @@ impl<'ast> CodeGenerator<'ast> {
                     arg // Not a & expression — keep as-is
                 };
 
-                let predicate_receives_ref = Self::predicate_closure_receives_ref(method, receiver_type_name)
-                    || self.closure_receives_element_ref(object, method, &receiver_type_inferred);
+                let predicate_receives_ref = self.predicate_receives_ref(object, method, i, receiver_type_name, &receiver_type_inferred);
                 let closure_borrowed_params: Vec<String> =
                     if predicate_receives_ref {
                         if let Expression::Closure { parameters, .. } = arg_to_generate {
@@ -1047,6 +1046,14 @@ impl<'ast> CodeGenerator<'ast> {
     /// Does the predicate closure of `method` receive a reference (`retain`, `filter`, `any`...)?
     /// `str::find(pattern)` takes `FnMut(char) -> bool`: its parameter is a plain `char`, unlike
     /// `Iterator::find`, which passes `&Item`.
+    /// Whether the closure argument `i` of `object.method(..)` receives references. The adapter's declaration decides
+    /// when it is known (`chars().all(|c| ..)` passes `char`, a sequence's `all` passes `&T`); the method list
+    /// stands in only where the item type is not declared.
+    fn predicate_receives_ref(&self, object: &Expression<'ast>, method: &str, i: usize, receiver_type_name: Option<&str>, receiver: &Option<Type>) -> bool {
+        let declared = self.adapter_closure_param_types(object, method, i, receiver).map(|params| params.first().is_some_and(|t| matches!(t, Type::Reference(_))));
+        declared.unwrap_or_else(|| Self::predicate_closure_receives_ref(method, receiver_type_name) || self.closure_receives_element_ref(object, method, receiver))
+    }
+
     fn predicate_closure_receives_ref(method: &str, receiver_type_name: Option<&str>) -> bool {
         !matches!(receiver_type_name, Some("string" | "String" | "str"))
             && crate::codegen::rust::stdlib_method_traits::method_predicate_closure_receives_ref(method)

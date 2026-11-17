@@ -220,7 +220,7 @@
 "src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1059
 "src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1217
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
-"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 971
+"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 970
 "src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2138
 "src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 317
 "src/codegen/rust/program_generation.rs::generate_program" = 998
