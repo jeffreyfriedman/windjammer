@@ -86,8 +86,13 @@ impl Checker<'_, '_, '_> {
                 let single = self.name_uses.get(name) == Some(&1);
                 if let (Use::Method(m @ ("len" | "first")), true, Some(sp)) = (how, single, &method_span) {
                     let to = if *m == "len" { "count" } else { "next" };
-                    let fix = machine(replace_fix(sp, to, format!("call `.{to}()`: an iterator has no `.{m}()`")));
-                    return (format!("write `.{to}()` instead of `.{m}()` on an iterator"), Some(fix));
+                    let mut fix = machine(replace_fix(sp, to, format!("call `.{to}()`: an iterator has no `.{m}()`")));
+                    // `.next()` borrows the iterator mutably: the binding must be `let mut` (WJ0051 otherwise)
+                    let declared = if *m == "first" { self.binding_mut_edit(name) } else { Some(None) };
+                    if let Some(maybe_edit) = declared {
+                        fix.edits.extend(maybe_edit);
+                        return (format!("write `.{to}()` instead of `.{m}()` on an iterator"), Some(fix));
+                    }
                 }
                 if !self.collected.insert(name.clone()) {
                     return (format!("`{name}` is fixed by the `.collect()` suggested at its first report"), None);

@@ -52,13 +52,13 @@ const CASES: &[Case] = &[
     },
     Case {
         name: "list method on an iterator",
-        code: "WJ0015",
+        code: "WJ0035",
         auto_fix: true,
         src: "fn main() {\n    let parts = \"a b\".split(\" \")\n    println(\"${parts.contains(\"a\")}\")\n}\n",
     },
     Case {
         name: "iterator given to a declared list",
-        code: "WJ0003",
+        code: "WJ0035",
         auto_fix: true,
         src: "fn main() {\n    let line = \"hello world\"\n    let parts: Vec<string> = line.split(\" \")\n    println(\"${parts.len()}\")\n}\n",
     },

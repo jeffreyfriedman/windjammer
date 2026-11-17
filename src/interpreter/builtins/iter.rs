@@ -123,31 +123,17 @@ fn register_adaptors(r: &mut Registry) {
     });
 }
 
-/// Defensive twin of the checker's WJ0035 ("an iterator is used as a list", `check/semantic/checker/iter_use.rs`): a lazy
-/// iterator has no `len`, `is_empty` or `contains`. The checker reports this before anything runs; this error only
-/// fires for a program that skipped the check, with the same code and wording (`error/runtime_text.rs`).
-fn list_only_on_iterator(v: &Value, method: &str) -> R<()> {
-    match v {
-        Value::Iter(_) => Err(crate::interpreter::error::semantic(format!(
-            "an iterator is used as a list: `{method}` is a list method; call `.collect()` first (`.count()` is the size of an iterator)"
-        ))),
-        _ => Ok(()),
-    }
-}
-
 fn register_consumers(r: &mut Registry) {
     r.pure(Kind::Iter, "len", |it, v, _| {
-        list_only_on_iterator(v, "len")?;
         let s = it_of(it, v)?;
         if let Some(t) = proto::inexact_type(&s) {
             return Err(crate::interpreter::error::semantic(format!(
-                "no method named `len` found for `{t}` (it has no exact size in the compiled program): count it with `.count()`, or call `strings.chars(text).len()`"
+                "an iterator is used as a list: `len` is a list method; no method named `len` found for `{t}` (it has no exact size in the compiled program): count it with `.count()`, or call `strings.chars(text).len()`"
             )));
         }
         proto::exact_len(&s).map(Value::usize).ok_or_else(|| unsupported("`len()` on an iterator without a known exact size"))
     });
     r.pure(Kind::Iter, "is_empty", |it, v, _| {
-        list_only_on_iterator(v, "is_empty")?;
         let s = it_of(it, v)?;
         match proto::exact_len(&s) {
             Some(n) => Ok(Value::Bool(n == 0)),
@@ -292,7 +278,7 @@ fn register_consumers(r: &mut Registry) {
         let x = arg(&a, 0, "contains")?;
         match v {
             Value::Range(r, _) => Ok(Value::Bool(matches!(x, Value::Int(n, _) if n >= r.0 && n < r.1))),
-            _ => list_only_on_iterator(v, "contains").map(|_| Value::Bool(false)),
+            _ => Err(semantic("an iterator is used as a list: `contains` is a list method; `.collect()` first")),
         }
     });
 }

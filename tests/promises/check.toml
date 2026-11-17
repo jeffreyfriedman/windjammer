@@ -267,6 +267,8 @@ stdout_has = ["\"code\": \"WJ0173\"", "file contents", "run_with_args"]
 name = "check accepts the same flow once the value is an argument, not a command (WJ0173)"
 polarity = "positive"
 files = { "m.wj" = "use std::fs\nuse std::process\n\nfn main() {\n    let name = fs::read_to_string(\"name.txt\").unwrap_or(\"\")\n    let out = process::run_with_args(\"echo\", [name])\n    println(\"${out}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
 
 [[case]]
 name = "check rejects a task nobody waits on (WJ0190), with the scope fix"

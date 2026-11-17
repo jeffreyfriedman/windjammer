@@ -165,6 +165,19 @@ pub fn missing_modules(path: &Path) -> Result<Checked> {
     Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 
+/// The `WJ0035` diagnostics (an iterator used as a list) of the program at `path`, exactly as `wj check` reports them;
+/// `wj build` prints these and stops. No cache, no other check.
+pub fn iterator_as_list(path: &Path) -> Result<Checked> {
+    let (sources, _) = inputs(path)?;
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut sink = Vec::new();
+    let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+    let found = project::iterator_as_list_only(&parsed);
+    std::panic::set_hook(previous);
+    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+}
+
 /// `local_mutability` over in-memory sources (one program); files that do not parse are left out.
 pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic> {
     let previous = std::panic::take_hook();
