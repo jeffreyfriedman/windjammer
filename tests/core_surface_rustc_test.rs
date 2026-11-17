@@ -69,7 +69,7 @@ fn receiver(type_name: &str, generics: &[String], by_ref: bool) -> String {
 fn every_core_surface_entry_typechecks_in_rustc() {
     // `ThreadPanic` is the surface's name for a joined thread's panic payload.
     let mut src = String::from(
-        "#![allow(unused, clippy::all)]\nuse std::collections::*;\nuse std::thread::{self, JoinHandle};\ntype ThreadPanic = Box<dyn std::any::Any + Send + 'static>;\nfn arg<A>() -> A { unimplemented!() }\n",
+        "#![allow(unused, clippy::all)]\nuse std::collections::*;\nuse std::thread::{self, JoinHandle};\nuse std::time::{Duration, Instant};\ntype ThreadPanic = Box<dyn std::any::Any + Send + 'static>;\nfn arg<A>() -> A { unimplemented!() }\n",
     );
     // `Task<T>` is the runtime's (ADR-0004): its module depends on `std` only, so rustc checks the entries against it.
     src.push_str(&format!(

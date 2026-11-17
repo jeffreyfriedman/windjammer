@@ -185,9 +185,8 @@ fn main() {
     assert!(rs.contains("timestamp_millis"), "{rs}");
     // the declared return type must be the one the runtime returns
     let decl = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/std/time.wj")).unwrap();
-    let rt = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/crates/windjammer-runtime/src/time.rs"))
-        .or_else(|_| fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/runtime/time.rs")))
-        .unwrap_or_default();
+    // `time.rs` publishes its calendar child with `pub use calendar::*;`, so `now` is declared in `time/calendar.rs`
+    let rt = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/crates/windjammer-runtime/src/time/calendar.rs")).unwrap_or_default();
     let decl_line = decl.lines().find(|l| l.contains("fn now(")).unwrap_or("");
     let rt_line = rt.lines().find(|l| l.contains("pub fn now(")).unwrap_or("");
     let ty = |l: &str| l.split("->").nth(1).map(|s| s.trim().trim_end_matches('{').trim().to_string()).unwrap_or_default();

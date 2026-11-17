@@ -43,6 +43,18 @@ fn runtime_source(module: &str) -> Option<String> {
     let top = [format!("{module}.rs"), format!("{module}_mod.rs"), format!("{module}/mod.rs")]
         .iter()
         .find_map(|f| std::fs::read_to_string(base.join(f)).ok());
+    // a module that publishes a private child with `pub use child::*;` (`time.rs`: `pub use calendar::*;`) defines
+    // those functions under its own path, so the child's source is part of the module
+    let top = top.map(|t| {
+        let children: String = t
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("pub use ")?.strip_suffix("::*;").map(str::to_string))
+            .filter(|c| !c.contains("::"))
+            .filter_map(|c| std::fs::read_to_string(base.join(module).join(format!("{c}.rs"))).ok())
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("{t}\n{children}")
+    });
     let native = std::fs::read_to_string(base.join(format!("platform/native/{module}.rs"))).ok();
     match (top, native) {
         (None, None) => None,
