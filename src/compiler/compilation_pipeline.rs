@@ -166,7 +166,7 @@ pub fn build_project_with_config(
 
     let mut deferred_lint_errors: Vec<String> = Vec::new();
 
-    for file in &wj_files {
+    for file in &super::lone_script_modules::lone_script_files(path, &wj_files, library) {
         let source = std::fs::read_to_string(file)?;
         let (_parser, program) = super::parse_wj_source(file, &source)?;
         if let Err(e) = super::emit_parser_warnings(&_parser) {
@@ -288,7 +288,7 @@ pub fn build_project_with_config(
         let copy_registry: HashSet<String> = analyzer.get_copy_structs().into_iter().collect();
         let explicit_copy: HashSet<String> =
             analyzer.get_explicit_copy_structs().into_iter().collect();
-        let mut codegen = CodeGenerator::new(registry.clone(), target);
+        let mut codegen = if wj_files.contains(file) { CodeGenerator::new(registry.clone(), target) } else { CodeGenerator::new_for_module(registry.clone(), target) };
         codegen.set_config(config.clone());
         codegen.set_global_signature_registry(std::sync::Arc::new(global_signatures.clone()));
         codegen.set_source_file(file);
@@ -322,7 +322,7 @@ pub fn build_project_with_config(
             }
         }
 
-        let output_file = if wj_files.len() > 1 && library {
+        let output_file = if !wj_files.contains(file) { super::lone_script_modules::declared_module_output(path, file, output)? } else if wj_files.len() > 1 && library {
             let base_path = if path.is_file() {
                 path.parent().unwrap_or(path)
             } else {

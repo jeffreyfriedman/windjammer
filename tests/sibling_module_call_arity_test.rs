@@ -13,7 +13,8 @@
 //! A lone script (no wj.toml) declares a sibling file module (`mod dep`) and calls `dep::f` with one argument; dep.wj
 //! declares `f` with two. The script is its own crate root, so `dep::f` resolves to that declaration and the call is
 //! WJ0013 (wrong number of arguments) in `wj check`, `wj run --interpret` (which never runs it) and `wj build` (which
-//! stops before generating code). The control with the right argument count checks clean and runs.
+//! stops before generating code). The control with the right argument count checks clean, runs, builds (the declared
+//! module is generated beside the script, as in a project build) and runs compiled.
 
 use std::path::Path;
 use std::process::{Command, Output};
@@ -67,4 +68,14 @@ fn sibling_module_call_with_the_declared_arguments_checks_and_runs() {
     assert!(check.status.success(), "the correct call was rejected:\n{}", text(&check));
     let run = wj(d.path(), &["run", "--interpret", "prog.wj"]);
     assert!(run.status.success() && String::from_utf8_lossy(&run.stdout).trim() == "2", "{}", text(&run));
+    // Compiled: the build emits the module the script declares (out/dep.rs beside out/prog.rs), as a project does.
+    let build = wj(d.path(), &["build", "prog.wj", "--no-cargo", "-o", "out"]);
+    assert!(build.status.success(), "wj build failed:\n{}", text(&build));
+    assert!(d.path().join("out/dep.rs").is_file(), "the declared module was not generated:\n{}", text(&build));
+    let compiled = wj(d.path(), &["run", "--compiled", "prog.wj"]);
+    let t = text(&compiled);
+    assert!(compiled.status.success() && String::from_utf8_lossy(&compiled.stdout).trim() == "2", "compiled run:\n{t}");
+    for leak in ["error[E0", "rustc --explain"] {
+        assert!(!t.contains(leak), "rustc text leaked (`{leak}`):\n{t}");
+    }
 }

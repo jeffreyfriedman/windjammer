@@ -12,6 +12,7 @@ mod dependency_resolution;
 mod path_dep_metadata;
 pub mod incremental;
 mod library_copy_registry;
+mod lone_script_modules;
 mod value_formal_fixed_point;
 pub(crate) mod rust_surface_metadata;
 pub mod library_multipass;
