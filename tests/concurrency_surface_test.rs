@@ -139,8 +139,8 @@ fn conformance_programs_pass_wj_check() {
 /// `wj run --verify` finds the compiled run identical to the interpreted one.
 /// Conformance programs whose compiled run fails for a reason outside the concurrency lowering, with that reason.
 /// The test requires them to keep failing compiled (a fix must remove the entry).
-const COMPILED_KNOWN_FAILURES: &[(&str, &str)] =
-    &[("select.wj", "`std::time::Duration::from_millis` lowers to chrono's Duration in compiled builds (no `from_millis`)")];
+/// Empty: select.wj's `Duration::from_millis` compiles now that std's own Duration types are in the runtime.
+const COMPILED_KNOWN_FAILURES: &[(&str, &str)] = &[];
 
 #[test]
 fn conformance_programs_compiled_match_the_interpreter() {
