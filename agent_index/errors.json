@@ -244,5 +244,22 @@
       "Build the compiler with `cargo build --features unstable_arenas`"
     ],
     "title": "`std::arena` is unstable"
+  },
+  "WJ0173": {
+    "causes": [
+      "A value read from a file, standard input or a request is interpolated into the command of `process::run`",
+      "Such a value names the file `fs::write` writes, or is concatenated into the SQL text of `query`/`execute`"
+    ],
+    "code": "WJ0173",
+    "example": "// Wrong:\nlet name = io::read_line().unwrap_or(\"\")\nprocess::run(\"echo ${name}\")\n\n// Correct:\nprocess::run_with_args(\"echo\", [name])",
+    "explanation": "Data the program did not produce (file contents, standard input, an HTTP request, a database row) flows into a command, the path of a file write or SQL text without passing through a sanitizer (ADR-0009). The environment and the command line belong to the operator and are not sources. `wj check`, `wj build` and `wj run` stop on it.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Pass the program and its arguments separately: `process::run_with_args(program, args)` uses no shell",
+      "Use SQL placeholders (`$1`, `?`) and pass the value in `params`; keep one path component with `path::file_name(..)`",
+      "Validate in a function documented `/// wj-taint: sanitizer`; a reviewed function may be documented `/// wj-taint: trusted(<reason>)`"
+    ],
+    "title": "Untrusted data reaches a command, file path or query"
   }
 }

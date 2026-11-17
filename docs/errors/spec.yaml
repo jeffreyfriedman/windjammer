@@ -41,3 +41,6 @@ codes:
   - code: WJ0161
     title: "`std::arena` is unstable"
     rust_codes: []
+  - code: WJ0173
+    title: Untrusted data reaches a command, file path or query
+    rust_codes: []
