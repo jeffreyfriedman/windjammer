@@ -15,7 +15,7 @@ fn find(xs: &Vec<i64>, needle: i64) -> i64 {
         if at(xs, i as usize) == needle {
             return i;
         }
-        i += 1;
+        i = i.wrapping_add(1);
     }
     -1_i64
 }

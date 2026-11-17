@@ -1,0 +1,15 @@
+fn main() {
+    let c = 'a';
+    println!("{} {} {} {} {}", c.is_lowercase(), 'Z'.is_uppercase(), c.is_alphanumeric(), ' '.is_whitespace(), '7'.is_ascii_digit());
+    let n = -3_i64;
+    println!("{} {} {} {}", n.abs(), 3_i64.max(5_i64), 3_i64.min(5_i64), [1_i64, 2_i64].contains(&2_i64));
+    let zeros = vec![0_i64; 3_usize];
+    println!("{} {} {}", zeros[0], zeros[1], zeros[2]);
+    let v = vec![1_i64, 2_i64, 3_i64];
+    let tail = &v[1..v.len()];
+    println!("{:?} {}", tail, &"hello"[1.."hello".len()]);
+    let good = "42".parse::<i64>().unwrap_or(0_i64);
+    let bad = "x".parse::<i64>().unwrap_or(0_i64);
+    println!("{} {}", good, bad);
+}
+

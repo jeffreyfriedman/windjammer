@@ -8,7 +8,7 @@ fn test_i32_loop_counter_with_array() {
         if i < (items.len() as i32) {
             let __value = items[i as usize].to_string();
         }
-        i += 1;
+        i = i.wrapping_add(1);
     }
 }
 
@@ -20,7 +20,7 @@ fn test_i32_capacity_with_array_access() {
     let mut i: i32 = 0_i32;
     while i < capacity {
         let __slot = slots[i as usize];
-        i += 1;
+        i = i.wrapping_add(1);
     }
 }
 

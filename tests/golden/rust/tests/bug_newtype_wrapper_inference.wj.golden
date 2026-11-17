@@ -19,7 +19,7 @@ fn is_quest_completed(&self, quest_id: &QuestId) -> bool {
             if self.completed_quests[i] == quest_id {
                 return true;
             }
-            i += 1;
+            i = i.wrapping_add(1);
         }
         false
 }

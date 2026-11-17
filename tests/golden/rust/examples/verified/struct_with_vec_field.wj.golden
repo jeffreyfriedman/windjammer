@@ -22,7 +22,7 @@ fn add(&mut self, name: String, price: i64) {
 }
 #[inline]
 fn total(&self) -> i64 {
-        self.items.as_ref().iter().map(|i| i.price).sum()
+        self.items.iter().map(|i| i.price).sum()
 }
 #[inline]
 fn cheapest(&self) -> String {

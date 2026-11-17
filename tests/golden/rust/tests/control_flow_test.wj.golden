@@ -32,7 +32,7 @@ fn test_if_else() {
 fn test_while_loop() {
     let mut count = 0_i64;
     while count < 5_i64 {
-        count += 1;
+        count = count.wrapping_add(1);
     }
     assert!(count == 5_i64);
 }

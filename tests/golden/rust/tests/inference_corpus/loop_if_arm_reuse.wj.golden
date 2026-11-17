@@ -25,7 +25,7 @@ fn main() {
             };
             total += run_once(&arm);
         }
-        r += 1;
+        r = r.wrapping_add(1);
     }
     println!("{} {} {}", total, base, test);
 }

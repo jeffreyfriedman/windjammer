@@ -62,7 +62,7 @@ fn main() {
         if walkable(nx, ny) && walkable(cx + dx, cy) {
             open += 1;
         }
-        d += 1;
+        d = d.wrapping_add(1);
     }
     println!("{}", open);
 }

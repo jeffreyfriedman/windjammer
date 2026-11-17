@@ -30,7 +30,7 @@ fn find_keyframe_index(&self, target_time: f32) -> usize {
                 after_idx = i + 1_usize;
                 break;
             }
-            i += 1;
+            i = i.wrapping_add(1);
         }
         after_idx
 }

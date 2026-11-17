@@ -57,7 +57,7 @@ fn test_if_chain() {
 fn test_while() {
     let mut count = 0_i64;
     while count < 5_i64 {
-        count += 1;
+        count = count.wrapping_add(1);
     }
     println!("[while] count to 5: {}", count);
     let mut sum = 0_i64;

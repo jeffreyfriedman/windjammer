@@ -5,7 +5,7 @@ fn find_in_vec(items: &Vec<String>, target: &str) -> bool {
         if items[i] == target {
             return true;
         }
-        i += 1;
+        i = i.wrapping_add(1);
     }
     false
 }

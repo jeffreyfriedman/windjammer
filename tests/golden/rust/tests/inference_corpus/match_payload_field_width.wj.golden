@@ -51,7 +51,7 @@ fn place(packer: &Packer, j: i32, w: f32) -> f32 {
         if r.y < lo {
             lo = r.y;
         }
-        k += 1;
+        k = k.wrapping_add(1);
     }
     lo -= 10.0_f32;
     (w + ox + oy) / lo

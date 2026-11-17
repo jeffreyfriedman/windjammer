@@ -12,7 +12,7 @@ pub fn contains(&self, id: i64) -> bool {
             if self.ids[i] == id {
                 return true;
             }
-            i += 1;
+            i = i.wrapping_add(1);
         }
         false
 }
@@ -23,7 +23,7 @@ pub fn first_missing(&self, cands: &Vec<i64>) -> i64 {
             if !self.contains(cands[i]) {
                 return cands[i];
             }
-            i += 1;
+            i = i.wrapping_add(1);
         }
         -1_i64
 }

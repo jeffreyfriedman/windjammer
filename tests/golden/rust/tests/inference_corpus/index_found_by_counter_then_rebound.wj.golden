@@ -9,7 +9,7 @@ fn tally(names: Vec<String>) -> Vec<i64> {
             if areas[k as usize] == n {
                 idx = k;
             }
-            k += 1;
+            k = k.wrapping_add(1);
         }
         if idx < 0_i64 {
             areas.push(n);
@@ -23,7 +23,7 @@ fn tally(names: Vec<String>) -> Vec<i64> {
     while ci < found.len() {
         let idx = found[ci] as usize;
         total[idx] += 1;
-        ci += 1;
+        ci = ci.wrapping_add(1);
     }
     total
 }
