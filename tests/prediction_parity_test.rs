@@ -126,7 +126,9 @@ fn in_process_generation_makes_every_prediction_the_transpile_made() {
     let (diff, families, flagged) = differences(&files, None);
     assert!(diff.is_empty(), "predictions differ:\n{}", diff.join("\n"));
     assert!(flagged >= 40, "the trigger flagged only {flagged} files; the parity check lost its subject");
-    for fam in ['A', 'B', 'C'] {
+    // Family B (a map key passed without its borrow) is required only while the backend still makes it: its last
+    // fixed repro, explicit_ref_literal_arg.wj, compiles since the map-key borrow fix (wt-ownership-15).
+    for fam in ['A', 'C'] {
         assert!(families.contains(&fam), "no family {fam} prediction in the corpora (saw {families:?})");
     }
 }
@@ -135,13 +137,18 @@ fn in_process_generation_makes_every_prediction_the_transpile_made() {
 #[test]
 fn the_differential_fails_when_the_in_process_predictor_drops_a_family() {
     let r = root();
-    // one repro per family: A (widths), B (a reference expected), C (`String` against `&str`)
-    for (file, fam) in [
-        ("tests/drift_corpus/repros/let_literal_captured_by_closure.wj", 'A'),
-        ("tests/drift_corpus/repros/explicit_ref_literal_arg.wj", 'B'),
-        ("tests/drift_corpus/repros/closure_string_param_literal.wj", 'C'),
-    ] {
-        let files = vec![r.join(file)];
+    // one repro per family: A (widths), C (`String` against `&str`), and B (a reference expected) from the first
+    // corpus program that still has a family-B prediction; B is retired from the check when none has one (its last
+    // repro, explicit_ref_literal_arg.wj, compiles since the map-key borrow fix).
+    let family_b = corpus().into_iter().find(|f| predicted_widths_via(f, false).0.iter().any(|d| family(d) == 'B'));
+    let mut cases: Vec<(PathBuf, char)> = vec![
+        (r.join("tests/drift_corpus/repros/let_literal_captured_by_closure.wj"), 'A'),
+        (r.join("tests/drift_corpus/repros/closure_string_param_literal.wj"), 'C'),
+    ];
+    cases.extend(family_b.map(|f| (f, 'B')));
+    for (file, fam) in cases {
+        let file = file.display().to_string();
+        let files = vec![PathBuf::from(&file)];
         let (clean, fams, _) = differences(&files, None);
         assert!(clean.is_empty() && fams.contains(&fam), "{file}: baseline must agree and show family {fam}: {clean:?} {fams:?}");
         let (mutated, _, _) = differences(&files, Some(fam));

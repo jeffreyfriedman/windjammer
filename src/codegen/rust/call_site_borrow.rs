@@ -1203,3 +1203,16 @@ impl<'ast> crate::codegen::rust::generator::CodeGenerator<'ast> {
         (wants_ref, wants_owned)
     }
 }
+
+impl<'ast> crate::codegen::rust::generator::CodeGenerator<'ast> {
+    /// Whether the Rust value of `operand` is already a reference, by its type: a string literal or a text slice is
+    /// `&str`, a binding or call typed `&T` is a reference; a number, `bool`, `char`, tuple or arithmetic is a value.
+    /// A written `&` on a reference operand is redundant at a `key: &K` formal (`m.get(&"b")` on a `String`-keyed
+    /// map passes `"b"`); on a value it is the borrow the formal needs (`m.get(&0)`).
+    pub(in crate::codegen::rust) fn operand_rust_type_is_reference(&self, operand: &Expression<'ast>) -> bool {
+        matches!(operand, Expression::Literal { value: crate::parser::Literal::String(_), .. })
+            || self.expression_is_static_str_value(operand)
+            || self.is_text_slice_expr(operand)
+            || self.infer_expression_type(operand).is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+    }
+}
