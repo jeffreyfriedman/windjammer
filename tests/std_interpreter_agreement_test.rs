@@ -83,8 +83,10 @@ const NOT_PROGRAM_STD: &[&str] =
 
 /// Runtime functions that exist for compiled programs only: they take Rust closures or generic journal types, so no
 /// interpreter builtin can mirror them. The interpreter implements the same semantics natively (src/interpreter/durable_rt.rs,
-/// gated by tests/effect_durable_test.rs and the compiled-journal differential).
-const COMPILED_ONLY: &[&str] = &["caps::open_write", "caps::entry_op", "caps::rename", "caps::copy", "caps::dir_all", "durable::run", "durable::step", "durable::step_read", "durable::to_json"];
+/// gated by tests/effect_durable_test.rs and the compiled-journal differential). `task::*` are the lowering targets of the
+/// ADR-0004 syntax (`spawn`, `async`, `select`, the scheduler's local queue): the interpreter runs the syntax itself
+/// (src/interpreter/sched.rs, tests/conformance/concurrency/), and no program names these functions.
+const COMPILED_ONLY: &[&str] = &["caps::open_write", "caps::entry_op", "caps::rename", "caps::copy", "caps::dir_all", "durable::run", "durable::step", "durable::step_read", "durable::to_json", "task::local", "task::run_pending_local", "task::select", "task::spawn"];
 
 /// `module::name` for the public free functions / constants of the runtime crate.
 fn declared_runtime() -> BTreeSet<String> {
