@@ -24,6 +24,21 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// The path of the extern a `parent::f` call names when `f` is declared in a child module of `parent` (the
+    /// multi-file FFI layout: `ffi::f` for an extern of `ffi/api.wj` is `ffi::api::f`). Decided by the extern's
+    /// declaration: `None` for any other call.
+    pub(crate) fn child_module_extern_path(&self, callee_name: &str) -> Option<String> {
+        let child = self.qualify_external_path_identifier(callee_name);
+        if child == callee_name {
+            return None;
+        }
+        let segments: Vec<&str> = child.split("::").collect();
+        let tail = segments.len().checked_sub(2).map(|i| segments[i..].join("::"));
+        let leaf = segments.last().map(|l| l.to_string());
+        let is_extern = [Some(child.clone()), tail, leaf].into_iter().flatten().any(|k| self.get_signature_with_global(&k).is_some_and(|s| s.is_extern));
+        is_extern.then_some(child)
+    }
+
     /// Resolve every call of `program` (recomputed per program: keys are node addresses). A module file of
     /// a multi-file build is resolved on its own, so only calls to its own definitions are recorded (paths
     /// relative to the file, as the name-based keys were); `Unresolved`/`Ambiguous` keep the name-based lookup.
