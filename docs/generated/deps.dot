@@ -116,7 +116,7 @@ digraph deps {
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="9"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
-  "analyzer" -> "parser" [label="147"];
+  "analyzer" -> "parser" [label="150"];
   "analyzer" -> "stdlib_scanner" [label="5"];
   "analyzer" -> "stdlib_surface" [label="1"];
   "analyzer" -> "test_utils" [label="1"];
@@ -176,13 +176,13 @@ digraph deps {
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="39"];
   "cli" -> "cargo_toml" [label="5"];
-  "cli" -> "check" [label="29"];
+  "cli" -> "check" [label="30"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="4"];
   "cli" -> "compiler_config" [label="6"];
   "cli" -> "config" [label="4"];
   "cli" -> "debug_env" [label="7"];
-  "cli" -> "diagnostics" [label="37"];
+  "cli" -> "diagnostics" [label="38"];
   "cli" -> "ejector" [label="2"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
@@ -244,7 +244,7 @@ digraph deps {
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "module_system" [label="2"];
-  "codegen" -> "parser" [label="714"];
+  "codegen" -> "parser" [label="716"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="4"];
   "codegen" -> "source_map" [label="9"];
@@ -336,7 +336,7 @@ digraph deps {
   "file_compiler" -> "compiler_config" [label="3"];
   "file_compiler" -> "embedded_assets" [label="2"];
   "file_compiler" -> "file_compilation_pipeline" [label="1"];
-  "file_compiler" -> "ir" [label="1"];
+  "file_compiler" -> "ir" [label="2"];
   "file_compiler" -> "lexer" [label="1"];
   "file_compiler" -> "optimizer" [label="1"];
   "file_compiler" -> "parser" [label="1"];
@@ -368,14 +368,14 @@ digraph deps {
   "interpreter" -> "type_inference" [label="1"];
   "intrinsics" -> "lexer" [label="1"];
   "intrinsics" -> "parser" [label="3"];
-  "ir" -> "analyzer" [label="54"];
+  "ir" -> "analyzer" [label="55"];
   "ir" -> "auto_clone" [label="1"];
   "ir" -> "codegen" [label="51",color=red,fontcolor=red];
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];
   "ir" -> "debug_env" [label="3"];
   "ir" -> "intrinsics" [label="3"];
   "ir" -> "lexer" [label="24"];
-  "ir" -> "parser" [label="110"];
+  "ir" -> "parser" [label="107"];
   "ir" -> "resolve" [label="9"];
   "ir" -> "source_map" [label="6"];
   "ir" -> "type_classification" [label="32"];
@@ -437,7 +437,7 @@ digraph deps {
   "resolve" -> "source_map" [label="6"];
   "stdlib_scanner" -> "analyzer" [label="17",color=red,fontcolor=red];
   "stdlib_scanner" -> "codegen" [label="9",color=red,fontcolor=red];
-  "stdlib_scanner" -> "embedded_assets" [label="6"];
+  "stdlib_scanner" -> "embedded_assets" [label="8"];
   "stdlib_scanner" -> "parser" [label="4"];
   "test_runner" -> "build_utils" [label="2"];
   "test_runner" -> "cargo_cache" [label="4"];
@@ -472,5 +472,5 @@ digraph deps {
   "typing" -> "lexer" [label="1"];
   "typing" -> "parser" [label="3"];
   "typing" -> "parser_impl" [label="1"];
-  "typing" -> "type_classification" [label="5"];
+  "typing" -> "type_classification" [label="6"];
 }
