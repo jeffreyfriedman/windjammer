@@ -151,7 +151,6 @@ corpus_tests!(
     borrowed_copy_key_into_map_lookup,
     borrowed_key_by_operand_type,
     field_passed_to_owned_formal_keeps_borrowed_receiver,
-    std_text_formal_borrows_owned_argument,
     builder_reads_fields_after_storing_one,
     mut_param_is_own_copy,
     str_literal_loop_var_pushed_into_owned_vec,

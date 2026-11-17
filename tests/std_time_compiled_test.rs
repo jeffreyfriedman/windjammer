@@ -18,7 +18,19 @@ fn shared_target() -> PathBuf {
 
 #[test]
 fn duration_program_is_the_same_interpreted_and_compiled() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/std_time_programs/duration_surface.wj");
+    same_interpreted_and_compiled("duration_surface.wj");
+}
+
+/// `time.parse_duration_ms(text)` with an owned `string`: the runtime declares it in `time/calendar.rs`, which `time.rs`
+/// re-exports with `pub use calendar::*;`, so its `text: &str` formal is read under `time::parse_duration_ms` and the
+/// argument is borrowed (rustc E0308 expected `&str`, found `String`).
+#[test]
+fn parse_duration_of_an_owned_string_is_the_same_interpreted_and_compiled() {
+    same_interpreted_and_compiled("parse_duration_owned_text.wj");
+}
+
+fn same_interpreted_and_compiled(program: &str) {
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/std_time_programs").join(program);
     let want = expected(&std::fs::read_to_string(&p).unwrap());
     let wj = env!("CARGO_BIN_EXE_wj");
 
