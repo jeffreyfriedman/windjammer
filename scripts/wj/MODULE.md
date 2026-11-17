@@ -18,6 +18,7 @@ Repository tooling written in interpreted Windjammer (`wj run scripts/wj/<script
 - `width_experiment.wj` and `nonneg_analysis.wj` (no originals; ADR-0039 decision B evidence): delete the integer casts of the reference solutions and examples and type-check each variant (`prepare`, `check` under a build slot, `report`); a lexical prototype of the "provably non-negative index" dataflow with a `len() - k` guard lint over the corpora (`--eco`, `--hits`).
 - `port_gates.wj`: runs the cases under `tests/py_ports/` (`--record` re-derives expectations from the original; `--time N` produces the CPU-time table of `docs/design/python-replacement-audit.md`).
 
+- `disk_janitor.wj` (docs/dev/disk-hygiene.md): `report` / `clean --dry-run|--apply` / `gate --floor-gb N` for build output and scratch we created (shared cargo target, worktree targets, `wj-*` temp dirs); never deletes another session's dirs or a target a cargo/rustc process uses; `--selftest` includes a mutation check. `scripts/slot_gate.sh` is its shell front door for builds.
 ## Invariants
 - Run from the repository root; paths are relative to it.
 - A script that starts a program names it through `env` or `sh` (a package grant cannot name an arbitrary path), so those two are the only broad process grants.

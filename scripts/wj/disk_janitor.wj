@@ -1,0 +1,551 @@
+// Disk janitor: keeps build output from filling the disk (docs/dev/disk-hygiene.md).
+//
+//   wj run --allow process --allow env.read scripts/wj/disk_janitor.wj -- report [options]
+//   wj run --allow process --allow env.read scripts/wj/disk_janitor.wj -- clean (--dry-run | --apply) [options]
+//   wj run --allow process --allow env.read scripts/wj/disk_janitor.wj -- gate --floor-gb N
+//   wj run --allow process --allow env.read scripts/wj/disk_janitor.wj -- --selftest
+//
+// Locations come from options or the environment, never from the clone path:
+//   --shared-target DIR   (WJ_SHARED_TARGET; default <cache>/windjammer/cargo-target, <cache> = ~/Library/Caches on macOS,
+//                         ${XDG_CACHE_HOME:-~/.cache} elsewhere)
+//   --worktree-root DIR   (WJ_WORKTREE_ROOT; every child directory is a worktree; none set = worktrees are not scanned)
+//   --scratchpad DIR      (WJ_SCRATCHPAD; children are session scratch dirs we created)
+//   --base REF            (WJ_BASE_REF; a worktree whose branch is an ancestor of REF counts as merged)
+//   --hours N             (WJ_JANITOR_HOURS, default 6; idle age that makes a target or scratch dir removable)
+//   --floor-gb N          (WJ_DISK_FLOOR_GB, default 28)
+//   --purge-shared        clean may also empty the shared target, refused while any cargo/rustc process runs
+//
+// What `clean` removes, and only this:
+//   (a)+(c) <worktree>/target and <cache>/windjammer/wt-* and cargo-target-* siblings of the shared target: private
+//           targets are policy violations (one shared target, see the doc); removed when nothing is using them and the
+//           worktree is gone, merged, or untouched for --hours. Active unmerged ones are flagged, not removed.
+//   (b)     wj-* directories we own in the temp dirs, and children of --scratchpad, untouched for --hours.
+// Never removed: other sessions' dirs (wfe-*, anything not named wj-*), Docker, the cargo registry, other tools' caches.
+// In use = a cargo/rustc/rustdoc/rust-analyzer process mentions the directory (command line, open file or cwd).
+//
+// Exit codes: 0 ok, 1 gate below the floor, 2 usage, 3 below the floor after cleaning, 4 refused (shared target busy).
+//
+// Why this is interpreted Windjammer that drives `sh`: std::fs::Metadata has no modification time and there is no
+// free-space or process-listing query, so du, find -mmin, df, ps and lsof do the measuring; the decisions are here.
+use std::env
+use std::process
+use std::strings
+use wj_cli_args::long_flag_value
+use wj_cli_args::long_flag_value_or
+use wj_cli_args::has_long_flag
+use wj_cli_args::first_positional
+use wj_proc::sh
+use wj_proc::quote
+
+struct Cfg {
+    shared: string,
+    wt_root: string,
+    cache_base: string,
+    tmp_bases: Vec<string>,
+    scratchpad: string,
+    base_ref: string,
+    hours: int,
+    me: string,
+    // mutation hook for --selftest only: pretend nothing is ever in use
+    skip_inuse: bool,
+    // report mode: sizes and ownership only, no idle-age scans (those walk every tree again)
+    light: bool,
+}
+
+struct Entry {
+    path: string,
+    kind: string,
+    owner: string,
+    kb: int,
+    idle: bool,
+    in_use: bool,
+    // violation: a private cargo target
+    violation: bool,
+    removable: bool,
+    why: string,
+}
+
+fn out(cmd: string) -> string {
+    match sh(cmd) {
+        Ok(r) => strings.trim(r.stdout).to_string(),
+        Err(_) => "",
+    }
+}
+
+fn status(cmd: string) -> int {
+    match sh(cmd) {
+        Ok(r) => r.status,
+        Err(_) => -1,
+    }
+}
+
+fn chomp(s: string, suffix: string) -> string {
+    if strings.ends_with(s, suffix) { strings.substring(s, 0, s.len() - suffix.len()) } else { s }
+}
+
+fn lines(s: string) -> Vec<string> {
+    let mut v: Vec<string> = Vec::new()
+    for l in strings.split_lines(s) {
+        let t = strings.trim(l).to_string()
+        if t != "" { v.push(t) }
+    }
+    v
+}
+
+fn to_int(s: string) -> int {
+    strings.trim(s).parse::<int>() ?? 0
+}
+
+fn default_cache_base() -> string {
+    let home = env.get_or("HOME", "")
+    if out("uname -s") == "Darwin" {
+        home + "/Library/Caches"
+    } else {
+        env.get_or("XDG_CACHE_HOME", home + "/.cache")
+    }
+}
+
+fn load_cfg(args: Vec<string>) -> Cfg {
+    let cache = default_cache_base()
+    let shared_default = env.get_or("WJ_SHARED_TARGET", cache + "/windjammer/cargo-target")
+    let mut bases: Vec<string> = Vec::new()
+    let tmpdir = env.get_or("TMPDIR", "")
+    if tmpdir != "" { bases.push(chomp(tmpdir, "/")) }
+    bases.push("/tmp")
+    Cfg {
+        shared: long_flag_value_or(args, "shared-target", shared_default),
+        wt_root: long_flag_value_or(args, "worktree-root", env.get_or("WJ_WORKTREE_ROOT", "")),
+        cache_base: cache,
+        tmp_bases: bases,
+        scratchpad: long_flag_value_or(args, "scratchpad", env.get_or("WJ_SCRATCHPAD", "")),
+        base_ref: long_flag_value_or(args, "base", env.get_or("WJ_BASE_REF", "")),
+        hours: to_int(long_flag_value_or(args, "hours", env.get_or("WJ_JANITOR_HOURS", "6"))),
+        me: out("id -un"),
+        skip_inuse: false,
+        light: false,
+    }
+}
+
+// ---------------------------------------------------------------- measuring
+
+fn size_kb(path: string) -> int {
+    to_int(out("du -sk ${quote(path)} 2>/dev/null | cut -f1"))
+}
+
+// no file near the top of the tree was written within the last `hours` (find -mmin is portable, -newermt is not)
+fn idle_for(path: string, hours: int) -> bool {
+    // (callers in light mode skip this)
+    out("find ${quote(path)} -maxdepth 4 -mmin -${hours * 60} 2>/dev/null | head -1") == ""
+}
+
+fn idle_cfg(cfg: Cfg, path: string) -> bool {
+    if cfg.light { return false }
+    idle_for(path, cfg.hours)
+}
+
+fn owner_of(path: string) -> string {
+    out("ls -ld ${quote(path)} 2>/dev/null | awk '{print $3}'")
+}
+
+fn free_kb(path: string) -> int {
+    let mut p = path
+    // df needs an existing path: climb to the nearest existing parent
+    while p != "" && p != "/" && status("test -e ${quote(p)}") != 0 {
+        p = out("dirname ${quote(p)}")
+    }
+    if p == "" { p = "/" }
+    to_int(out("df -Pk ${quote(p)} 2>/dev/null | awk 'NR==2{print $4}'"))
+}
+
+// Lines that name something a cargo/rustc-family process is doing: its command line, open files and cwd.
+fn busy_lines() -> Vec<string> {
+    let mut v = lines(out("ps -axo command= 2>/dev/null | grep -E '(^|/)([c]argo|[r]ustc|[r]ustdoc|[r]ust-analyzer|[c]lippy-driver)( |$)'"))
+    for l in lines(out("lsof -n -w -c cargo -c rustc -c rustdoc -c rust-analyzer -Fn 2>/dev/null | grep '^n'")) {
+        v.push(l)
+    }
+    v
+}
+
+fn mentions(line: string, dir: string) -> bool {
+    strings.contains(line, dir + "/") || strings.ends_with(line, dir) || strings.contains(line, dir + " ")
+}
+
+fn any_build_running() -> bool {
+    out("ps -axo command= 2>/dev/null | grep -cE '(^|/)([c]argo|[r]ustc|[r]ustdoc|[c]lippy-driver)( |$)'") != "0"
+}
+
+fn in_use(cfg: Cfg, busy: Vec<string>, dirs: Vec<string>) -> bool {
+    if cfg.skip_inuse { return false }
+    for l in busy {
+        for d in dirs {
+            if mentions(l, d) { return true }
+        }
+    }
+    false
+}
+
+// ---------------------------------------------------------------- classification
+
+fn merged_or_absent(cfg: Cfg, wt: string) -> string {
+    if status("test -e ${quote(wt)}/.git") != 0 { return "worktree gone" }
+    let branch = out("git -C ${quote(wt)} symbolic-ref --short -q HEAD 2>/dev/null")
+    if branch != "" && cfg.base_ref != "" && status("git -C ${quote(wt)} merge-base --is-ancestor ${quote(branch)} ${quote(cfg.base_ref)} 2>/dev/null") == 0 {
+        return "branch ${branch} merged into ${cfg.base_ref}"
+    }
+    ""
+}
+
+fn plan(cfg: Cfg) -> Vec<Entry> {
+    let busy = busy_lines()
+    let mut v: Vec<Entry> = Vec::new()
+    // the shared target: ours, never removed by plan
+    if status("test -d ${quote(cfg.shared)}") == 0 {
+        v.push(Entry { path: cfg.shared, kind: "shared-target", owner: "ours", kb: size_kb(cfg.shared), idle: false, in_use: in_use(cfg, busy, [cfg.shared]), violation: false, removable: false, why: "the one shared cargo target" })
+    }
+    // worktree targets
+    if cfg.wt_root != "" {
+        for wt in lines(out("find ${quote(cfg.wt_root)} -mindepth 1 -maxdepth 1 -type d 2>/dev/null")) {
+            let t = wt + "/target"
+            if status("test -d ${quote(t)} && test ! -L ${quote(t)}") != 0 { continue }
+            let idle = idle_cfg(cfg, t)
+            let used = in_use(cfg, busy, [t, wt])
+            let gone = merged_or_absent(cfg, wt)
+            let mut e = Entry { path: t, kind: "worktree-target", owner: "ours", kb: size_kb(t), idle: idle, in_use: used, violation: true, removable: false, why: "" }
+            if used {
+                e.why = "in use by a cargo/rustc process"
+            } else if gone != "" {
+                e.removable = true
+                e.why = gone
+            } else if idle {
+                e.removable = true
+                e.why = "idle over ${cfg.hours} h"
+            } else {
+                e.why = "active unmerged worktree: private target, set CARGO_TARGET_DIR to the shared one"
+            }
+            v.push(e)
+        }
+    }
+    // private target caches next to the shared one (our naming, in our cache dir)
+    let wjcache = chomp(cfg.shared, "/cargo-target")
+    for d in lines(out("find ${quote(wjcache)} -mindepth 1 -maxdepth 1 -type d \\( -name 'wt-*' -o -name 'cargo-target-*' \\) 2>/dev/null")) {
+        let idle = idle_cfg(cfg, d)
+        let used = in_use(cfg, busy, [d])
+        let mut e = Entry { path: d, kind: "private-target", owner: "ours", kb: size_kb(d), idle: idle, in_use: used, violation: true, removable: false, why: "" }
+        if used { e.why = "in use by a cargo/rustc process" } else if idle { e.removable = true
+            e.why = "idle over ${cfg.hours} h"
+        } else { e.why = "recently written private target" }
+        v.push(e)
+    }
+    // cargo registry: other tool's cache, sized only
+    let cargo_home = env.get_or("CARGO_HOME", env.get_or("HOME", "") + "/.cargo")
+    if status("test -d ${quote(cargo_home)}/registry") == 0 {
+        v.push(Entry { path: cargo_home + "/registry", kind: "cargo-registry", owner: "other", kb: size_kb(cargo_home + "/registry"), idle: false, in_use: false, violation: false, removable: false, why: "cargo's own cache, never cleaned here" })
+    }
+    // temp dirs: wj-* that we own are ours; everything else is only sized
+    let mut seen: Vec<string> = Vec::new()
+    for base in cfg.tmp_bases {
+        let real = out("cd ${quote(base)} 2>/dev/null && pwd -P")
+        if real == "" || seen.contains(real) { continue }
+        seen.push(real)
+        // two process spawns for the whole directory, not three per entry: sizes (du) and the entries we own (find -user)
+        let mine = lines(out("find ${quote(real)} -mindepth 1 -maxdepth 1 -type d -user ${quote(cfg.me)} 2>/dev/null"))
+        for row in lines(out("du -sk ${quote(real)}/* 2>/dev/null")) {
+            let parts = strings.split(row, "\t")
+            if parts.len() < 2 { continue }
+            let d = parts[1]
+            let name = strings.substring(d, real.len() + 1, d.len())
+            let mut e = Entry { path: d, kind: "tmp", owner: "unknown", kb: to_int(parts[0]), idle: false, in_use: false, violation: false, removable: false, why: "not ours: sized only" }
+            if mine.contains(d) {
+                if strings.starts_with(name, "wj-") {
+                    e.owner = "ours"
+                    e.idle = idle_cfg(cfg, d)
+                    e.in_use = in_use(cfg, busy, [d])
+                    e.removable = e.idle && !e.in_use
+                    e.why = if e.in_use { "in use" } else if e.idle { "idle over ${cfg.hours} h" } else { "recent" }
+                }
+            } else {
+                e.owner = "other"
+            }
+            if e.kb > 0 { v.push(e) }
+        }
+    }
+    // session scratchpad children
+    if safe_dir(cfg.scratchpad) && status("test -d ${quote(cfg.scratchpad)}") == 0 {
+        for d in lines(out("find ${quote(cfg.scratchpad)} -mindepth 1 -maxdepth 1 2>/dev/null")) {
+            let idle = idle_cfg(cfg, d)
+            let used = in_use(cfg, busy, [d])
+            v.push(Entry { path: d, kind: "scratch", owner: "ours", kb: size_kb(d), idle: idle, in_use: used, violation: false, removable: idle && !used, why: if used { "in use" } else if idle { "idle over ${cfg.hours} h" } else { "recent" } })
+        }
+    }
+    v
+}
+
+// a directory we are willing to delete inside: absolute, at least three components, not a bare home or system dir
+fn safe_dir(p: string) -> bool {
+    if p == "" || !strings.starts_with(p, "/") { return false }
+    strings.split(chomp(p, "/"), "/").len() >= 4 || (strings.split(chomp(p, "/"), "/").len() >= 3 && strings.starts_with(p, "/tmp/"))
+}
+
+// ---------------------------------------------------------------- output
+
+fn size_text(kb: int) -> string {
+    if kb >= 1048576 {
+        let tenths = kb * 10 / 1048576
+        "${tenths / 10}.${tenths % 10} GB"
+    } else {
+        "${kb / 1024} MB"
+    }
+}
+
+fn sorted_desc(v: Vec<Entry>) -> Vec<Entry> {
+    let mut rest = v
+    let mut res: Vec<Entry> = Vec::new()
+    while rest.len() > 0 {
+        let mut best = 0
+        let mut i = 1
+        while i < rest.len() {
+            if rest[i].kb > rest[best].kb { best = i }
+            i += 1
+        }
+        res.push(rest[best])
+        let mut next: Vec<Entry> = Vec::new()
+        let mut j = 0
+        while j < rest.len() {
+            if j != best { next.push(rest[j]) }
+            j += 1
+        }
+        rest = next
+    }
+    res
+}
+
+fn describe(e: Entry) -> string {
+    let flag = if e.violation { " POLICY-VIOLATION" } else { "" }
+    let used = if e.in_use { " IN-USE" } else { "" }
+    "${size_text(e.kb)}\t${e.owner}\t${e.kind}${flag}${used}\t${e.path}\t${e.why}"
+}
+
+fn report(cfg: Cfg) {
+    let all = sorted_desc(plan(cfg))
+    println("top disk users (size, owner, kind, path, note):")
+    let mut i = 0
+    while i < all.len() && i < 10 {
+        println("  " + describe(all[i]))
+        i += 1
+    }
+    println("free: ${size_text(free_kb(cfg.shared))} on the filesystem holding ${cfg.shared}")
+}
+
+// ---------------------------------------------------------------- clean
+
+fn remove(path: string, apply: bool) -> bool {
+    // a symlink or a path that is not a directory is never followed or removed
+    if status("test -d ${quote(path)} && test ! -L ${quote(path)}") != 0 { return false }
+    if apply { return status("rm -rf -- ${quote(path)}") == 0 }
+    true
+}
+
+// returns the number of directories removed (or that would be)
+fn clean(cfg: Cfg, apply: bool, purge_shared: bool) -> int {
+    let mut n = 0
+    let mut freed = 0
+    for e in plan(cfg) {
+        if e.removable {
+            if remove(e.path, apply) {
+                println("${if apply { "removed" } else { "would remove" }}  ${describe(e)}")
+                n += 1
+                freed += e.kb
+            }
+        } else if e.violation {
+            println("flagged  ${describe(e)}")
+        }
+    }
+    if purge_shared {
+        if any_build_running() {
+            println("refused: a cargo/rustc process is running, the shared target stays")
+            return -1
+        }
+        if remove(cfg.shared, apply) {
+            println("${if apply { "removed" } else { "would remove" }}  shared target ${cfg.shared}")
+            n += 1
+        }
+    }
+    println("${if apply { "freed" } else { "would free" }} about ${size_text(freed)} in ${n} directories")
+    n
+}
+
+fn gate_ok(path: string, floor_gb: int) -> bool {
+    free_kb(path) >= floor_gb * 1048576
+}
+
+// ---------------------------------------------------------------- selftest
+
+fn put(path: string, old: bool) {
+    let _ = sh("mkdir -p ${quote(path)} && echo x > ${quote(path)}/f")
+    if old { let _ = sh("find ${quote(path)} -exec touch -t 202001010000 {} +") }
+}
+
+fn exists(path: string) -> bool {
+    status("test -e ${quote(path)}") == 0
+}
+
+fn check(name: string, ok: bool) -> int {
+    if ok {
+        println("ok   ${name}")
+        0
+    } else {
+        println("FAIL ${name}")
+        1
+    }
+}
+
+// in the mutation run a failing check is the expected outcome: say so without the word FAIL
+fn check_m(mutate: bool, name: string, ok: bool) -> int {
+    if mutate && !ok {
+        println("mutant detected: ${name}")
+        return 1
+    }
+    check(name, ok)
+}
+
+fn fixture_cfg(t: string) -> Cfg {
+    Cfg {
+        shared: t + "/cache/windjammer/cargo-target",
+        wt_root: t + "/wt",
+        cache_base: t + "/cache",
+        tmp_bases: [t + "/tmp"],
+        scratchpad: t + "/work/scratch",
+        base_ref: "",
+        hours: 6,
+        me: out("id -un"),
+        skip_inuse: false,
+        light: false,
+    }
+}
+
+// builds the tree, returns the failures of one clean --apply (normal or with the in-use check removed)
+fn fixture_run(t: string, mutate: bool) -> int {
+    let _ = sh("rm -rf ${quote(t)} && mkdir -p ${quote(t)}")
+    put(t + "/cache/windjammer/cargo-target", true)
+    put(t + "/cache/windjammer/wt-old", true)
+    put(t + "/cache/windjammer/wt-new", false)
+    put(t + "/wt/gone/target", true)
+    put(t + "/wt/stale/target", true)
+    let _ = sh("mkdir -p ${quote(t)}/wt/stale/.git")
+    put(t + "/wt/fresh/target", false)
+    let _ = sh("mkdir -p ${quote(t)}/wt/fresh/.git")
+    put(t + "/wt/busy/target", true)
+    put(t + "/tmp/wj-old", true)
+    put(t + "/tmp/wj-new", false)
+    put(t + "/tmp/wfe-theirs", true)
+    put(t + "/work/scratch/old", true)
+    put(t + "/work/scratch/new", false)
+    // a process named rustc working under wt/busy (argv0 carries the path so ps shows it on every OS)
+    let _ = sh("mkdir -p ${quote(t)}/wt/busy/.fake && (bash -c 'exec -a ${t}/wt/busy/.fake/rustc sleep 120' >/dev/null 2>&1 &)")
+    let _ = sh("sleep 1")
+    let mut cfg = fixture_cfg(t)
+    cfg.skip_inuse = mutate
+    let _ = clean(cfg, true, false)
+    let mut f = 0
+    f += check_m(mutate, "worktree gone: target removed", !exists(t + "/wt/gone/target"))
+    f += check_m(mutate, "stale worktree: target removed", !exists(t + "/wt/stale/target"))
+    f += check_m(mutate, "fresh unmerged worktree: target kept (flagged)", exists(t + "/wt/fresh/target"))
+    f += check_m(mutate, "old wt-* private cache removed", !exists(t + "/cache/windjammer/wt-old"))
+    f += check_m(mutate, "recent wt-* private cache kept", exists(t + "/cache/windjammer/wt-new"))
+    f += check_m(mutate, "old wj-* tmp removed", !exists(t + "/tmp/wj-old"))
+    f += check_m(mutate, "recent wj-* tmp kept", exists(t + "/tmp/wj-new"))
+    f += check_m(mutate, "other session's tmp dir never touched", exists(t + "/tmp/wfe-theirs"))
+    f += check_m(mutate, "old scratchpad child removed", !exists(t + "/work/scratch/old"))
+    f += check_m(mutate, "recent scratchpad child kept", exists(t + "/work/scratch/new"))
+    f += check_m(mutate, "shared target untouched by plain clean", exists(t + "/cache/windjammer/cargo-target"))
+    f += check_m(mutate, "target in use by a rustc process: kept", exists(t + "/wt/busy/target"))
+    if !mutate {
+        let refused = clean(cfg, true, true)
+        f += check_m(mutate, "purge-shared refused while rustc runs", refused == -1 && exists(t + "/cache/windjammer/cargo-target"))
+    }
+    let _ = sh("pkill -f ${quote(t + "/wt/busy/.fake/rustc")}")
+    let _ = sh("sleep 1")
+    f
+}
+
+fn selftest() -> int {
+    let base = out("mktemp -d ${quote(chomp(env.get_or("TMPDIR", "/tmp"), "/"))}/wj-janitor-selftest.XXXXXX")
+    if base == "" {
+        println("selftest: cannot make a temp dir")
+        return 1
+    }
+    let mut failed = 0
+    println("--- normal run")
+    failed += fixture_run(base + "/a", false)
+    // after the fake build ends, purging the shared target works
+    let cfg = fixture_cfg(base + "/a")
+    let _ = clean(cfg, true, true)
+    if any_build_running() {
+        println("skip purge-shared success check: a real cargo/rustc process is running on this machine")
+    } else {
+        failed += check("purge-shared works when nothing builds", !exists(base + "/a/cache/windjammer/cargo-target"))
+    }
+    println("--- mutation: with the in-use check removed the busy target must be deleted (proves the check is load-bearing)")
+    let mutant_fails = fixture_run(base + "/b", true)
+    if mutant_fails == 0 {
+        println("FAIL the in-use check is not load-bearing: removing it changed nothing")
+        failed += 1
+    } else {
+        println("ok   removing the in-use check makes the fixture fail (${mutant_fails} checks), as it must")
+    }
+    failed += check("gate passes at a floor of 0 GB", gate_ok(base, 0))
+    failed += check("gate fails at an impossible floor", !gate_ok(base, 100000000))
+    failed += check("safe_dir refuses home-like paths", !safe_dir("/") && !safe_dir("/Users") && !safe_dir("") && !safe_dir("relative/x/y/z") && safe_dir("/var/work/a/b"))
+    let _ = sh("rm -rf ${quote(base)}")
+    failed
+}
+
+// ---------------------------------------------------------------- main
+
+fn main() {
+    let args = env.args()
+    if has_long_flag(args, "selftest") {
+        let f = selftest()
+        if f == 0 {
+            println("disk_janitor selftest: ok")
+            return
+        }
+        println("disk_janitor selftest: FAILED (${f})")
+        process.exit(1)
+    }
+    let mode = first_positional(args) ?? ""
+    let cfg = load_cfg(args)
+    let floor = to_int(long_flag_value_or(args, "floor-gb", env.get_or("WJ_DISK_FLOOR_GB", "28")))
+    if mode == "report" {
+        let mut c = cfg
+        c.light = true
+        report(c)
+        return
+    }
+    if mode == "gate" {
+        let kb = free_kb(cfg.shared)
+        if kb < floor * 1048576 {
+            println("disk gate: ${size_text(kb)} free, floor is ${floor} GB: refusing. Run `disk_janitor clean --apply` or free space.")
+            process.exit(1)
+        }
+        println("disk gate: ${size_text(kb)} free (floor ${floor} GB): ok")
+        return
+    }
+    if mode == "clean" {
+        let apply = has_long_flag(args, "apply")
+        if !apply && !has_long_flag(args, "dry-run") {
+            eprintln("clean needs --dry-run or --apply")
+            process.exit(2)
+        }
+        let n = clean(cfg, apply, has_long_flag(args, "purge-shared"))
+        if n < 0 { process.exit(4) }
+        if apply && !gate_ok(cfg.shared, floor) {
+            println("still below the ${floor} GB floor after cleaning: ${size_text(free_kb(cfg.shared))} free")
+            process.exit(3)
+        }
+        return
+    }
+    eprintln("usage: disk_janitor.wj report | clean (--dry-run|--apply) [--purge-shared] | gate --floor-gb N | --selftest")
+    eprintln("       options: --shared-target DIR --worktree-root DIR --scratchpad DIR --base REF --hours N")
+    process.exit(2)
+}
