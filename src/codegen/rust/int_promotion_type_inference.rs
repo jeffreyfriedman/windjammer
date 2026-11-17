@@ -2100,6 +2100,10 @@ impl<'ast> CodeGenerator<'ast> {
                         | BinaryOp::Shl
                         | BinaryOp::Shr
                 ) {
+                    // a shift has the type of the shifted operand; the shift amount is its own type
+                    if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+                        return self.int_type_for_mixed_int_codegen(left);
+                    }
                     let lt = self.int_type_for_mixed_int_codegen(left);
                     let rt = self.int_type_for_mixed_int_codegen(right);
                     let lit = |e: &Expression<'ast>| {

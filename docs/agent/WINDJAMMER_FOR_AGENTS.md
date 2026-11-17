@@ -6,6 +6,8 @@ Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in
 - No semicolons. `let mut` to mutate. The last expression is the block value. `[1, 2]` is a Vec (no `vec!`).
 - Strings: `println("${x} ${y:.2}")` is a function, not a macro. Use `string`, never `String`; literals need no `.to_string()`. A dollar sign before a value is `"\$${p}"` (`$$` prints `$` and stops the interpolation).
 - Ownership is inferred: `fn f(v: Vec<int>)`, `self`; never `&`, `&mut`, `.iter()`, `.unwrap()`. Iterate with `for x in v`; adapters start at the collection: `v.map(..)`.
+  The one `&` you write is the receiver of a trait method that has no body (`fn put(&mut self, k: int)`, W0016).
+- `split`, `split_whitespace`, `lines`, `chars` give an iterator, not a list: index, `.len()` or `.contains(..)` need `let parts: Vec<string> = s.split(" ").collect()` first (WJ0015, WJ0035).
 - Input: `use std::fs`, `let text = fs::read_to_string("/dev/stdin").unwrap_or("")`, `for line in text.lines()`. `std::env::args()` is an iterator.
 - `len()` is `usize` when compiled: `let n: int = v.len() as int`. Slice strings with `s[a..b]`.
 - JSON: `use std::json`; any struct converts: `json.to_string(v)`, `json.parse_string::<T>(text)` (no derive).

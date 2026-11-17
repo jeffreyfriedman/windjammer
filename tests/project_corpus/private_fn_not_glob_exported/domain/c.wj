@@ -1,0 +1,3 @@
+pub fn parse(cell: string) -> int {
+    cell.len() as int
+}

@@ -5,6 +5,7 @@
 
 use super::elements::{self, Scope};
 use super::index::{is_std_name, FileNames, Index};
+use super::iterators;
 use super::mismatch::check_literal;
 use super::rules::{self, Kind};
 use super::visit::{walk_block, walk_expr, walk_pattern, Visitor};
@@ -157,7 +158,8 @@ impl Cx<'_, '_> {
             }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types, scalars, .. } = col;
+        let Collect { names, counts, let_types, scalars, iter_locals, .. } = col;
+        let iter_locals: iterators::IterLocals = iter_locals.into_iter().filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1).collect();
         let scalars: HashMap<String, (Kind, bool)> = scalars
             .into_iter()
             .filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1)
@@ -171,6 +173,7 @@ impl Cx<'_, '_> {
         let mut ck = Checker::new(self, &names, typed, self_ty.map(str::to_string));
         ck.ret_ty = ret.cloned();
         ck.scalars = scalars;
+        ck.iter_locals = iter_locals;
         walk_block(&mut ck, body);
         if let (Some(Statement::Expression { expr, .. }), Some(ty)) = (body.last().map(|s| &**s), ret) {
             ck.wrapper_mismatch(ty, expr, " in return value");
@@ -201,6 +204,8 @@ struct Collect<'i> {
     let_types: HashMap<String, String>,
     /// `let x: int = ..` / `let s = "lit"`: scalar kind and whether it was declared.
     scalars: HashMap<String, (Kind, bool)>,
+    /// Bindings initialised with a std iterator (`let parts = "a,b".split(",")`), by the std declaration.
+    iter_locals: iterators::IterLocals,
 }
 
 impl<'i> Collect<'i> {
@@ -214,6 +219,7 @@ impl<'i> Collect<'i> {
             counts: HashMap::new(),
             let_types: HashMap::new(),
             scalars: HashMap::new(),
+            iter_locals: HashMap::new(),
         }
     }
 
@@ -273,6 +279,12 @@ impl Visitor for Collect<'_> {
                         }
                     }
                 }
+            }
+        }
+        if let Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_: None, value, .. } = s {
+            let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
+            if let Some(root) = iterators::iterator_root(value, &text, &self.iter_locals) {
+                self.iter_locals.insert(n.clone(), root);
             }
         }
         if let Statement::Let {
@@ -349,6 +361,7 @@ struct Checker<'c, 'a, 'o> {
     self_ty: Option<String>,
     ret_ty: Option<Type>,
     scalars: HashMap<String, (Kind, bool)>,
+    iter_locals: iterators::IterLocals,
     skip: HashSet<usize>,
     macro_locs: Vec<SourceLocation>,
 }
@@ -367,6 +380,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             self_ty,
             ret_ty: None,
             scalars: HashMap::new(),
+            iter_locals: HashMap::new(),
             skip: HashSet::new(),
             macro_locs: Vec::new(),
         }
@@ -562,9 +576,107 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         self.cx.out.push(d);
     }
 
+    /// `parts.contains("a")` where `parts` is a std iterator (`"a,b".split(",")`) and the std declaration gives `contains`
+    /// to lists only (WJ0015).
+    fn list_method_on_iterator(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
+        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
+        let Some(root) = iterators::iterator_root(object, &text, &self.iter_locals) else { return };
+        if !iterators::lists_only(method, &root) {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0015", format!("no method `{method}` found for an iterator"));
+        let span = self.cx.loc.word(&self.effective(loc), method).or_else(|| self.cx.loc.first_use(method));
+        if let Some(sp) = span {
+            d = d.at(sp.with_label("an iterator has no such method"));
+        }
+        self.cx.out.push(self.collect_first_help(d, object, method));
+    }
+
+    /// `parts[0]` where `parts` is a std iterator: iterators have no positions (WJ0035).
+    fn index_into_iterator(&mut self, object: &Expression<'_>) {
+        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
+        if iterators::iterator_root(object, &text, &self.iter_locals).is_none() {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0035", "this value cannot be indexed: an iterator has no positions");
+        if let Expression::Identifier { name, location } = object {
+            if let Some(sp) = self.cx.loc.word(&self.effective(location), name) {
+                d = d.at(sp.with_label("an iterator"));
+            }
+        }
+        self.cx.out.push(self.collect_first_help(d, object, "[..]"));
+    }
+
+    /// Help, and a machine-applicable fix when the iterator is a plain `let` binding whose initialiser ends at the end
+    /// of its line: `let parts = text.split(" ")` becomes `let parts = text.split(" ").collect()`.
+    fn collect_first_help(&self, d: Diagnostic, object: &Expression<'_>, use_: &str) -> Diagnostic {
+        let name = if let Expression::Identifier { name, .. } = object { name.as_str() } else { "the iterator" };
+        let mut d = d.with_help(format!(
+            "`split`, `lines`, `chars` and the adapters give an iterator; `{use_}` belongs to lists: call `.collect()` first (`let {name}: Vec<string> = ...collect()`), then use the list"
+        ));
+        if let Expression::Identifier { name, .. } = object {
+            if let Some(fix) = self.collect_fix_for_binding(name) {
+                d = d.with_fix(fix);
+            }
+        }
+        d
+    }
+
+    /// Insert `.collect()` at the end of the `let [mut] <name>[: T] = <iterator>` line when that line is exactly that
+    /// statement (one binding of the name, no trailing comment, the initialiser ends in `)`).
+    fn collect_fix_for_binding(&self, name: &str) -> Option<Fix> {
+        let text = self.cx.loc.ix.text();
+        let mut found: Option<(usize, usize)> = None;
+        let mut offset = 0;
+        for line in text.split_inclusive('\n') {
+            let t = line.trim_start();
+            let rest = t.strip_prefix("let mut ").or_else(|| t.strip_prefix("let "));
+            if let Some(rest) = rest.and_then(|r| r.strip_prefix(name)) {
+                if rest.starts_with([' ', ':']) {
+                    if found.is_some() {
+                        return None; // two bindings of the name
+                    }
+                    found = Some((offset, offset + line.trim_end().len()));
+                }
+            }
+            offset += line.len();
+        }
+        let (start, end) = found?;
+        let stmt = &text[start..end];
+        if !stmt.contains(" = ") || stmt.contains("//") || stmt.trim_end().ends_with(".collect()") || !stmt.trim_end().ends_with(')') {
+            return None;
+        }
+        let sp = self.cx.loc.ix.span(end, end);
+        let mut fix = replace_fix(&sp, ".collect()", "call `.collect()` to make the iterator a list".to_string());
+        fix.applicability = Applicability::MachineApplicable;
+        Some(fix)
+    }
+
+    /// `let parts: Vec<string> = line.split(" ")`: a list is declared, an iterator is given (WJ0003).
+    fn iterator_for_declared_list(&mut self, name: &str, declared: &Type, value: &Expression<'_>, location: &SourceLocation) {
+        if !crate::type_classification::type_is_vec_container(declared) {
+            return;
+        }
+        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
+        // a trailing `.collect()` makes the value a list: `iterator_root` only follows iterator-returning calls
+        if iterators::iterator_root(value, &text, &self.iter_locals).is_none() {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0003", "mismatched types: expected a list, found an iterator");
+        if let Some(sp) = self.cx.loc.word(&self.effective(location), name) {
+            d = d.at(sp.with_label("declared a list, given an iterator"));
+        }
+        d = d.with_help(format!("add `.collect()`: `let {name}: Vec<..> = ...collect()` turns the iterator into the list the type declares"));
+        if let Some(fix) = self.collect_fix_for_binding(name) {
+            d = d.with_fix(fix);
+        }
+        self.cx.out.push(d);
+    }
+
     /// `x.m()` where `x` is known to be a user struct/enum: `m` must exist on it (WJ0015).
     fn method_call(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
         self.unknown_anywhere(object, method, loc);
+        self.list_method_on_iterator(object, method, loc);
         let Expression::Identifier { name, .. } = object else { return };
         let ty = if name == "self" { self.self_ty.clone() } else { self.typed.get(name).cloned() };
         let Some(ty) = ty else { return };
@@ -834,6 +946,64 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             self.cx.out.push(d);
         }
         self.char_against_string(left, op, right, l.map(|k| k.0), r.map(|k| k.0));
+        self.bitwise_around_comparison(left, op, right);
+    }
+
+    /// Integer-typed operand, judged from declarations and literals only (`None` when unsure).
+    fn is_int_operand(&self, e: &Expression<'_>) -> bool {
+        use crate::parser::BinaryOp as B;
+        match e {
+            Expression::Binary { left, op: B::Shl | B::Shr, .. } => self.is_int_operand(left),
+            Expression::Binary { left, op: B::Add | B::Sub | B::Mul | B::Div | B::Mod | B::BitAnd | B::BitOr | B::BitXor, right, .. } => {
+                self.is_int_operand(left) && self.is_int_operand(right)
+            }
+            other => self.kind_of(other).is_some_and(|k| k.0 == Kind::Int),
+        }
+    }
+
+    /// `x & 1 == 0`: Windjammer binds `& ^ |` looser than comparisons (SPEC-EXPR-001), so this is `x & (1 == 0)`, an
+    /// integer combined with a `bool`. Reported only when the other operand of the bitwise operator and an operand
+    /// of the comparison are both integers by declaration, so a deliberate `flag & x == 3` (bool, bool) is silent.
+    fn bitwise_around_comparison(&mut self, left: &Expression<'_>, op: crate::parser::BinaryOp, right: &Expression<'_>) {
+        use crate::parser::BinaryOp as B;
+        let Some(sym) = (match op { B::BitAnd => Some("&"), B::BitXor => Some("^"), B::BitOr => Some("|"), _ => None }) else { return };
+        let is_cmp = |o: &B| matches!(o, B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge);
+        // (integer side, comparison operands, comparison on the right?)
+        let (int_side, a, b, cmp_right, cmp_op) = match (left, right) {
+            (l, Expression::Binary { left: a, op: cop, right: b, .. }) if is_cmp(cop) => (l, *a, *b, true, *cop),
+            (Expression::Binary { left: a, op: cop, right: b, .. }, r) if is_cmp(cop) => (r, *a, *b, false, *cop),
+            _ => return,
+        };
+        if !self.is_int_operand(int_side) || !(self.is_int_operand(a) || self.is_int_operand(b)) {
+            return;
+        }
+        let cmp_sym = match cmp_op { B::Eq => "==", B::Ne => "!=", B::Lt => "<", B::Le => "<=", B::Gt => ">", _ => ">=" };
+        let mut d = Diagnostic::error(
+            "WJ0003",
+            format!("mismatched types: `{sym}` binds looser than `{cmp_sym}` in Windjammer, so an integer is combined with a `bool`"),
+        );
+        // the operand next to the operator, then the whole group when the source is plain
+        let near = if cmp_right { (int_side, a) } else { (b, int_side) };
+        let first_span = self.operand_span(near.0);
+        let last_span = self.operand_span(near.1);
+        if let Some(sp) = self.operand_span(int_side) {
+            d = d.at(sp.with_label(format!("`{sym}` is applied to the result of `{cmp_sym}`")));
+        }
+        if let (Some(fs), Some(ls)) = (first_span, last_span) {
+            let text = self.cx.loc.ix.text();
+            let between = text.get(fs.byte_end..ls.byte_start).unwrap_or("");
+            if fs.byte_end <= ls.byte_start && between.trim() == sym {
+                let whole = self.cx.loc.ix.span(fs.byte_start, ls.byte_end);
+                let group = &text[fs.byte_start..ls.byte_end];
+                let mut fix = replace_fix(&whole, &format!("({group})"), format!("group the `{sym}` first: ({group})"));
+                fix.applicability = Applicability::MachineApplicable;
+                d = d.with_fix(fix);
+            }
+        }
+        let shown = if cmp_right { format!("(… {sym} …) {cmp_sym} …") } else { format!("… {cmp_sym} (… {sym} …)") };
+        self.cx.out.push(d.with_help(format!(
+            "in Windjammer `&`, `^` and `|` bind looser than comparisons, so write the grouping you mean, for example {shown}"
+        )));
     }
 
     /// `ch == "?"` with `ch` a `char`: rustc rejects comparing `char` with `&str`, and the interpreter answers `false`.
@@ -964,6 +1134,7 @@ impl Visitor for Checker<'_, '_, '_> {
                 self.variant_path(name, &loc);
             }
             Expression::MacroInvocation { name, args, .. } if name == "format" => self.display_args(args),
+            Expression::Index { object, .. } => self.index_into_iterator(object),
             Expression::MethodCall { object, method, location, .. } => {
                 let loc = self.effective(location);
                 self.method_call(object, method, &loc);
@@ -973,6 +1144,9 @@ impl Visitor for Checker<'_, '_, '_> {
     }
 
     fn stmt(&mut self, s: &Statement<'_>) {
+        if let Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_: Some(t), value, location, .. } = s {
+            self.iterator_for_declared_list(n, t, value, location);
+        }
         match s {
             Statement::If { condition, location, .. } | Statement::While { condition, location, .. } => {
                 self.condition(condition, location)

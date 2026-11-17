@@ -5,4 +5,5 @@ error[W0006]: string literal `.to_string()` is forbidden Rust leakage
   |                     ^^^^^^^^^
   = help: write `"text"` instead of `"text".to_string()`
   = note: a string literal is already a `string`, so the call adds nothing
+  = fix (auto-fixable): remove `.to_string()`
   = explain: wj explain W0006

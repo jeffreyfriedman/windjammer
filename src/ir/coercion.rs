@@ -216,6 +216,29 @@ fn emitted_rust_closure_value(expr: &str) -> bool {
         || (t.starts_with('(') && (t.contains("move ||") || t.contains("||") || t.contains('|')))
 }
 
+/// The expression without one pair of outer parentheses, when that pair wraps the whole text (`(a + b)` yes,
+/// `(&x).to_vec()` no).
+fn strip_wrapping_parens(text: &str) -> &str {
+    let t = text.trim();
+    if !(t.starts_with('(') && t.ends_with(')')) {
+        return text;
+    }
+    let mut depth = 0i32;
+    for (i, c) in t.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 && i + 1 != t.len() {
+                    return text;
+                }
+            }
+            _ => {}
+        }
+    }
+    t[1..t.len() - 1].trim()
+}
+
 fn strip_rust_ref_expr(expr: &str) -> &str {
     let trimmed = expr.trim();
     let inner = if parens_wrap_whole(trimmed) {
@@ -251,12 +274,15 @@ pub(crate) fn parens_wrap_whole(s: &str) -> bool {
 }
 
 /// `text[s..e]` / `&text[s..e]` are `str` subslices — owned `String` formals need `.to_string()`.
-fn owned_coercion_for_str_subslice(inner: &str) -> String {
+///
+/// Only when the formal is text and the whole expression is the subslice: a list slice's copy
+/// (`data[0..n].to_vec()`, or a slice passed to a list formal) is not text, so it keeps `.clone()`.
+fn owned_coercion_for_str_subslice(inner: &str, text_formal: bool) -> String {
     // unit keywords are constructors — never `.clone()`.
     if inner == "None" || inner == "true" || inner == "false" {
         return inner.to_string();
     }
-    if inner.contains('[') && inner.contains("..") {
+    if text_formal && inner.ends_with(']') && inner.contains("..") {
         format!("({inner}).to_string()")
     } else {
         format!("{inner}.clone()")
@@ -315,7 +341,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
             } else if emitted_rust_closure_value(inner) {
                 *coerced = inner.to_string();
             } else {
-                *coerced = owned_coercion_for_str_subslice(inner);
+                *coerced = owned_coercion_for_str_subslice(inner, is_string_base(&expected.base));
             }
             return;
         }
@@ -387,7 +413,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                     }
                 } else if !coerced.ends_with(".clone()") {
                     let base = strip_rust_ref_expr(coerced);
-                    *coerced = owned_coercion_for_str_subslice(base);
+                    *coerced = owned_coercion_for_str_subslice(base, is_string_base(&expected.base));
                 }
             }
             CoercionKind::Clone => {
@@ -396,7 +422,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                     && !coerced.ends_with(".to_owned()")
                 {
                     let base = strip_rust_ref_expr(coerced);
-                    *coerced = owned_coercion_for_str_subslice(base);
+                    *coerced = owned_coercion_for_str_subslice(base, is_string_base(&expected.base));
                 }
             }
             _ => {}

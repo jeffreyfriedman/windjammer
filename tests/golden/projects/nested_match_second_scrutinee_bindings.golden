@@ -30,7 +30,7 @@ pub enum Val {
 }
 
 #[inline]
-pub fn cmp_i64(a: i64, b: i64) -> i32 {
+fn cmp_i64(a: i64, b: i64) -> i32 {
     if a < b {
         -1_i32
     } else {

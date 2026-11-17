@@ -79,6 +79,7 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
     // The expression rustc highlighted usually appears verbatim in the `.wj` source. When it occurs
     // exactly once in the file, that is a better location than the (approximate) line map.
     let mut line_for_fix = d.location.line;
+    let mut located = false;
     if let Some(needle) = d.primary_text.as_deref().map(str::trim).filter(|n| n.chars().count() >= 4) {
         let file = d.location.file.to_string_lossy().to_string();
         if let Some(text) = cache.text(&file).map(str::to_string) {
@@ -87,6 +88,7 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
                 let sp = SourceIndex::new(file, &text).span(hits[0], hits[0] + needle.len());
                 line_for_fix = sp.line_start;
                 out.primary_span = Some(sp);
+                located = true;
             } else if hits.is_empty() {
                 // Generated Rust adds parentheses and spaces: compare with those removed, line by line.
                 let norm = |t: &str| {
@@ -112,6 +114,13 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
                     }
                 }
             }
+        }
+    }
+    if !located {
+        // rustc names the value (`t.clone()`, `d`): the identifier it is built from, as a whole word on the mapped line.
+        if let Some(sp) = identifier_on_mapped_line(cache, &d.location, d.primary_text.as_deref()) {
+            line_for_fix = sp.line_start;
+            out.primary_span = Some(sp);
         }
     }
     if let Some(hint) = &d.fix {
@@ -152,6 +161,28 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
 const GENERATED_DEREF_HELP: &str = "your source has no `*` here: the compiled backend dereferenced a value that is not a reference (a compiler defect; `wj run` interprets this program correctly). Keep the code; report it with `wj reduce`";
 
 /// Whether the line of `span` in its `.wj` file contains a `*` (a written dereference or product).
+/// The span of the identifier rustc's primary text is built from (`t.clone()` -> `t`), when it occurs once, as a whole word, on the
+/// `.wj` line the error maps to: the use site, not the whole line.
+fn identifier_on_mapped_line(cache: &mut SourceCache, loc: &Location, primary_text: Option<&str>) -> Option<Span> {
+    let t = primary_text?.trim();
+    let base = ["&mut ", "&"].iter().fold(t, |b, p| b.strip_prefix(p).unwrap_or(b));
+    let base = [".clone()", ".to_string()", ".to_owned()"].iter().fold(base, |b, s| b.strip_suffix(s).unwrap_or(b));
+    if base.is_empty() || !base.chars().all(|c| c.is_alphanumeric() || c == '_') || base.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let file = cache.resolve(&loc.file).to_string_lossy().to_string();
+    let text = cache.text(&file)?.to_string();
+    let (start, line) = text.split_inclusive('\n').scan(0usize, |off, l| { let s = *off; *off += l.len(); Some((s, l)) }).nth(loc.line.checked_sub(1)?)?;
+    let word = |i: usize| {
+        let before = line[..i].chars().next_back();
+        let after = line[i + base.len()..].chars().next();
+        !before.is_some_and(|c| c.is_alphanumeric() || c == '_') && !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+    };
+    let hits: Vec<usize> = line.match_indices(base).map(|(i, _)| i).filter(|i| word(*i)).collect();
+    let [i] = hits.as_slice() else { return None };
+    Some(SourceIndex::new(file, &text).span(start + i, start + i + base.len()))
+}
+
 fn source_line_has_deref(cache: &mut SourceCache, span: Option<&Span>) -> bool {
     let Some(sp) = span else { return true };
     let Some(text) = cache.text(&sp.file) else { return true };

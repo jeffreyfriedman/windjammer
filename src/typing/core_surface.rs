@@ -75,6 +75,28 @@ impl CoreSurface {
         Self { table, enumerable }
     }
 
+    /// The item type of the iterator a method is declared to return, when every type that declares the method
+    /// agrees and the item names no type parameter (`split_whitespace` -> `&str`; `map` -> none: its item is `U`).
+    /// For a receiver whose type is not known: the declaration still says what the call yields.
+    pub fn unique_iterator_item(&self, method: &str) -> Option<Type> {
+        let mut found: Option<Type> = None;
+        for ((_, m), e) in &self.table {
+            if m != method || e.is_static {
+                continue;
+            }
+            let ret = e.ret.as_ref()?;
+            let (name, args) = head(ret)?;
+            if name != ITERATOR || args.len() != 1 || mentions_type_parameter(&args[0]) {
+                return None;
+            }
+            match &found {
+                Some(prev) if *prev != args[0] => return None,
+                _ => found = Some(args[0].clone()),
+            }
+        }
+        found
+    }
+
     /// Every declared `(type, method)` pair, sorted (for the rustc agreement gate and the docs).
     pub fn entries(&self) -> Vec<(String, String)> {
         self.table.keys().cloned().collect()
@@ -152,6 +174,17 @@ impl CoreSurface {
     pub fn iterates_by_reference(&self, receiver: &Type, method: &str) -> bool {
         let Some((name, _)) = head(receiver) else { return false };
         name != ITERATOR && !self.table.contains_key(&(name.to_string(), method.to_string())) && !self.enumerable.contains_key(method)
+            && self.table.contains_key(&(ITERATOR.to_string(), method.to_string()))
+    }
+
+    /// Whether `receiver.method(..)` on a collection is an iterator adapter: the collection does not declare the
+    /// method, `Iterator` does (`names.any(..)`, `names.position(..)`); codegen's collection detection asks by name.
+    pub fn is_adapter_on_collection(&self, receiver_name: &str, method: &str) -> bool {
+        let name = crate::type_classification::type_name_leaf(receiver_name);
+        is_element_container(name)
+            && name != ITERATOR
+            && !self.table.contains_key(&(name.to_string(), method.to_string()))
+            && !self.enumerable.contains_key(method)
             && self.table.contains_key(&(ITERATOR.to_string(), method.to_string()))
     }
 
@@ -368,5 +401,18 @@ mod tests {
     fn unknown_receivers_and_methods_have_no_signature() {
         assert!(method_signature(&Type::Custom("Grid".into()), "get", &[]).is_none());
         assert!(method_signature(&vec_of(Type::Int), "frobnicate", &[]).is_none());
+    }
+}
+
+/// Whether a surface type mentions one of its own type parameters (a single capital letter, or `Generic`).
+fn mentions_type_parameter(t: &Type) -> bool {
+    match t {
+        Type::Generic(_) => true,
+        Type::Custom(n) => n.len() == 1 && n.chars().all(|c| c.is_ascii_uppercase()),
+        Type::Reference(i) | Type::MutableReference(i) | Type::Vec(i) | Type::Option(i) | Type::Array(i, _) => mentions_type_parameter(i),
+        Type::Result(a, b) => mentions_type_parameter(a) || mentions_type_parameter(b),
+        Type::Tuple(v) => v.iter().any(mentions_type_parameter),
+        Type::Parameterized(_, v) => v.iter().any(mentions_type_parameter),
+        _ => false,
     }
 }

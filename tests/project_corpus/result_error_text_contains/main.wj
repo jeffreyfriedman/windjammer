@@ -1,0 +1,10 @@
+// The error text of a `Result` is a string: `unwrap_err()` is declared in `std/rust_core.wji`, so the chained
+// `to_lowercase().contains("expired")` takes the string method, not the `contains` of the user's `Bag` in another
+// module (whose formal is an owned string). Expected by hand: true false.
+// expect: true false
+mod bag
+mod check
+
+fn main() {
+    println("${check::rejected_as_expired("abcd")} ${check::rejected_as_expired("ab")}")
+}

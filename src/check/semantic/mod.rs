@@ -5,6 +5,7 @@ mod declared;
 mod elements;
 mod index;
 mod arms;
+mod iterators;
 mod mismatch;
 mod rules;
 mod std_methods;

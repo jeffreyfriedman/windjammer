@@ -131,8 +131,8 @@ impl<'ast> RustLeakageLinter<'ast> {
                 level: LintLevel::Warning,
                 message: format!("trait method `{}` has no body and does not declare its receiver", u.method),
                 location: self.receiver_location(u.params),
-                help: Some("write `&self` when no implementation changes `self`, `&mut self` when one does".to_string()),
-                note: Some("`self` alone is inferred from a body; implementations follow the trait's declared receiver".to_string()),
+                help: Some("in a trait method without a body, write `&self` when no implementation changes `self` and `&mut self` when one does: this is the one place a receiver takes `&`. Implementations and every other method keep plain `self` (ownership is inferred from the body), and parameters never take `&`".to_string()),
+                note: Some("`self` alone is inferred from a body; a trait method has none, so the trait declares the receiver and every implementation follows it".to_string()),
                 suggestion: None,
             });
         }
@@ -350,8 +350,12 @@ impl<'ast> RustLeakageLinter<'ast> {
                         message: format!("explicit .{}() call", method),
                         location: loc,
                         help: Some(
-                            "write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`"
-                                .to_string(),
+                            if matches!(object, Expression::MethodCall { method: m, .. } if m == "parse") {
+                                "parsing can fail: write `s.parse::<int>() ?? 0` for a fallback, `s.parse::<int>()?` to pass the error up, or `match s.parse::<int>() { Ok(n) => .., Err(_) => .. }`"
+                            } else {
+                                "write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`"
+                            }
+                            .to_string(),
                         ),
                         note: Some("`.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead".to_string()),
                         suggestion: Some(

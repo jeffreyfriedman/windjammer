@@ -990,6 +990,15 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         is_extern_call,
     );
 
+    // A slice-typed argument (`"abc".as_bytes()`) at a `Vec` formal is copied into one.
+    if let Some(sig) = signature.as_ref() {
+        for (i, (_, arg)) in arguments.iter().enumerate() {
+            if let Some(arg_str) = args.get_mut(i) {
+                gen.convert_slice_arg_to_vec_formal(arg, sig, i, arg_str);
+            }
+        }
+    }
+
     // Path-dep import aliases: dependency metadata `Borrowed` / `emitted_rust_ref_params`
     // must auto-borrow owned locals at the cross-crate boundary (apps/wj-find).
     // Mixed formals (`field: &str`, `value: String`) must peel `&` only on owned slots

@@ -1,0 +1,6 @@
+fn cell(s: string) -> string {
+    s
+}
+pub fn a_pub(s: string) -> string {
+    cell(s)
+}

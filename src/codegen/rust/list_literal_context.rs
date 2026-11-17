@@ -55,6 +55,13 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::Array { elements, .. } if tail && !elements.is_empty() => {
                     out.insert(elements.as_ptr() as usize);
                 }
+                Expression::MacroInvocation { is_repeat: false, name, args, .. }
+                    if tail
+                        && !args.is_empty()
+                        && crate::intrinsics::Intrinsic::from_macro_name(name) == Some(crate::intrinsics::Intrinsic::Vec) =>
+                {
+                    out.insert(args.as_ptr() as usize);
+                }
                 Expression::Block { statements, .. } => stmts(statements, tail, out),
                 // `Ok([1])` / `Some([1])` returned from a `Result<Vec<_>, _>` / `Option<Vec<_>>` function
                 Expression::Call { function: Expression::Identifier { name, .. }, arguments, .. }
@@ -102,6 +109,11 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Slot types of the tuples a list type holds: `Vec<(string, int)>` (also under `Result` / `Option`) gives `[string, int]`.
     pub(in crate::codegen::rust) fn list_element_tuple_slots(list: &Type) -> Option<Vec<Type>> {
+        // a body-inferred borrow makes the formal `&Vec<(..)>`: the literal still builds the list
+        let list = match list {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
         let list = match list {
             Type::Result(ok, _) => ok.as_ref(),
             Type::Option(inner) => inner.as_ref(),

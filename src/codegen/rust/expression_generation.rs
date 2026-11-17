@@ -916,7 +916,20 @@ impl<'ast> CodeGenerator<'ast> {
                 args,
                 delimiter,
                 ..
-            } => self.generate_macro_invocation(*is_repeat, name, args, delimiter),
+            } => {
+                // `vec![("a", "b")]` is a list literal like `[("a", "b")]`: the tuples in it take the slot types of the
+                // declared list type (formal, return type), so a literal in a `string` slot is owned.
+                let is_vec = !*is_repeat && !args.is_empty() && crate::intrinsics::Intrinsic::from_macro_name(name) == Some(crate::intrinsics::Intrinsic::Vec);
+                if is_vec {
+                    let slots = self.idiom.list_elem_tuple_slots.take().or_else(|| self.return_or_argument_element_tuple_slots(args));
+                    let outer = std::mem::replace(&mut self.idiom.list_elem_tuple_slots, slots);
+                    let generated = self.generate_macro_invocation(*is_repeat, name, args, delimiter);
+                    self.idiom.list_elem_tuple_slots = outer;
+                    generated
+                } else {
+                    self.generate_macro_invocation(*is_repeat, name, args, delimiter)
+                }
+            }
             Expression::Cast { expr, type_, .. } => self.generate_cast(expr, type_),
             Expression::Block {
                 statements: stmts,

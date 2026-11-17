@@ -1,0 +1,19 @@
+// Windjammer binds `& ^ |` looser than comparisons (SPEC-EXPR-001): `flag & x == 3` is `flag & (x == 3)`. The Rust
+// output keeps that tree with parentheses, and a literal compared with a narrow bit takes that bit's type.
+// expect: true false false
+// expect: true false
+fn bit_is_clear(bits: Vec<u8>, pos: u64) -> bool {
+    let at = (pos / 8) as usize
+    if ((bits[at] >> ((pos % 8) as u32)) & 1) == 0 {
+        return true
+    }
+    false
+}
+
+fn main() {
+    let flag = true
+    let x = 3
+    println("${flag & x == 3} ${flag & x == 4} ${false | x > 2 ^ true}")
+    let bits: Vec<u8> = [5]
+    println("${bit_is_clear(bits, 1)} ${bit_is_clear(bits, 0)}")
+}

@@ -730,6 +730,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // `vec[i]` → element type (peeling `&Vec<T>`: `vals: &Vec<f32>` yields `f32`; `mask[i]` of
             // `Vec<u8>` is `u8`); `map[&k]` → value type.
+            // `vec[a..b]` is a slice of the collection (a `Vec<T>` view), not an element
+            Expression::Index { object, index, .. } if matches!(index, Expression::Range { .. }) => {
+                let ty = self.infer_expression_type(object)?;
+                Some(crate::codegen::rust::collection_detection::peel_type_reference(&ty).clone())
+            }
             Expression::Index { object, .. } => {
                 Self::indexed_type(&self.infer_expression_type(object)?)
             }
@@ -853,7 +858,21 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        None
+        self.declared_generic_return(receiver, method)
+    }
+
+    /// A method `std/rust_core.wji` declares on a two-parameter core type (`Result<T, E>::unwrap_err() -> E`) whose
+    /// result is one of the type's own parameters: the receiver's argument at that position. The declaration names
+    /// the parameter; nothing here knows which method it is.
+    fn declared_generic_return(&self, receiver: &Type, method: &str) -> Option<Type> {
+        let Type::Result(ok, err) = Self::peel_references(receiver) else { return None };
+        let (generics, _, _, ret) = self.core_surface().declared("Result", method)?;
+        let (Type::Custom(g) | Type::Generic(g)) = ret? else { return None };
+        match generics.iter().position(|x| *x == g)? {
+            0 => Some((**ok).clone()),
+            1 => Some((**err).clone()),
+            _ => None,
+        }
     }
 
     /// Receivers to try for method return lookup: the type itself, then Deref payloads.

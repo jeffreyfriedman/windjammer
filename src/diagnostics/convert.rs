@@ -48,7 +48,34 @@ pub fn lint(d: &LintDiagnostic, ix: &SourceIndex) -> Option<Diagnostic> {
     if let Some(n) = &d.note {
         out = out.with_note(n.clone());
     }
+    if let Some(fix) = out.primary_span.as_ref().and_then(|sp| lint_fix(code, sp, ix)) {
+        out = out.with_fix(fix);
+    }
     Some(out)
+}
+
+/// The exact edit for a lint whose fix is mechanical: delete the call the lint names (`"x".to_string()`, `.iter()`), or
+/// spell a bodyless trait method's receiver `&self`.
+fn lint_fix(code: &str, sp: &super::model::Span, ix: &SourceIndex) -> Option<Fix> {
+    let text = ix.text();
+    let (start, end) = (sp.byte_start, sp.byte_end);
+    let word = text.get(start..end)?;
+    match code {
+        "W0006" | "W0003" if matches!(word, "to_string" | "iter" | "iter_mut") && start > 0 && text[..start].ends_with('.') && text[end..].starts_with("()") => {
+            let (from, to) = (start - 1, end + 2);
+            Some(Fix {
+                description: format!("remove `{}`", &text[from..to]),
+                applicability: Applicability::MachineApplicable,
+                edits: vec![Edit { span: ix.span(from, to), replacement: String::new() }],
+            })
+        }
+        "W0016" if word == "self" && !text[..start].ends_with('&') => Some(Fix {
+            description: "declare the receiver `&self` (`&mut self` when an implementation changes it)".to_string(),
+            applicability: Applicability::MaybeIncorrect,
+            edits: vec![Edit { span: ix.span(start, end), replacement: "&self".to_string() }],
+        }),
+        _ => None,
+    }
 }
 
 /// A W0007/W0008 finding, with the exact rewrite as a machine-applicable fix.
@@ -94,6 +121,11 @@ pub fn ir(severity_is_error: bool, severity_is_warning: bool, message: &str) -> 
     Diagnostic::new(code, severity, message.to_string())
 }
 
+/// A marker such as `.unwrap` must not be the front of a longer name (`.unwrap_or`).
+fn ends_at_word_boundary(text: &str, end: usize) -> bool {
+    !text[end.min(text.len())..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+}
+
 /// Lint locations come from AST nodes (0-based columns, often just after the construct, or a
 /// default of 1:1); find the offending text itself.
 fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::Span {
@@ -116,7 +148,14 @@ fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::
     let lo = (lo..=offset).find(|&i| text.is_char_boundary(i)).unwrap_or(0);
     let near = markers
         .iter()
-        .filter_map(|m| text[lo..offset.min(text.len())].rfind(m).map(|i| (lo + i, m.len())))
+        .filter_map(|m| {
+            text[lo..offset.min(text.len())]
+                .match_indices(m)
+                .map(|(i, _)| lo + i)
+                .filter(|&i| ends_at_word_boundary(text, i + m.len()))
+                .last()
+                .map(|i| (i, m.len()))
+        })
         .max_by_key(|(i, _)| *i);
     let found = near.or_else(|| {
         let from_decl = |i: usize| {
@@ -127,7 +166,12 @@ fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::
         };
         markers
             .iter()
-            .filter_map(|m| text.match_indices(m).map(|(i, _)| i).find(|&i| from_decl(i)).map(|i| (i, m.len())))
+            .filter_map(|m| {
+                text.match_indices(m)
+                    .map(|(i, _)| i)
+                    .find(|&i| from_decl(i) && ends_at_word_boundary(text, i + m.len()))
+                    .map(|i| (i, m.len()))
+            })
             .min_by_key(|(i, _)| *i)
     });
     match found {

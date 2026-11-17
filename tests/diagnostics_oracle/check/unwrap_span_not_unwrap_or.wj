@@ -1,0 +1,14 @@
+// expect: W0002
+// The W0002 span is the bare `.unwrap()` call, never the allowed `unwrap_or` before it.
+fn pick(o: Option<int>) -> int {
+    o.unwrap_or(0)
+}
+
+fn first(o: Option<int>) -> int {
+    o.unwrap()
+//~@7+6 ERROR W0002 explicit .unwrap() call
+}
+
+fn main() {
+    println("${pick(Some(1))} ${first(Some(2))}")
+}

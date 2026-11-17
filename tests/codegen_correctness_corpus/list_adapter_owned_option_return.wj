@@ -1,0 +1,48 @@
+// A list adapter returned as `Option<T>`: the declaration says `find` yields `Option<T>`, so the lowered Rust
+// owns the element. A read-only list parameter stays read-only for `any`, `all` and `position` (the adapter
+// runs on a fresh iterator, not on the list).
+// expect: 2 3
+// expect: true false
+// expect: 1 none
+pub struct Item {
+    pub id: string,
+    pub part: int,
+}
+
+fn find_item(items: Vec<Item>, id: string) -> Option<Item> {
+    items.find(|i| i.id == id)
+}
+
+fn find_big(nums: Vec<int>) -> Option<int> {
+    nums.find(|n| n > 2)
+}
+
+fn has(items: Vec<Item>, id: string) -> bool {
+    items.any(|i| i.id == id)
+}
+
+fn all_positive(items: Vec<Item>) -> bool {
+    items.all(|i| i.part > 1)
+}
+
+fn at(items: Vec<Item>, id: string) -> Option<int> {
+    items.position(|i| i.id == id)
+}
+
+fn main() {
+    let items = [Item { id: "a", part: 1 }, Item { id: "b", part: 2 }]
+    let nums = [1, 3, 2]
+    let part = match find_item(items, "b") {
+        Some(i) => i.part,
+        None => 0,
+    }
+    let big = find_big(nums) ?? 0
+    println("${part} ${big}")
+    println("${has(items, "a")} ${all_positive(items)}")
+    let first = at(items, "b") ?? 9
+    let missing = match at(items, "z") {
+        Some(_) => "some",
+        None => "none",
+    }
+    println("${first} ${missing}")
+}

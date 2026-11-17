@@ -1,0 +1,503 @@
+// ADR-0039 decision B: how far a simple "provably non-negative" analysis gets on real programs.
+//
+//   wj run --interpret scripts/wj/nonneg_analysis.wj [--eco <ecosystem checkout>] [--hits <file>]
+//
+// Run from the repository root. A lexical prototype of the dataflow a compiler would run under option B1 (lengths are
+// `int`), per function:
+//   non-negative sources  lengths, counts, capacities, absolute values, integer literals, `for v in a..b` with a non-negative a,
+//                         the index of `enumerate()`, declared unsigned (`usize`, `u8`, ...) values, position/find
+//                         results defaulted with `?? k`, sums, products, quotients and remainders of non-negatives,
+//                         `a.max(b)` with one non-negative side, `a.min(b)` with both
+//   killed by             subtraction, negation, an assignment of anything not provably non-negative
+// For every integer index or slice `xs[e]` it reports whether `e` is proved non-negative (the checked conversion can be
+// dropped) or not (the conversion stays and checks at run time). For every `xs.len() - k` it reports whether a guard on
+// the same collection (`is_empty`, a `len()` comparison) appears earlier in the function. Counts are approximate (lines,
+// not a parser): map indexing `m[k]` is skipped when `m` is declared as a map in the same file.
+use std::env
+use std::fs
+use std::process
+use std::regex
+
+struct Corpus {
+    name: string,
+    root: string,
+    specs: Vec<string>,
+}
+
+struct Tally {
+    files: int,
+    index_sites: int,
+    proved: int,
+    unproved: int,
+    len_minus: int,
+    len_minus_guarded: int,
+}
+
+fn files_of(c: Corpus) -> Vec<string> {
+    let mut args = ["-C", c.root, "ls-files", "--"]
+    for s in c.specs {
+        args.push(s)
+    }
+    let listed = process.run_with_args("git", args) ?? ""
+    let mut out: Vec<string> = []
+    for l in listed.lines() {
+        if l.trim() != "" {
+            out.push(c.root + "/" + l)
+        }
+    }
+    out
+}
+
+fn read(path: string) -> string {
+    match fs.read_to_string(path) {
+        Ok(t) => t,
+        Err(_) => process.run("cat '" + path + "'") ?? "",
+    }
+}
+
+fn is_ident_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+fn is_int_literal(e: string) -> bool {
+    let t = e.trim().replace("_", "")
+    if t == "" {
+        return false
+    }
+    let mut digits = 0
+    for c in t.chars() {
+        if c >= '0' && c <= '9' {
+            digits = digits + 1
+        } else {
+            // a literal suffix such as 0usize or 3i64
+            return digits > 0 && (t.ends_with("usize") || t.ends_with("u32") || t.ends_with("u64") || t.ends_with("i64") || t.ends_with("i32") || t.ends_with("u8"))
+        }
+    }
+    digits > 0
+}
+
+fn contains_word(xs: Vec<string>, w: string) -> bool {
+    for x in xs {
+        if x == w {
+            return true
+        }
+    }
+    false
+}
+
+// Split `e` at top-level occurrences of `op` (outside parentheses, brackets and strings).
+fn split_top(e: string, op: char) -> Vec<string> {
+    let mut parts: Vec<string> = []
+    let mut depth = 0
+    let mut cur = ""
+    let mut in_str = false
+    let mut prev = ' '
+    for c in e.chars() {
+        if c == '"' {
+            in_str = !in_str
+        }
+        if !in_str {
+            if c == '(' || c == '[' || c == '{' {
+                depth = depth + 1
+            }
+            if c == ')' || c == ']' || c == '}' {
+                depth = depth - 1
+            }
+            // `->` and `=>` are not operators; `-` after an operator or `(` is a negation (kept in the part)
+            if depth == 0 && c == op && !(op == '-' && (prev == ' ' && cur.trim() == "")) {
+                parts.push(cur)
+                cur = ""
+                prev = c
+                continue
+            }
+        }
+        cur += c
+        prev = c
+    }
+    parts.push(cur)
+    parts
+}
+
+fn strip_parens(e: string) -> string {
+    let t = e.trim()
+    if t.starts_with("(") && t.ends_with(")") {
+        let inner = t[1..t.len() - 1]
+        // only when the parentheses enclose the whole expression
+        let mut depth = 0
+        let mut ok = true
+        for c in inner.chars() {
+            if c == '(' { depth = depth + 1 }
+            if c == ')' { depth = depth - 1 }
+            if depth < 0 { ok = false }
+        }
+        if ok && depth == 0 {
+            return strip_parens(inner)
+        }
+    }
+    t
+}
+
+fn nonneg(e0: string, nn: Vec<string>) -> bool {
+    let e = strip_parens(e0)
+    if e == "" {
+        return false
+    }
+    if e.starts_with("-") {
+        return false
+    }
+    if is_int_literal(e) {
+        return true
+    }
+    // casts keep the operand's sign: `e as T`
+    match e.rfind(" as ") {
+        Some(at) => {
+            let head = e[..at]
+            if split_top(head, '+').len() == 1 && split_top(head, '-').len() == 1 {
+                return nonneg(head, nn)
+            }
+        },
+        None => {},
+    }
+    let minus = split_top(e, '-')
+    if minus.len() > 1 {
+        return false
+    }
+    for op in ['+', '*', '/', '%'] {
+        let parts = split_top(e, op)
+        if parts.len() > 1 {
+            for p in parts {
+                if !nonneg(p, nn) {
+                    return false
+                }
+            }
+            return true
+        }
+    }
+    let q = split_top(e, '?')
+    if q.len() >= 3 && e.contains("??") {
+        // `x.position(..) ?? k`: non-negative when the default is
+        let head = q[0]
+        let default = q[q.len() - 1]
+        if (head.contains(".position(") || head.contains(".find(") || head.contains(".rfind(") || head.contains(".index_of(") || head.contains(".parse::<usize>")) && nonneg(default, nn) {
+            return true
+        }
+        return false
+    }
+    for m in [".len()", ".count()", ".abs()", ".count_ones()"] {
+        if e.ends_with(m) {
+            return true
+        }
+    }
+    let char_count = ".char" + "_count()"
+    let capacity = ".cap" + "acity()"
+    if e.ends_with(char_count) || e.ends_with(capacity) {
+        return true
+    }
+    if e.ends_with(")") {
+        match e.rfind(".max(") {
+            Some(at) => {
+                let a = e[..at]
+                let b = e[at + 5..e.len() - 1]
+                return nonneg(a, nn) || nonneg(b, nn)
+            },
+            None => {},
+        }
+        match e.rfind(".min(") {
+            Some(at) => {
+                let a = e[..at]
+                let b = e[at + 5..e.len() - 1]
+                return nonneg(a, nn) && nonneg(b, nn)
+            },
+            None => {},
+        }
+        match e.rfind(".clamp(") {
+            Some(at) => {
+                let args = e[at + 7..e.len() - 1]
+                let lo = split_top(args, ',')
+                return nonneg(lo[0], nn)
+            },
+            None => {},
+        }
+    }
+    // a plain variable (or self.field) proved earlier
+    let mut plain = true
+    for c in e.chars() {
+        if !(is_ident_char(c) || c == '.') {
+            plain = false
+        }
+    }
+    plain && contains_word(nn, e)
+}
+
+fn without(xs: Vec<string>, w: string) -> Vec<string> {
+    let mut out: Vec<string> = []
+    for x in xs {
+        if x != w {
+            out.push(x)
+        }
+    }
+    out
+}
+
+fn is_unsigned_type(t: string) -> bool {
+    let s = t.trim()
+    s == "usize" || s == "u8" || s == "u16" || s == "u32" || s == "u64"
+}
+
+// Map-typed names in a file: `name: HashMap<`, `name = HashMap::new()`, `name = {"`.
+fn map_names(text: string) -> Vec<string> {
+    let mut out: Vec<string> = []
+    let pats = ["(\\w+)\\s*:\\s*&?(mut\\s+)?(std::collections::)?(HashMap|BTreeMap|Map)<", "(\\w+)\\s*(:[^=]*)?=\\s*(HashMap|BTreeMap)::(new|with_capacity)", "(\\w+)\\s*=\\s*\\{\\s*\""]
+    for p in pats {
+        match regex.compile(p) {
+            Ok(re) => {
+                for c in re.captures_all(text) {
+                    out.push(c.get(1) ?? "")
+                }
+            },
+            Err(_) => {},
+        }
+    }
+    out
+}
+
+// The receiver name just before `[` at byte `at`: `self.items[` -> `items`, `grid[r][` -> `grid`.
+fn base_before(line: string, at: usize) -> string {
+    let cs: Vec<char> = line[..at].chars().collect()
+    let mut j = cs.len()
+    while j > 0 && cs[j - 1] == ']' {
+        // skip a previous index group
+        let mut depth = 0
+        while j > 0 {
+            let c = cs[j - 1]
+            if c == ']' { depth = depth + 1 }
+            if c == '[' { depth = depth - 1 }
+            j = j - 1
+            if depth == 0 { break }
+        }
+    }
+    let mut name = ""
+    while j > 0 && is_ident_char(cs[j - 1]) {
+        name = cs[j - 1].to_string() + name
+        j = j - 1
+    }
+    name
+}
+
+// The bracket contents of every postfix index on a line, with the base name.
+fn index_sites(line: string) -> Vec<(string, string)> {
+    let mut out: Vec<(string, string)> = []
+    let cs: Vec<char> = line.chars().collect()
+    let mut i = 0
+    let mut in_str = false
+    let mut byte: usize = 0
+    while i < cs.len() {
+        let c = cs[i]
+        if c == '"' {
+            in_str = !in_str
+        }
+        if !in_str && c == '[' && i > 0 && (is_ident_char(cs[i - 1]) || cs[i - 1] == ')' || cs[i - 1] == ']') {
+            let mut depth = 0
+            let mut k = i
+            let mut inner = ""
+            while k < cs.len() {
+                let d = cs[k]
+                if d == '[' { depth = depth + 1 }
+                if d == ']' {
+                    depth = depth - 1
+                    if depth == 0 { break }
+                }
+                if k > i { inner += d }
+                k = k + 1
+            }
+            let base = base_before(line, byte)
+            out.push((base, inner))
+        }
+        byte = byte + c.to_string().len()
+        i = i + 1
+    }
+    out
+}
+
+fn skip_index(base: string, inner: string, maps: Vec<string>) -> bool {
+    let t = inner.trim()
+    // types (`Vec<[u8; 4]>` never reach here), literals, map keys, fill literals
+    t == "" || t.contains(";") || t.starts_with("\"") || t.starts_with("&") || t.starts_with("'") || contains_word(maps, base) || base == "" || (base.chars().next() ?? 'a').is_uppercase()
+}
+
+fn analyse(text: string, t: Tally, hits: Vec<string>, file: string) -> (Tally, Vec<string>) {
+    let mut tally = t
+    let mut out = hits
+    let maps = map_names(text)
+    let mut nn: Vec<string> = []
+    let mut fn_lines: Vec<string> = []
+    let let_re = regex.compile("^\\s*let\\s+(mut\\s+)?(\\w+)\\s*(:\\s*([\\w<>]+))?\\s*=\\s*(.+)$") ?? regex.compile("x") ?? panic("re")
+    let assign_re = regex.compile("^\\s*([\\w.]+)\\s*(\\+=|\\*=|-=|/=|=)\\s*(.+)$") ?? regex.compile("x") ?? panic("re")
+    let for_range = regex.compile("^\\s*for\\s+(\\w+)\\s+in\\s+\\(?(.+?)\\.\\.=?") ?? regex.compile("x") ?? panic("re")
+    let for_enum = regex.compile("^\\s*for\\s+\\((\\w+),") ?? regex.compile("x") ?? panic("re")
+    let param_re = regex.compile("(\\w+)\\s*:\\s*(usize|u8|u16|u32|u64)\\b") ?? regex.compile("x") ?? panic("re")
+    let len_minus = regex.compile("([\\w.]+)\\.len\\(\\)\\s*-\\s*[\\w(]") ?? regex.compile("x") ?? panic("re")
+    let mut ln = 0
+    for raw in text.lines() {
+        ln = ln + 1
+        let line = match raw.find("//") {
+            Some(at) => raw[..at],
+            None => raw,
+        }
+        let t2 = line.trim()
+        if t2.starts_with("fn ") || t2.starts_with("pub fn ") || t2.starts_with("async fn ") || t2.starts_with("pub(crate) fn ") {
+            nn = []
+            fn_lines = []
+            for c in param_re.captures_all(line) {
+                nn.push(c.get(1) ?? "")
+            }
+        }
+        // index sites on this line, judged with the facts before it
+        for (base, inner) in index_sites(line) {
+            if skip_index(base, inner, maps) {
+                continue
+            }
+            let mut parts: Vec<string> = []
+            if inner.contains("..") {
+                for p in inner.replace("..=", "..").split("..") {
+                    if p.trim() != "" {
+                        parts.push(p)
+                    }
+                }
+            } else {
+                parts.push(inner)
+            }
+            for p in parts {
+                tally.index_sites = tally.index_sites + 1
+                if nonneg(p, nn) {
+                    tally.proved = tally.proved + 1
+                } else {
+                    tally.unproved = tally.unproved + 1
+                    out.push("unproved\t${file}:${ln}\t${base}[${p.trim()}]")
+                }
+            }
+        }
+        for c in len_minus.captures_all(line) {
+            let base = c.get(1) ?? ""
+            tally.len_minus = tally.len_minus + 1
+            let mut guarded = false
+            for prev in fn_lines {
+                if prev.contains(base + ".is_empty()") || prev.contains(base + ".len() > ") || prev.contains(base + ".len() >= ") || prev.contains(base + ".len() == 0") || prev.contains(base + ".len() < ") || prev.contains(base + ".len() != 0") || prev.contains(base + ".len() <= ") {
+                    guarded = true
+                }
+            }
+            if line.contains(base + ".len() > ") || line.contains(base + ".len() >= ") || line.contains(base + ".is_empty()") {
+                guarded = true
+            }
+            if guarded {
+                tally.len_minus_guarded = tally.len_minus_guarded + 1
+            }
+            let tag = if guarded { "guarded" } else { "unguarded" }
+            out.push("${tag}\t${file}:${ln}\t${line.trim()}")
+        }
+        // update the facts after the line
+        match let_re.captures(line) {
+            Some(c) => {
+                let name = c.get(2) ?? ""
+                let ty = c.get(4) ?? ""
+                let value = c.get(5) ?? ""
+                if is_unsigned_type(ty) || (ty == "" || ty == "int" || ty == "i64") && nonneg(value, nn) {
+                    if !contains_word(nn, name) { nn.push(name) }
+                } else {
+                    nn = without(nn, name)
+                }
+            },
+            None => {
+                match assign_re.captures(line) {
+                    Some(c) => {
+                        let name = c.get(1) ?? ""
+                        let op = c.get(2) ?? ""
+                        let value = c.get(3) ?? ""
+                        let keep = if op == "-=" {
+                            false
+                        } else if op == "=" {
+                            nonneg(value, nn)
+                        } else {
+                            contains_word(nn, name) && nonneg(value, nn)
+                        }
+                        if keep {
+                            if !contains_word(nn, name) { nn.push(name) }
+                        } else {
+                            nn = without(nn, name)
+                        }
+                    },
+                    None => {},
+                }
+            },
+        }
+        match for_range.captures(line) {
+            Some(c) => {
+                let v = c.get(1) ?? ""
+                if nonneg(c.get(2) ?? "", nn) {
+                    if !contains_word(nn, v) { nn.push(v) }
+                } else {
+                    nn = without(nn, v)
+                }
+            },
+            None => {},
+        }
+        if line.contains(".enumerate()") {
+            match for_enum.captures(line) {
+                Some(c) => {
+                    let v = c.get(1) ?? ""
+                    if !contains_word(nn, v) { nn.push(v) }
+                },
+                None => {},
+            }
+        }
+        fn_lines.push(line)
+    }
+    (tally, out)
+}
+
+fn main() {
+    let args = env.args()
+    let mut eco = env.get("WJ_ECOSYSTEM") ?? ""
+    let mut hits_file = ""
+    let mut i = 1
+    while i < args.len() {
+        if args[i] == "--eco" && i + 1 < args.len() {
+            eco = args[i + 1]
+            i = i + 1
+        } else if args[i] == "--hits" && i + 1 < args.len() {
+            hits_file = args[i + 1]
+            i = i + 1
+        }
+        i = i + 1
+    }
+    let mut corpora = [
+        Corpus { name: "examples", root: ".", specs: [":(glob)examples/**/*.wj"] },
+        Corpus { name: "golden", root: ".", specs: [":(glob)bench/agent-dx/solutions/wj*/**/*.wj"] },
+        Corpus { name: "tests", root: ".", specs: [":(glob)tests/**/*.wj"] },
+    ]
+    if eco != "" {
+        corpora.push(Corpus { name: "eco", root: eco, specs: [":(glob)**/*.wj"] })
+    }
+    let mut all_hits: Vec<string> = []
+    println("| corpus | files | integer index sites | proved non-negative | not proved | `len() - k` sites | with a guard before | without |")
+    println("|---|---:|---:|---:|---:|---:|---:|---:|")
+    for c in corpora {
+        let mut t = Tally { files: 0, index_sites: 0, proved: 0, unproved: 0, len_minus: 0, len_minus_guarded: 0 }
+        for f in files_of(c) {
+            t.files = t.files + 1
+            let (nt, nh) = analyse(read(f), t, all_hits, f)
+            t = nt
+            all_hits = nh
+        }
+        let pct = if t.index_sites > 0 { t.proved * 100 / t.index_sites } else { 0 }
+        println("| ${c.name} | ${t.files} | ${t.index_sites} | ${t.proved} (${pct}%) | ${t.unproved} | ${t.len_minus} | ${t.len_minus_guarded} | ${t.len_minus - t.len_minus_guarded} |")
+    }
+    if hits_file != "" {
+        let mut body = ""
+        for h in all_hits {
+            body += h + "\n"
+        }
+        fs.write(hits_file, body) ?? ()
+        println("wrote ${hits_file}")
+    }
+}

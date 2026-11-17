@@ -1,0 +1,15 @@
+// expect: WJ0003
+// `split` gives an iterator; the annotation declares a list.
+fn main() {
+    let line = "hello world"
+    let parts: Vec<string> = line.split(" ")
+//~@9+5 ERROR WJ0003 mismatched types: expected a list, found an iterator
+    println("${parts.len()}")
+}
+
+// No report: the iterator is collected.
+fn controls() -> int {
+    let line = "a b"
+    let ok: Vec<string> = line.split(" ").collect()
+    ok.len() as int
+}

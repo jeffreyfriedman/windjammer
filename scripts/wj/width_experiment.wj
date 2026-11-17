@@ -1,0 +1,173 @@
+// ADR-0039 decision B, S5 step 1: delete the integer casts of the agent-dx reference solutions and the examples and
+// see what today's compiler accepts.
+//
+//   wj run --interpret scripts/wj/width_experiment.wj -- prepare <out-dir>     transpile every variant (no cargo)
+//   slot wj run --interpret scripts/wj/width_experiment.wj -- check <out-dir>  cargo check every variant (the build)
+//   wj run --interpret scripts/wj/width_experiment.wj -- report <out-dir>      the table
+//
+// Run from the repository root. Variants of each program that contains a cast:
+//   base    unchanged
+//   nolen   every cast of a length (len, count, capacity) to int or i64 deleted
+//   nousize every cast to usize deleted
+//   none    both deleted
+// A variant is accepted when `wj build --no-cargo` succeeds and `cargo check` of the generated crate succeeds.
+use std::env
+use std::fs
+use std::process
+use std::regex
+
+const LEN_CAST: string = "(\\.(len|count|capacity)\\(\\))\\s+as\\s+(int|i64)\\b"
+const USIZE_CAST: string = "\\s+as\\s+usize\\b"
+
+fn programs() -> Vec<string> {
+    let mut out: Vec<string> = []
+    let args = ["ls-files", "--", ":(glob)bench/agent-dx/solutions/wj*/**/*.wj", ":(glob)examples/**/*.wj"]
+    let listed = process.run_with_args("git", args) ?? ""
+    for f in listed.lines() {
+        let text = fs.read_to_string(f) ?? ""
+        let has_len = regex.is_match(LEN_CAST, text) ?? false
+        let has_usize = regex.is_match(USIZE_CAST, text) ?? false
+        if (has_len || has_usize) && text.contains("fn main") {
+            out.push(f)
+        }
+    }
+    out
+}
+
+fn slug(path: string) -> string {
+    path.replace("/", "__").replace(".wj", "")
+}
+
+fn variant(text: string, name: string) -> string {
+    let mut t = text
+    if name == "nolen" || name == "none" {
+        t = regex.replace_all(LEN_CAST, t, "$1") ?? t
+    }
+    if name == "nousize" || name == "none" {
+        t = regex.replace_all(USIZE_CAST, t, "") ?? t
+    }
+    t
+}
+
+fn count_of(pattern: string, text: string) -> int {
+    match regex.compile(pattern) {
+        Ok(re) => {
+            let mut n = 0
+            for _ in re.find_all(text) {
+                n = n + 1
+            }
+            n
+        },
+        Err(_) => 0,
+    }
+}
+
+fn prepare(out: string) {
+    let mut manifest = "variant\tprogram\tlen_casts\tusize_casts\ttranspiled\tdir\n"
+    for p in programs() {
+        let text = fs.read_to_string(p) ?? ""
+        let lc = count_of(LEN_CAST, text)
+        let uc = count_of(USIZE_CAST, text)
+        for v in ["base", "nolen", "nousize", "none"] {
+            if (v == "nolen" && lc == 0) || (v == "nousize" && uc == 0) {
+                continue
+            }
+            let dir = out + "/" + v + "/" + slug(p)
+            fs.create_dir_all(dir) ?? ()
+            let src = dir + "/main.wj"
+            fs.write(src, variant(text, v)) ?? ()
+            let cmd = "wj build --no-cargo --no-lint -o '" + dir + "/build' '" + src + "' >'" + dir + "/transpile.log' 2>&1 && echo ok || echo fail"
+            let verdict = (process.run(cmd) ?? "fail").trim()
+            manifest += "${v}\t${p}\t${lc}\t${uc}\t${verdict}\t${dir}\n"
+        }
+    }
+    fs.write(out + "/manifest.tsv", manifest) ?? ()
+    println("prepared ${out}/manifest.tsv")
+}
+
+fn check(out: string) {
+    let manifest = fs.read_to_string(out + "/manifest.tsv") ?? ""
+    let mut results = "variant\tprogram\tlen_casts\tusize_casts\tverdict\terrors\tcodes\n"
+    for line in manifest.lines() {
+        if line.starts_with("variant\t") {
+            continue
+        }
+        let f: Vec<string> = line.split("\t").collect()
+        if f.len() < 6 {
+            continue
+        }
+        let mut verdict = "front_end_reject"
+        let mut errors = 0
+        let mut codes = ""
+        if f[4] == "ok" {
+            let cmd = "cd '" + f[5] + "/build' && CARGO_TARGET_DIR='" + out + "/target' cargo check --quiet --message-format short 2>&1 | grep -E '^[^ ]+: error|^error' ; true"
+            let log = process.run(cmd) ?? ""
+            for l in log.lines() {
+                if l.contains("error[E") {
+                    errors = errors + 1
+                    match l.find("error[E") {
+                        Some(at) => {
+                            let code = l[at + 6..at + 11]
+                            if !codes.contains(code) {
+                                codes += code + " "
+                            }
+                        },
+                        None => {},
+                    }
+                } else if l.contains("error") && !l.contains("could not compile") && !l.contains("aborting") {
+                    errors = errors + 1
+                }
+            }
+            verdict = if errors == 0 { "accepted" } else { "rustc_reject" }
+        }
+        results += "${f[0]}\t${f[1]}\t${f[2]}\t${f[3]}\t${verdict}\t${errors}\t${codes.trim()}\n"
+        println("${f[0]} ${f[1]}: ${verdict} ${codes}")
+    }
+    fs.write(out + "/results.tsv", results) ?? ()
+}
+
+fn report(out: string) {
+    let results = fs.read_to_string(out + "/results.tsv") ?? ""
+    println("| variant | programs | accepted | rejected by rustc | rejected by the front end | casts deleted |")
+    println("|---|---:|---:|---:|---:|---:|")
+    for v in ["base", "nolen", "nousize", "none"] {
+        let mut n = 0
+        let mut ok = 0
+        let mut rustc = 0
+        let mut front = 0
+        let mut casts = 0
+        for line in results.lines() {
+            let f: Vec<string> = line.split("\t").collect()
+            if f.len() < 5 || f[0] != v {
+                continue
+            }
+            n = n + 1
+            if f[4] == "accepted" { ok = ok + 1 }
+            if f[4] == "rustc_reject" { rustc = rustc + 1 }
+            if f[4] == "front_end_reject" { front = front + 1 }
+            let lc = f[2].parse::<int>() ?? 0
+            let uc = f[3].parse::<int>() ?? 0
+            if v == "nolen" { casts = casts + lc }
+            if v == "nousize" { casts = casts + uc }
+            if v == "none" { casts = casts + lc + uc }
+        }
+        println("| ${v} | ${n} | ${ok} | ${rustc} | ${front} | ${casts} |")
+    }
+}
+
+fn main() {
+    let args = env.args()
+    if args.len() < 3 {
+        stderr.println("usage: width_experiment.wj prepare|check|report <out-dir>")
+        process.exit(2)
+    }
+    let mode = args[1]
+    let out = args[2]
+    if mode == "prepare" {
+        prepare(out)
+    } else if mode == "check" {
+        check(out)
+    } else {
+        report(out)
+    }
+}

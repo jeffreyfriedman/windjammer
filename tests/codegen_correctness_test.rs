@@ -183,6 +183,12 @@ corpus_tests!(
     name_rebound_from_int_to_byte_list,
     empty_list_assigned_to_typed_local,
     extend_with_copied_slice,
+    string_as_bytes_to_vec_formal,
+    vec_macro_tuple_string_slots,
+    bitwise_vs_comparison_precedence,
+    slice_to_vec_extend_argument,
+    collect_owned_from_unknown_receiver,
+    list_adapter_owned_option_return,
 );
 
 // ------------------------------------------------------------------ generated programs

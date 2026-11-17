@@ -536,7 +536,11 @@ impl CodeGenerator<'_> {
         collect_receiver: &Expression,
         explicit_target: Option<&Type>,
     ) -> (String, String) {
-        let iter_item = self.infer_iterator_item_type_at_expr(collect_receiver);
+        let iter_item = self.infer_iterator_item_type_at_expr(collect_receiver).or_else(|| match collect_receiver {
+            // an unknown receiver (`read_to_string(..).unwrap_or("")` lines): the declaration of the producer says the item
+            Expression::MethodCall { method, .. } => self.core_surface().unique_iterator_item(method),
+            _ => None,
+        });
         let target_ty = explicit_target.or(self.collect_target_type.as_ref()).or_else(|| {
             self.current_function_return_type
                 .as_ref()
@@ -620,6 +624,44 @@ impl CodeGenerator<'_> {
         };
         matches!(iter_item, Type::Reference(_) | Type::MutableReference(_))
             && types_equivalent_for_collect(&iter_item, inner)
+    }
+
+    /// `items.find(..)` on a collection: lowered through `.iter()`, so Rust yields `Option<&T>` while the
+    /// declaration (`Iterator<T>::find -> Option<T>`) and the enclosing return type say `Option<T>`.
+    pub(in crate::codegen::rust) fn collection_adapter_needs_cloned_for_owned_return(
+        &self,
+        object: &Expression,
+        method: &str,
+    ) -> bool {
+        let Some(Type::Option(inner)) = self.current_function_return_type.as_ref() else {
+            return false;
+        };
+        if matches!(inner.as_ref(), Type::Reference(_) | Type::MutableReference(_)) {
+            return false;
+        }
+        let Some(recv_ty) = self.infer_expression_type(object) else { return false };
+        let Some(element) = Self::extract_iterator_element_type(match &recv_ty {
+            Type::Reference(t) | Type::MutableReference(t) => t.as_ref(),
+            other => other,
+        }) else {
+            return false;
+        };
+        let surface = self.core_surface();
+        let container = match &recv_ty {
+            Type::Reference(t) | Type::MutableReference(t) => t.as_ref(),
+            other => other,
+        };
+        let Some(name) = crate::typing::core_surface::surface_type_name(container) else { return false };
+        if !surface.is_adapter_on_collection(name, method) {
+            return false;
+        }
+        let Some((generics, _, _, Some(Type::Option(ret)))) = surface.declared(crate::ir::stdlib_tables::ITERATOR, method)
+        else {
+            return false;
+        };
+        matches!((ret.as_ref(), generics.first()), (Type::Generic(g), Some(t)) if g == t)
+            && !matches!(element, Type::Reference(_) | Type::MutableReference(_))
+            && types_equivalent_for_collect(&element, inner)
     }
 
     fn expr_is_iterator_adapter_chain(expr: &Expression) -> bool {
