@@ -976,23 +976,9 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     };
 
     let mut args: Vec<String> = super::argument_generation::collect_regular_function_arguments(
-        gen,
-        func_name,
-        func_str.as_str(),
-        arguments,
-        &signature,
-        resolved_via_fallback,
-        is_extern_call,
+        gen, func_name, func_str.as_str(), arguments, &signature, resolved_via_fallback, is_extern_call,
     );
-
-    // A slice-typed argument (`"abc".as_bytes()`) at a `Vec` formal is copied into one.
-    if let Some(sig) = signature.as_ref() {
-        for (i, (_, arg)) in arguments.iter().enumerate() {
-            if let Some(arg_str) = args.get_mut(i) {
-                gen.convert_slice_arg_to_vec_formal(arg, sig, i, arg_str);
-            }
-        }
-    }
+    gen.convert_slice_args_to_vec_formals(arguments, signature.as_ref(), &mut args);
 
     // Path-dep import aliases: dependency metadata `Borrowed` / `emitted_rust_ref_params`
     // must auto-borrow owned locals at the cross-crate boundary (apps/wj-find).

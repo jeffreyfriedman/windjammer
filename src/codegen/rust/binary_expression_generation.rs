@@ -509,8 +509,7 @@ impl<'ast> CodeGenerator<'ast> {
                         | BinaryOp::Ge
                 );
                 let needs_parens = operators::op_precedence(left_op) < operators::op_precedence(op)
-                    || (parent_is_cmp && child_is_cmp)
-                    || operators::bitwise_under_comparison(op, left_op);
+                    || (parent_is_cmp && child_is_cmp) || operators::bitwise_under_comparison(op, left_op);
                 if needs_parens {
                     format!("({})", self.generate_expression(left))
                 } else {
@@ -532,8 +531,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 let needs_parens = operators::op_precedence(right_op)
                     < operators::op_precedence(op)
-                    || (parent_is_cmp && child_is_cmp)
-                    || operators::bitwise_under_comparison(op, right_op)
+                    || (parent_is_cmp && child_is_cmp) || operators::bitwise_under_comparison(op, right_op)
                     || operators::binary_rhs_needs_parens_for_rust_left_assoc(op, right_op);
                 if needs_parens {
                     format!("({})", self.generate_expression(right))

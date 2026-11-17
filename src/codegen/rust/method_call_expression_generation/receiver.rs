@@ -223,8 +223,7 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::codegen::rust::stdlib_method_traits::option_owned_self_method(
             method,
             &self.signature_registry,
-        ) && self.expression_traces_to_inferred_borrowed_param(object)
-            && !self.infer_expression_type(object).is_some_and(|t| Self::extract_iterator_element_type(&t).is_some())
+        ) && self.expression_traces_to_borrowed_non_list_param(object)
             && !obj_str.contains(".as_ref()")
             && !obj_str.contains(".clone()")
         {
@@ -235,11 +234,7 @@ impl<'ast> CodeGenerator<'ast> {
         // (`map` / `and_then` / …) lower via `.as_ref()` so `&T` methods stay borrowed.
         // Driven by Option stdlib_meta + method registry — not a bare method-name list.
         // The receiver must be an Option: `items.map(..)` over a borrowed list is an iterator adapter.
-        let receiver_is_list = self.infer_expression_type(object).is_some_and(|t| {
-            Self::extract_iterator_element_type(&t).is_some()
-        });
-        if self.expression_traces_to_inferred_borrowed_param(object)
-            && !receiver_is_list
+        if self.expression_traces_to_borrowed_non_list_param(object)
             && !obj_str.contains(".as_ref()")
             && crate::codegen::rust::stdlib_method_traits::option_adapter_needs_as_ref(
                 method,
@@ -331,6 +326,13 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// True when `expr` is a bare borrowed param or a field/index chain rooted at one.
+    /// [`Self::expression_traces_to_inferred_borrowed_param`], and the receiver is not a list (an iterator adapter
+    /// over a borrowed list is not an `Option` adapter).
+    fn expression_traces_to_borrowed_non_list_param(&self, expr: &Expression<'ast>) -> bool {
+        self.expression_traces_to_inferred_borrowed_param(expr)
+            && !self.infer_expression_type(expr).is_some_and(|t| Self::extract_iterator_element_type(&t).is_some())
+    }
+
     fn expression_traces_to_inferred_borrowed_param(&self, expr: &Expression<'ast>) -> bool {
         match expr {
             Expression::Identifier { name, .. } => self.inferred_borrowed_params.contains(name),

@@ -730,13 +730,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // `vec[i]` → element type (peeling `&Vec<T>`: `vals: &Vec<f32>` yields `f32`; `mask[i]` of
             // `Vec<u8>` is `u8`); `map[&k]` → value type.
-            // `vec[a..b]` is a slice of the collection (a `Vec<T>` view), not an element
-            Expression::Index { object, index, .. } if matches!(index, Expression::Range { .. }) => {
-                let ty = self.infer_expression_type(object)?;
-                Some(crate::codegen::rust::collection_detection::peel_type_reference(&ty).clone())
-            }
-            Expression::Index { object, .. } => {
-                Self::indexed_type(&self.infer_expression_type(object)?)
+            Expression::Index { object, index, .. } => {
+                Self::indexed_or_sliced_type(&self.infer_expression_type(object)?, matches!(index, Expression::Range { .. }))
             }
             // `[ (1.0, 0.0, 0.0), … ]` must type as `[ (f32,f32,f32); N ]`
             // so index destructure is Copy and does not `.clone()`.
@@ -859,6 +854,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         self.declared_generic_return(receiver, method)
+    }
+
+    /// `vec[i]` is an element; `vec[a..b]` is a slice of the collection (a `Vec<T>` view), not an element.
+    fn indexed_or_sliced_type(collection: &Type, is_range: bool) -> Option<Type> {
+        if is_range {
+            return Some(crate::codegen::rust::collection_detection::peel_type_reference(collection).clone());
+        }
+        Self::indexed_type(collection)
     }
 
     /// A method `std/rust_core.wji` declares on a two-parameter core type (`Result<T, E>::unwrap_err() -> E`) whose
