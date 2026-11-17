@@ -1,5 +1,27 @@
 # Ownership decided once
 
+## PC verification commands (wt-ownership-16 b9fbeb2c2, then wt-ownership-17)
+
+Run in a checkout of the branch, `CARGO_BUILD_JOBS=2`, through the slot gate; `<all>` is the `--test all` binary.
+
+1. `cargo build --release --bin wj && cargo test --release --lib --no-run && cargo test --release --test all --no-run`
+2. `<all> codegen_correctness_test library_module_receiver_shapes std_ stdlib_scanner heuristic_surface architecture inference_spec_catalog drift_contract width_prediction_test prediction_parity_test explicit_ref_of_an_integer_literal`
+3. `WJ_GATE_JOBS=2 <all> --test-threads=1 convergence_gates_test project_gates_test` (no UPDATE_GOLDEN; a changed golden
+   is bisected against the parent commit first)
+4. Gate 5 inventory, printed: `WJ_GATE_FILTER=. WJ_GATE_JOBS=2 <all> --test-threads=1 --exact convergence_gates_test::gate5_formals_emitted_against_the_ir_only_shrink --nocapture`;
+   recorded once on ownership-16: the same with `UPDATE_GOLDEN=1` and without the filter, then commit
+   `tests/golden/own_stages_emitted_vs_ir.txt`
+5. `wj run --verify bench/agent-dx/solutions/wj-set3/t308_text_world/main.wj` (pilot-7 references 9/9)
+6. Ecosystem: full builds of packages/wj-sql, apps/wj-webhook, packages/wj-duration (cargo check)
+7. `wj build tests/engine_parity/jit_map_ops.wj --no-cargo -o <dir>` then `cargo check` in `<dir>`
+8. Mutation: on the parent commit the new corpus cases fail (field_passed_to_owned_formal_keeps_borrowed_receiver,
+   builder_reads_fields_after_storing_one, std_text_formal_borrows_owned_argument, borrowed_copy_key_into_map_lookup,
+   library_module_receiver_shapes::a_method_does_not_take_the_formals_of_a_same_named_free_function)
+9. Engine by code, parent and head: `WJ=<wj> scripts/build_engine.sh transpile` (game-host), then in
+   game-host-core `cargo check --lib --message-format short > c.log 2>&1; grep -oE "error\[E[0-9]+\]" c.log | sort | uniq -c`
+10. Full suite once: `<all> --test-threads=3`, compared with the parent's failure list
+11. On wt-ownership-17 (class 1): steps 1-4 and 9; gate 5's printed list before/after shows the entries class 1 removes
+
 Status: DRAFT (stage 0 landed as gate 5; stage 1 class 1 drafted, unbuilt, not for merge).
 
 ## Problem
