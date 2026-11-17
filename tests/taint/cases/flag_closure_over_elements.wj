@@ -7,6 +7,6 @@ fn main() {
     let text = fs::read_to_string("jobs.txt").unwrap_or("")
     let lines = text.split("\n").collect()
     lines.iter().for_each(|l| process::run(l)) //~ WJ0173
-//~@11+4 ERROR W0003 explicit .iter() call
+//~@11+4 ERROR W0003 explicit
 //~@40+3 ERROR WJ0173 data from file contents
 }

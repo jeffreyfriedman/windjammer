@@ -303,7 +303,8 @@ fn annotate_repo_files() {
             }
             for f in found.iter().filter(|f| f.line == i + 1) {
                 let len = f.len.map(|n| format!("+{n}")).unwrap_or_default();
-                let msg: Vec<&str> = f.message.split_whitespace().take(4).collect();
+                // words with call syntax or a leading dot stay out: a lint that scans text would report the marker itself
+                let msg: Vec<&str> = f.message.split_whitespace().filter(|w| !w.contains('(') && !w.starts_with('.')).take(4).collect();
                 text.push_str(&format!("//~@{}{} {} {} {}\n", f.col, len, f.severity, f.code, msg.join(" ")));
             }
         }
