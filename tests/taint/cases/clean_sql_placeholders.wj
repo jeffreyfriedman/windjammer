@@ -1,9 +1,11 @@
+// oracle: check
 // The value travels as a parameter, never as SQL text.
 use std::db
 use std::fs
 
 fn main() {
     let id = fs::read_to_string("id.txt").unwrap_or("")
+//~@43+6 ERROR W0002 explicit
     let conn = db::connect("sqlite::memory:").unwrap()
     let rows = conn.query("select * from users where id = $1", [id])
     println("${rows}")

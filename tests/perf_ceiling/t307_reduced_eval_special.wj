@@ -1,3 +1,4 @@
+// oracle: check
 // Reduced from t307_mini_scheme (the recursive eval/special core, 309 of 443 lines): the second mutation-sensitive case for the
 // taint walk bounds; with the bounds removed it grows past 1.5 GB within seconds.
 use std::process
@@ -22,6 +23,7 @@ impl Interp {
             self.err_msg = msg
         }
         ival(0)
+//~@9+4 ERROR WJ0002 cannot find function `ival`
     }
 
     fn lookup_frame(self, env: int, name: string) -> int {
@@ -58,6 +60,7 @@ impl Interp {
 
     fn new_frame(self, parent: int) -> int {
         self.frames.push(Frame { parent: parent, names: [], vals: [] })
+//~@26+5 ERROR WJ0005 cannot find struct `Frame`
         self.frames.len() as int - 1
     }
 
@@ -67,6 +70,7 @@ impl Interp {
             if self.forms[id].kind != 2 { return false }
             let s = self.forms[id].s
             if reserved(s) { return false }
+//~@16+8 ERROR WJ0002 cannot find function `reserved`
             for o in out {
                 if o == s { return false }
             }
@@ -78,11 +82,14 @@ impl Interp {
     fn eval(self, f: int, env: int) -> Val {
         let k = self.forms[f].kind
         if k == 0 { return ival(self.forms[f].n) }
+//~@28+4 ERROR WJ0002 cannot find function `ival`
         if k == 1 { return bval(self.forms[f].n == 1) }
+//~@28+4 ERROR WJ0002 cannot find function `bval`
         let line = self.forms[f].line
         if k == 2 {
             let s = self.forms[f].s
             if reserved(s) { return self.fail(line, "unbound variable ${s}") }
+//~@16+8 ERROR WJ0002 cannot find function `reserved`
             let fr = self.lookup_frame(env, s)
             if fr < 0 { return self.fail(line, "unbound variable ${s}") }
             return self.frames[fr].vals[self.slot(fr, s)]
@@ -94,16 +101,20 @@ impl Interp {
         let h = items[0]
         let n = items.len() - 1
         if self.forms[h].kind == 2 && reserved(self.forms[h].s) {
+//~@39+8 ERROR WJ0002 cannot find function `reserved`
             return self.special(self.forms[h].s, items, line, env)
         }
         let callee = self.eval(h, env)
         if self.failed { return ival(0) }
+//~@33+4 ERROR WJ0002 cannot find function `ival`
         if callee.k != 2 { return self.fail(line, "not a function") }
         let mut args: Vec<Val> = []
+//~@27+3 ERROR WJ0005 cannot find type `Val`
         let mut i = 1
         while i <= n {
             let v = self.eval(items[i], env)
             if self.failed { return ival(0) }
+//~@37+4 ERROR WJ0002 cannot find function `ival`
             args.push(v)
             i += 1
         }
@@ -118,9 +129,11 @@ impl Interp {
         }
         self.depth += 1
         let mut last = ival(0)
+//~@24+4 ERROR WJ0002 cannot find function `ival`
         for b in self.clos[cid].body {
             last = self.eval(b, ne)
             if self.failed { return ival(0) }
+//~@37+4 ERROR WJ0002 cannot find function `ival`
         }
         self.depth -= 1
         last
@@ -130,12 +143,15 @@ impl Interp {
         let n = items.len() - 1
         if op == "define" || op == "set!" {
             if n != 2 || self.forms[items[1]].kind != 2 || reserved(self.forms[items[1]].s) { return self.fail(line, "bad syntax") }
+//~@60+8 ERROR WJ0002 cannot find function `reserved`
             let name = self.forms[items[1]].s
             let v = self.eval(items[2], env)
             if self.failed { return ival(0) }
+//~@37+4 ERROR WJ0002 cannot find function `ival`
             if op == "define" {
                 self.bind(env, name, v)
                 return ival(0)
+//~@24+4 ERROR WJ0002 cannot find function `ival`
             }
             let fr = self.lookup_frame(env, name)
             if fr < 0 { return self.fail(line, "unbound variable ${name}") }
@@ -155,7 +171,9 @@ impl Interp {
                 i += 1
             }
             self.clos.push(Clo { params: ps, body: body, env: env })
+//~@28+3 ERROR WJ0005 cannot find struct `Clo`
             return Val { k: 2, n: self.clos.len() as int - 1 }
+//~@20+3 ERROR WJ0005 cannot find struct `Val`
         }
         if op == "let" {
             if n < 2 || self.forms[items[1]].kind != 3 { return self.fail(line, "bad syntax") }
@@ -169,9 +187,11 @@ impl Interp {
             let mut ns: Vec<string> = []
             if !self.names_of(ids, ns) { return self.fail(line, "bad syntax") }
             let mut vals: Vec<Val> = []
+//~@31+3 ERROR WJ0005 cannot find type `Val`
             for e in exprs {
                 let v = self.eval(e, env)
                 if self.failed { return ival(0) }
+//~@41+4 ERROR WJ0002 cannot find function `ival`
                 vals.push(v)
             }
             let ne = self.new_frame(env)
@@ -181,10 +201,12 @@ impl Interp {
                 i += 1
             }
             let mut last = ival(0)
+//~@28+4 ERROR WJ0002 cannot find function `ival`
             i = 2
             while i <= n {
                 last = self.eval(items[i], ne)
                 if self.failed { return ival(0) }
+//~@41+4 ERROR WJ0002 cannot find function `ival`
                 i += 1
             }
             return last
@@ -193,17 +215,21 @@ impl Interp {
             if n != 2 && n != 3 { return self.fail(line, "bad syntax") }
             let c = self.eval(items[1], env)
             if self.failed { return ival(0) }
+//~@37+4 ERROR WJ0002 cannot find function `ival`
             if c.k != 1 { return self.fail(line, "type error") }
             if c.n == 1 { return self.eval(items[2], env) }
             if n == 3 { return self.eval(items[3], env) }
             return ival(0)
+//~@20+4 ERROR WJ0002 cannot find function `ival`
         }
         if op == "begin" {
             let mut last = ival(0)
+//~@28+4 ERROR WJ0002 cannot find function `ival`
             let mut i = 1
             while i <= n {
                 last = self.eval(items[i], env)
                 if self.failed { return ival(0) }
+//~@41+4 ERROR WJ0002 cannot find function `ival`
                 i += 1
             }
             return last
@@ -213,16 +239,20 @@ impl Interp {
             while true {
                 let c = self.eval(items[1], env)
                 if self.failed { return ival(0) }
+//~@41+4 ERROR WJ0002 cannot find function `ival`
                 if c.k != 1 { return self.fail(line, "type error") }
                 if c.n == 0 { return ival(0) }
+//~@38+4 ERROR WJ0002 cannot find function `ival`
                 let mut i = 2
                 while i <= n {
                     self.eval(items[i], env)
                     if self.failed { return ival(0) }
+//~@45+4 ERROR WJ0002 cannot find function `ival`
                     i += 1
                 }
             }
             return ival(0)
+//~@20+4 ERROR WJ0002 cannot find function `ival`
         }
         if op == "and" || op == "or" {
             let is_and = op == "and"
@@ -231,34 +261,43 @@ impl Interp {
             while i <= n {
                 let v = self.eval(items[i], env)
                 if self.failed { return ival(0) }
+//~@41+4 ERROR WJ0002 cannot find function `ival`
                 if v.k != 1 { return self.fail(line, "type error") }
                 result = v.n == 1
                 if result != is_and { break }
                 i += 1
             }
             return bval(result)
+//~@20+4 ERROR WJ0002 cannot find function `bval`
         }
         if op == "not" {
             if n != 1 { return self.fail(line, "bad syntax") }
             let v = self.eval(items[1], env)
             if self.failed { return ival(0) }
+//~@37+4 ERROR WJ0002 cannot find function `ival`
             if v.k != 1 { return self.fail(line, "type error") }
             return bval(v.n == 0)
+//~@20+4 ERROR WJ0002 cannot find function `bval`
         }
         if op == "print" {
             if n != 1 { return self.fail(line, "bad syntax") }
             let v = self.eval(items[1], env)
             if self.failed { return ival(0) }
+//~@37+4 ERROR WJ0002 cannot find function `ival`
             self.out.push(show(v))
+//~@27+4 ERROR WJ0002 cannot find function `show`
             return ival(0)
+//~@20+4 ERROR WJ0002 cannot find function `ival`
         }
         let fixed2 = op == "/" || op == "%" || op == "<" || op == ">" || op == "<=" || op == ">=" || op == "="
         if (fixed2 && n != 2) || (op == "-" && n < 1) { return self.fail(line, "bad syntax") }
         let mut vals: Vec<Val> = []
+//~@27+3 ERROR WJ0005 cannot find type `Val`
         let mut i = 1
         while i <= n {
             let v = self.eval(items[i], env)
             if self.failed { return ival(0) }
+//~@37+4 ERROR WJ0002 cannot find function `ival`
             vals.push(v)
             i += 1
         }
@@ -271,41 +310,56 @@ impl Interp {
             for v in vals {
                 t += v.n
                 if abs(t) > limit { return self.fail(line, "overflow") }
+//~@20+3 ERROR WJ0002 cannot find function `abs`
             }
             return ival(t)
+//~@20+4 ERROR WJ0002 cannot find function `ival`
         }
         if op == "*" {
             let mut t = 1
             for v in vals {
                 // |t| <= 10^15 and |v| <= 10^15 here, so check before multiplying
                 if v.n != 0 && abs(t) > limit / abs(v.n) { return self.fail(line, "overflow") }
+//~@32+3 ERROR WJ0002 cannot find function `abs`
+//~@49+3 ERROR WJ0002 cannot find function `abs`
                 t = t * v.n
             }
             return ival(t)
+//~@20+4 ERROR WJ0002 cannot find function `ival`
         }
         if op == "-" {
             if vals.len() == 1 { return ival(0 - vals[0].n) }
+//~@41+4 ERROR WJ0002 cannot find function `ival`
             let mut t = vals[0].n
             i = 1
             while i < vals.len() {
                 t -= vals[i].n
                 if abs(t) > limit { return self.fail(line, "overflow") }
+//~@20+3 ERROR WJ0002 cannot find function `abs`
                 i += 1
             }
             return ival(t)
+//~@20+4 ERROR WJ0002 cannot find function `ival`
         }
         let x = vals[0].n
         let y = vals[1].n
         if op == "/" || op == "%" {
             if y == 0 { return self.fail(line, "division by zero") }
             if op == "/" { return ival(x / y) }
+//~@35+4 ERROR WJ0002 cannot find function `ival`
             return ival(x % y)
+//~@20+4 ERROR WJ0002 cannot find function `ival`
         }
         if op == "<" { return bval(x < y) }
+//~@31+4 ERROR WJ0002 cannot find function `bval`
         if op == ">" { return bval(x > y) }
+//~@31+4 ERROR WJ0002 cannot find function `bval`
         if op == "<=" { return bval(x <= y) }
+//~@32+4 ERROR WJ0002 cannot find function `bval`
         if op == ">=" { return bval(x >= y) }
+//~@32+4 ERROR WJ0002 cannot find function `bval`
         bval(x == y)
+//~@9+4 ERROR WJ0002 cannot find function `bval`
     }
 }
 

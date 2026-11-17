@@ -1,3 +1,4 @@
+// oracle: check
 // The same merge with every source replaced by a literal but one: the one tainted origin keeps the sink flagged.
 use std::fs
 use std::process
@@ -65,5 +66,6 @@ fn main() {
     all = all + "lit58"
     all = all + "lit59"
     let out = process::run(all) //~ WJ0173
+//~@24+3 ERROR WJ0173 data from file contents
     println("${out}")
 }

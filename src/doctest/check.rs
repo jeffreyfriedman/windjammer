@@ -12,7 +12,13 @@ fn parse(src: &str) -> Result<crate::parser::Program<'static>, String> {
     catch_unwind(AssertUnwindSafe(|| {
         let tokens = Lexer::new(&src).tokenize_with_locations();
         // Dropping the parser is sound: its arenas are retired, not freed (docs/design/parser-arena-ownership.md).
-        Parser::new_with_source(tokens, "doc.wj".to_string(), src.clone()).parse()
+        let mut parser = Parser::new_with_source(tokens, "doc.wj".to_string(), src.clone());
+        let parsed = parser.parse()?;
+        // a coded syntax error the parser recovers from (`mut self`, WJ0011) is still a parse error for the example
+        match parser.warnings().iter().find(|w| w.is_error) {
+            Some(w) => Err(w.message.clone().into()),
+            None => Ok(parsed),
+        }
     }))
     .unwrap_or_else(|_| Err("parser panicked".to_string()))
 }

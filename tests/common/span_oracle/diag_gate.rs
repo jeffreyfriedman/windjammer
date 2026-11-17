@@ -278,6 +278,49 @@ fn generate_check_markers() {
     }
 }
 
+/// Developer aid: writes `//~@col+len` markers (the producer of `wj check`) into the repo files named by
+/// `WJ_ANNOTATE=path,path` (repo-relative), after the line of each diagnostic. With `WJ_ANNOTATE_CHECK_ONLY=1` the file also
+/// gets the `// oracle: check` header (its diagnostics are ones the legacy producers never report, such as WJ0173).
+/// Run once, review the diff, commit: the markers are then the oracle.
+#[test]
+#[ignore]
+fn annotate_repo_files() {
+    let Ok(list) = std::env::var("WJ_ANNOTATE") else { return };
+    let check_only = std::env::var("WJ_ANNOTATE_CHECK_ONLY").is_ok_and(|v| v == "1");
+    for name in list.split(',').filter(|n| !n.is_empty()) {
+        let path = repo_root().join(name);
+        let src = std::fs::read_to_string(&path).unwrap();
+        if src.lines().any(is_marker_line) {
+            eprintln!("{name}: already has markers, skipped");
+            continue;
+        }
+        let mut found = collect_check(name, &src);
+        found.retain(|f| f.line > 0);
+        if found.is_empty() {
+            continue;
+        }
+        let lines: Vec<&str> = src.split_inclusive('\n').collect();
+        let mut text = String::new();
+        if check_only {
+            text.push_str("// oracle: check\n");
+        }
+        for (i, l) in lines.iter().enumerate() {
+            text.push_str(l);
+            if !l.ends_with('\n') {
+                text.push('\n');
+            }
+            for f in found.iter().filter(|f| f.line == i + 1) {
+                let len = f.len.map(|n| format!("+{n}")).unwrap_or_default();
+                // words with call syntax or a leading dot stay out: a lint that scans text would report the marker itself
+                let msg: Vec<&str> = f.message.split_whitespace().filter(|w| !w.contains('(') && !w.starts_with('.')).take(4).collect();
+                text.push_str(&format!("//~@{}{} {} {} {}\n", f.col, len, f.severity, f.code, msg.join(" ")));
+            }
+        }
+        std::fs::write(&path, text).unwrap();
+        eprintln!("{name}: {} markers", found.len());
+    }
+}
+
 #[test]
 fn diagnostics_with_invalid_spans_panic_in_strict_mode() {
     use windjammer::diagnostics::{Diagnostic, Span};

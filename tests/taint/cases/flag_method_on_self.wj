@@ -1,3 +1,4 @@
+// oracle: check
 // A method uses a field of self as a command; the caller built self from a source.
 use std::fs
 use std::process
@@ -15,5 +16,6 @@ impl Runner {
 fn main() {
     let r = Runner { program: fs::read_to_string("program.txt").unwrap_or("") }
     let out = r.go() //~ WJ0173
+//~@17+2 ERROR WJ0173 data from file contents
     println("${out}")
 }

@@ -7,7 +7,7 @@ use axum::extract::Path
 use axum::extract::State
 use serde::Serialize
 use serde::Deserialize
-use tokio
+use tokio::net::TcpListener
 
 @derive(Clone)
 struct User {
@@ -123,7 +123,7 @@ async fn main() {
         .route("/users/:id", get(get_user).delete(delete_user))
         .with_state(state)
     
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap()
+    let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap()
     
     println!("Server running on http://127.0.0.1:3000")
     

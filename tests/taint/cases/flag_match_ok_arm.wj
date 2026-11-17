@@ -1,3 +1,4 @@
+// oracle: check
 // The Ok payload of a read is file contents.
 use std::fs
 use std::process
@@ -6,6 +7,7 @@ fn main() {
     match fs::read_to_string("job.txt") {
         Ok(text) => {
             let out = process::run(text) //~ WJ0173
+//~@32+3 ERROR WJ0173 data from file contents
             println("${out}")
         },
         Err(e) => println("cannot read: ${e}"),

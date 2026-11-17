@@ -1,3 +1,4 @@
+// oracle: check
 // Taint stored in a struct field is read back through the field.
 use std::fs
 use std::process
@@ -9,5 +10,6 @@ struct Job {
 fn main() {
     let job = Job { command: fs::read_to_string("job.txt").unwrap_or("") }
     let out = process::run(job.command) //~ WJ0173
+//~@24+3 ERROR WJ0173 data from file contents
     println("${out}")
 }

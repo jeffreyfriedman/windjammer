@@ -1,3 +1,4 @@
+// oracle: check
 // A value reaches the sink only after it has been carried through five assignments, one per iteration: a fixed number of walks
 // of the loop body misses it, the walk continues until nothing changes.
 use std::fs
@@ -13,6 +14,7 @@ fn main() {
     let mut f = ""
     for item in items {
         let out = process::run(a) //~ WJ0173
+//~@28+3 ERROR WJ0173 data from file contents
         println("${out} ${item}")
         a = b
         b = c

@@ -1,3 +1,4 @@
+// oracle: check
 // A helper passes its parameter to a command: reported where the tainted value is handed over.
 use std::fs
 use std::process
@@ -9,5 +10,6 @@ fn execute(command: string) -> string {
 fn main() {
     let name = fs::read_to_string("job.txt").unwrap_or("")
     let out = execute(name) //~ WJ0173
+//~@15+7 ERROR WJ0173 data from file contents
     println("${out}")
 }

@@ -1,3 +1,4 @@
+// oracle: check
 // A line read from standard input names the file to write.
 use std::fs
 use std::io
@@ -5,5 +6,6 @@ use std::io
 fn main() {
     let path = io::read_line().unwrap_or("")
     let result = fs::write(path, "data") //~ WJ0173
+//~@22+5 ERROR WJ0173 data from standard input
     println("${result}")
 }

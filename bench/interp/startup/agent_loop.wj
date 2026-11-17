@@ -180,7 +180,7 @@ fay: k100, k100, e300*2"
     for (category, units) in by_category(catalog) {
         println("  ${category}: ${units} in stock")
     }
-    let expensive: Vec<string> = catalog.values().filter(|i| i.price_cents > 10000).map(|i| i.name.clone()).collect()
+    let expensive: Vec<string> = catalog.values().filter(|i| i.price_cents > 10000).map(|i| i.name.to_string()).collect()
     let mut sorted = expensive
     sorted.sort()
     println("over \$100: ${sorted.join(", ")}")
