@@ -253,6 +253,12 @@ LTO on and off, each into its own empty target directory. Geometric means, LTO o
 
 (`dx/t009_rpn_eval` did not build with the lean-runtime compiler in this run and is excluded; under investigation.)
 
+PC (Linux x86_64, quiet, `--lto-study` on wt-econ-4): cold release build `dx/t001_gcd_lcm` 5.49 s CPU with LTO vs
+4.88 s without; `interp/fib30` 2.13 s vs 0.09 s; incremental rebuild 2.65 s vs 0.16 s (LTO off about 15x cheaper per
+rebuild); stripped binaries about 14% smaller with LTO. Same direction as the Mac numbers above.
+`dx/t009_rpn_eval` is excluded on both machines: its generated Rust does not compile (E0614,
+docs/known-issues/compiled-chars-all-closure-derefs-char.md; fixed on wt-ownership-14).
+
 Default change (implemented, `wt-econ`): `[profile.release] lto` unset is automatic: on when the project depends on
 another Windjammer package (the cross-crate case LTO was chosen for), off for a single crate, where it bought about 1%
 run time and 14% size for about 7x the CPU of every release rebuild. `lto = true` / `false` decides explicitly
@@ -334,8 +340,8 @@ cd wj && git checkout <integration head>
 cargo build --release --bin wj
 export WJ_ECOSYSTEM=$PWD/../eco WJ=$PWD/target/release/wj
 
-# which paths work on this machine (each must say ok)
-$WJ run scripts/wj/economics.wj --selftest
+# which paths work on this machine (each must say ok); --wj names the binary under test (else `wj` must be on PATH)
+$WJ run scripts/wj/economics.wj --selftest --wj $WJ
 
 # quiet check: load below 1 before the timed step, nothing else running
 uptime
@@ -360,6 +366,9 @@ The "after" numbers of the later steps, on the integration head (wave 3, cf73e7f
 
 ```
 # D2: record the PC's own verify-loop ratio (a new meter entry; the Mac entry is never compared), then check it
+#   (meters without counters, e.g. WSL2 without perf: an agent-sized program below GNU time's 10 ms is repeated inside
+#    one timed measurement until it uses 0.5 s of CPU; if it stays below resolution it is re-measured with callgrind
+#    when valgrind is installed, else excluded with a printed "excluded <id>: below meter resolution" line)
 $WJ run scripts/wj/economics.wj --d2 --wj $WJ --runs 5 --write bench/economics/d2_baseline.json
 $WJ run scripts/wj/economics.wj --d2 --wj $WJ --runs 5 --check bench/economics/d2_baseline.json
 
