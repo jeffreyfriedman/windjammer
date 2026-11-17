@@ -203,11 +203,14 @@ fn library_build_holds_its_scaling_ceilings() {
     let failures = judge(&ceilings, measured[&100], measured[&200]);
     assert!(failures.is_empty(), "library build scaling ({machine}, {}):\n  {}", wj.display(), failures.join("\n  "));
 
-    // (d) the same library built twice gives the same bytes
+    // (d) the same library built twice (same output directory, caches removed) gives the same bytes
     let lib = &libs[&50];
-    build(&wj, lib, "gen-again");
-    let (a, b) = (tree(&lib.join("gen")), tree(&lib.join("gen-again")));
-    let differing: Vec<&String> = a.keys().chain(b.keys()).filter(|k| a.get(*k) != b.get(*k)).collect();
+    let first = tree(&lib.join("gen"));
+    let _ = std::fs::remove_dir_all(lib.join("gen"));
+    let _ = std::fs::remove_dir_all(lib.join(".wj-cache"));
+    build(&wj, lib, "gen");
+    let second = tree(&lib.join("gen"));
+    let differing: Vec<&String> = first.keys().chain(second.keys()).filter(|k| first.get(*k) != second.get(*k)).collect();
     assert!(differing.is_empty(), "two builds of one library differ in: {differing:?}");
-    assert!(!a.is_empty(), "the build produced no files");
+    assert!(!first.is_empty(), "the build produced no files");
 }
