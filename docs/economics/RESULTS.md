@@ -19,8 +19,9 @@ Every number below is labelled **measured** (a command in this repository produc
   (`/usr/bin/time -l`), **user+sys CPU** (children included), **peak RSS**. Instructions alone mislead across different
   programs (`wj check` retires 253M instructions in 96M cycles, rustc runs at a third of that IPC), so cross-program
   ratios use cycles and CPU; rustc's linker is a child process, so only CPU includes it.
-- Same flags on both sides: debug `-C opt-level=0 -C debuginfo=0`; release `-C opt-level=3 -C lto` (the generated
-  crate's dependencies are LTO bitcode, so the twin gets LTO too). "Shipped" = the generated `Cargo.toml` as is
+- Same flags on both sides: debug `-C opt-level=0 -C debuginfo=0`; release `-C opt-level=3 -C lto` in this run (the
+  generated crate's dependencies were LTO bitcode then). Since the automatic LTO default (2026-11-17) a single crate's
+  dependencies carry no bitcode, and the runner compares release builds at `-C opt-level=3` without LTO on both sides. "Shipped" = the generated `Cargo.toml` as is
   (LTO, overflow checks on) against the twin's release build.
 - Every number is the smallest of 3 runs (dx) or 1 run (kernels' slow variants); every output was checked.
 - Ratio = Windjammer / Rust; below 1.00 is cheaper. `geo` = geometric mean over programs.
@@ -236,6 +237,28 @@ Owner decision (2026-11-16): overflow checks stay **on** by default in release b
 interpreter, which panics on overflow). Every D5 number in this file states its setting: "same flags" rows are
 without checks on both sides; "shipped" rows are Windjammer with checks against the Rust twin without.
 
+### LTO on programs that use the runtime (measured)
+
+`economics.wj --lto-study` (`bench/economics/results/mac-20261116-lto.json`): 11 programs (9 `dx` programs that use the
+runtime crate, 2 std-only kernels) built `cargo build --release` with the generated profile (overflow checks on) with
+LTO on and off, each into its own empty target directory. Geometric means, LTO on / off:
+
+| | ratio | per program |
+|---|---:|---|
+| cold release build CPU (dependencies included) | 1.55 | runtime users 5.6-6.7 s vs 5.1-6.5 s; std-only 2.1 s vs 0.2-0.3 s |
+| incremental release rebuild CPU (`main.rs` touched) | **6.74** | 2.8-3.6 s vs 0.3-1.1 s |
+| run instructions | 0.99 | 0.96-1.01 |
+| run cycles | 0.98 | |
+| stripped binary size | 0.86 | e.g. 369 KB vs 430 KB |
+
+(`dx/t009_rpn_eval` did not build with the lean-runtime compiler in this run and is excluded; under investigation.)
+
+Default change (implemented, `wt-econ`): `[profile.release] lto` unset is automatic: on when the project depends on
+another Windjammer package (the cross-crate case LTO was chosen for), off for a single crate, where it bought about 1%
+run time and 14% size for about 7x the CPU of every release rebuild. `lto = true` / `false` decides explicitly
+(`docs/book/src/reference/wj-toml.md`). Gate: `tests/lean_manifest.rs`
+(`release_lto_is_automatic_and_an_explicit_setting_wins`).
+
 Proposal (owner decision; no default changed yet):
 
 - **Overflow checks stay on** in shipped Windjammer binaries. The spec says integer overflow panics; dropping the checks
@@ -332,6 +355,25 @@ rm -rf /tmp/econ-target-pc
 ```
 
 Commit `bench/economics/results/pc-*.{json,md}` and add the PC rows above, labelled "PC, quiet".
+
+The "after" numbers of the later steps, on the integration head (wave 3, cf73e7fe4 or later), same session:
+
+```
+# D2: record the PC's own verify-loop ratio (a new meter entry; the Mac entry is never compared), then check it
+$WJ run scripts/wj/economics.wj --d2 --wj $WJ --runs 5 --write bench/economics/d2_baseline.json
+$WJ run scripts/wj/economics.wj --d2 --wj $WJ --runs 5 --check bench/economics/d2_baseline.json
+
+# C2 lean manifest + lean runtime, and the LTO default: cold and incremental release builds per program, LTO on/off
+$WJ run scripts/wj/economics.wj --lto-study --wj $WJ --label pc-$(date +%Y%m%d) --runs 5 \
+    --only dx/t001_gcd_lcm,dx/t009_rpn_eval,dx/t011_lru_cache,dx/t013_bst,dx/t018_word_freq,dx/t030_bank_ledger,dx/t043_channel_pipeline,dx/t048_wc_clone,interp/fib30,interp/hashmap,parity/string_build
+
+# C4: overflow checks on/off per kernel and the bounded_counter clawback, with callgrind instruction counts
+cargo build --release --example optimize_rs
+$WJ run scripts/wj/economics.wj --profiles --wj $WJ --label pc-$(date +%Y%m%d) --runs 3 --instr callgrind
+$WJ run scripts/wj/economics.wj --clawback --wj $WJ --optimize-rs target/release/examples/optimize_rs --label pc-$(date +%Y%m%d) --runs 3 --instr callgrind
+$WJ run scripts/wj/economics_report.wj bench/economics/results/pc-YYYYMMDD-profiles.json --md bench/economics/results/pc-YYYYMMDD-profiles.md
+$WJ run scripts/wj/economics_report.wj bench/economics/results/pc-YYYYMMDD-clawback.json --md bench/economics/results/pc-YYYYMMDD-clawback.md
+```
 
 ## Reproduce the Mac numbers
 

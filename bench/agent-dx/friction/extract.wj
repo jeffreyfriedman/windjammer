@@ -123,8 +123,25 @@ fn classify(t: string, pilot: string) -> Vec<string> {
     ["program-output", "the program's own non-zero exit (the task asks for it); not friction"]
 }
 
+/// wj-taint: sanitizer
+/// The directory of one event under `dir`. Event ids are built from fields of the pilot transcripts (file contents, so
+/// tainted): only a single path segment of ASCII letters, digits, `-` and `_` is accepted, so an id can never point
+/// outside `dir`; anything else stops the extraction.
+fn event_dir(dir: string, id: string) -> string {
+    let mut ok = id.len() > 0
+    for c in id.chars() {
+        if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+            ok = false
+        }
+    }
+    if !ok {
+        panic("event id `${id}` is not a plain name; refusing to write outside ${dir}")
+    }
+    dir + "/" + id
+}
+
 fn write_event(dir: string, e: Ev, observed: string, src: string, stdin: string) {
-    let d = dir + "/" + e.id
+    let d = event_dir(dir, e.id)
     fs::create_dir_all(d).unwrap_or(())
     fs::write(d + "/event.json", (json::to_string_pretty(e) ?? "{}") + "\n").unwrap_or(())
     fs::write(d + "/observed.txt", observed + "\n").unwrap_or(())

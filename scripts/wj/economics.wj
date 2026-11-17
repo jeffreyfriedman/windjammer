@@ -55,9 +55,10 @@ const TWINS: string = "bench/economics/twins"
 const MARK: string = "\n@@wj-economics counter@@\n"
 // rustc flags shared by twin and generated builds, so a compile/size/run difference is the source, not the flags
 const DEBUG_FLAGS: string = "--edition 2021 -A warnings -C opt-level=0 -C debuginfo=0"
-// fat LTO on both sides: the generated crate's dependencies are built for LTO (cargo makes them bitcode-only), so
-// the same-flags comparison links both with -C lto
-const RELEASE_FLAGS: string = "--edition 2021 -A warnings -C opt-level=3 -C lto"
+// no LTO on either side: a single generated crate now builds without LTO by default ([profile.release] lto is
+// automatic, docs/economics/RESULTS.md C4), so its dependencies carry no bitcode. Results recorded before 2026-11-17
+// (mac-20261116*) used `-C lto` on both sides.
+const RELEASE_FLAGS: string = "--edition 2021 -A warnings -C opt-level=3"
 // the lint allowances the generated Cargo.toml adds ([lints.rust])
 const GEN_ALLOW: string = "--allow=unconditional_panic --allow=arithmetic_overflow"
 
@@ -484,10 +485,28 @@ fn cold_deps(gen_dir: string, target: string, flag: string, scratch: string) -> 
 
 // ---------------------------------------------------------------- one program
 
+/// wj-taint: sanitizer
+/// The path of a sample file inside the run directory `dir`. Sample file names come from the tasks' `samples.json`
+/// (file contents, so tainted): only a relative name of plain segments is accepted (no leading `/`, no `..` or `.`
+/// segment, no empty segment, no backslash); anything else stops the run, so a sample can never write outside
+/// `dir`.
+fn sample_file_path(dir: string, name: string) -> string {
+    let mut ok = name.len() > 0 && !name.starts_with("/") && !name.contains("\\")
+    for seg in name.split("/") {
+        if seg == "" || seg == "." || seg == ".." {
+            ok = false
+        }
+    }
+    if !ok {
+        die("sample file name `${name}` is not a plain relative path; refusing to write it")
+    }
+    dir + "/" + name
+}
+
 fn prepare_dir(p: Prog, dir: string) -> string {
     let _ = run_sh("rm -rf " + quote(dir) + " && mkdir -p " + quote(dir))
     for f in p.files {
-        let path = dir + "/" + (as_str(get(f, "name") ?? from_str("x")) ?? "x")
+        let path = sample_file_path(dir, as_str(get(f, "name") ?? from_str("x")) ?? "x")
         // sample files may sit in subdirectories (t054)
         let _ = run_sh("mkdir -p \"$(dirname " + quote(path) + ")\"")
         let _ = fs.write(path, as_str(get(f, "text") ?? from_str("")) ?? "")
@@ -898,7 +917,7 @@ fn check_static(results: Json, path: string) -> int {
 
 // --selftest: every measuring path this machine offers measures a small known command, and each reports what it
 // claims to (output and exit status always; CPU and peak RSS for time/rusage; instructions for callgrind/perf/-l).
-fn selftest(scratch: string) -> int {
+fn selftest(scratch: string, wj: string) -> int {
     let cmd = "sh -c 'i=0; while [ $i -lt 300000 ]; do i=$((i+1)); done; echo ok'"
     let mut meters: Vec<string> = Vec::new()
     let auto = choose_meter("auto", scratch)
@@ -908,6 +927,16 @@ fn selftest(scratch: string) -> int {
     meters.push("wall")
     if run_sh("command -v valgrind").len() > 0 { meters.push("callgrind") }
     let mut failed = 0
+    // the suite's own scripts pass `wj check` (taint rules included) with the wj under test
+    for script in ["scripts/wj/economics.wj", "scripts/wj/economics_report.wj"] {
+        let chk = run_sh(quote(wj) + " check " + script + " > /dev/null 2>&1; echo $?")
+        if strings.trim(chk) == "0" {
+            println("ok   wj check ${script}")
+        } else {
+            println("FAIL wj check ${script} (exit ${strings.trim(chk)}; run it to see the diagnostics)")
+            failed += 1
+        }
+    }
     for mtr in meters {
         let m = measure_once(scratch, cmd, "", mtr)
         let mut problems: Vec<string> = Vec::new()
@@ -957,7 +986,7 @@ fn main() {
     // callgrind is opt-in: it multiplies the run time of every measured command (the interpreter kernels by ~50)
     let callgrind = long_flag_value_or(args, "instr", "none") == "callgrind"
     if has_long_flag(args, "selftest") {
-        let code = selftest(scratch)
+        let code = selftest(scratch, long_flag_value_or(args, "wj", "wj"))
         let _ = run_sh("rm -rf " + quote(scratch))
         process.exit(code)
     }

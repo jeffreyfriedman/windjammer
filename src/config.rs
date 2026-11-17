@@ -124,13 +124,16 @@ pub struct ProfileSection {
 }
 
 /// Release profile settings written into generated Cargo.toml.
-/// Defaults: `opt-level = 3`, `lto = true` (cross-crate hot paths need LTO).
+/// Defaults: `opt-level = 3`; `lto` unset means automatic: on when the project depends on other Windjammer packages
+/// (cross-crate hot paths), off otherwise (docs/economics/RESULTS.md C4: for a single crate, fat LTO costs about 7x the
+/// incremental release-build CPU for about 1% run time and 14% size). `lto = true` / `false` in `[profile.release]`
+/// decides explicitly.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReleaseProfile {
     #[serde(default = "default_opt_level", rename = "opt-level")]
     pub opt_level: OptLevel,
-    #[serde(default = "default_lto_true")]
-    pub lto: bool,
+    #[serde(default)]
+    pub lto: Option<bool>,
     #[serde(default, rename = "codegen-units")]
     pub codegen_units: Option<u32>,
     #[serde(default, rename = "overflow-checks")]
@@ -141,7 +144,7 @@ impl Default for ReleaseProfile {
     fn default() -> Self {
         Self {
             opt_level: default_opt_level(),
-            lto: default_lto_true(),
+            lto: None,
             codegen_units: None,
             overflow_checks: None,
         }
@@ -152,9 +155,6 @@ fn default_opt_level() -> OptLevel {
     OptLevel::Int(3)
 }
 
-fn default_lto_true() -> bool {
-    true
-}
 
 /// Cargo `opt-level` accepts integers (`0`–`3`) or strings (`"s"` / `"z"`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,19 +178,35 @@ impl WjConfig {
     /// project (`[build] overflow_checks = false`, `[profile.release] overflow-checks = false`) or the
     /// command line (`--unchecked-arithmetic`) turns them off: a release binary panics on overflow exactly
     /// like a debug build and the interpreter (SPEC-NUM-002).
-    pub fn release_profile_section(&self, unchecked_arithmetic: bool) -> String {
+    pub fn release_profile_section(&self, unchecked_arithmetic: bool, manifest_dir: Option<&std::path::Path>) -> String {
         let flag = unchecked_arithmetic.then_some(false);
         let checks = flag.or(self.build.overflow_checks).or(self.profile.release.overflow_checks).unwrap_or(true);
-        self.profile.release.render(checks)
+        let lto = self.profile.release.lto.unwrap_or_else(|| self.has_windjammer_package_dependencies(manifest_dir));
+        self.profile.release.render(checks, lto)
+    }
+
+    /// The project depends on another Windjammer package (a path dependency whose directory has a `wj.toml`, or a
+    /// registry package): the case where cross-crate LTO can pay. `base` resolves relative paths (the manifest's
+    /// directory; `None` = the current directory).
+    pub fn has_windjammer_package_dependencies(&self, base: Option<&std::path::Path>) -> bool {
+        self.dependencies.values().any(|spec| match spec {
+            DependencySpec::Detailed { path: Some(p), .. } => {
+                let dir = std::path::Path::new(p);
+                let dir = if dir.is_absolute() { dir.to_path_buf() } else { base.unwrap_or(std::path::Path::new(".")).join(dir) };
+                dir.join("wj.toml").is_file()
+            }
+            DependencySpec::Detailed { registry: Some(_), .. } => true,
+            _ => false,
+        })
     }
 }
 
 impl ReleaseProfile {
-    fn render(&self, overflow_checks: bool) -> String {
+    fn render(&self, overflow_checks: bool, lto: bool) -> String {
         let mut lines = vec![
             "[profile.release]".to_string(),
             format!("opt-level = {}", self.opt_level.to_toml_value()),
-            format!("lto = {}", self.lto),
+            format!("lto = {}", lto),
             format!("overflow-checks = {overflow_checks}"),
         ];
         if let Some(units) = self.codegen_units {

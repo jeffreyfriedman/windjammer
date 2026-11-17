@@ -85,6 +85,23 @@ fn prepare(out: string) {
     println("prepared ${out}/manifest.tsv")
 }
 
+/// wj-taint: sanitizer
+/// A program directory listed in `<out>/manifest.tsv` (which `prepare` wrote; read back as file contents, so tainted).
+/// Accepted only when it lies under `out` (prefix `out/`), has no `..` segment and no single quote (it is spliced into a
+/// single-quoted shell word); anything else stops the run.
+fn manifest_dir(out: string, d: string) -> string {
+    let mut ok = d.starts_with(out + "/") && !d.contains("'")
+    for seg in d.split("/") {
+        if seg == ".." {
+            ok = false
+        }
+    }
+    if !ok {
+        panic("manifest entry `${d}` is not a directory under ${out}; refusing to run a command in it")
+    }
+    d
+}
+
 fn check(out: string) {
     let manifest = fs.read_to_string(out + "/manifest.tsv") ?? ""
     let mut results = "variant\tprogram\tlen_casts\tusize_casts\tverdict\terrors\tcodes\n"
@@ -100,7 +117,7 @@ fn check(out: string) {
         let mut errors = 0
         let mut codes = ""
         if f[4] == "ok" {
-            let cmd = "cd '" + f[5] + "/build' && CARGO_TARGET_DIR='" + out + "/target' cargo check --quiet --message-format short 2>&1 | grep -E '^[^ ]+: error|^error' ; true"
+            let cmd = "cd '" + manifest_dir(out, f[5]) + "/build' && CARGO_TARGET_DIR='" + out + "/target' cargo check --quiet --message-format short 2>&1 | grep -E '^[^ ]+: error|^error' ; true"
             let log = process.run(cmd) ?? ""
             for l in log.lines() {
                 if l.contains("error[E") {

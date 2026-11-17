@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! Generated Cargo.toml must honor `wj.toml` `[profile.release]` (LTO default).
+//! Generated Cargo.toml must honor `wj.toml` `[profile.release]` (LTO automatic: on only with Windjammer package dependencies).
 
 use std::fs;
 use std::process::Command;
@@ -21,7 +21,7 @@ mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn generated_cargo_toml_defaults_lto_true_for_release() {
+fn generated_cargo_toml_defaults_lto_off_for_a_single_crate() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
@@ -71,9 +71,10 @@ edition = "2025"
         cargo.contains("[profile.release]"),
         "missing [profile.release]:\n{cargo}"
     );
+    // no other Windjammer package: LTO is off by default (docs/economics/RESULTS.md C4; tests/lean_manifest.rs)
     assert!(
-        cargo.contains("lto = true") || cargo.contains("lto=true"),
-        "release profile must default lto = true (cross-crate inlining):\n{cargo}"
+        cargo.contains("lto = false"),
+        "a single-crate release profile defaults to lto = false:\n{cargo}"
     );
     assert!(
         cargo.contains("opt-level"),

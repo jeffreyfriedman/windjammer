@@ -716,6 +716,25 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Report the economic dimensions of a file (docs/economics/DEFINITION.md); today the source dimension
+    #[command(arg_required_else_help = true)]
+    Economics {
+        /// Windjammer source file
+        file: PathBuf,
+
+        /// Dimensions to report (comma-separated); `static` (source: lines, characters, tokens, ceremony)
+        #[arg(long, value_delimiter = ',', default_value = "static")]
+        dims: Vec<String>,
+
+        /// A hand-written Rust twin of the program: also report its counts and the Windjammer / Rust ratios
+        #[arg(long, value_name = "FILE.rs")]
+        twin: Option<PathBuf>,
+
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Show what the post-codegen optimizer changes in a file's emitted Rust, with each pass's soundness argument
     #[command(arg_required_else_help = true)]
     Optimize {

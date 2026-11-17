@@ -81,7 +81,16 @@ program, a `main.wj` inside `cmd/NAME` is a program called `NAME`, and files in 
 
 ## `[profile.release]`
 
-Build settings for `wj build --release` and `wj run --release`, such as `opt-level` and `lto`.
+Build settings for `wj build --release` and `wj run --release`:
+
+- `opt-level` (default `3`).
+- `lto`: when it is not set, link-time optimization is on only if the project depends on another Windjammer package
+  (where calls cross crates); a single crate builds without it, which keeps release rebuilds fast. `lto = true` or
+  `lto = false` decides explicitly.
+- `overflow-checks` (default `true`): integer overflow panics in release builds too, exactly as in the interpreter.
+  `overflow-checks = false` is the explicit opt-out; a single hot path can use `wrapping_*`, `checked_*` or
+  `saturating_*` instead.
+- `codegen-units`.
 
 ## `[capabilities]`
 
