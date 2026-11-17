@@ -938,11 +938,6 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         }
     }
 
-    // `ffi::f(..)` naming the extern `f` of a child module (`ffi/api.wj`, emitted `ffi::api::f`): the extern's own
-    // declaration types the arguments (its `string` parameters are `FfiString` at the boundary).
-    if let Some(ext) = child_module_extern_signature(gen, func_name) {
-        signature = Some(ext);
-    }
     // Extern detection: resolved signature is authoritative. For fallback
     // resolutions on module-qualified calls, only trust explicit is_extern.
     let is_extern_call = if resolved_via_fallback && func_name.contains("::") {
@@ -1200,15 +1195,4 @@ fn owned_field_payload(gen: &CodeGenerator<'_>, arg: &Expression<'_>, result: St
         return format!("{result}.clone()");
     }
     result
-}
-
-/// The declaration of the extern a `parent::f` call names when `f` lives in a child module of `parent`.
-fn child_module_extern_signature(gen: &CodeGenerator<'_>, name: &str) -> Option<crate::analyzer::FunctionSignature> {
-    let child = gen.qualify_external_path_identifier(name);
-    if child == name {
-        return None;
-    }
-    let segments: Vec<&str> = child.split("::").collect();
-    let tail = segments.len().checked_sub(2).map(|i| segments[i..].join("::"));
-    [Some(child.clone()), tail].into_iter().flatten().find_map(|k| gen.get_signature_with_global(&k).filter(|s| s.is_extern).cloned())
 }
