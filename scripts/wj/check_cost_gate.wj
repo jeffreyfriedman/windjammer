@@ -1,0 +1,114 @@
+// Cost gate for `wj check`: the instructions of a check of the 12 dx programs of bench/economics/d2_baseline.json stay under a
+// ceiling, and the taint pass (WJ0173) costs nothing on a program with no taint source (ADR-0009: the pre-scan is exact).
+//
+//   wj run --allow process --allow 'fs.read=**' scripts/wj/check_cost_gate.wj <wj-binary>
+//
+// Instructions come from `WJ_PHASES=1` (`[phase] NAME N`, the hardware counter of `proc_pid_rusage`): macOS only; elsewhere the
+// gate says "not run" and exits 0. Ceilings: tests/perf_ceiling/check_instructions.tsv. `--selftest` judges planted phase output.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+const IDS: string = "t001_gcd_lcm t005_roman t009_rpn_eval t011_lru_cache t013_bst t018_word_freq t020_rle t023_expr_eval t030_bank_ledger t034_shapes_trait t048_wc_clone t057_inventory"
+const CEILINGS: string = "tests/perf_ceiling/check_instructions.tsv"
+
+// the instruction count of the last `[phase] NAME N` line called NAME, or -1
+fn phase_of(text: string, name: string) -> int {
+    let mut found = -1
+    for line in strings.split_lines(text) {
+        let f = strings.split_whitespace(line)
+        if f.len() == 3 && f[0] == "[phase]" && f[1] == name {
+            found = f[2].parse::<int>().unwrap_or(-1)
+        }
+    }
+    found
+}
+
+fn last_phase(text: string) -> int {
+    let mut found = -1
+    for line in strings.split_lines(text) {
+        let f = strings.split_whitespace(line)
+        if f.len() == 3 && f[0] == "[phase]" {
+            found = f[2].parse::<int>().unwrap_or(-1)
+        }
+    }
+    found
+}
+
+fn ceiling(name: string) -> int {
+    for line in strings.split_lines(fs.read_to_string(CEILINGS).unwrap_or("")) {
+        let f = strings.split(line, "\t")
+        if f.len() == 2 && f[0] == name {
+            return f[1].parse::<int>().unwrap_or(-1)
+        }
+    }
+    -1
+}
+
+fn selftest() -> bool {
+    let t = "[phase] check-effects 100\n[phase] check-taint-prescan 150\n[phase] check-taint 150\n[phase] done 900\n"
+    phase_of(t, "check-effects") == 100 && phase_of(t, "check-taint") == 150 && last_phase(t) == 900 && phase_of(t, "nope") == -1
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() >= 2 && args[1] == "--selftest" {
+        if selftest() {
+            println("check-cost selftest: planted phase output parsed")
+            return
+        }
+        println("check-cost selftest: FAILED")
+        process.exit(1)
+    }
+    if args.len() < 2 {
+        println("usage: check_cost_gate.wj <wj-binary> | --selftest")
+        process.exit(2)
+    }
+    let wj = quote(args[1])
+    let probe = match sh("WJ_PHASES=1 ${wj} check tests/perf_ceiling/t307_reduced_eval_special.wj 2>&1 | grep -c '^\\[phase\\]'") {
+        Ok(r) => strings.trim(r.stdout).parse::<int>().unwrap_or(0),
+        Err(_) => 0,
+    }
+    if probe == 0 {
+        println("check-cost gate: not run (this machine has no instruction counter behind WJ_PHASES; macOS arm64 does)")
+        return
+    }
+    let scratch = match sh("mktemp -d") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-check-cost",
+    }
+    let nonce = match sh("date +%s%N") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "0",
+    }
+    let mut total = 0
+    let mut failed = 0
+    for id in strings.split_whitespace(IDS) {
+        // a copy with a nonce line: no result cache (whole-run or per-file) can answer, so every run is a cold check
+        let f = "${scratch}/${id}.wj"
+        let _ = sh("{ cat bench/agent-dx/solutions/wj/${id}/main.wj; echo '// nonce ${nonce} ${id}'; } > ${quote(f)}")
+        let out = match sh("WJ_ALLOW_TOOLCHAIN_MISMATCH=1 WJ_PHASES=1 ${wj} check ${quote(f)} 2>&1") {
+            Ok(r) => r.stdout,
+            Err(_) => "",
+        }
+        let all = last_phase(out)
+        let taint = phase_of(out, "check-taint") - phase_of(out, "check-effects")
+        total += all
+        if taint > ceiling("taint_ceiling") {
+            println("  FAIL  ${id}: the taint pass spent ${taint} instructions on a program with no sink call (ceiling ${ceiling("taint_ceiling")})")
+            failed += 1
+        }
+    }
+    let _ = sh("rm -rf ${quote(scratch)}")
+    println("check-cost gate: ${total} instructions over the 12 dx programs (ceiling ${ceiling("total_ceiling")})")
+    if total > ceiling("total_ceiling") || total <= 0 {
+        println("  FAIL  total over the ceiling")
+        failed += 1
+    }
+    if failed > 0 {
+        process.exit(1)
+    }
+}

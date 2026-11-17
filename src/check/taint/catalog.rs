@@ -120,3 +120,13 @@ pub fn sink_roles(path: &str) -> Vec<SinkRole> {
 pub fn db_method_role(method: &str) -> Option<SinkRole> {
     matches!(method, "query" | "execute").then(|| SinkRole { arg: 0, desc: SQL.0, role: SQL.1, advice: SQL.2 })
 }
+
+/// The last segments of every function that has a sink role (the effect table's process and file-write rows) and of the SQL methods:
+/// the names a call must carry to be a sink at all (a superset, used by the pre-scan of `mod.rs`).
+pub fn sink_names() -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = sinks::all_paths().filter(|p| !sink_roles(p).is_empty()).filter_map(|p| p.rsplit("::").next()).collect();
+    out.extend(["query", "execute"]);
+    out.sort_unstable();
+    out.dedup();
+    out
+}

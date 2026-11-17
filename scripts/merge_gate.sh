@@ -45,6 +45,7 @@ step "effect spelling gate (check, build, run refuse an ungranted effect in both
 step "disk janitor selftest (fixture tree; removing the in-use check must fail it)" wj run --allow process --allow env.read scripts/wj/disk_janitor.wj -- --selftest
 step "slot gate syntax" sh -n scripts/slot_gate.sh
 step "build ceiling (tests/perf_ceiling build within 5 s and 2 GB)" wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' scripts/wj/build_ceiling_gate.wj "$WJ_BIN_DIR/wj"
+step "check cost (12 dx programs: instruction ceiling, taint pass free without a sink)" wj run --allow process --allow 'fs.read=**' scripts/wj/check_cost_gate.wj "$WJ_BIN_DIR/wj"
 step "target tiers table current (ADR-0007)" wj run --allow process --allow 'fs.read=**' scripts/wj/target_tiers.wj check
 step "wj.lock reproducibility (ADR-0010)" wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' --allow env.read scripts/wj/lock_gate.wj "$WJ_BIN_DIR/wj"
 step "dead capabilities" t capability_reachability_test::

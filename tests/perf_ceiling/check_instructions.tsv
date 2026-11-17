@@ -1,0 +1,6 @@
+# Instruction ceilings of a cold `wj check` (scripts/wj/check_cost_gate.wj). Measured on macOS arm64 with WJ_PHASES on the 12 dx programs of
+# bench/economics/d2_baseline.json, each a copy with a unique last line (no cache answers): 3.93 G in total with the taint pre-scan;
+# without it (the walk on every program that mentions a source) 4.17 G, of which the taint pass is 244 M = 6.2 per cent of the check.
+# total_ceiling: the sum over the 12 programs, a coarse guard (runs vary by about 8 per cent: 3.75 to 4.06 G); taint_ceiling: instructions the taint pass may spend on one program with no sink (measured: about 200 000).
+total_ceiling	4500000000
+taint_ceiling	600000
