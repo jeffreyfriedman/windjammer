@@ -1,5 +1,5 @@
-// A lone script (no wj.toml) whose `main.wj` declares a sibling file module. `wj build main.wj` emits only main.rs:
-// `mod counter;` with no counter.rs, and the argument of the module's method typed `2_i32`. `wj run --interpret` prints 2.
+// A lone script (no wj.toml) whose `main.wj` declares a sibling file module. `wj build main.wj` generates counter.rs
+// beside main.rs (as a project build does); `wj run --interpret` prints 2.
 mod counter
 
 use counter::Counter

@@ -511,8 +511,11 @@ fn book_regen_rewrites_a_stale_generated_fence_and_refuses_a_broken_program() {
     assert_eq!(std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap(), before);
 }
 
+/// A lone script (no wj.toml) whose main.wj declares a sibling file module (`mod counter`): `wj build main.wj`
+/// generates the module beside main.rs, as a project build does, and the module's method takes the literal at its
+/// declared width (`int`), never `2_i32`. (Was a known gap: tests/book_repros/lone_script_mod/.)
 #[test]
-fn known_gap_lone_script_build_of_main_drops_its_sibling_module() {
+fn lone_script_build_generates_its_sibling_module() {
     let src = real().root.join("tests/book_repros/lone_script_mod");
     let tmp = tempfile::tempdir().unwrap();
     for f in ["main.wj", "counter.wj"] {
@@ -525,8 +528,8 @@ fn known_gap_lone_script_build_of_main_drops_its_sibling_module() {
     let b = std::process::Command::new(wj).args(["build", "--no-cargo", "-o"]).arg(&out).arg(tmp.path().join("main.wj")).output().unwrap();
     assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
     let main = std::fs::read_to_string(out.join("main.rs")).unwrap_or_default();
-    let gap = main.contains("mod counter;") && !out.join("counter.rs").exists() && main.contains("bump(2_i32)");
-    assert!(gap, "the lone-script build is fixed: delete tests/book_repros/lone_script_mod/, this test and its docs/known-gaps.md row\n{main}");
+    assert!(main.contains("mod counter;") && out.join("counter.rs").is_file(), "the declared module is generated:\n{main}");
+    assert!(main.contains("bump(2") && !main.contains("bump(2_i32)"), "the literal takes the module's declared int:\n{main}");
 }
 
 // ---------------------------------------------------------------------------------------------

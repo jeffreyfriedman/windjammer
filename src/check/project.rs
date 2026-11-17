@@ -151,7 +151,10 @@ fn resolve_files<'a>(root: &Path, parsed: &[&'a Parsed]) -> (resolve::ResolvedPr
         .iter()
         .map(|p| {
             let path = Path::new(&p.file);
-            ParsedFile::new(resolve::module_path_from_file(base, path), path.to_path_buf(), &p.program)
+            // A lone script (no wj.toml above it) is its own crate root: its `mod dep` declares `dep` (dep.wj beside it).
+            let lone_root = root.is_file() && path == root && !root.ancestors().any(|d| d.join(crate::module_system::project::MANIFEST).is_file());
+            let module = if lone_root { Vec::new() } else { resolve::module_path_from_file(base, path) };
+            ParsedFile::new(module, path.to_path_buf(), &p.program)
         })
         .collect();
     (resolve::resolve_program(&inputs), base.to_path_buf())
@@ -230,7 +233,7 @@ pub(super) fn iterator_as_list_only(all: &[Parsed]) -> Vec<Diagnostic> {
     out
 }
 
-fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
+pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
     let (r, base) = resolve_files(root, parsed);
     missing_module_imports(root, parsed, by_file, &r, &base, out);
     let span_for = |loc: &Option<crate::source_map::Location>, word: &str| {

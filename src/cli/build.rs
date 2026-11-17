@@ -40,6 +40,21 @@ fn stop_on_rust_crate_errors(path: &Path) -> Result<()> {
     anyhow::bail!("{} error(s) in calls into Rust crates: the build stops before generating code", errors.len())
 }
 
+/// A call with the wrong number of arguments (WJ0013, from the callee's declaration) stops the build before code
+/// generation, reported exactly as `wj check` reports it.
+fn stop_on_call_arity_errors(path: &Path) -> Result<()> {
+    let checked = crate::check::call_arity(path)?;
+    let errors: Vec<_> = checked.report.diagnostics.iter().filter(|d| d.is_error()).collect();
+    if errors.is_empty() {
+        return Ok(());
+    }
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    for d in &errors {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    anyhow::bail!("{} call(s) with the wrong number of arguments: the build stops before generating code", errors.len())
+}
+
 /// ADR-0002: local bindings changed without `mut` (WJ0051), reported exactly as `wj check` reports them. A warning
 /// during the migration; an error stops the build before code generation.
 fn report_local_mutability(path: &Path) -> Result<()> {
@@ -184,6 +199,7 @@ pub fn execute(
         }
         // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
         stop_on_rust_crate_errors(path)?;
+        stop_on_call_arity_errors(path)?;
         report_local_mutability(path)?;
         report_missing_modules(path)?;
         stop_on_iterator_as_list(path)?;

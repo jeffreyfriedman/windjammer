@@ -73,7 +73,7 @@ pub fn predicted_widths_via(path: &Path, child_only: bool) -> (Vec<Diagnostic>, 
 }
 
 /// What `wj build --no-cargo` is given for `path`: a crate root `main.wj` is built as its source root, as
-/// `wj run --compiled` does (building the file alone drops its sibling modules: docs/known-gaps.md,
+/// `wj run --compiled` does (a lone script built alone also generates the modules it declares:
 /// `tests/book_repros/lone_script_mod/`).
 fn build_input(path: &Path) -> PathBuf {
     let root_dir = (path.is_file() && path.file_name().is_some_and(|n| n == "main.wj")).then(|| {

@@ -1,7 +1,6 @@
 //! Trait AST `string` (E0053) written back onto `impl Trait for Type` method signatures of a registry.
 
 use crate::analyzer::{FunctionSignature, SignatureRegistry};
-use std::collections::HashMap;
 
 /// Write trait AST `string` (E0053) onto `impl Trait for Type` method signatures
 /// in `registry`. Inherent homonyms are left alone (`trait_impl_method_keys`).
@@ -29,18 +28,15 @@ fn trait_owned_string_impl_updates(registry: &SignatureRegistry) -> (Vec<(String
         return (Vec::new(), 0);
     }
     let mut updates: Vec<(String, FunctionSignature)> = Vec::new();
-    // The registry is not written until every update is computed, so the trait definitions of one method
-    // name are looked up once per call instead of once per impl method.
-    let mut trait_sigs_by_method: HashMap<String, Vec<(String, FunctionSignature)>> = HashMap::new();
+    // The registry is not written until every update is computed. Each impl method reads the declaration of the
+    // trait its `impl Trait for Type` names (never every trait's same-named method).
     for key in impl_keys {
         let Some(mut sig) = registry.signature_declared_at(&key).cloned() else {
             continue;
         };
-        let method = key.rsplit("::").next().unwrap_or(&key).to_string();
-        let trait_sigs = trait_sigs_by_method
-            .entry(method.clone())
-            .or_insert_with(|| super::call_signature_resolution::trait_definition_sigs_for_method(registry, &method));
-        super::call_signature_resolution::apply_trait_owned_string_contracts_from(registry, trait_sigs, &mut sig);
+        let trait_sigs: Vec<(String, FunctionSignature)> =
+            registry.trait_definition_of_impl_method(&key).map(|(k, s)| vec![(k, s.clone())]).unwrap_or_default();
+        super::call_signature_resolution::apply_trait_owned_string_contracts_from(registry, &trait_sigs, &mut sig);
         updates.push((key, sig));
     }
     (updates, walked)

@@ -40,7 +40,7 @@ impl SignatureRegistry {
                     self.record_trait_method_key(aliased.clone());
                 }
                 if is_trait_impl {
-                    self.record_trait_impl_method_key(aliased.clone());
+                    self.record_trait_impl_method_key(aliased.clone(), source.impl_method_traits.get(name).map(String::as_str));
                 }
                 // WJ `std/strings.wj` declaration stubs must not clobber scanned
                 // runtime AsRef/`&str` under `strings::fn` (P3.524).
@@ -54,7 +54,7 @@ impl SignatureRegistry {
                     self.record_trait_method_key(aliased.clone());
                 }
                 if is_trait_impl {
-                    self.record_trait_impl_method_key(aliased.clone());
+                    self.record_trait_impl_method_key(aliased.clone(), source.impl_method_traits.get(name).map(String::as_str));
                 }
                 if !self.runtime_strings_alias_would_clobber(&aliased, sig) {
                     self.add_function(aliased, sig.clone());
@@ -93,7 +93,7 @@ mod tests {
     fn detached_alias_registration_matches_the_attached_one() {
         let mut shared = SignatureRegistry::empty();
         shared.record_trait_method_key("Unit::step".into());
-        shared.record_trait_impl_method_key("Unit::step".into());
+        shared.record_trait_impl_method_key("Unit::step".into(), None);
         let shared = std::sync::Arc::new(shared);
         let mut file = SignatureRegistry::layered(std::sync::Arc::clone(&shared));
         file.add_function("Unit::step".into(), plain_sig("Unit::step"));
