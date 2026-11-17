@@ -602,7 +602,9 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
 
     /// Insert `.collect()` at the end of the `let [mut] <name>[: T] = <iterator>` line when that line is exactly that
     /// statement (one binding of the name, no trailing comment, the initialiser ends in `)`).
-    fn collect_fix_for_binding(&self, name: &str) -> Option<Fix> {
+    /// Byte range of the line `let [mut] <name>[: T] = ..` when the function binds the name exactly once on a line of
+    /// its own.
+    fn binding_line(&self, name: &str) -> Option<(usize, usize)> {
         let text = self.cx.loc.ix.text();
         let mut found: Option<(usize, usize)> = None;
         let mut offset = 0;
@@ -619,6 +621,27 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             }
             offset += line.len();
         }
+        found
+    }
+
+    /// The edit that makes `let <name> = ..` `let mut <name> = ..` (`Some(None)` when it already is): `.next()` takes
+    /// `&mut self` (ADR-0002), so the `.first()` fix of an iterator binding must declare it.
+    pub(super) fn binding_mut_edit(&self, name: &str) -> Option<Option<Edit>> {
+        let (start, _) = self.binding_line(name)?;
+        let text = self.cx.loc.ix.text();
+        let line = &text[start..];
+        let indent = line.len() - line.trim_start().len();
+        if line.trim_start().starts_with("let mut ") {
+            return Some(None);
+        }
+        let at = start + indent + "let ".len();
+        let sp = self.cx.loc.ix.span(at, at);
+        Some(Some(Edit { span: sp, replacement: "mut ".to_string() }))
+    }
+
+    fn collect_fix_for_binding(&self, name: &str) -> Option<Fix> {
+        let text = self.cx.loc.ix.text();
+        let found = self.binding_line(name);
         let (start, end) = found?;
         let stmt = &text[start..end];
         if !stmt.contains(" = ") || stmt.contains("//") || stmt.trim_end().ends_with(".collect()") || !stmt.trim_end().ends_with(')') {

@@ -70,6 +70,21 @@ fn report_missing_modules(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// ADR-0039 decision H: an iterator used as a list (WJ0035), reported exactly as `wj check` reports it, with its fix;
+/// an error stops the build before code generation.
+fn stop_on_iterator_as_list(path: &Path) -> Result<()> {
+    let checked = crate::check::iterator_as_list(path)?;
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    for d in &checked.report.diagnostics {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    let errors = checked.report.diagnostics.iter().filter(|d| d.is_error()).count();
+    if errors > 0 {
+        anyhow::bail!("{errors} iterator(s) used as a list (WJ0035): the build stops before generating code (`wj check --fix` adds the `.collect()`)");
+    }
+    Ok(())
+}
+
 /// ADR-0009: untrusted data reaching a command, a file path or SQL text (WJ0173), reported exactly as `wj check`
 /// reports it; an error stops the build before code generation.
 fn stop_on_taint(path: &Path) -> Result<()> {
@@ -171,6 +186,7 @@ pub fn execute(
         stop_on_rust_crate_errors(path)?;
         report_local_mutability(path)?;
         report_missing_modules(path)?;
+        stop_on_iterator_as_list(path)?;
         stop_on_taint(path)?;
         follow_lock(path, options.locked)?;
         let config = with_project_facts(config, path, library)?;

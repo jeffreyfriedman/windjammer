@@ -18,13 +18,15 @@ fn run(name: &str, src: &str) -> (i32, String, String) {
 }
 
 /// `text.chars().len()`: Rust's `Chars` has no `len` (E0599 in the compiled build), so the interpreted run fails
-/// too, naming `.count()`; the same through a size-keeping adapter.
+/// too, naming `.count()`; the same through a size-keeping adapter. ADR-0039 decision H: `.len()` on an iterator is WJ0035
+/// ("an iterator is used as a list") with `.count()` as its fix, from the checker or, for a program that skipped it, the
+/// interpreter's guard with the same wording.
 #[test]
 fn len_of_chars_is_refused_like_the_compiled_build() {
     for (name, expr) in [("chars", "\"héllo\".chars().len()"), ("char_indices", "\"héllo\".char_indices().len()"), ("mapped", "\"abc\".chars().map(|c| c).len()")] {
         let (code, out, err) = run(name, &format!("fn main() {{\n    let n = {expr}\n    println(\"${{n}}\")\n}}\n"));
         assert_ne!(code, 0, "{name}: interpreted run passed: {out}");
-        assert!(err.contains("no method named `len`") && err.contains(".count()"), "{name}: {err}");
+        assert!(err.contains("an iterator is used as a list") && err.contains("`len`") && err.contains(".count()"), "{name}: {err}");
     }
 }
 

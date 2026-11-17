@@ -215,6 +215,20 @@ pub(super) fn module_imports_only(root: &Path, all: &[Parsed]) -> Vec<Diagnostic
     out
 }
 
+/// Only the WJ0035 diagnostics (an iterator used as a list, ADR-0039 decision H) of the program at these files: the
+/// semantic check `wj check` runs, filtered, so `wj build` reports exactly what `wj check` reports.
+pub(super) fn iterator_as_list_only(all: &[Parsed]) -> Vec<Diagnostic> {
+    let parsed: Vec<&Parsed> = all.iter().filter(|p| !is_shader(p)).collect();
+    let programs: Vec<_> = parsed.iter().map(|p| &p.program).collect();
+    let idx = Index::build(&programs);
+    let mut out = Vec::new();
+    for p in &parsed {
+        semantic::check_file(&idx, &FileInput { file: &p.file, text: &p.text, items: &p.program.items }, &mut out);
+    }
+    out.retain(|d| d.code == "WJ0035");
+    out
+}
+
 fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
     let (r, base) = resolve_files(root, parsed);
     missing_module_imports(root, parsed, by_file, &r, &base, out);
