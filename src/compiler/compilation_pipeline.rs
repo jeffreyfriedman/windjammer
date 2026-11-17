@@ -165,7 +165,6 @@ pub fn build_project_with_config(
     }
 
     let mut deferred_lint_errors: Vec<String> = Vec::new();
-
     for file in &super::lone_script_modules::lone_script_files(path, &wj_files, library) {
         let source = std::fs::read_to_string(file)?;
         let (_parser, program) = super::parse_wj_source(file, &source)?;
@@ -322,7 +321,7 @@ pub fn build_project_with_config(
             }
         }
 
-        let output_file = if !wj_files.contains(file) { super::lone_script_modules::declared_module_output(path, file, output)? } else if wj_files.len() > 1 && library {
+        let output_file = if !wj_files.contains(file) { super::lone_script_modules::declared_module_output(path, file, output, &mut codegen)? } else if wj_files.len() > 1 && library {
             let base_path = if path.is_file() {
                 path.parent().unwrap_or(path)
             } else {
@@ -430,6 +429,7 @@ pub fn build_project_with_config(
             }
         }
     }
+    super::lone_script_modules::write_directory_module_files(path, &wj_files, output, library)?;
 
     if library && crate_metadata.has_entries() {
         super::write_crate_metadata_json(output, &crate_metadata)?;
