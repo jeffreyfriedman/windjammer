@@ -165,3 +165,19 @@ pub(super) fn write_directory_module_files(path: &Path, wj_files: &[PathBuf], ou
     }
     Ok(())
 }
+
+/// Parse one script of a lone-script build; a lone `main.wj` (a file given to `wj build`, not a project directory)
+/// also declares the sibling modules its `use crate::` paths name.
+pub(crate) fn parse_lone_script(
+    file: &Path,
+    source: &str,
+    path: &Path,
+    wj_files: &[PathBuf],
+    library: bool,
+) -> anyhow::Result<(crate::parser::Parser, crate::parser::Program<'static>)> {
+    let (parser, mut program) = super::parse_wj_source(file, source)?;
+    if !library && path.is_file() && wj_files.iter().any(|f| f == file) {
+        declare_used_crate_modules(&mut program);
+    }
+    Ok((parser, program))
+}
