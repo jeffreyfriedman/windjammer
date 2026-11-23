@@ -121,7 +121,7 @@ impl FloatInference {
                 } else {
                     self.var_types
                         .get(name)
-                        .or_else(|| self.const_types.get(name))
+                        .or_else(|| self.const_types.get(&self.current_file_name, name))
                         .cloned()
                 }
             }

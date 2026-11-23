@@ -293,7 +293,7 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        let receiver_base = self.self_field_call_receiver_type_base(object);
+        let receiver_base = self.self_field_call_receiver_type_base(object, Some(reg));
         super::stdlib_method_traits::method_call_mutates_receiver(
             method,
             receiver_base.as_deref(),
@@ -301,8 +301,27 @@ impl<'ast> Analyzer<'ast> {
         )
     }
 
-    pub(crate) fn self_field_call_receiver_type_base(&self, object: &Expression) -> Option<String> {
+    pub(crate) fn self_field_call_receiver_type_base(
+        &self,
+        object: &Expression,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> Option<String> {
         let ctx = self.self_impl_context.as_ref()?;
+        // `self.widen(2.0).truncate()`: the receiver of `truncate` is what `widen` is declared to return (its impl's
+        // declaration in this file, or its signature in the crate registry: the type may live in another module).
+        if let Expression::MethodCall { object: inner, method, .. } = object {
+            let inner_base = self.self_field_call_receiver_type_base(inner, registry)?;
+            let declared = if inner_base == ctx.impl_type_base {
+                self.current_impl_functions.as_ref().and_then(|f| f.get(method.as_str())).and_then(|f| f.return_type.clone())
+            } else {
+                None
+            }
+            .or_else(|| {
+                let sig = registry?.get_signature(&format!("{inner_base}::{method}"))?;
+                sig.return_type.clone()
+            })?;
+            return Self::type_base_for_qualified_sig_lookup(&declared);
+        }
         if let Some(receiver_ty) =
             self.static_value_type_of_self_rooted_expr(ctx.program(), &ctx.impl_type_base, object)
         {

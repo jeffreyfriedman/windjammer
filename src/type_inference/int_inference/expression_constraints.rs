@@ -171,7 +171,7 @@ impl IntInference {
                 if let Some(var_type) = self
                     .var_types
                     .get(name)
-                    .or_else(|| self.const_types.get(name))
+                    .or_else(|| self.const_types.get(&self.current_file_name, name))
                 {
                     if let Some(int_ty) = self.extract_int_type(var_type) {
                         self.constraints.push(IntConstraint::MustBe(

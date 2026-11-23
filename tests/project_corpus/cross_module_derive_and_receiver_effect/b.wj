@@ -1,0 +1,16 @@
+use crate::v::V4
+
+pub struct Pair {
+    pub lo: V4,
+    pub hi: V4,
+}
+
+impl Pair {
+    pub fn widen(self, k: f32) -> V4 {
+        V4 { x: self.lo.x * k, w: self.hi.w }
+    }
+
+    pub fn first(self) -> f32 {
+        self.widen(2.0).truncate()
+    }
+}

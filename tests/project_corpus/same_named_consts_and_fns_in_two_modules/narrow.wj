@@ -1,0 +1,9 @@
+pub const TAU: f32 = 6.2831855
+
+pub fn wrap(r: f32) -> f32 {
+    r % TAU
+}
+
+pub fn half(x: f32) -> f32 {
+    x * 0.5
+}

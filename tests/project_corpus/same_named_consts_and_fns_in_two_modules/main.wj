@@ -1,0 +1,14 @@
+// `narrow` and `wide` declare the same names (`TAU`, `wrap`, `half`) at different float widths: each module's
+// literals and constants take that module's own declaration, and `narrow::TAU` / `wide::TAU` type from the module
+// they name (never from the other module's same-named item). Expected by hand: all four comparisons hold.
+// expect: true true true true 1.5 1.5
+mod narrow
+mod wide
+
+fn main() {
+    let a = narrow::wrap(7.0) < 1.0
+    let b = wide::wrap(7.0) < 1.0
+    let c = narrow::TAU > 6.28
+    let d = wide::TAU > 6.28
+    println("${a} ${b} ${c} ${d} ${narrow::half(3.0)} ${wide::half(3.0)}")
+}

@@ -596,8 +596,9 @@ fn detect_and_compile_library(
         }
         Err(e) => {
             println!("   {} Library compilation failed: {}", "✗".red().bold(), e);
-            // Don't fail the entire test run - just continue without library dependency
-            Ok(None)
+            // The tests import the library: running them without it only reports unrelated "unresolved import"
+            // errors from rustc and hides this cause, so the run stops here with the library's own diagnostic.
+            Err(anyhow::anyhow!("library compilation failed: {e}"))
         }
     }
 }

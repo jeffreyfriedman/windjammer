@@ -2,10 +2,10 @@ impl FloatInference {
     fn register_const_and_static<'ast>(&mut self, item: &Item<'ast>) {
         match item {
             Item::Const { name, type_, .. } => {
-                self.const_types.insert(name.clone(), type_.clone());
+                self.const_types.insert(&self.current_file_name.clone(), name.clone(), type_.clone());
             }
             Item::Static { name, type_, .. } => {
-                self.const_types.insert(name.clone(), type_.clone());
+                self.const_types.insert(&self.current_file_name.clone(), name.clone(), type_.clone());
             }
             Item::Mod { items, .. } => {
                 for sub_item in items {

@@ -207,6 +207,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
         trait_impls: HashMap::new(),
         copy_structs: vec![],
         non_copy_structs: vec![],
+        consts: Default::default(),
         version: "0.1.0".to_string(),
         analysis_fingerprint: None,
     };

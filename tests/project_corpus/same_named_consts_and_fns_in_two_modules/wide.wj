@@ -1,0 +1,9 @@
+pub const TAU: f64 = 6.283185307179586
+
+pub fn wrap(r: f64) -> f64 {
+    r % TAU
+}
+
+pub fn half(x: f64) -> f64 {
+    x * 0.5
+}

@@ -84,7 +84,9 @@ pub struct IntInference {
     id_to_file_name: HashMap<usize, String>,
     next_file_id: usize,
     current_impl_type: Option<String>,
-    const_types: HashMap<String, Type>,
+    const_types: crate::type_inference::const_table::ConstTable,
+    /// File being collected (const lookups resolve to this file's own declarations first).
+    current_file_name: String,
 }
 
 impl Default for IntInference {
@@ -116,7 +118,8 @@ impl IntInference {
             id_to_file_name: HashMap::new(),
             next_file_id: 1,
             current_impl_type: None,
-            const_types: HashMap::new(),
+            const_types: Default::default(),
+            current_file_name: String::new(),
         };
 
         // TDD FIX: Register stdlib method signatures (Vec, HashMap, etc.)
@@ -148,6 +151,7 @@ impl IntInference {
     }
 
     pub fn set_current_file(&mut self, file: String) -> usize {
+        self.current_file_name = file.clone();
         if let Some(&id) = self.file_name_to_id.get(&file) {
             self.current_file_id = id;
             id
@@ -345,12 +349,12 @@ impl IntInference {
     /// Codegen imports these into `module_const_types` so `use crate::m::VIEWER_GRID`
     /// peers range literals correctly (P3.280).
     pub fn export_const_types(&self) -> HashMap<String, Type> {
-        self.const_types.clone()
+        self.const_types.agreed()
     }
 
     /// Imported `const string` (metadata) lowers to `&'static str`.
     pub fn register_string_const(&mut self, name: String) {
-        self.const_types.insert(name, Type::String);
+        self.const_types.insert("", name, Type::String);
     }
 
     /// TDD FIX: Substitute generic type parameters with concrete types
@@ -556,10 +560,10 @@ impl IntInference {
     fn register_const_and_static<'ast>(&mut self, item: &Item<'ast>) {
         match item {
             Item::Const { name, type_, .. } => {
-                self.const_types.insert(name.clone(), type_.clone());
+                self.const_types.insert(&self.current_file_name.clone(), name.clone(), type_.clone());
             }
             Item::Static { name, type_, .. } => {
-                self.const_types.insert(name.clone(), type_.clone());
+                self.const_types.insert(&self.current_file_name.clone(), name.clone(), type_.clone());
             }
             Item::Mod { items, .. } => {
                 for sub_item in items {

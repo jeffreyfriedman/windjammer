@@ -364,6 +364,17 @@ pub(crate) fn build_library_multipass(
     // Merge explicit non-Copy structs with non-Copy enums for codegen registry
     let mut global_non_copy_types = global_non_copy_enums.clone();
     global_non_copy_types.extend(explicit_non_copy_structs.iter().cloned());
+    // `PartialEq` of a struct whose fields are declared in another module of this crate: decided once over every
+    // module's declarations (a per-file pass cannot see them).
+    let crate_partial_eq_types = {
+        let mut g = CodeGenerator::new_for_module(SignatureRegistry::new(), target);
+        g.set_copy_types_registry(global_copy_structs.clone());
+        g.set_explicit_copy_types_registry(global_explicit_copy_structs.clone());
+        g.set_non_copy_types_registry(global_non_copy_types.clone());
+        let programs: Vec<&crate::parser::Program<'_>> = parsed_programs.iter().collect();
+        g.collect_partial_eq_types_all(&programs);
+        g.partial_eq_types_snapshot()
+    };
     let mut dep_registry = SignatureRegistry::new();
     {
         let mut dep_copy_structs = Vec::new();
@@ -1333,6 +1344,7 @@ pub(crate) fn build_library_multipass(
             codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
             codegen.merge_function_emitted_mut_arg_indices(&accumulated_emitted_mut_arg_indices);
             codegen.set_copy_types_registry((*global_copy_structs).clone());
+            codegen.set_crate_partial_eq_types(crate_partial_eq_types.clone());
             codegen.set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
             codegen.set_non_copy_types_registry((*global_non_copy_types_arc).clone());
             codegen.set_global_struct_field_types((*global_struct_fields).clone());
