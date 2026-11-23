@@ -1971,10 +1971,32 @@
   {
     "kind": "builtin",
     "module": "float",
+    "name": "to_be_bytes",
+    "signature": "x.to_be_bytes() -> Vec<u8>",
+    "source": "agent_index/builtins.txt",
+    "summary": "big-endian IEEE-754 bytes (4 for f32, 8 for f64)",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
     "name": "to_bits",
     "signature": "x.to_bits() -> u64",
     "source": "agent_index/builtins.txt",
     "summary": "IEEE-754 bit pattern",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
+    "name": "to_le_bytes",
+    "signature": "x.to_le_bytes() -> Vec<u8>",
+    "source": "agent_index/builtins.txt",
+    "summary": "little-endian IEEE-754 bytes (4 for f32, 8 for f64)",
     "tags": [
       "float"
     ]
