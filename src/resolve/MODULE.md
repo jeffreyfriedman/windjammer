@@ -19,6 +19,7 @@ Every definition gets a `DefId`; every call expression resolves to a `Res`: `Def
 3. `paths.rs`   - callee paths: `f`, `mod::f`, `Type::assoc`, `Self::assoc`, `Trait::m`, `Enum::V`.
 4. `walk.rs`    - walks bodies, tracks locals (shadowing), emits `CallResolution`s.
 5. `visibility.rs` - Rust's privacy rule (`private_uses`): a private item called, imported (`use`) or re-exported (`pub use`) outside its module and that module's descendants. The one check `wj check`, `wj build` and the interpreter share (WJ0019).
+6. `reexports.rs` - ADR-0040: `implicit_reexports` resolves every `use` and resolved path call a second time with the implicit child re-export rule switched off (`Collected::explicit_only`) and reports each step the two resolutions disagree on (WJ0194, with the `pub use` line that fixes it). Decided by declaration: the declaring module and its parent, never names.
 `def.rs` / `res.rs` / `uses.rs` / `prelude.rs` are data + normalisation.
 
 ## Invariants

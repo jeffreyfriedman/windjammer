@@ -361,7 +361,7 @@ statement = "Explain an error code"
 
 [[promise]]
 id = "wj fix"
-statement = "Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms"
+statement = "Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms, and add the `pub use` lines a module needs to re-export its child modules' items (ADR-0040)"
 
 [[promise]]
 id = "wj fix --check"
@@ -892,6 +892,9 @@ id = "code WJ0192"
 
 [[promise]]
 id = "code WJ0193"
+
+[[promise]]
+id = "code WJ0194"
 
 [[promise]]
 id = "wj mcp"

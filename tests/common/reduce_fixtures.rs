@@ -67,7 +67,7 @@ pub fn write_program(dir: &Path, files: &[(String, String)]) {
 }
 
 pub fn wj() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+    PathBuf::from(std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string()))
 }
 
 pub fn reduce(input: &Path, out: &Path, extra: &[&str]) -> Output {

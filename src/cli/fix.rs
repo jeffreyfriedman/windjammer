@@ -186,6 +186,62 @@ fn add_missing_mut(path: &Path, check: bool, docs: bool) -> Result<(usize, usize
     Ok((files, edits))
 }
 
+/// ADR-0040 (WJ0194): add the `pub use child::Name` lines a program relies on without having. Each round adds the
+/// missing lines of every module; a name reached through two levels needs a second round. A diagnostic without a
+/// fix (the re-exporting module is declared inline) is listed and counted as manual. Returns (files, edits, manual).
+fn add_missing_reexports(path: &Path, check: bool) -> Result<(usize, usize, usize)> {
+    if !(path.is_dir() || path.extension().is_some_and(|e| e == "wj")) {
+        return Ok((0, 0, 0));
+    }
+    let mut changed: std::collections::BTreeSet<String> = Default::default();
+    let mut edits = 0;
+    let mut manual = 0;
+    let mut printed: std::collections::BTreeSet<String> = Default::default();
+    for _ in 0..64 {
+        let checked = crate::check::implicit_reexports(path)?;
+        let diags = &checked.report.diagnostics;
+        if diags.is_empty() {
+            manual = 0;
+            break;
+        }
+        manual = diags.iter().filter(|d| d.fixes.is_empty()).count();
+        let outcome = crate::check::apply_fixes(diags, &checked.sources, !check)?;
+        for f in &outcome.files_skipped {
+            eprintln!("warning: {f}: adding a `pub use` would not parse; left unchanged");
+        }
+        let verb = if check { "is missing" } else { "added" };
+        for d in diags {
+            match d.fixes.first().and_then(|f| f.edits.first()) {
+                Some(e) => {
+                    if printed.insert(format!("{}\n{}", e.span.file, e.replacement)) {
+                        println!("{}:{}: `{}` ({verb}, {})", e.span.file, e.span.line_start, e.replacement.trim(), d.code)
+                    }
+                }
+                None => println!("{}: {} (needs a manual `pub use`)", d.primary_span.as_ref().map(|s| format!("{}:{}", s.file, s.line_start)).unwrap_or_default(), d.message),
+            }
+        }
+        edits += outcome.edits_applied;
+        if check || outcome.edits_applied == 0 {
+            break;
+        }
+        // files changed this round
+        for d in diags {
+            for e in d.fixes.iter().flat_map(|f| &f.edits) {
+                changed.insert(e.span.file.clone());
+            }
+        }
+    }
+    let files = if check { checked_files_needing(path)? } else { changed.len() };
+    Ok((files, edits, manual))
+}
+
+/// `--check`: the number of module files that lack a `pub use` line.
+fn checked_files_needing(path: &Path) -> Result<usize> {
+    let checked = crate::check::implicit_reexports(path)?;
+    let files: std::collections::BTreeSet<String> = checked.report.diagnostics.iter().flat_map(|d| d.fixes.iter().flat_map(|f| f.edits.iter().map(|e| e.span.file.clone()))).collect();
+    Ok(files.len())
+}
+
 /// Whether a fence info string (```wj, ```wj,test, ```windjammer) holds Windjammer code.
 fn is_wj_fence(line: &str) -> bool {
     let info = line.trim().strip_prefix("```").unwrap_or("");
@@ -282,6 +338,11 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
         }
         println!("fixed {} ({} rewrite(s))", name, out.changed_count() + conc_rewrites);
     }
+    // ADR-0040: every name a module is used for without re-exporting it gets its `pub use` line
+    let (re_files, re_edits, re_manual) = add_missing_reexports(path, check)?;
+    summary.files_changed += re_files;
+    summary.rewrites += re_edits;
+    summary.skipped += re_manual;
     // ADR-0002: every local binding the program changes is declared `mut` (WJ0051), after the rewrites above
     let (mut_files, mut_edits) = add_missing_mut(path, check, docs)?;
     summary.files_changed += mut_files;

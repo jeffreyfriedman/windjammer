@@ -273,6 +273,10 @@ impl Interpreter {
         if let Some(bad) = crate::resolve::private_uses(&resolved).first() {
             return Err(semantic_at(format!("{} (E0603)", bad.message(&resolved)), bad.location.as_ref()));
         }
+        // ADR-0040: a module re-exports a name only through an explicit `pub use` (the check `wj check` runs, WJ0194)
+        if let Some(bad) = crate::resolve::implicit_reexports(&resolved).first() {
+            return Err(semantic_at(format!("{}: add `{}` to the module (WJ0194)", bad.message(&resolved), bad.line(&resolved)), bad.location.as_ref()));
+        }
         self.bind_uses(&resolved, &module_ids)?;
         // an `extern fn` runs when the host bridge provides it or the C library does (scalar signatures)
         let progs: Vec<&crate::parser::Program<'_>> = all.iter().map(|f| f.program).collect();

@@ -1,0 +1,13 @@
+// expect: WJ0194
+mod adapters {
+    pub mod http {
+        pub fn serve() -> int {
+            1
+        }
+    }
+}
+
+fn main() {
+    println("${adapters::serve()}")
+//~@26+5 ERROR WJ0194 `serve` is not re-exported by `adapters`; it is declared in `adapters::http`
+}

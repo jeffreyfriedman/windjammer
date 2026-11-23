@@ -26,6 +26,7 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0191` | Removed concurrency syntax | Proven |  | `thread { }`, `ch <- v` and `<-ch` were removed by ADR-0004: write `spawn { }`, `ch.send(v)` and `ch.recv()`; `wj fix` rewrites them |
 | `WJ0192` | Task changes a captured variable | HighConfidence |  | A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004) |
 | `WJ0193` | Value cannot move to another thread | HighConfidence |  | A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004) |
+| `WJ0194` | Name is not re-exported | HighConfidence | E0425, E0433 | A path or import names an item through a module that only gets it from one of its child modules; `pub mod child` re-exports nothing, a module re-exports a name only through an explicit `pub use` (ADR-0040) |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

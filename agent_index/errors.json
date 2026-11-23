@@ -320,5 +320,23 @@
       "Build the value inside the task"
     ],
     "title": "Value cannot move to another thread"
+  },
+  "WJ0194": {
+    "causes": [
+      "`adapters::serve` where `serve` is declared in `adapters::http` and `adapters` has no `pub use http::serve`"
+    ],
+    "code": "WJ0194",
+    "example": null,
+    "explanation": "A path or import names an item through a module that only gets it from one of its child modules; `pub mod child` re-exports nothing, a module re-exports a name only through an explicit `pub use` (ADR-0040).",
+    "maturity": "HighConfidence",
+    "rust_codes": [
+      "E0425",
+      "E0433"
+    ],
+    "solutions": [
+      "Add `pub use http::serve` to the re-exporting module (`wj fix` does)",
+      "Name the item by its declaring module: `adapters::http::serve`"
+    ],
+    "title": "Name is not re-exported"
   }
 }

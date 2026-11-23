@@ -1,0 +1,3 @@
+pub fn encode(n: int) -> int {
+    n * 10
+}

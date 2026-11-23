@@ -9,6 +9,8 @@
 | `use a::b::c as e` | renames |
 | `super::` | reaches the parent module, including its private items |
 | paths | `::` separates modules, types and items: `Type::assoc`, `Enum::Variant`, `module::item` |
+| `pub use a::b::c` | re-exports `c` from this module: `this_module::c` names it. A module offers a name declared elsewhere only through a `pub use` |
+| `pub mod child` | declares the child module; it does not re-export the child's items |
 | files | a file `name.wj` is the module `name`; declare it with `mod name` in the importer |
 | std | `use std::module`; `std` is always available |
 
@@ -39,6 +41,46 @@ fn main() {
 ```
 
 A private item used from outside its module is a compile-time error naming the item: ``function `helper` is private``.
+
+## Re-exports
+
+`pub mod http` makes `adapters::http` a module; it does not make `adapters::serve` a name. A module re-exports an item of
+one of its children only with an explicit `pub use`, the way Rust does:
+
+```wj
+// expect: 1
+mod adapters {
+    pub mod http {
+        pub fn serve() -> int {
+            1
+        }
+    }
+
+    pub use http::serve
+}
+
+fn main() {
+    println("${adapters::serve()}")
+}
+```
+
+Naming an item through a module that does not re-export it is `WJ0194`, with the line to add as the fix; `wj fix <path>` adds
+it. A `pub use http::*` glob is an explicit re-export too.
+
+<!-- ignore: WJ0194 is reported by the project check (name resolution), which a fence does not run -->
+```wj,ignore
+mod adapters {
+    pub mod http {
+        pub fn serve() -> int {
+            1
+        }
+    }
+}
+
+fn main() {
+    println("${adapters::serve()}")
+}
+```
 
 ## Projects and packages
 

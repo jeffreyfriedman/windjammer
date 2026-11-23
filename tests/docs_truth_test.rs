@@ -504,9 +504,9 @@ fn update_baseline_refuses_to_raise_or_add_baselines() {
 /// `wj docs` (the shipped command) must produce exactly the generated, checked-in catalog, and twice the same bytes.
 #[test]
 fn wj_docs_command_output_is_deterministic_and_matches_the_generated_file() {
-    let wj = env!("CARGO_BIN_EXE_wj");
+    let wj = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string());
     let run = |dir: &Path| {
-        let o = std::process::Command::new(wj).args(["docs", "-f", "markdown", "-o"]).arg(dir).output().unwrap();
+        let o = std::process::Command::new(&wj).args(["docs", "-f", "markdown", "-o"]).arg(dir).output().unwrap();
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         std::fs::read_to_string(dir.join("errors.md")).unwrap()
     };

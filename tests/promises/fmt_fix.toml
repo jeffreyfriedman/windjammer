@@ -174,3 +174,18 @@ files = { "m.wj" = "fn main() {\n    thread {\n        println(\"x\")\n    }\n}\
 args = ["fix", "--check", "{w}/m.wj"]
 exit = 1
 file_has = { "m.wj" = "thread {" }
+
+[[case]]
+name = "fix adds the pub use line a module needs to re-export its child's item (WJ0194)"
+polarity = "positive"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "src/main.wj" = "mod adapters\n\nfn main() {\n    println(\"${adapters::serve()}\")\n}\n", "src/adapters/mod.wj" = "pub mod http\n", "src/adapters/http.wj" = "pub fn serve() -> int {\n    7\n}\n" }
+args = ["fix", "{w}/src"]
+file_has = { "src/adapters/mod.wj" = "pub use http::serve" }
+
+[[case]]
+name = "fix --check fails while a module lacks a pub use line (WJ0194) and does not write"
+polarity = "negative"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "src/main.wj" = "mod adapters\n\nfn main() {\n    println(\"${adapters::serve()}\")\n}\n", "src/adapters/mod.wj" = "pub mod http\n", "src/adapters/http.wj" = "pub fn serve() -> int {\n    7\n}\n" }
+args = ["fix", "--check", "{w}/src"]
+exit = 1
+file_has = { "src/adapters/mod.wj" = "pub mod http" }
