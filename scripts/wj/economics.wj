@@ -734,7 +734,9 @@ fn d2_value(m: M) -> int {
 // 0.00 s. Such a command is repeated k times inside one timed measurement until the CPU reaches MIN_TIMED_CPU, and the
 // per-run value is the total over k. A reading that stays below resolution at MAX_REPEAT is never an abort.
 const MIN_TIMED_CPU: f64 = 0.5
-const MAX_REPEAT: int = 1024
+// 16384: a native twin of an agent-sized program runs in ~0.4 ms of CPU, so 1024 repeats (0.36 s) stayed below MIN_TIMED_CPU and the program
+// silently fell back to callgrind instructions while others stayed on CPU time (mixed units in one geometric mean: the D2 flake of 2026-11-22).
+const MAX_REPEAT: int = 16384
 
 // The next repetition count after a reading of `cpu` seconds for `k` runs: 0 = enough, -1 = give up (below
 // resolution even at MAX_REPEAT), else the larger k to try.
@@ -796,7 +798,15 @@ fn robust_value(dir: string, cmd: string, input: string, single: M, flag: string
 // Verify-loop cost of one program: (`wj run --interpret`, `rustc -O0` + run), each the smallest of `runs`; per-run
 // values from robust_value. A side that stays below the meter's resolution is re-measured with callgrind (both
 // sides, so the program's ratio keeps one unit) when valgrind is installed, else reported as 0 (excluded by the caller).
-fn d2_pair(p: Prog, wj: string, scratch: string, runs: int, flag: string) -> (int, int, string) {
+// Two readings of one value that differ by more than 2x are not a measurement (a baseline must never be written from them).
+fn unstable(a: int, b: int) -> bool {
+    if a <= 0 || b <= 0 { return false }
+    let hi = if a > b { a } else { b }
+    let lo = if a > b { b } else { a }
+    hi > 2 * lo
+}
+
+fn d2_pair(p: Prog, wj: string, scratch: string, runs: int, flag: string) -> (int, int, string, string) {
     let root = run_sh("pwd").trim().to_string()
     let work = scratch + "/" + strings.replace(p.id, "/", "_")
     let run_dir = work + "/run"
@@ -816,18 +826,27 @@ fn d2_pair(p: Prog, wj: string, scratch: string, runs: int, flag: string) -> (in
     if rc.status != 0 || rr.status != 0 { problem = "${p.id}: rust twin failed" }
     let c = robust_value(work, ccmd, "", rc, flag)
     let r = robust_value(run_dir, rcmd, input, rr, flag)
+    // second reading of each CPU-time value: two readings of the same program that disagree by more than 2x refuse the run
+    let c2 = robust_value(work, ccmd, "", rc, flag)
+    let r2 = robust_value(run_dir, rcmd, input, rr, flag)
     // the run directory was re-prepared for the Rust run: the program goes back in before its repeated measurement
     let _ = prepare_dir(p, run_dir)
     let _ = run_sh("cp " + quote(root + "/" + p.wj) + " " + quote(run_dir + "/main.wj"))
     let mut w = robust_value(run_dir, wcmd, input, wi, flag)
+    let w2 = robust_value(run_dir, wcmd, input, wi, flag)
+    let mut unit = if wi.cycles > 0 { "cycles" } else { "cpu" }
+    if problem == "" && (unstable(w, w2) || unstable(c, c2) || unstable(r, r2)) {
+        problem = "${p.id}: unstable CPU readings (interpreted ${w}/${w2}, rustc ${c}/${c2}, run ${r}/${r2} differ by more than 2x between two readings): not usable for a baseline (box not quiet?)"
+    }
     let mut rust = if c > 0 && r > 0 { c + r } else { 0 }
     if (w <= 0 || rust <= 0) && problem == "" && run_sh("command -v valgrind").len() > 0 {
         eprintln("  ${p.id}: below the meter's resolution; measuring instructions with callgrind instead")
+        unit = "instr"
         w = measure_once(run_dir, wcmd, input, "callgrind").instr
         rust = measure_once(work, ccmd, "", "callgrind").instr + measure_once(run_dir, rcmd, input, "callgrind").instr
     }
     let _ = run_sh("rm -rf " + quote(work))
-    (w, rust, problem)
+    (w, rust, problem, unit)
 }
 
 // Geometric mean of the per-program ratios over the programs with a value on both sides; the others are listed as
@@ -859,17 +878,26 @@ fn run_d2(args: Vec<string>, wj: string, scratch: string, runs: int, flag: strin
     let mut vals: Vec<(string, int, int)> = Vec::new()
     let mut rows = array()
     let only = long_flag_value_or(args, "only", "")
+    let mut first_unit = ""
+    let mut mixed = ""
     for p in programs() {
         if !("," + D2_SET + ",").contains("," + p.id + ",") { continue }
         if only != "" && !("," + only + ",").contains("," + p.id + ",") { continue }
-        let (w, r, problem) = d2_pair(p, wj, scratch, runs, flag)
+        let (w, r, problem, unit) = d2_pair(p, wj, scratch, runs, flag)
         if problem != "" {
             eprintln("economics --d2: " + problem)
             return 1
         }
+        if w > 0 && r > 0 {
+            if first_unit == "" { first_unit = unit } else if unit != first_unit { mixed = mixed + " " + p.id + "(" + unit + ")" }
+        }
         vals.push((p.id, w, r))
         rows = push(rows, with(with(with(object(), "id", from_str(p.id)), "wj", from_int(w as i64)), "rust", from_int(r as i64)))
         eprintln("  ${p.id}: interpreted ${w} / rustc+run ${r}")
+    }
+    if mixed != "" {
+        eprintln("economics --d2: mixed measurement units in one run (first program used ${first_unit}; different:${mixed}): ratios from different units cannot be combined: refusing (neither --write nor --check is possible from this run)")
+        return 1
     }
     let (ratio, n, excluded) = d2_combine(vals)
     for id in excluded {
@@ -1035,7 +1063,8 @@ fn selftest(scratch: string, wj: string) -> int {
     let (ratio, n, excl) = d2_combine([("a", 50, 100), ("b", 0, 120), ("c", 30, 0), ("d", 25, 100)])
     let combine_ok = n == 2 && excl.len() == 2 && excl[0] == "b" && excl[1] == "c" && ratio > 0.35 && ratio < 0.36
     let rep = measure_once(scratch, repeated("true", "", 3), "", "wall")
-    if tiny_ok && combine_ok && rep.status == 0 {
+    let unstable_ok = unstable(100, 300) && unstable(300, 100) && !unstable(100, 150) && !unstable(0, 300)
+    if tiny_ok && combine_ok && unstable_ok && rep.status == 0 {
         println("ok   D2 tiny-program path: below-resolution readings repeat, then exclude with a reason (fake 0.00 s meter)")
     } else {
         println("FAIL D2 tiny-program path: repeat plan ${tiny_ok}, exclusion ${combine_ok} (ratio ${fixed(ratio, 3)}, used ${n}), repeated command status ${rep.status}")
