@@ -342,7 +342,7 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
         let def = r.defs().get(pu.def);
         let last = pu.written.rsplit("::").next().unwrap_or(&pu.written).to_string();
         let mut d = Diagnostic::error("WJ0019", pu.message(&r));
-        let sp = span_for(&pu.location, &last).or_else(|| {
+        let sp = span_for(pu.location, &last).or_else(|| {
             let p = by_file.values().find(|p| p.text.contains(&last))?;
             let ix = SourceIndex::new(p.file.clone(), &p.text);
             Locator::new(&ix).first_use(&last)

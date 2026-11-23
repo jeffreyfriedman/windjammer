@@ -23,12 +23,13 @@ pub enum PrivateUseKind {
 
 /// One use of a private item from a module that may not see it.
 #[derive(Debug, Clone)]
-pub struct PrivateUse {
+pub struct PrivateUse<'r> {
     pub def: DefId,
     pub kind: PrivateUseKind,
     /// The path as written at the use site (`mesh_generator::generate_naive_mesh`, `shapes::hidden`).
     pub written: String,
-    pub location: Option<Location>,
+    /// Where the use is written, borrowed from the resolved program (a diagnostic locates its span from this).
+    pub location: &'r Option<Location>,
 }
 
 /// rustc's noun for a definition kind (E0603 wording).
@@ -109,7 +110,7 @@ impl Collected<'_> {
 }
 
 /// Every use of a private item outside its visibility: imports and re-exports first (in module order), then calls.
-pub fn private_uses(r: &ResolvedProgram<'_>) -> Vec<PrivateUse> {
+pub fn private_uses<'r>(r: &'r ResolvedProgram<'_>) -> Vec<PrivateUse<'r>> {
     let c = &r.collected;
     let mut out = Vec::new();
     let mut scopes: Vec<_> = c.modules.iter().collect();
@@ -124,7 +125,7 @@ pub fn private_uses(r: &ResolvedProgram<'_>) -> Vec<PrivateUse> {
             });
             if let Some(def) = bad {
                 let kind = if u.is_pub { PrivateUseKind::ReExport } else { PrivateUseKind::Import };
-                out.push(PrivateUse { def, kind, written: u.segments.join("::"), location: u.location.clone() });
+                out.push(PrivateUse { def, kind, written: u.segments.join("::"), location: &u.location });
             }
         }
     }
@@ -140,13 +141,13 @@ pub fn private_uses(r: &ResolvedProgram<'_>) -> Vec<PrivateUse> {
             continue;
         }
         if !c.is_visible_from(d, call.module) && !reported.contains(id) {
-            out.push(PrivateUse { def: *id, kind: PrivateUseKind::Call, written: call.callee.clone(), location: call.location.clone() });
+            out.push(PrivateUse { def: *id, kind: PrivateUseKind::Call, written: call.callee.clone(), location: &call.location });
         }
     }
     out
 }
 
-impl PrivateUse {
+impl PrivateUse<'_> {
     /// `function `a::b::f` is private` (the path as written): the same wording in `wj check`, `wj build` and the interpreter.
     pub fn message(&self, r: &ResolvedProgram<'_>) -> String {
         let d = r.defs().get(self.def);
