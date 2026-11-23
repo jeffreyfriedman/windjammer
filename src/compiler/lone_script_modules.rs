@@ -66,8 +66,13 @@ pub(super) fn declare_used_crate_modules(program: &mut crate::parser::Program<'s
                 _ => None,
             });
             if let Some(location) = location {
-                program.items.insert(0, crate::parser::Item::Mod { name, items: Vec::new(), is_public: false, location });
+                program.items.insert(0, crate::parser::Item::Mod { name: name.clone(), items: Vec::new(), is_public: false, location });
             }
+            // `use crate::util` imports the module itself; the `mod util;` just declared already binds that name in the
+            // crate root, and keeping both is rustc E0255 (the name defined twice).
+            program.items.retain(|i| {
+                !matches!(i, crate::parser::Item::Use { path, alias: None, is_pub: false, .. } if path.len() == 2 && path[0] == "crate" && path[1] == name)
+            });
         }
     }
 }

@@ -100,3 +100,23 @@ fn wj_test_use_crate_item_of_the_library_is_not_a_missing_module() {
     let t = text(&o);
     assert!(!t.contains("names module"), "a library item was reported as a missing module:\n{t}");
 }
+
+/// `use crate::util` (the module itself) beside the `mod util;` the build declares for it is rustc E0255 (the name
+/// defined twice): the emitted entry keeps only the declaration, and rustc accepts it with the sibling file beside it.
+#[test]
+fn whole_module_import_of_a_sibling_is_not_defined_twice() {
+    let d = tempfile::tempdir().unwrap();
+    write(d.path(), "wj.toml", "[package]\nname = \"p\"\nversion = \"0.1.0\"\nedition = \"2025\"\n");
+    write(d.path(), "src/util.wj", "pub fn label(s: string) -> int {\n    s.len()\n}\n");
+    write(d.path(), "src/main.wj", "use crate::util\n\nfn main() {\n    let n = util::label(\"abc\")\n    println(\"${n}\")\n}\n");
+    let b = build(d.path());
+    assert!(b.status.success(), "{}", text(&b));
+    let main = d.path().join("out/main.rs");
+    let rc = Command::new("rustc")
+        .args(["--edition", "2021", "--crate-type", "bin", "--emit", "metadata", "-A", "warnings", "-o"])
+        .arg(d.path().join("check.rmeta"))
+        .arg(&main)
+        .output()
+        .unwrap();
+    assert!(rc.status.success(), "{}\n{}", text(&rc), std::fs::read_to_string(&main).unwrap());
+}

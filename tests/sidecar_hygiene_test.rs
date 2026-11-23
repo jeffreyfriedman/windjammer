@@ -195,6 +195,9 @@ fn stray_detector_reports_a_planted_file() {
 
 #[test]
 fn legacy_sidecar_is_never_read() {
+    // `--library`: an entry built as a program compiles the sibling modules it names from source (each build rewrites
+    // their entries), so no stored metadata could be read at all; a library build of the entry reads its peers'
+    // stored metadata, which is the path this gate must watch.
     // A poisoned sidecar next to a source must not change the output. The poison claims `util::label`
     // takes an owned string, which (if read) makes the call site emit `"abc".to_string()`; the real
     // analysis borrows. The oracle is the clean build, and the poison is proven live by the cache control below (single-file builds consult peer metadata).
@@ -211,7 +214,7 @@ fn legacy_sidecar_is_never_read() {
             std::fs::write(&dest, meta).unwrap();
             planted = Some(dest);
         }
-        let o = wj(d.path(), cache.path(), &["build", "src/main.wj", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
+        let o = wj(d.path(), cache.path(), &["build", "src/main.wj", "--library", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         let rs = std::fs::read_to_string(d.path().join("out/main.rs")).unwrap();
         let untouched = planted.map(|p| std::fs::read_to_string(p).unwrap().starts_with("{\"module_path\":\"util\"")).unwrap_or(true);
@@ -238,7 +241,7 @@ fn legacy_sidecar_is_never_read() {
         label["param_ownership"] = serde_json::json!(["Owned"]);
         label["emitted_rust_ref_params"] = serde_json::json!([false]);
         std::fs::write(&entry, serde_json::to_string(&meta).unwrap()).unwrap();
-        let o = wj(d.path(), cache.path(), &["build", "src/main.wj", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
+        let o = wj(d.path(), cache.path(), &["build", "src/main.wj", "--library", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         std::fs::read_to_string(d.path().join("out/main.rs")).unwrap()
     };
