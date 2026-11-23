@@ -35,8 +35,11 @@ pub use codec::*           // a deliberate glob is an explicit re-export, and al
 - A path `adapters::serve` or an import `use crate::adapters::serve` resolves to an item declared in `adapters`
   itself, to a name `adapters` imports with `pub use`, or to a name a `pub use child::*` glob of `adapters` brings in.
   It does not resolve to an item that only a child of `adapters` declares.
-- The interpreter, `wj check`, `wj build` and the generated Rust all follow the same rule (one resolver); the backend
-  emits `pub use` lines only for the `pub use` lines the source has.
+- `wj check`, `wj build` and the interpreter all refuse a program that relies on the implicit rule (one pass over the
+  resolver, `src/resolve/reexports.rs`), so no accepted program depends on it. The lenient lookup itself
+  (`lookup_child_reexports`) and the backend's `pub use self::child::*` for plain `pub mod` stay until the ecosystem
+  repositories are migrated, then both are deleted (a second stage; the check already makes them unreachable for
+  accepted programs).
 - Decided by declaration: the check compares what a path resolves to with what each module's scope declares. It never
   matches names or file layouts.
 
@@ -74,13 +77,16 @@ second run changes nothing, and `wj fix --check` fails while a line is missing. 
 period (ADR-0039 policy): the standard library, the packages, the book and the ecosystem repositories are migrated with
 one `wj fix`.
 
-Files that only gain a glob through the old rule (`use crate::adapters::*` followed by a bare `serve()`) are reported by
-the same check (the glob reaches `adapters`, which does not export `serve`) and fixed the same way.
+A glob import through the old rule (`use crate::adapters::*` followed by a bare `serve()`) is reported by the same check
+(the glob reaches `adapters`, which does not export `serve`) and fixed the same way. Not covered yet: a type named in a
+signature or field through such a path with no `use` or call of it (only imports and calls are resolved), and a
+re-exporting module declared inline in a file (reported, fix is manual).
 
 ## Consequences
 
-- `lookup_child_reexports` and the backend's unconditional `pub use self::child::*;` for plain `pub mod` go away; the
-  backend's per-module symbol-conflict workaround for wildcards becomes dead code and is deleted with them.
+- Stage 2 (after the ecosystem migration): `lookup_child_reexports` and the backend's unconditional
+  `pub use self::child::*;` for plain `pub mod` go away; the backend's per-module symbol-conflict workaround for
+  wildcards becomes dead code and is deleted with them.
 - A module's public surface is the list of its `pub use` lines plus its own `pub` items; docs and agent indexes can
   print it.
 - Breaking for every program that relied on the implicit rule: one `wj fix` run. The `docs/std_surface.toml` and book

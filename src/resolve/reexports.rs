@@ -14,6 +14,8 @@ use super::uses::Binding;
 use super::ResolvedProgram;
 use crate::source_map::Location;
 
+type Gap = (DefId, DefId, DefId, String);
+
 /// One use that depends on the implicit child re-export rule.
 #[derive(Debug, Clone)]
 pub struct ImplicitReexport {
@@ -56,11 +58,15 @@ impl Collected<'_> {
         found
     }
 
-    /// Look `name` up in `module` leniently; every item only the implicit rule found is a gap.
-    fn lookup_noting(&self, module: DefId, name: &str, ns: Ns, gaps: &mut Vec<(DefId, DefId, DefId, String)>) -> Vec<Found> {
+    /// Look `name` up in `module` leniently; every item only the implicit rule found is a gap. The flag says the
+    /// explicit rule finds the name too.
+    fn lookup_noting(&self, module: DefId, name: &str, ns: Ns, gaps: &mut Vec<Gap>) -> (Vec<Found>, bool) {
         let lenient = self.lookup_in_module(module, name, ns, &mut Vec::new());
-        if lenient.is_empty() || !self.lookup_explicit(module, name, ns).is_empty() {
-            return lenient;
+        if lenient.is_empty() {
+            return (lenient, false);
+        }
+        if !self.lookup_explicit(module, name, ns).is_empty() {
+            return (lenient, true);
         }
         for f in &lenient {
             let Found::Def(d) = f else { continue };
@@ -75,27 +81,33 @@ impl Collected<'_> {
                 gaps.push(g);
             }
         }
-        lenient
+        (lenient, false)
     }
 
     /// Walk `segs` from `module` like `resolve_use_path`, collecting the steps that need the implicit rule.
-    fn implicit_steps(&self, module: DefId, segs: &[String], ns: Ns) -> Vec<(DefId, DefId, DefId, String)> {
+    /// Returns the gaps and whether the last segment resolved by the explicit rule (a path that is a module in one
+    /// namespace and an item in the other, `use crate::inflate` with `inflate::inflate`, is explicit as the module).
+    fn implicit_steps(&self, module: DefId, segs: &[String], ns: Ns) -> (Vec<Gap>, bool) {
         let mut gaps = Vec::new();
-        let Some((first, rest)) = segs.split_first() else { return gaps };
+        let Some((first, rest)) = segs.split_first() else { return (gaps, false) };
         let first_ns = if rest.is_empty() { ns } else { Ns::Type };
-        let mut cur = self.lookup_noting(module, first, first_ns, &mut gaps);
+        let (mut cur, mut explicit) = self.lookup_noting(module, first, first_ns, &mut gaps);
         if cur.is_empty() && module != self.root {
-            cur = self.lookup_noting(self.root, first, first_ns, &mut gaps);
+            (cur, explicit) = self.lookup_noting(self.root, first, first_ns, &mut gaps);
         }
         for (i, seg) in rest.iter().enumerate() {
+            explicit = false;
             let seg_ns = if i + 1 == rest.len() { ns } else { Ns::Type };
             let mut next = Vec::new();
             for f in cur {
                 if let Found::Def(d) = f {
                     if self.defs.get(d).kind == DefKind::Module {
-                        next.extend(self.lookup_noting(d, seg, seg_ns, &mut gaps));
+                        let (found, ex) = self.lookup_noting(d, seg, seg_ns, &mut gaps);
+                        explicit |= ex;
+                        next.extend(found);
                     } else {
                         next.extend(self.member(d, seg, seg_ns, &mut Vec::new(), 0));
+                        explicit = true;
                     }
                 }
             }
@@ -104,7 +116,7 @@ impl Collected<'_> {
                 break;
             }
         }
-        gaps
+        (gaps, explicit)
     }
 }
 
@@ -128,13 +140,19 @@ pub fn implicit_reexports(r: &ResolvedProgram<'_>) -> Vec<ImplicitReexport> {
     scopes.sort_by_key(|(d, _)| **d);
     for (module, scope) in scopes {
         for u in &scope.uses {
-            let mut gaps = c.implicit_steps(*module, &u.segments, Ns::Type);
+            let (mut gaps, mut explicit) = c.implicit_steps(*module, &u.segments, Ns::Type);
             if u.binding != Binding::Glob {
-                for g in c.implicit_steps(*module, &u.segments, Ns::Value) {
+                let (more, ex) = c.implicit_steps(*module, &u.segments, Ns::Value);
+                explicit |= ex;
+                for g in more {
                     if !gaps.contains(&g) {
                         gaps.push(g);
                     }
                 }
+            }
+            // `use a::name` binds every namespace `name` has: explicit in one of them is explicit
+            if explicit {
+                gaps.retain(|g| u.segments.last() != Some(&g.3));
             }
             push(gaps, *module, u.segments.join("::"), u.location.clone());
         }
@@ -144,7 +162,7 @@ pub fn implicit_reexports(r: &ResolvedProgram<'_>) -> Vec<ImplicitReexport> {
             continue;
         }
         let segs: Vec<String> = call.callee.split("::").map(str::to_string).collect();
-        push(c.implicit_steps(call.module, &segs, Ns::Value), call.module, call.callee.clone(), call.location.clone());
+        push(c.implicit_steps(call.module, &segs, Ns::Value).0, call.module, call.callee.clone(), call.location.clone());
     }
     out
 }

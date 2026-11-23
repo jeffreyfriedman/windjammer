@@ -646,5 +646,5 @@ pub fn path_to_toml_string(path: &Path) -> String {
 
 /// Get the path to the `wj` compiler binary (tip / dev build under test).
 pub fn wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+    PathBuf::from(std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string()))
 }

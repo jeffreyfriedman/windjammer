@@ -18,7 +18,8 @@ pub struct Sandbox {
 }
 
 pub fn real_wj() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+    // a private copy of the binary under test, named at run time (the cargo-built one is shared and gets overwritten)
+    PathBuf::from(std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string()))
 }
 
 pub fn write(p: &Path, s: &str) {

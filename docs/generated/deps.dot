@@ -153,7 +153,7 @@ digraph deps {
   "check" -> "codegen" [label="1"];
   "check" -> "compiler_config" [label="3"];
   "check" -> "debug_env" [label="27"];
-  "check" -> "diagnostics" [label="37"];
+  "check" -> "diagnostics" [label="40"];
   "check" -> "embedded_assets" [label="4"];
   "check" -> "fuzzy_matcher" [label="5"];
   "check" -> "intrinsics" [label="2"];
@@ -176,7 +176,7 @@ digraph deps {
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="48"];
   "cli" -> "cargo_toml" [label="5"];
-  "cli" -> "check" [label="31"];
+  "cli" -> "check" [label="34"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="4"];
   "cli" -> "compiler_config" [label="6"];
@@ -360,7 +360,7 @@ digraph deps {
   "interpreter" -> "module_system" [label="9"];
   "interpreter" -> "package" [label="4"];
   "interpreter" -> "parser" [label="144"];
-  "interpreter" -> "resolve" [label="14"];
+  "interpreter" -> "resolve" [label="15"];
   "interpreter" -> "source_map" [label="17"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
@@ -435,7 +435,7 @@ digraph deps {
   "reduce" -> "lexer" [label="1"];
   "reduce" -> "module_system" [label="1"];
   "resolve" -> "parser" [label="6"];
-  "resolve" -> "source_map" [label="7"];
+  "resolve" -> "source_map" [label="8"];
   "stdlib_scanner" -> "analyzer" [label="17",color=red,fontcolor=red];
   "stdlib_scanner" -> "codegen" [label="9",color=red,fontcolor=red];
   "stdlib_scanner" -> "embedded_assets" [label="8"];

@@ -62,7 +62,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj errors --code` | Show only this diagnostic code (e.g. WJ0010, W0002) | tested |
 | `wj errors --severity` | Show only this severity (error, warning) | tested |
 | `wj explain` | Explain an error code | tested |
-| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms | tested |
+| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms, and add the `pub use` lines a module needs to re-export its child modules' items (ADR-0040) | tested |
 | `wj fix --check` | Do not write; exit non-zero if any file would change | tested |
 | `wj fix --docs` | Also migrate ```windjammer / ```wj code fences in .md files | tested |
 | `wj replay` | Step through a recorded or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035) | tested |

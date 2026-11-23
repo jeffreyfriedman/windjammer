@@ -2901,6 +2901,15 @@
     "tags": []
   },
   {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0194",
+    "signature": "Name is not re-exported",
+    "source": "",
+    "summary": "A path or import names an item through a module that only gets it from one of its child modules; `pub mod child` re-exports nothing, a module re-exports a name ",
+    "tags": []
+  },
+  {
     "kind": "example",
     "module": "",
     "name": "algo_anagram",

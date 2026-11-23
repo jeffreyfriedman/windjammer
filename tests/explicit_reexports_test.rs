@@ -9,14 +9,17 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const WJ: &str = env!("CARGO_BIN_EXE_wj");
+/// The `wj` under test: a private copy named by `CARGO_BIN_EXE_wj` at run time, else the one cargo built.
+fn wj_bin() -> String {
+    std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string())
+}
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/explicit_reexports").join(name)
 }
 
 fn run(dir: &Path, args: &[&str]) -> (bool, String) {
-    let o = Command::new(WJ).args(args).current_dir(dir).output().unwrap();
+    let o = Command::new(wj_bin()).args(args).current_dir(dir).output().unwrap();
     (o.status.success(), format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)))
 }
 
@@ -129,5 +132,37 @@ fn inline_module_has_no_file_to_fix_and_is_left_alone() {
     let (_, text) = run(&tmp, &["fix", "main.wj"]);
     assert!(text.contains("manual"), "{text}");
     assert_eq!(read(&tmp.join("main.wj")), src);
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn glob_import_of_a_module_does_not_reach_a_childs_items() {
+    let tmp = scratch("glob");
+    copy_dir(&fixture("before"), &tmp);
+    std::fs::write(tmp.join("src/main.wj"), "mod adapters\n\nuse adapters::*\n\nfn main() {\n    println(\"${serve()}\")\n}\n").unwrap();
+    std::fs::write(tmp.join("src/adapters/mod.wj"), "pub mod http\npub mod codec\n").unwrap();
+    let (ok, text) = run(&tmp, &["check"]);
+    assert!(!ok && text.contains("`serve` is not re-exported by `adapters`"), "{text}");
+    let (ok, text) = run(&tmp, &["fix", "."]);
+    assert!(ok, "{text}");
+    assert_eq!(read(&tmp.join("src/adapters/mod.wj")), "pub mod http\npub mod codec\npub use http::serve\n");
+    // a deliberate glob in the module is an explicit re-export
+    std::fs::write(tmp.join("src/adapters/mod.wj"), "pub mod http\npub mod codec\npub use http::*\n").unwrap();
+    let (ok, text) = run(&tmp, &["check"]);
+    assert!(ok && !text.contains("WJ0194"), "{text}");
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn a_name_that_is_a_module_and_a_function_is_explicit_as_the_module() {
+    // `use crate::inflate` imports the module `inflate` (which also declares `pub fn inflate`): not an implicit re-export
+    let tmp = scratch("modfn");
+    std::fs::create_dir_all(tmp.join("src")).unwrap();
+    std::fs::write(tmp.join("wj.toml"), "[package]\nname = \"modfn\"\nversion = \"0.1.0\"\n").unwrap();
+    std::fs::write(tmp.join("src/main.wj"), "mod inflate\nmod zip\n\nfn main() {\n    println(\"${zip::run()}\")\n}\n").unwrap();
+    std::fs::write(tmp.join("src/zip.wj"), "use crate::inflate\n\npub fn run() -> int {\n    inflate::inflate(3)\n}\n").unwrap();
+    std::fs::write(tmp.join("src/inflate.wj"), "pub fn inflate(n: int) -> int {\n    n + 1\n}\n").unwrap();
+    let (ok, text) = run(&tmp, &["check"]);
+    assert!(ok && !text.contains("WJ0194"), "{text}");
     let _ = std::fs::remove_dir_all(&tmp);
 }
