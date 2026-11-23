@@ -564,38 +564,6 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Identifier should use `::` for associated/static calls (`tokio::spawn`, `Vec::new`).
     /// Import- and declaration-driven — not a crate/method name list.
-    /// A constant in scope (a module `const`, or one `use` imported such as `std::f32::consts::PI`): a value, so a
-    /// method on it is an instance call (`PI.to_degrees()`), never a path on a type.
-    pub(in crate::codegen::rust) fn identifier_names_constant(&self, name: &str) -> bool {
-        self.imported_const_names.contains(name) || self.module_const_types.contains_key(name)
-    }
-
-    pub(in crate::codegen::rust) fn identifier_is_static_call_root(&self, name: &str) -> bool {
-        if self.identifier_is_local_binding(name) || self.identifier_names_constant(name) {
-            return false;
-        }
-        if name == "std" || name == "Self" || name.contains('.') {
-            return true;
-        }
-        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
-            return true;
-        }
-        self.is_imported_runtime_std_module(name)
-            || self.imported_path_roots.contains(name)
-            || self.inline_module_names.contains(name)
-            || self.module_alias_map.contains_key(name)
-            || self.ffi_module_aliases.contains(name)
-    }
-
-    /// Single-file inline `mod gpu { … }` callees (`gpu::load_shader`) — registry cannot
-    /// prove module origin, so string literal coercion stays conservative (no `.to_string()`).
-    pub(in crate::codegen::rust) fn inline_module_qualified_call(&self, func_name: &str) -> bool {
-        func_name
-            .split("::")
-            .next()
-            .is_some_and(|module| self.inline_module_names.contains(module))
-    }
-
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
         let extern_fn_names = registry.collect_all_extern_names();
         CodeGenerator {

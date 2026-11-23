@@ -827,3 +827,22 @@ fn strip_refs_owned(t: &Type) -> Type {
         other => other.clone(),
     }
 }
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// `let a: P<f32> = P::new(3.0)`: the declared type arguments fix the callee's generics (its result is `P<T>`),
+    /// so a formal of type `T` is the declared type (here `f32`) instead of the generic, and an argument at it takes
+    /// that width rather than the default.
+    pub(super) fn declared_formal_type(sig: &FunctionSignature, expected: &Type, param_idx: usize) -> Option<Type> {
+        let (Some(Type::Parameterized(ret_name, ret_args)), Type::Parameterized(exp_name, exp_args)) = (sig.return_type.as_ref(), expected) else {
+            return None;
+        };
+        if ret_name != exp_name || ret_args.len() != exp_args.len() {
+            return None;
+        }
+        let Some(Type::Generic(g) | Type::Custom(g)) = sig.formal_param_type(param_idx).or_else(|| sig.param_types.get(param_idx)) else {
+            return None;
+        };
+        let pos = ret_args.iter().position(|a| matches!(a, Type::Generic(n) | Type::Custom(n) if n == g))?;
+        Some(exp_args[pos].clone())
+    }
+}
