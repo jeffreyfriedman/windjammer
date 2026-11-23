@@ -39,7 +39,7 @@ fn main() {
     println("{} {} {} {}", strings::is_empty(""), strings::starts_with("abc", "a"), strings::ends_with("abc", "c"), strings::contains("abc", "b"))
 //~@5+142 WARN W0008 `println` with a `{}`
     println("{} {} {} {}", strings::replace("aXa", "X", "-"), strings::len("abc"), strings::char_count("日本"), strings::repeat("ab", 3))
-//~@5+135 WARN W0008 `println` with a `{}`
+//~@5+131 WARN W0008 `println` with a `{}`
     println("{}", strings::byte_at("abc", 1))
 //~@5+41 WARN W0008 `println` with a `{}`
     let path = "/tmp/wj_module_fns_probe.txt"

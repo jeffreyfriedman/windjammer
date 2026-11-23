@@ -1,0 +1,13 @@
+// Several identical statements in one function: every diagnostic is located at ITS OWN expression, the first and the last
+// included, whatever the lines around them hold (a diagnostic's position is the expression's own span, never the token
+// after it, which for one statement is the start of the next).
+fn main() {
+    println("${"ab".chars().next().unwrap().is_alphabetic()}")
+//~@36+6 ERROR W0002 explicit .unwrap() call
+    println("${"ab".chars().next().unwrap().is_alphabetic()}")
+//~@36+6 ERROR W0002 explicit .unwrap() call
+    println("${"ab".chars().next().unwrap().is_alphabetic()}")
+//~@36+6 ERROR W0002 explicit .unwrap() call
+    println("${"ab".chars().next().unwrap().is_alphabetic()}")
+//~@36+6 ERROR W0002 explicit .unwrap() call
+}

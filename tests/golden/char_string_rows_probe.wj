@@ -1,3 +1,4 @@
+// oracle: check
 // Every method of `trait Char` and `trait String` that the portable emitters lower, with a local, a literal and an expression
 // operand. tests/golden/char_string_rows_probe.{js,go}.txt hold the JavaScript and Go this program emitted before the Char and
 // String rows moved into std/rust_core.wji (docs/design/table-driven-std-surface.md, stage 3); the output must stay byte-identical.
@@ -13,43 +14,53 @@ fn probe_char(c: char, d: char, n: u32) {
     println("${'x'.is_alphabetic()}")
     println("${(d).is_alphabetic()}")
     println("${"ab".chars().next().unwrap().is_alphabetic()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.is_alphanumeric()}")
     println("${'x'.is_alphanumeric()}")
     println("${(d).is_alphanumeric()}")
     println("${"ab".chars().next().unwrap().is_alphanumeric()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.is_whitespace()}")
     println("${'x'.is_whitespace()}")
     println("${(d).is_whitespace()}")
     println("${"ab".chars().next().unwrap().is_whitespace()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.is_uppercase()}")
     println("${'x'.is_uppercase()}")
     println("${(d).is_uppercase()}")
     println("${"ab".chars().next().unwrap().is_uppercase()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.is_lowercase()}")
     println("${'x'.is_lowercase()}")
     println("${(d).is_lowercase()}")
     println("${"ab".chars().next().unwrap().is_lowercase()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.is_ascii()}")
     println("${'x'.is_ascii()}")
     println("${(d).is_ascii()}")
     println("${"ab".chars().next().unwrap().is_ascii()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.to_uppercase()}")
     println("${'x'.to_uppercase()}")
     println("${(d).to_uppercase()}")
     println("${"ab".chars().next().unwrap().to_uppercase()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.to_lowercase()}")
     println("${'x'.to_lowercase()}")
     println("${(d).to_lowercase()}")
     println("${"ab".chars().next().unwrap().to_lowercase()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.to_string()}")
     println("${'x'.to_string()}")
     println("${(d).to_string()}")
     println("${"ab".chars().next().unwrap().to_string()}")
+//~@36+6 ERROR W0002 explicit
     println("${c.to_digit(10).unwrap_or(n)}")
     println("${c.to_digit(n).unwrap_or(n)}")
     println("${'7'.to_digit(10).unwrap_or(n)}")
     println("${d.to_digit(16).unwrap_or(n)}")
     println("${"7a".chars().next().unwrap().to_digit(n).unwrap_or(n)}")
+//~@36+6 ERROR W0002 explicit
 }
 
 fn probe_str(s: string, t: string, c: char, n: usize) {
@@ -110,7 +121,9 @@ fn probe_str(s: string, t: string, c: char, n: usize) {
     println("${"ab".repeat(3)}")
     println("${s.to_string()}")
     println("${"lit".to_string()}")
+//~@22+9 ERROR W0006 string literal is forbidden
     println("${s.clone()}")
+//~@18+5 WARN W0005 explicit
     println("${s.parse::<i32>().unwrap_or(0)}")
     println("${s.parse::<i8>().unwrap_or(0)}")
     println("${s.parse::<u8>().unwrap_or(0)}")
@@ -131,6 +144,7 @@ fn probe_str(s: string, t: string, c: char, n: usize) {
     m.clear()
     println("${m}")
     let mut h = Holder { name: s.clone(), letter: c }
+//~@34+5 WARN W0005 explicit
     h.name.push(h.letter)
     h.name.push('?')
     println("${h.name}")

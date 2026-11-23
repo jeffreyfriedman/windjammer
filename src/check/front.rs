@@ -170,7 +170,7 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     super::tasks::unwaited(p, &ix, out);
     super::tasks::captures(p, &ix, out);
     crate::debug_env::phase("check-forbidden");
-    let mut leak = crate::linter::rust_leakage::RustLeakageLinter::new(&p.file).with_receiver_spans(p.parser.span_snapshot()).with_source(&p.text);
+    let mut leak = crate::linter::rust_leakage::RustLeakageLinter::new(&p.file).with_spans(p.parser.span_snapshot()).with_source(&p.text);
     leak.lint_program(&p.program);
     for d in leak.diagnostics() {
         if let Some(d) = convert::lint(d, &ix) {

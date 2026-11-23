@@ -1,3 +1,4 @@
+// oracle: check
 // Every method of the lists (Vec) and iterators the portable emitters lower, on every element kind that changes the text
 // (integer, float, string, bool, struct), and `collect` / `sum` / `product` into every target type.
 // tests/golden/vec_iter_rows_probe.{js,go}.txt hold the JavaScript and Go this program emitted before the Vec and Iterator rows
@@ -67,8 +68,11 @@ fn probe_list_kinds(s: string, f: f64, b: bool) {
     let pts: Vec<Pt> = [Pt { x: 1, y: 2 }, Pt { x: 3, y: 4 }]
     println("${pts.len()}")
     println("${pts.first().unwrap().x}")
+//~@28+6 ERROR W0002 explicit
     println("${pts.iter().map(|p| p.x + p.y).sum()}")
+//~@20+4 ERROR W0003 explicit
     let more: Vec<Pt> = pts.iter().map(|p| Pt { x: p.x + 1, y: p.y }).collect()
+//~@29+4 ERROR W0003 explicit
     println("${more.len()}")
     let mut grid: Vec<Vec<i32>> = Vec::new()
     grid.push([1, 2])
@@ -76,61 +80,97 @@ fn probe_list_kinds(s: string, f: f64, b: bool) {
     println("${grid.len()}")
     println("${grid.contains([1, 2])}")
     let copy = pts.iter().cloned().collect::<Vec<Pt>>()
+//~@20+4 ERROR W0003 explicit
     println("${copy.len()}")
 }
 
 fn probe_iter(n: i32, s: string) {
     let mut xs: Vec<i32> = [n, n + 1, n + 2, n + 3, n + 4]
     let doubled: Vec<i32> = xs.iter().map(|v| v * 2).collect()
+//~@32+4 ERROR W0003 explicit
     println("${doubled.len()}")
     let evens: Vec<i32> = xs.iter().filter(|v| v % 2 == 0).collect()
+//~@30+4 ERROR W0003 explicit
     println("${evens.len()}")
     xs.iter().for_each(|v| println("${v}"))
+//~@8+4 ERROR W0003 explicit
     let fm: Vec<i32> = xs.iter().filter_map(|v| if v > 2 { Some(v) } else { None }).collect()
+//~@27+4 ERROR W0003 explicit
     println("${fm.len()}")
     let flat: Vec<i32> = xs.iter().flat_map(|v| [v, v]).collect()
+//~@29+4 ERROR W0003 explicit
     println("${flat.len()}")
     for (i, v) in xs.iter().enumerate() {
+//~@22+4 ERROR W0003 explicit
         println("${i} ${v}")
     }
     let ys: Vec<i32> = [10, 20, 30]
     for (a, b) in xs.iter().zip(ys.iter()) {
+//~@22+4 ERROR W0003 explicit
+//~@36+4 ERROR W0003 explicit
         println("${a} ${b}")
     }
     let rev: Vec<i32> = xs.iter().rev().collect()
+//~@28+4 ERROR W0003 explicit
     println("${rev.len()}")
     let t: Vec<i32> = xs.iter().take(2).collect()
+//~@26+4 ERROR W0003 explicit
     let k: Vec<i32> = xs.iter().skip(2).collect()
+//~@26+4 ERROR W0003 explicit
     let st: Vec<i32> = xs.iter().step_by(2).collect()
+//~@27+4 ERROR W0003 explicit
     let tw: Vec<i32> = xs.iter().take_while(|v| v < 3).collect()
+//~@27+4 ERROR W0003 explicit
     let sw: Vec<i32> = xs.iter().skip_while(|v| v < 3).collect()
+//~@27+4 ERROR W0003 explicit
     let ch: Vec<i32> = xs.iter().chain(ys.iter()).collect()
+//~@27+4 ERROR W0003 explicit
+//~@43+4 ERROR W0003 explicit
     println("${t.len()} ${k.len()} ${st.len()} ${tw.len()} ${sw.len()} ${ch.len()}")
     let total: i32 = xs.iter().sum()
+//~@25+4 ERROR W0003 explicit
     let prod: i32 = xs.iter().product()
+//~@24+4 ERROR W0003 explicit
     let t64: i64 = xs.iter().map(|v| v as i64).sum()
+//~@23+4 ERROR W0003 explicit
     let p8: u8 = [2, 3].iter().product()
+//~@25+4 ERROR W0003 explicit
     println("${total} ${prod} ${t64} ${p8}")
     let fl: Vec<f64> = [1.5, 2.5]
     let fsum: f64 = fl.iter().sum()
+//~@24+4 ERROR W0003 explicit
     let fprod: f64 = fl.iter().product()
+//~@25+4 ERROR W0003 explicit
     println("${fsum} ${fprod}")
     let folded = xs.iter().fold(0, |acc, v| acc + v)
+//~@21+4 ERROR W0003 explicit
     println("${folded}")
     let cnt: int = xs.iter().filter(|v| v > 2).count()
+//~@23+4 ERROR W0003 explicit
     let cnt32: i32 = xs.iter().count()
+//~@25+4 ERROR W0003 explicit
     println("${cnt} ${cnt32}")
     println("${xs.iter().any(|v| v > 3)}")
+//~@19+4 ERROR W0003 explicit
     println("${xs.iter().all(|v| v > 3)}")
+//~@19+4 ERROR W0003 explicit
     println("${xs.iter().min().unwrap_or(0)}")
+//~@19+4 ERROR W0003 explicit
     println("${xs.iter().max().unwrap_or(0)}")
+//~@19+4 ERROR W0003 explicit
     println("${xs.iter().find(|v| v > 2).unwrap_or(0)}")
+//~@19+4 ERROR W0003 explicit
     println("${xs.iter().position(|v| v > 2).unwrap_or(0)}")
+//~@19+4 ERROR W0003 explicit
     println("${xs.iter().last().unwrap_or(0)}")
+//~@19+4 ERROR W0003 explicit
     println("${xs.iter().nth(1).unwrap_or(0)}")
+//~@19+4 ERROR W0003 explicit
     let mut it = xs.iter()
+//~@21+4 ERROR W0003 explicit
     println("${it.next().unwrap_or(0)}")
     for v in xs.iter_mut() {
+//~@17+8 ERROR W0003 explicit
         println("${v}")
     }
     for v in xs.into_iter() {
@@ -144,6 +184,7 @@ fn probe_iter(n: i32, s: string) {
     println("${incl}")
     let letters: Vec<string> = [s, "x"]
     let joined: string = letters.iter().map(|w| w.to_uppercase()).collect::<Vec<string>>().join("+")
+//~@34+4 ERROR W0003 explicit
     println("${joined}")
     // direct iterator methods on a list (W0003)
     let direct: Vec<i32> = xs.map(|v| v + 1).collect()
@@ -153,25 +194,33 @@ fn probe_iter(n: i32, s: string) {
 fn probe_collect(s: string) {
     let xs: Vec<i32> = [3, 1, 3, 2]
     let set: HashSet<i32> = xs.iter().cloned().collect()
+//~@32+4 ERROR W0003 explicit
     println("${set.len()}")
     let bset: BTreeSet<i32> = xs.iter().cloned().collect()
+//~@34+4 ERROR W0003 explicit
     println("${bset.len()}")
     let pairs: Vec<(string, i32)> = [("a", 1), ("b", 2)]
     let map: HashMap<string, i32> = pairs.iter().cloned().collect()
+//~@43+4 ERROR W0003 explicit
     println("${map.len()}")
     let bmap: BTreeMap<string, i32> = pairs.iter().cloned().collect()
+//~@45+4 ERROR W0003 explicit
     println("${bmap.len()}")
     let text: string = s.chars().collect()
     println("${text}")
     let parts: Vec<string> = [s, "y"]
     let text2: string = parts.iter().cloned().collect()
+//~@31+4 ERROR W0003 explicit
     println("${text2}")
     let strs: Vec<string> = ["1", "2", "x"]
     let parsed: Result<Vec<i32>, string> = strs.iter().map(|v| v.parse::<i32>()).collect()
+//~@49+4 ERROR W0003 explicit
     println("${parsed.is_err()}")
     let somes: Option<Vec<i32>> = xs.iter().map(|v| if v > 0 { Some(v) } else { None }).collect()
+//~@38+4 ERROR W0003 explicit
     println("${somes.is_some()}")
     let back = xs.iter().copied().collect::<Vec<i32>>()
+//~@19+4 ERROR W0003 explicit
     println("${back.len()}")
     println("${3.to_string()}")
     println("${2.5.to_string()}")
@@ -179,7 +228,9 @@ fn probe_collect(s: string) {
     println("${s.to_string()}")
     println("${'c'.to_string()}")
     println("${Some(4).unwrap().to_string()}")
+//~@24+6 ERROR W0002 explicit
     println("${xs.iter().max().unwrap_or(0).to_string()}")
+//~@19+4 ERROR W0003 explicit
 }
 
 fn main() {

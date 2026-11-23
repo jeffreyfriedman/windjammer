@@ -1,3 +1,4 @@
+// oracle: check
 pub struct Conn {
     pub id: int,
     pub user: string,
@@ -16,15 +17,18 @@ pub struct Hub {
 impl Hub {
     pub fn receive(self, conn: Conn, kind: string, raw: string) -> Frame {
         let mut me = conn.clone()
+//~@27+5 WARN W0005 explicit
         me.id = me.id + 0
         if me.user == "" {
             return Frame { room: "", n: -1 }
         }
         let room = raw.clone()
+//~@24+5 WARN W0005 explicit
         if kind == "history" {
             return self.replay(me, room)
         }
         Frame { room: me.user.clone(), n: 0 }
+//~@31+5 WARN W0005 explicit
     }
 
     fn replay(self, me: Conn, room: string) -> Frame {

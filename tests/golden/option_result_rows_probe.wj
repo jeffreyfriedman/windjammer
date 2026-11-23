@@ -1,3 +1,4 @@
+// oracle: check
 // Every method of `trait Option` and `trait Result` that the portable emitters lower, on locals, literals, expressions and
 // closures, with the error types the debug text of `unwrap` / `expect` depends on (string, integer, list, tuple).
 // tests/golden/option_result_rows_probe.{js,go}.txt hold the JavaScript and Go this program emitted before the Option and Result
@@ -10,9 +11,13 @@ fn probe_option(o: Option<i32>, p: Option<string>, d: i32, s: string) {
     println("${p.is_some()}")
     println("${Some(4).is_some()}")
     println("${o.unwrap()}")
+//~@18+6 ERROR W0002 explicit
     println("${p.unwrap()}")
+//~@18+6 ERROR W0002 explicit
     println("${o.expect("o is present")}")
+//~@18+6 ERROR W0002 explicit
     println("${p.expect(s)}")
+//~@18+6 ERROR W0002 explicit
     println("${o.unwrap_or(d)}")
     println("${o.unwrap_or(9)}")
     println("${p.unwrap_or(s)}")
@@ -49,13 +54,21 @@ fn probe_result(a: Result<i32, string>, b: Result<string, i32>, c: Result<i32, V
     println("${c.is_err()}")
     println("${e.is_ok()}")
     println("${a.unwrap()}")
+//~@18+6 ERROR W0002 explicit
     println("${b.unwrap()}")
+//~@18+6 ERROR W0002 explicit
     println("${c.unwrap()}")
+//~@18+6 ERROR W0002 explicit
     println("${e.unwrap()}")
+//~@18+6 ERROR W0002 explicit
     println("${a.expect("a is ok")}")
+//~@18+6 ERROR W0002 explicit
     println("${b.expect(s)}")
+//~@18+6 ERROR W0002 explicit
     println("${c.expect("c is ok")}")
+//~@18+6 ERROR W0002 explicit
     println("${e.expect("e is ok")}")
+//~@18+6 ERROR W0002 explicit
     println("${a.unwrap_err()}")
     println("${b.unwrap_err()}")
     println("${a.unwrap_or(d)}")
