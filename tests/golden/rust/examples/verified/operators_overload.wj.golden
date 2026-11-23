@@ -17,6 +17,8 @@ struct V2 {
 
 
 impl Add for V2 {
+    type Output = V2;
+
 #[inline]
 fn add(self, o: V2) -> V2 {
         V2 { x: self.x + o.x, y: self.y + o.y }
@@ -24,6 +26,8 @@ fn add(self, o: V2) -> V2 {
 }
 
 impl Mul<i64> for V2 {
+    type Output = V2;
+
 #[inline]
 fn mul(self, k: i64) -> V2 {
         V2 { x: self.x * k, y: self.y * k }
