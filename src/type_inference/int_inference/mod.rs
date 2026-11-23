@@ -87,6 +87,8 @@ pub struct IntInference {
     const_types: crate::type_inference::const_table::ConstTable,
     /// File being collected (const lookups resolve to this file's own declarations first).
     current_file_name: String,
+    /// Source root and shared cache root: where imported modules' cached metadata (their constants) is read.
+    source_root: Option<(PathBuf, PathBuf)>,
 }
 
 impl Default for IntInference {
@@ -120,6 +122,7 @@ impl IntInference {
             current_impl_type: None,
             const_types: Default::default(),
             current_file_name: String::new(),
+            source_root: None,
         };
 
         // TDD FIX: Register stdlib method signatures (Vec, HashMap, etc.)
@@ -206,6 +209,10 @@ impl IntInference {
         self.external_crate_metadata_paths = paths.clone();
     }
 
+    pub fn set_source_root(&mut self, path: &std::path::Path, cache_root: &std::path::Path) {
+        self.source_root = Some((path.to_path_buf(), cache_root.to_path_buf()));
+    }
+
     /// Load function signatures from external `metadata.json` when the program imports
     /// that crate (`use prebuilt_i32_lib::double`). Signature-driven — no name heuristics.
     fn load_imported_external_function_signatures<'ast>(&mut self, program: &Program<'ast>) {
@@ -257,6 +264,8 @@ impl IntInference {
         }
 
         self.load_imported_external_function_signatures(program);
+        let root = self.source_root.clone();
+        self.const_types.load_imported(program, root.as_ref());
         self.register_own_functions(program);
         self.register_use_imports_from_items(&program.items);
     }
