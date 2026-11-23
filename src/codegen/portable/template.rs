@@ -5,7 +5,8 @@
 //! {self}       the receiver's value          {&self}     the receiver as a place (assignable / addressable)
 //! {name}       an argument, by the parameter name the declaration gives it
 //! {name:f64}   the same, with a modifier (`Modifier`)
-//! {T.max}      a fact (`Fact`) about the receiver's type `T`; `{R.go}` about the result `R`
+//! {T.max}      a fact (`Fact`) about the receiver's type `T`; `{R.go}` about the result `R`, `{O.go}` about the `Ok`
+//!              type of a `Result` result (`parse::<i32>()`)
 //! {{  }}       a literal brace
 //! ```
 //!
@@ -16,20 +17,35 @@ use super::ir::PResult;
 use super::ty::{IntKind, Ty};
 use crate::stdlib_surface::lowering::{Fact, Guard, Modifier};
 
-/// The guards that are about the receiver's own type (`when = "t_wide"`), answered from its type; the guards about the
-/// receiver's element are the emitter's (they need its notion of a primitive).
-pub fn receiver_guard(guard: Guard, recv: &Ty) -> bool {
+/// The guards that are about the call's own types, answered from them: the receiver's integer type (`when = "t_wide"`) and
+/// the `Ok` type of a `Result` result (`when = "ok_int"`); the guards about the receiver's element are the emitter's
+/// (they need its notion of a primitive).
+pub fn type_guard(guard: Guard, recv: &Ty, result: &Ty) -> bool {
+    let ok = || match result {
+        Ty::Result(ok, _) => Some(&**ok),
+        _ => None,
+    };
     match (guard, recv) {
         (Guard::RecvWide, Ty::Int(k)) => k.is_wide(),
         (Guard::RecvI32, Ty::Int(k)) => *k == IntKind::I32,
         (Guard::RecvU32, Ty::Int(k)) => *k == IntKind::U32,
+        (Guard::OkInt, _) => matches!(ok(), Some(Ty::Int(_))),
+        (Guard::OkF32, _) => matches!(ok(), Some(Ty::F32)),
+        (Guard::OkF64, _) => matches!(ok(), Some(Ty::F64)),
+        (Guard::OkBool, _) => matches!(ok(), Some(Ty::Bool)),
         _ => false,
     }
 }
 
 /// The integer type a fact is asked about: the receiver's or the result's, when it is an integer.
 pub fn int_kind_of<'a>(of: TypeRef, receiver: &'a Ty, result: &'a Ty) -> Option<IntKind> {
-    match if of == TypeRef::Receiver { receiver } else { result } {
+    let ty = match (of, result) {
+        (TypeRef::Receiver, _) => receiver,
+        (TypeRef::Result, _) => result,
+        (TypeRef::Ok, Ty::Result(ok, _)) => &**ok,
+        (TypeRef::Ok, _) => return None,
+    };
+    match ty {
         Ty::Int(k) => Some(*k),
         _ => None,
     }
@@ -51,6 +67,8 @@ pub enum TypeRef {
     Receiver,
     /// The call's result type.
     Result,
+    /// The `Ok` type of a `Result` result.
+    Ok,
 }
 
 /// One `{...}` of a template.
@@ -172,7 +190,8 @@ fn parse_hole(body: &str) -> Result<Hole, String> {
         let of = match ty.chars().collect::<Vec<char>>().as_slice() {
             ['T'] => TypeRef::Receiver,
             ['R'] => TypeRef::Result,
-            _ => return Err(format!("unknown type `{ty}` in `{{{body}}}` (T or R)")),
+            ['O'] => TypeRef::Ok,
+            _ => return Err(format!("unknown type `{ty}` in `{{{body}}}` (T, R or O)")),
         };
         let fact = Fact::ALL.into_iter().find(|f| f.name() == fact).ok_or_else(|| format!("unknown fact `{fact}` in `{{{body}}}`"))?;
         return Ok(Hole::Fact(of, fact));
@@ -263,14 +282,30 @@ mod tests {
     }
 
     #[test]
-    fn receiver_guards_read_the_receivers_type() {
-        assert!(receiver_guard(Guard::RecvWide, &Ty::Int(IntKind::Usize)));
-        assert!(!receiver_guard(Guard::RecvWide, &Ty::Int(IntKind::U32)));
-        assert!(receiver_guard(Guard::RecvI32, &Ty::Int(IntKind::I32)));
-        assert!(!receiver_guard(Guard::RecvI32, &Ty::Int(IntKind::U32)));
-        assert!(receiver_guard(Guard::RecvU32, &Ty::Int(IntKind::U32)));
-        assert!(!receiver_guard(Guard::RecvU32, &Ty::F32));
-        assert!(!receiver_guard(Guard::ElemPrim, &Ty::Int(IntKind::I32)));
+    fn type_guards_read_the_receivers_and_the_results_types() {
+        let none = Ty::Unit;
+        assert!(type_guard(Guard::RecvWide, &Ty::Int(IntKind::Usize), &none));
+        assert!(!type_guard(Guard::RecvWide, &Ty::Int(IntKind::U32), &none));
+        assert!(type_guard(Guard::RecvI32, &Ty::Int(IntKind::I32), &none));
+        assert!(!type_guard(Guard::RecvI32, &Ty::Int(IntKind::U32), &none));
+        assert!(type_guard(Guard::RecvU32, &Ty::Int(IntKind::U32), &none));
+        assert!(!type_guard(Guard::RecvU32, &Ty::F32, &none));
+        assert!(!type_guard(Guard::ElemPrim, &Ty::Int(IntKind::I32), &none));
+        let parsed = |ok: Ty| Ty::Result(Box::new(ok), Box::new(Ty::Str));
+        assert!(type_guard(Guard::OkInt, &Ty::Str, &parsed(Ty::Int(IntKind::U8))));
+        assert!(!type_guard(Guard::OkInt, &Ty::Str, &parsed(Ty::F64)));
+        assert!(type_guard(Guard::OkF32, &Ty::Str, &parsed(Ty::F32)));
+        assert!(type_guard(Guard::OkF64, &Ty::Str, &parsed(Ty::F64)));
+        assert!(type_guard(Guard::OkBool, &Ty::Str, &parsed(Ty::Bool)));
+        assert!(!type_guard(Guard::OkBool, &Ty::Str, &Ty::Bool));
+    }
+
+    #[test]
+    fn the_ok_type_of_a_result_is_asked_by_o() {
+        let parsed = Ty::Result(Box::new(Ty::Int(IntKind::U16)), Box::new(Ty::Str));
+        assert_eq!(int_kind_of(TypeRef::Ok, &Ty::Str, &parsed), Some(IntKind::U16));
+        assert_eq!(int_kind_of(TypeRef::Ok, &Ty::Str, &Ty::Int(IntKind::U16)), None);
+        assert_eq!(Template::parse("{O.go}").unwrap().holes().next(), Some(&Hole::Fact(TypeRef::Ok, Fact::Go)));
     }
 
     #[test]

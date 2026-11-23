@@ -110,6 +110,7 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         let recv = match ty.as_str() {
             "Integer" => checked_on.clone().unwrap_or_else(|| "i64".to_string()),
             "Float" => "f64".to_string(),
+            "Char" => "char".to_string(),
             // the width traits (`F32::to_bits`) are checked on the type they are named after
             "F32" => "f32".to_string(),
             "F64" => "f64".to_string(),
@@ -133,6 +134,12 @@ fn every_core_surface_entry_typechecks_in_rustc() {
             r => (r.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into()), ""),
         };
         let ret_ty = if method == "parse" { "Result<i64, _>".to_string() } else { ret_ty };
+        // `@rustc(tail = ".collect::<String>()")`: the adapter that turns Rust's result into the declared one (a `char`'s
+        // `to_uppercase` is an iterator of characters, lowered to the string they spell)
+        let tail = match surface.decorators(ty, method).iter().find(|d| d.name == "rustc").and_then(|d| d.args.iter().find(|(k, _)| k == "tail")) {
+            Some((_, t)) => t.as_str(),
+            None => tail,
+        };
         // `x[a..b]` is parsed as `x.slice(a, b)`: checked as the range index (the result is a slice of the receiver).
         let line = if method == "slice" {
             format!("fn e{i}(mut r: {recv}) {{ let _x = &r[{}..{}]; }}\n", args[0], args[1])

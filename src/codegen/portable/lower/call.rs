@@ -423,7 +423,7 @@ impl<'e> Lowerer<'e> {
         };
         let mut lowered: Vec<PExpr> = Vec::new();
         for (i, (_, a)) in args.iter().enumerate() {
-            let w = builtins::arg_want(&recv.ty, method, i, &lowered);
+            let w = builtins::arg_want(&self.env.surface, &recv.ty, method, i, &lowered);
             let v = self.expr(a, w.as_ref())?;
             if let Some(w) = &w {
                 self.constrain(w, &v.ty);

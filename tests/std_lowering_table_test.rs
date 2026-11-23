@@ -24,7 +24,7 @@ use windjammer::typing::core_surface::CoreSurface;
 
 /// The types whose methods are migrated: every declaration of these traits needs a rule per target. A stage adds its
 /// types here (and to `CoreType`); the list never shrinks.
-const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer];
+const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String];
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -74,6 +74,11 @@ fn row_problems(core: &CoreSurface, table: &LoweringTable) -> Vec<String> {
                 bad.push(format!("{id}: no row"));
                 continue;
             };
+            // an `@internal` row is a form the compiler lowers before any emitter sees it (`clone` is a copy, `x[a..b]` an
+            // index): it has no rule and no example to hold
+            if row.internal.is_some() {
+                continue;
+            }
             for target in Target::ALL {
                 let rules = row.rules(target);
                 if rules.is_empty() {
@@ -151,6 +156,12 @@ fn the_row_checker_sees_a_planted_mistake() {
     assert!(plant("@example(src = \"(16.0).sqrt()\", expect = \"4\")", "").iter().any(|p| p.contains("no `@example`")));
     // the Integer rows are held to the same rules
     assert!(plant("@go(emit = \"wjAbs({self})\")", "").iter().any(|p| p.contains("Integer::abs") && p.contains("no `@go` rule")));
+    // the Char and String rows too
+    assert!(plant("@go(emit = \"wjTrim({self})\")", "").iter().any(|p| p.contains("String::trim") && p.contains("no `@go` rule")));
+    assert!(plant("@go(emit = \"wjIsWhitespace({self})\")", "").iter().any(|p| p.contains("Char::is_whitespace") && p.contains("no `@go` rule")));
+    assert!(plant("{self}.repeat({n:num})", "{self}.repeat({count:num})").iter().any(|p| p.contains("{count}")));
+    assert!(plant("{O.lo}", "{O.low}").iter().any(|p| p.contains("unknown fact")));
+    assert!(plant("@js(unsupported = \"parse reads an integer, a float or a bool\")", "@js(emit = \"$parseBool({self})\", when = \"ok_bool\")").iter().any(|p| p.contains("String::parse") && p.contains("guarded")));
     assert!(plant("$min2({self}, {other})", "$min2({self}, {othr})").iter().any(|p| p.contains("{othr}")));
     assert!(plant("@js(emit = \"$max2({self}, {other})\")", "@js(emit = \"$max2({self}, {other})\", when = \"t_wide\")").iter().any(|p| p.contains("Integer::max") && p.contains("guarded")));
     assert!(plant("@js(emit = \"$sat({T.min}, {T.max}, {self} + {rhs})\")", "@js(unsupported = \"\")").iter().any(|p| p.contains("empty `unsupported` reason")));
@@ -166,6 +177,8 @@ fn kind_of(ty: CoreType) -> Kind {
     match ty {
         CoreType::Float => Kind::Float,
         CoreType::Integer => Kind::Int,
+        CoreType::Char => Kind::Char,
+        CoreType::String => Kind::Str,
     }
 }
 
@@ -180,6 +193,60 @@ const REGISTERED_WITHOUT_ROW: &[(CoreType, &[&str])] = &[
         CoreType::Integer,
         &["is_ascii_alphabetic", "is_ascii_digit", "is_ascii_whitespace", "next_power_of_two", "overflowing_add", "overflowing_mul", "to_ascii_lowercase", "to_ascii_uppercase", "to_be_bytes", "to_le_bytes"],
     ),
+    // Char: the spellings ADR-0039 removed (R060-R063, R057) have no declaration; `is_control` is a canonical row that has no lowering yet.
+    (
+        CoreType::Char,
+        &[
+            "is_ascii_alphabetic",
+            "is_ascii_alphanumeric",
+            "is_ascii_digit",
+            "is_ascii_hexdigit",
+            "is_ascii_lowercase",
+            "is_ascii_punctuation",
+            "is_ascii_uppercase",
+            "is_ascii_whitespace",
+            "is_control",
+            "is_numeric",
+            "len_utf8",
+            "to_ascii_lowercase",
+            "to_ascii_uppercase",
+        ],
+    ),
+    // String: the removed spellings (R050-R057) have no declaration; the others are canonical rows without a lowering yet.
+    (
+        CoreType::String,
+        &[
+            "as_bytes",
+            "as_str",
+            "char_count",
+            "eq_ignore_ascii_case",
+            "get",
+            "insert",
+            "insert_str",
+            "into_bytes",
+            "into_string",
+            "is_char_boundary",
+            "matches",
+            "remove",
+            "replacen",
+            "reserve",
+            "rsplit",
+            "rsplit_once",
+            "split_ascii_whitespace",
+            "split_once",
+            "split_terminator",
+            "splitn",
+            "strip_prefix",
+            "strip_suffix",
+            "substring",
+            "to_ascii_lowercase",
+            "to_ascii_uppercase",
+            "to_owned",
+            "trim_end_matches",
+            "trim_matches",
+            "trim_start_matches",
+        ],
+    ),
 ];
 
 #[test]
@@ -192,6 +259,8 @@ fn every_row_is_registered_in_the_interpreter_with_the_same_mutability() {
         for (_, row) in table.rows().filter(|(t, _)| t == ty) {
             let id = format!("{}::{}", ty.trait_name(), row.name);
             match registered.iter().find(|(n, _)| *n == row.name) {
+                // an `@internal` row is a form the compiler lowers itself (`clone` is a copy): nothing to register
+                None if row.internal.is_some() => {}
                 None => bad.push(format!("{id}: declared, but the interpreter registers no {} method of that name", ty.noun())),
                 Some((_, mutating)) if *mutating != row.changes_receiver => {
                     bad.push(format!("{id}: declared {}, registered {}", if row.changes_receiver { "`&mut self`" } else { "`self`" }, if *mutating { "mutating" } else { "pure" }))
@@ -291,7 +360,7 @@ fn row_templates(table: &LoweringTable, target: Target) -> Vec<(String, String)>
         .rows()
         .flat_map(|(ty, row)| {
             row.rules(target).iter().filter_map(move |r| match r {
-                Rule::Emit { template, .. } => Some((format!("{}::{}", ty.trait_name(), row.name), template.clone())),
+                Rule::Emit { template, .. } | Rule::Assign(template) => Some((format!("{}::{}", ty.trait_name(), row.name), template.clone())),
                 _ => None,
             })
         })
@@ -397,13 +466,13 @@ fn variants(source: &str, name: &str) -> Vec<String> {
 /// A new variant of one of these needs this test edited with the reason: the vocabulary names type shapes and
 /// emitter capabilities, never std methods (section 2.3 of the design).
 const VOCABULARY: &[(&str, usize, &str)] = &[
-    ("Guard", 5, "elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it"),
+    ("Guard", 9, "ok_int, ok_f32, ok_f64, ok_bool: the `Ok` type of a `Result` result (`parse::<i32>()` picks its parser by it); elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it"),
     ("Hook", 1, "display: the type-directed `to_string` emitter; `clone` joins with the Vec stage"),
-    ("Modifier", 1, "f64: Go's operand widening for Float<T>; `str` and `num` join with the String / Integer stages"),
-    ("Fact", 11, "bits signed wide min max zero one chk go: the numeric helpers' facts of the Integer rows; wrap_open, wrap_close: the text that brackets an expression wrapped into T's range (asIntN(64, ..), `(.. | 0)`, `((.. << 24) >> 24)`: a template is linear, so the bracket is two facts)"),
-    ("Rule", 3, "Emit, Hook, Unsupported; `Assign` joins with the String stage"),
+    ("Modifier", 3, "f64: Go's operand widening for Float<T>; str: a `char` operand where Go wants a string (`string(rune(c))`); num: an integer JavaScript wants as a Number (`Number(n)`, a BigInt is not a length)"),
+    ("Fact", 13, "lo, hi: the bounds as BigInt literals (`-128n`: what `$parseInt` compares in, whatever the width); bits signed wide min max zero one chk go: the numeric helpers' facts of the Integer rows; wrap_open, wrap_close: the text that brackets an expression wrapped into T's range (asIntN(64, ..), `(.. | 0)`, `((.. << 24) >> 24)`: a template is linear, so the bracket is two facts)"),
+    ("Rule", 4, "Emit, Assign, Hook, Unsupported; `Assign` is JavaScript's place update (`(s = s + c, undefined)` for a string's `push`)"),
     ("Target", 2, "Js, Go; TypeScript uses the JavaScript rules; `Rust` joins when the Rust backend reads the table"),
-    ("CoreType", 2, "one per migrated std type (a stage adds its types): Float, Integer"),
+    ("CoreType", 4, "one per migrated std type (a stage adds its types): Float, Integer, Char, String"),
     ("Widen", 1, "F64"),
 ];
 

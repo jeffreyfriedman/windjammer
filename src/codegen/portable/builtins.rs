@@ -33,7 +33,7 @@ fn iter_elem(recv: &Ty) -> Option<Ty> {
     }
 }
 
-pub fn arg_want(recv: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
+pub fn arg_want(surface: &StdSurface, recv: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
     if let Some(t) = super::ordering::arg_want(recv, iter_elem(recv).as_ref(), name, i) {
         return Some(t);
     }
@@ -43,7 +43,7 @@ pub fn arg_want(recv: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
     match recv {
         Ty::Vec(t) => vec_arg_want(t, name, i, prev),
         Ty::Iter(_) | Ty::Range(_) => iter_arg_want(&iter_elem(recv)?, name, i, prev),
-        Ty::Str => str_arg_want(name, i),
+        Ty::Str => surface.declared_arg(recv, name, i),
         Ty::Map(k, v) => match (name, i) {
             ("insert", 0) | ("get", 0) | ("contains_key", 0) | ("remove", 0) | ("entry", 0) | ("get_mut", 0) => Some((**k).clone()),
             ("insert", 1) => Some((**v).clone()),
@@ -78,15 +78,6 @@ fn iter_arg_want(e: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
         ("take", 0) | ("skip", 0) | ("step_by", 0) | ("nth", 0) => Some(Ty::usize()),
         ("zip", 0) | ("chain", 0) => Some(Ty::Unknown),
         ("fold", 1) => prev.first().map(|init| fnty(vec![init.ty.clone(), e.clone()], init.ty.clone())),
-        _ => None,
-    }
-}
-
-fn str_arg_want(name: &str, i: usize) -> Option<Ty> {
-    match (name, i) {
-        ("push", 0) => Some(Ty::Char),
-        ("push_str", 0) | ("replace", _) | ("starts_with", 0) | ("ends_with", 0) | ("contains", 0) | ("find", 0) | ("split", 0) | ("trim_matches", 0) => Some(Ty::Str),
-        ("repeat", 0) | ("substring", _) | ("truncate", 0) | ("remove", 0) | ("char_at", 0) => Some(Ty::usize()),
         _ => None,
     }
 }
@@ -137,13 +128,11 @@ pub fn ret_ty(surface: &StdSurface, recv: &Ty, name: &str, args: &[PExpr], want:
     match recv {
         Ty::Vec(t) => vec_ret(t, name, args, want),
         Ty::Iter(_) | Ty::Range(_) => iter_ret(&iter_elem(recv)?, name, args, want),
-        Ty::Str => str_ret(name, want),
         Ty::Map(k, v) => map_ret(k, v, name),
         Ty::Set(t) => set_ret(t, name),
         Ty::Option(t) => option_ret(t, name, args),
         Ty::Result(t, e) => result_ret(t, e, name, args),
-        Ty::Int(_) | Ty::F64 | Ty::F32 => surface.declared_ret(recv, name),
-        Ty::Char => char_ret(name),
+        Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Char | Ty::Str => surface.declared_ret(recv, name, want),
         Ty::Bool | Ty::Tuple(_) | Ty::Adt(..) | Ty::Param(_) => None,
         _ => None,
     }
@@ -207,30 +196,6 @@ fn iter_ret(e: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty>
     })
 }
 
-fn str_ret(name: &str, want: Option<&Ty>) -> Option<Ty> {
-    Some(match name {
-        "len" => Ty::usize(),
-        "is_empty" | "contains" | "starts_with" | "ends_with" | "is_numeric" => Ty::Bool,
-        "to_uppercase" | "to_lowercase" | "trim" | "trim_start" | "trim_end" | "as_str" | "replace" | "repeat" | "substring" | "into_string" | "to_ascii_uppercase" | "to_ascii_lowercase" | "trim_matches" => Ty::Str,
-        "push" | "push_str" | "clear" | "truncate" => Ty::Unit,
-        "chars" => iter_of(Ty::Char),
-        "bytes" | "as_bytes" => iter_of(Ty::Int(IntKind::U8)),
-        "split" | "lines" | "split_whitespace" => iter_of(Ty::Str),
-        "char_indices" => iter_of(pair(Ty::usize(), Ty::Char)),
-        "find" => Ty::Option(b(Ty::usize())),
-        "pop" => Ty::Option(b(Ty::Char)),
-        "parse" => parse_ty(want)?,
-        _ => return None,
-    })
-}
-
-fn parse_ty(want: Option<&Ty>) -> Option<Ty> {
-    match want {
-        Some(Ty::Result(ok, _)) => Some(Ty::Result(ok.clone(), b(Ty::Str))),
-        _ => None,
-    }
-}
-
 fn map_ret(k: &Ty, v: &Ty, name: &str) -> Option<Ty> {
     Some(match name {
         "len" => Ty::usize(),
@@ -286,17 +251,6 @@ fn result_ret(t: &Ty, e: &Ty, name: &str, args: &[PExpr]) -> Option<Ty> {
         "and_then" => closure_ret()?,
         "ok" => Ty::Option(b(t.clone())),
         "err" => Ty::Option(b(e.clone())),
-        _ => return None,
-    })
-}
-
-fn char_ret(name: &str) -> Option<Ty> {
-    Some(match name {
-        "is_alphabetic" | "is_numeric" | "is_alphanumeric" | "is_whitespace" | "is_uppercase" | "is_lowercase" | "is_ascii_digit" | "is_ascii_alphabetic" | "is_ascii_alphanumeric" | "is_ascii_uppercase" | "is_ascii_lowercase" | "is_ascii_punctuation" | "is_ascii" | "is_digit" => Ty::Bool,
-        "to_ascii_uppercase" | "to_ascii_lowercase" => Ty::Char,
-        "to_uppercase" | "to_lowercase" => Ty::Str,
-        "to_digit" => Ty::Option(b(Ty::Int(IntKind::U32))),
-        "len_utf8" => Ty::usize(),
         _ => return None,
     })
 }

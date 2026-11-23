@@ -170,35 +170,195 @@ pub trait Result<T, E> {
     fn is_err(self) -> bool;
 }
 
+// String methods. Lowering rows as for `Float<T>` below: the JavaScript / TypeScript and Go text of a call, with the
+// receiver `{self}`, its place `{&self}` (Go: its address; an `assign` rule, JavaScript: the place the new value is stored
+// in, printed `(place = value, undefined)`), the arguments by their declared names, and `{name:str}` / `{name:num}` for an
+// operand that is converted (a `char` where Go wants a string; an integer JavaScript wants as a Number). `parse<F>` takes
+// its target from the expected type: `ok_int`, `ok_f32`, `ok_f64` and `ok_bool` select on the `Ok` type of the result, and
+// `{O.lo}`, `{O.hi}`, `{O.wide}`, `{O.go}` are facts about an integer one. A row marked `@internal` is not a spelling a
+// program writes: `clone` is a copy and `x[a..b]` an index before any emitter sees them. The spellings ADR-0039 removed
+// (`to_owned`, `as_str`, `into_string`, `substring`, `as_bytes`, `to_ascii_uppercase`, ...) have no row: a portable backend
+// refuses them; `push_str` and `capacity` stay declared for the Rust side (the receiver-mode check reads them) and are
+// `unsupported` on the portable targets.
 pub trait String {
     fn new() -> String;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> String;
+    @js(emit = "BigInt($strlen({self}))")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let s = \"héllo\"", src = "s.len()", expect = "6")
     fn len(self) -> usize;
+    @js(unsupported = "capacity is a storage detail, not part of the portable string surface (ADR-0039 R056)")
+    @go(unsupported = "capacity is a storage detail, not part of the portable string surface (ADR-0039 R056)")
+    @example(given = "let s = \"abc\"", src = "s.capacity() >= 3", expect = "true")
     fn capacity(self) -> usize;
+    @js(emit = "({self}.length === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let s = \"\"", src = "s.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "{self}.trim()")
+    @go(emit = "wjTrim({self})")
+    @example(given = "let s = \"  ab  \"", src = "s.trim().len()", expect = "2")
     fn trim(self) -> &str;
+    @js(emit = "{self}.trimStart()")
+    @go(emit = "wjTrimStart({self})")
+    @example(given = "let s = \"  ab  \"", src = "s.trim_start().len()", expect = "4")
     fn trim_start(self) -> &str;
+    @js(emit = "{self}.trimEnd()")
+    @go(emit = "wjTrimEnd({self})")
+    @example(given = "let s = \"  ab  \"", src = "s.trim_end().len()", expect = "4")
     fn trim_end(self) -> &str;
+    @js(emit = "{self}.toLowerCase()")
+    @go(emit = "wjLower({self})")
+    @example(given = "let s = \"HeLLo\"", src = "s.to_lowercase()", expect = "hello")
     fn to_lowercase(self) -> String;
+    @js(emit = "{self}.toUpperCase()")
+    @go(emit = "wjUpper({self})")
+    @example(given = "let s = \"HeLLo\"", src = "s.to_uppercase()", expect = "HELLO")
     fn to_uppercase(self) -> String;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(given = "let s = \"abc\"", src = "s.to_string()", expect = "abc")
     fn to_string(self) -> String;
+    @js(emit = "{self}.includes({pattern})")
+    @go(emit = "wjStrContains({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.contains(\"ell\") && s.contains('o')", expect = "true")
     fn contains(self, pattern: &str) -> bool;
+    @js(emit = "{self}.startsWith({pattern})")
+    @go(emit = "wjStrStarts({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.starts_with(\"he\") && s.starts_with('h')", expect = "true")
     fn starts_with(self, pattern: &str) -> bool;
+    @js(emit = "{self}.endsWith({pattern})")
+    @go(emit = "wjStrEnds({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.ends_with(\"lo\") && s.ends_with('o')", expect = "true")
     fn ends_with(self, pattern: &str) -> bool;
+    @js(emit = "$strFind({self}, {pattern})")
+    @go(emit = "wjStrFind({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.find(\"l\").unwrap_or(99) + s.find('o').unwrap_or(99)", expect = "6")
     fn find(self, pattern: &str) -> Option<usize>;
+    @js(unsupported = "the portable backends have no lowering for rfind yet")
+    @go(unsupported = "the portable backends have no lowering for rfind yet")
+    @example(given = "let s = \"hello\"", src = "s.rfind(\"l\").unwrap_or(99)", expect = "3")
     fn rfind(self, pattern: &str) -> Option<usize>;
+    @internal(reason = "the parser's spelling of `x[a..b]`: lowered to an index expression before any emitter sees it")
     fn slice(self, start: usize, end: usize) -> &str;
+    @js(emit = "$parseInt({self}, {O.lo}, {O.hi}, {O.wide})", when = "ok_int")
+    @js(emit = "$parseFloat({self})", when = "ok_f64")
+    @js(emit = "$parseFloat({self})", when = "ok_f32")
+    @js(emit = "$parseBool({self})", when = "ok_bool")
+    @js(unsupported = "parse reads an integer, a float or a bool")
+    @go(emit = "wjParseInt[{O.go}]({self})", when = "ok_int")
+    @go(emit = "wjParseFloat({self})", when = "ok_f64")
+    @go(emit = "wjParseFloat32({self})", when = "ok_f32")
+    @go(emit = "wjParseBool({self})", when = "ok_bool")
+    @go(unsupported = "parse reads an integer, a float or a bool")
+    @example(given = "let s = \"42\"", src = "s.parse::<i32>().unwrap_or(0)", expect = "42")
     fn parse<F>(self) -> Result<F, String>;
+    @js(unsupported = "push_str is a removed spelling (ADR-0039 R050): write s += t")
+    @go(unsupported = "push_str is a removed spelling (ADR-0039 R050): write s += t")
+    @example(given = "let mut s = \"ab\"; s.push_str(\"cd\")", src = "s", expect = "abcd")
     fn push_str(&mut self, text: &str);
+    @js(unsupported = "the portable backends have no lowering for truncate yet")
+    @go(unsupported = "the portable backends have no lowering for truncate yet")
+    @example(given = "let mut s = \"hello\"; s.truncate(2)", src = "s", expect = "he")
     fn truncate(&mut self, len: usize);
+    @js(assign = "{&self} + {ch}")
+    @go(emit = "wjPushStr({&self}, {ch:str})")
+    @example(given = "let mut s = \"ab\"; s.push('c')", src = "s", expect = "abc")
     fn push(&mut self, ch: char);
+    @js(unsupported = "the portable backends have no lowering for pop yet")
+    @go(unsupported = "the portable backends have no lowering for pop yet")
+    @example(given = "let mut s = \"abc\"", src = "s.pop().unwrap_or('z')", expect = "c")
     fn pop(&mut self) -> Option<char>;
+    @js(assign = "\"\"")
+    @go(emit = "wjClearStr({&self})")
+    @example(given = "let mut s = \"ab\"; s.clear()", src = "s.len()", expect = "0")
     fn clear(&mut self);
+    @js(emit = "$split({self}, {pattern})")
+    @go(emit = "wjStrSplit({self}, {pattern:str})")
+    @example(given = "let s = \"a,b,c\"", src = "s.split(\",\").count()", expect = "3")
     fn split(self, pattern: &str) -> Iterator<&str>;
+    @js(emit = "{self}.split(/\\s+/).filter((s) => s.length > 0)")
+    @go(emit = "wjSplitWs({self})")
+    @example(given = "let s = \"a  b c\"", src = "s.split_whitespace().count()", expect = "3")
     fn split_whitespace(self) -> Iterator<&str>;
+    @js(emit = "$lines({self})")
+    @go(emit = "wjLines({self})")
+    @example(given = "let s = \"a\\nb\\nc\"", src = "s.lines().count()", expect = "3")
     fn lines(self) -> Iterator<&str>;
+    @js(emit = "Array.from({self})")
+    @go(emit = "wjChars({self})")
+    @example(given = "let s = \"héllo\"", src = "s.chars().count()", expect = "5")
     fn chars(self) -> Iterator<char>;
+    @js(emit = "$bytes({self})")
+    @go(emit = "wjBytes({self})")
+    @example(given = "let s = \"héllo\"", src = "s.bytes().count()", expect = "6")
     fn bytes(self) -> Iterator<u8>;
+    @js(emit = "$charIndices({self})")
+    @go(emit = "wjCharIndices({self})")
+    @example(given = "let s = \"héllo\"", src = "s.char_indices().count()", expect = "5")
+    fn char_indices(self) -> Iterator<(usize, char)>;
+    @js(emit = "{self}.repeat({n:num})")
+    @go(emit = "wjStrRepeat({self}, {n})")
+    @example(given = "let s = \"ab\"", src = "s.repeat(3)", expect = "ababab")
+    fn repeat(self, n: usize) -> String;
+    @js(emit = "{self}.split({pattern}).join({replacement})")
+    @go(emit = "wjStrReplace({self}, {pattern:str}, {replacement:str})")
+    @example(given = "let s = \"hello\"", src = "s.replace(\"l\", \"L\")", expect = "heLLo")
+    fn replace(self, pattern: &str, replacement: &str) -> String;
+}
+
+// `char` methods (the receiver is a `char`; checked against rustc on `char`). Lowering rows as for `String` above. A
+// `char`'s `to_uppercase` / `to_lowercase` are Rust iterators over the case-mapped characters, lowered to the string they
+// spell (`@rustc(tail = ..)` is the adapter the rustc gate adds to Rust's result to get the declared one). The spellings
+// ADR-0039 removed (`is_ascii_digit`, `is_numeric`, `is_ascii_alphabetic`, `len_utf8`, `to_ascii_uppercase`, ...) have no row.
+pub trait Char {
+    @js(emit = "/^\\p{{L}}$/u.test({self})")
+    @go(emit = "wjIsAlphabetic({self})")
+    @example(given = "let c: char = 'q'", src = "c.is_alphabetic()", expect = "true")
+    fn is_alphabetic(self) -> bool;
+    @js(emit = "/^[\\p{{L}}\\p{{N}}]$/u.test({self})")
+    @go(emit = "(wjIsAlphabetic({self}) || wjIsNumeric({self}))")
+    @example(given = "let c: char = '7'", src = "c.is_alphanumeric()", expect = "true")
+    fn is_alphanumeric(self) -> bool;
+    @js(emit = "/^\\s$/u.test({self})")
+    @go(emit = "wjIsWhitespace({self})")
+    @example(given = "let c: char = ' '", src = "c.is_whitespace()", expect = "true")
+    fn is_whitespace(self) -> bool;
+    @js(emit = "/^\\p{{Lu}}$/u.test({self})")
+    @go(emit = "wjIsUpper({self})")
+    @example(given = "let c: char = 'Q'", src = "c.is_uppercase()", expect = "true")
+    fn is_uppercase(self) -> bool;
+    @js(emit = "/^\\p{{Ll}}$/u.test({self})")
+    @go(emit = "wjIsLower({self})")
+    @example(given = "let c: char = 'q'", src = "c.is_lowercase()", expect = "true")
+    fn is_lowercase(self) -> bool;
+    @js(emit = "({self}.codePointAt(0) < 128)")
+    @go(emit = "({self} < 128)")
+    @example(given = "let c: char = 'a'", src = "c.is_ascii()", expect = "true")
+    fn is_ascii(self) -> bool;
+    @js(emit = "{self}.toUpperCase()")
+    @go(emit = "wjUpper(string(rune({self})))")
+    @rustc(tail = ".collect::<String>()")
+    @example(given = "let c: char = 'a'", src = "c.to_uppercase()", expect = "A")
+    fn to_uppercase(self) -> String;
+    @js(emit = "{self}.toLowerCase()")
+    @go(emit = "wjLower(string(rune({self})))")
+    @rustc(tail = ".collect::<String>()")
+    @example(given = "let c: char = 'Q'", src = "c.to_lowercase()", expect = "q")
+    fn to_lowercase(self) -> String;
+    @js(emit = "$toDigit({self}, {radix})")
+    @go(emit = "wjToDigit({self}, {radix})")
+    @example(given = "let c: char = '7'; let r: u32 = 10", src = "c.to_digit(r).unwrap_or(r)", expect = "7")
+    fn to_digit(self, radix: u32) -> Option<u32>;
+    @js(emit = "($toDigit({self}, {radix}) !== null)")
+    @go(unsupported = "the Go backend has no lowering for char is_digit yet")
+    @example(given = "let c: char = 'f'; let r: u32 = 16", src = "c.is_digit(r)", expect = "true")
+    fn is_digit(self, radix: u32) -> bool;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(given = "let c: char = 'x'", src = "c.to_string()", expect = "x")
+    fn to_string(self) -> String;
 }
 
 // A thread handle (`std::thread::JoinHandle<T>`): `join` returns the spawned closure's result, or the panic payload.

@@ -49,19 +49,71 @@ impl StdSurface {
         StdSurface { core: crate::ir::stdlib_tables::shared_core_surface(), lowering: crate::ir::stdlib_tables::shared_lowering() }
     }
 
-    /// The result type the declaration in `std/rust_core.wji` gives `recv.name(..)` for a float or integer receiver, `T`
-    /// being the receiver's own type; `None` when the surface declares no such method.
-    pub fn declared_ret(&self, recv: &Ty, name: &str) -> Option<Ty> {
+    /// The result type the declaration in `std/rust_core.wji` gives `recv.name(..)` for a float, integer, char or string
+    /// receiver, `T` being the receiver's own type; `None` when the surface declares no such method. A method generic
+    /// (`parse<F>`) takes its type from the expected result `want` (`Result<i32, string>` binds `F = i32`).
+    pub fn declared_ret(&self, recv: &Ty, name: &str, want: Option<&Ty>) -> Option<Ty> {
         let (receiver, core_type) = match recv {
             Ty::F64 => (crate::parser::Type::Custom("f64".to_string()), CoreType::Float),
             Ty::F32 => (crate::parser::Type::Custom("f32".to_string()), CoreType::Float),
             Ty::Int(k) => (crate::parser::Type::Custom(k.name().to_string()), CoreType::Integer),
+            Ty::Char => return self.declared_on_trait(CoreType::Char, name, want),
+            Ty::Str => return self.declared_on_trait(CoreType::String, name, want),
             _ => return None,
         };
         // Only a method with a row: the width traits (`f32::to_bits`) are declared too, but have no lowering yet.
         self.lowering.row(core_type, name)?;
         let ret = self.core.method_signature(&receiver, name, &[])?.ret?;
         Some(from_ast(&ret, &[], &Aliases::default()))
+    }
+
+    /// The expected type of argument `index` of `recv.name(..)` as the declaration gives it (a string's `contains` takes a
+    /// `&str`, `repeat` a `usize`); `None` when the receiver's type has no rows or the method no such parameter.
+    pub fn declared_arg(&self, recv: &Ty, name: &str, index: usize) -> Option<Ty> {
+        if *recv != Ty::Str {
+            return None;
+        }
+        self.lowering.row(CoreType::String, name)?;
+        let (_, generics, params, _) = self.core.declared(CoreType::String.trait_name(), name)?;
+        Some(from_ast(params.get(index)?, &generics, &Aliases::default()))
+    }
+
+    /// `char` and `string` are declared on their own traits (`Char`, `String`), read directly: the solver's
+    /// `method_signature` does not know `char`.
+    fn declared_on_trait(&self, core_type: CoreType, name: &str, want: Option<&Ty>) -> Option<Ty> {
+        self.lowering.row(core_type, name)?;
+        let (_, generics, _, ret) = self.core.declared(core_type.trait_name(), name)?;
+        let Some(ret) = ret else { return Some(Ty::Unit) };
+        let ty = match from_ast(&ret, &generics, &Aliases::default()) {
+            // `Iterator<T>` is the portable type of a lazy sequence
+            Ty::Adt(n, mut args) if n == "Iterator" && args.len() == 1 => Ty::Iter(Box::new(args.remove(0))),
+            other => other,
+        };
+        if generics.is_empty() {
+            return Some(ty);
+        }
+        let mut bound: Vec<Option<Ty>> = vec![None; generics.len()];
+        bind_generics(&ty, want?, &generics, &mut bound);
+        let args: Option<Vec<Ty>> = bound.into_iter().collect();
+        Some(ty.subst(&generics, &args?))
+    }
+}
+
+/// Bind the method generics that `pattern` mentions to the parts of `want` in the same places (`Result<F, string>` against
+/// `Result<i32, string>` binds `F = i32`).
+fn bind_generics(pattern: &Ty, want: &Ty, generics: &[String], bound: &mut [Option<Ty>]) {
+    match (pattern, want) {
+        (Ty::Param(n), w) => {
+            if let Some(i) = generics.iter().position(|g| g == n) {
+                bound[i].get_or_insert_with(|| w.clone());
+            }
+        }
+        (Ty::Result(a, b), Ty::Result(wa, wb)) => {
+            bind_generics(a, wa, generics, bound);
+            bind_generics(b, wb, generics, bound);
+        }
+        (Ty::Option(a), Ty::Option(wa)) | (Ty::Vec(a), Ty::Vec(wa)) | (Ty::Iter(a), Ty::Iter(wa)) => bind_generics(a, wa, generics, bound),
+        _ => {}
     }
 }
 

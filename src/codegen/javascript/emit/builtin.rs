@@ -48,8 +48,8 @@ impl<'m> Js<'m> {
         match &recv.ty {
             Ty::Vec(t) => self.vec_method(recv, t, name, &r, &a, args, ty),
             Ty::Iter(t) | Ty::Range(t) => self.iter_method(t, name, &r, &a, args, ty),
-            Ty::Str => self.str_method(recv, name, &r, &a, ty),
-            Ty::Char => self.char_method(name, &r, &a),
+            Ty::Str => self.lowered(CoreType::String, recv, name, &r, &a, ty),
+            Ty::Char => self.lowered(CoreType::Char, recv, name, &r, &a, ty),
             Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &r, &a, ty),
             Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &r, &a, ty),
             Ty::Option(_) => self.option_method(name, &r, &a),
@@ -170,81 +170,8 @@ impl<'m> Js<'m> {
         }
     }
 
-    fn assign_place(&mut self, recv: &PExpr, f: impl FnOnce(&str) -> String) -> PResult<String> {
-        let p = self.place(recv)?;
-        let rhs = f(&p);
-        Ok(format!("({p} = {rhs}, undefined)"))
-    }
-
-    fn str_method(&mut self, recv: &PExpr, name: &str, r: &str, a: &[String], ty: &Ty) -> PResult<String> {
-        Ok(match name {
-            "len" => format!("BigInt($strlen({r}))"),
-            "is_empty" => format!("({r}.length === 0)"),
-            "to_uppercase" | "to_ascii_uppercase" => format!("{r}.toUpperCase()"),
-            "to_lowercase" | "to_ascii_lowercase" => format!("{r}.toLowerCase()"),
-            "trim" => format!("{r}.trim()"),
-            "trim_start" => format!("{r}.trimStart()"),
-            "trim_end" => format!("{r}.trimEnd()"),
-            "as_str" | "to_owned" | "into_string" | "clone" => r.to_string(),
-            "contains" => format!("{r}.includes({})", a[0]),
-            "starts_with" => format!("{r}.startsWith({})", a[0]),
-            "ends_with" => format!("{r}.endsWith({})", a[0]),
-            "replace" => format!("{r}.split({}).join({})", a[0], a[1]),
-            "split" => format!("$split({r}, {})", a[0]),
-            "chars" => format!("Array.from({r})"),
-            "bytes" | "as_bytes" => format!("$bytes({r})"),
-            "lines" => format!("$lines({r})"),
-            "split_whitespace" => format!("{r}.split(/\\s+/).filter((s) => s.length > 0)"),
-            "char_indices" => format!("$charIndices({r})"),
-            "find" => format!("$strFind({r}, {})", a[0]),
-            "repeat" => format!("{r}.repeat(Number({}))", a[0]),
-            "substring" => format!("$strSlice({r}, {}, {}, false)", a[0], a[1]),
-            "push" | "push_str" => self.assign_place(recv, |p| format!("{p} + {}", a[0]))?,
-            "clear" => self.assign_place(recv, |_| "\"\"".to_string())?,
-            "parse" => match ty {
-                Ty::Result(ok, _) => match &**ok {
-                    Ty::Int(k) => {
-                        let (lo, hi) = range_of(*k);
-                        format!("$parseInt({r}, {lo}n, {hi}n, {})", num::is_wide(*k))
-                    }
-                    Ty::F64 | Ty::F32 => format!("$parseFloat({r})"),
-                    Ty::Bool => format!("$parseBool({r})"),
-                    other => return self.unsupported(format!("parse::<{}>", other.describe())),
-                },
-                _ => return self.unsupported("parse without a target type"),
-            },
-            _ => return self.unsupported(format!("string method `{name}`")),
-        })
-    }
-
-    fn char_method(&mut self, name: &str, r: &str, a: &[String]) -> PResult<String> {
-        Ok(match name {
-            "is_alphabetic" => format!("/^\\p{{L}}$/u.test({r})"),
-            "is_numeric" => format!("/^\\p{{N}}$/u.test({r})"),
-            "is_alphanumeric" => format!("/^[\\p{{L}}\\p{{N}}]$/u.test({r})"),
-            "is_whitespace" => format!("/^\\s$/u.test({r})"),
-            "is_uppercase" => format!("/^\\p{{Lu}}$/u.test({r})"),
-            "is_lowercase" => format!("/^\\p{{Ll}}$/u.test({r})"),
-            "is_ascii_digit" => format!("/^[0-9]$/.test({r})"),
-            "is_ascii_alphabetic" => format!("/^[A-Za-z]$/.test({r})"),
-            "is_ascii_alphanumeric" => format!("/^[A-Za-z0-9]$/.test({r})"),
-            "is_ascii_uppercase" => format!("/^[A-Z]$/.test({r})"),
-            "is_ascii_lowercase" => format!("/^[a-z]$/.test({r})"),
-            "is_ascii_punctuation" => format!("/^[!-\\/:-@\\[-`{{-~]$/.test({r})"),
-            "is_ascii" => format!("({r}.codePointAt(0) < 128)"),
-            "to_ascii_uppercase" => format!("$asciiUpper({r})"),
-            "to_ascii_lowercase" => format!("$asciiLower({r})"),
-            "to_uppercase" => format!("{r}.toUpperCase()"),
-            "to_lowercase" => format!("{r}.toLowerCase()"),
-            "to_digit" => format!("$toDigit({r}, {})", a[0]),
-            "is_digit" => format!("($toDigit({r}, {}) !== null)", a[0]),
-            "len_utf8" => format!("BigInt($strlen({r}))"),
-            _ => return self.unsupported(format!("char method `{name}`")),
-        })
-    }
-
     /// A call of a std method of a migrated type: print the receiver's row for JavaScript (`std/rust_core.wji`); `ty` is
-    /// the call's result type (`{R.chk}`).
+    /// the call's result type (`{R.chk}`, the `Ok` type of a `parse`).
     fn lowered(&mut self, ct: CoreType, recv: &PExpr, name: &str, r: &str, a: &[String], ty: &Ty) -> PResult<String> {
         let m = self.m;
         let Some(row) = m.lowering.row(ct, name) else { return self.unsupported(format!("{} method `{name}`", ct.noun())) };
@@ -253,10 +180,15 @@ impl<'m> Js<'m> {
         let guard = |g: Guard| match g {
             Guard::ElemPrim => prim,
             Guard::ElemPrimNotBool => prim && elem != Ty::Bool,
-            g => template::receiver_guard(g, &recv.ty),
+            g => template::type_guard(g, &recv.ty, ty),
         };
         match row.select(Target::Js, guard) {
-            Some(Rule::Emit { template, .. }) => template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty }),
+            Some(Rule::Emit { template, .. }) => template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty, place: None }),
+            Some(Rule::Assign(template)) => {
+                let place = self.place(recv)?;
+                let value = template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty, place: Some(&place) })?;
+                Ok(format!("({place} = {value}, undefined)"))
+            }
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no JavaScript rule", ct.noun())),
@@ -381,22 +313,34 @@ struct JsOperands<'a> {
     args: &'a [String],
     recv: &'a Ty,
     result: &'a Ty,
+    /// The receiver as a place, for an `assign` rule.
+    place: Option<&'a str>,
+}
+
+/// `Num`: an integer operand printed as a JavaScript Number (a BigInt is not a length or an index). No other modifier is
+/// a JavaScript operation (`str`: a char is already a string).
+fn modified(text: &str, modifier: Option<Modifier>) -> PResult<String> {
+    match modifier {
+        None => Ok(text.to_string()),
+        Some(Modifier::Num) => Ok(format!("Number({text})")),
+        Some(_) => unsupported("this target has no such operand modifier for the template"),
+    }
 }
 
 impl Operands for JsOperands<'_> {
     fn receiver(&mut self, place: bool, modifier: Option<Modifier>) -> PResult<String> {
-        if place || modifier.is_some() {
-            return unsupported("this target has no receiver place or modifier for the template");
+        if place {
+            return match self.place {
+                Some(p) if modifier.is_none() => Ok(p.to_string()),
+                _ => unsupported("this target has no receiver place or modifier for the template"),
+            };
         }
-        Ok(self.receiver.to_string())
+        modified(self.receiver, modifier)
     }
 
     fn arg(&mut self, index: usize, modifier: Option<Modifier>) -> PResult<String> {
-        if modifier.is_some() {
-            return unsupported("this target has no operand modifier for the template");
-        }
         match self.args.get(index) {
-            Some(a) => Ok(a.clone()),
+            Some(a) => modified(a, modifier),
             None => unsupported(format!("the call has no argument {index}")),
         }
     }
@@ -417,6 +361,8 @@ fn int_fact(k: IntKind, fact: Fact) -> Option<String> {
         Fact::Wide => Some(num::is_wide(k).to_string()),
         Fact::Min => Some(num::lit_int(lo, k)),
         Fact::Max => Some(num::lit_int(hi, k)),
+        Fact::Lo => Some(format!("{lo}n")),
+        Fact::Hi => Some(format!("{hi}n")),
         Fact::Zero => Some(num::zero(k)),
         Fact::One => Some(num::one(k)),
         Fact::Chk => Some(num::chk(k).to_string()),
@@ -448,6 +394,8 @@ mod tests {
         assert_eq!(f(IntKind::U64, Fact::Wide), "true");
         assert_eq!(f(IntKind::U32, Fact::Wide), "false");
         assert_eq!(f(IntKind::I16, Fact::Bits), "16");
+        assert_eq!(f(IntKind::I32, Fact::Lo), "-2147483648n");
+        assert_eq!(f(IntKind::U8, Fact::Hi), "255n");
         assert_eq!(f(IntKind::U32, Fact::Signed), "false");
         assert_eq!(int_fact(IntKind::I32, Fact::Go), None);
     }

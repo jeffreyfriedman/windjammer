@@ -37,16 +37,20 @@ impl Target {
 pub enum CoreType {
     Float,
     Integer,
+    Char,
+    String,
 }
 
 impl CoreType {
-    pub const ALL: [CoreType; 2] = [CoreType::Float, CoreType::Integer];
+    pub const ALL: [CoreType; 4] = [CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String];
 
     /// The trait of `std/rust_core.wji` that declares this type's methods.
     pub fn trait_name(self) -> &'static str {
         match self {
             CoreType::Float => "Float",
             CoreType::Integer => "Integer",
+            CoreType::Char => "Char",
+            CoreType::String => "String",
         }
     }
 
@@ -55,6 +59,8 @@ impl CoreType {
         match self {
             CoreType::Float => "float",
             CoreType::Integer => "integer",
+            CoreType::Char => "char",
+            CoreType::String => "string",
         }
     }
 
@@ -76,10 +82,25 @@ pub enum Guard {
     RecvI32,
     /// The receiver is a `u32`.
     RecvU32,
+    /// The call's result is a `Result` whose `Ok` is an integer (`parse::<i32>()`), an `f32`, an `f64`, a `bool`.
+    OkInt,
+    OkF32,
+    OkF64,
+    OkBool,
 }
 
 impl Guard {
-    pub const ALL: [Guard; 5] = [Guard::ElemPrim, Guard::ElemPrimNotBool, Guard::RecvWide, Guard::RecvI32, Guard::RecvU32];
+    pub const ALL: [Guard; 9] = [
+        Guard::ElemPrim,
+        Guard::ElemPrimNotBool,
+        Guard::RecvWide,
+        Guard::RecvI32,
+        Guard::RecvU32,
+        Guard::OkInt,
+        Guard::OkF32,
+        Guard::OkF64,
+        Guard::OkBool,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -88,6 +109,10 @@ impl Guard {
             Guard::RecvWide => "t_wide",
             Guard::RecvI32 => "t_i32",
             Guard::RecvU32 => "t_u32",
+            Guard::OkInt => "ok_int",
+            Guard::OkF32 => "ok_f32",
+            Guard::OkF64 => "ok_f64",
+            Guard::OkBool => "ok_bool",
         }
     }
 }
@@ -114,14 +139,20 @@ impl Hook {
 pub enum Modifier {
     /// Converted to the compute type the trait declares with `widen` (Go: `float64(x)` for an `f32`; nothing for `f64`).
     F64,
+    /// A `char` operand where the target wants a string (Go: `string(rune(x))`); any other operand is printed as it is.
+    Str,
+    /// An integer operand where the target wants a plain number (JavaScript: `Number(x)`, a BigInt is not an index).
+    Num,
 }
 
 impl Modifier {
-    pub const ALL: [Modifier; 1] = [Modifier::F64];
+    pub const ALL: [Modifier; 3] = [Modifier::F64, Modifier::Str, Modifier::Num];
 
     pub fn name(self) -> &'static str {
         match self {
             Modifier::F64 => "f64",
+            Modifier::Str => "str",
+            Modifier::Num => "num",
         }
     }
 }
@@ -141,11 +172,27 @@ pub enum Fact {
     /// The text that opens a wrap of an expression into `T`'s range (two's complement); `WrapClose` closes it.
     WrapOpen,
     WrapClose,
+    /// The bounds of the type as arbitrary-precision literals (`-128n`, `255n`), whatever the width: what a parser compares in.
+    Lo,
+    Hi,
 }
 
 impl Fact {
-    pub const ALL: [Fact; 11] =
-        [Fact::Bits, Fact::Signed, Fact::Wide, Fact::Min, Fact::Max, Fact::Zero, Fact::One, Fact::Chk, Fact::Go, Fact::WrapOpen, Fact::WrapClose];
+    pub const ALL: [Fact; 13] = [
+        Fact::Bits,
+        Fact::Signed,
+        Fact::Wide,
+        Fact::Min,
+        Fact::Max,
+        Fact::Zero,
+        Fact::One,
+        Fact::Chk,
+        Fact::Go,
+        Fact::WrapOpen,
+        Fact::WrapClose,
+        Fact::Lo,
+        Fact::Hi,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -160,6 +207,8 @@ impl Fact {
             Fact::Go => "go",
             Fact::WrapOpen => "wrap_open",
             Fact::WrapClose => "wrap_close",
+            Fact::Lo => "lo",
+            Fact::Hi => "hi",
         }
     }
 }
@@ -176,6 +225,9 @@ pub enum Widen {
 pub enum Rule {
     /// Print the template (`emit = "..."`); with `when`, only when every guard holds. The first matching rule wins.
     Emit { template: String, when: Vec<Guard> },
+    /// A place update (`assign = "..."`, JavaScript): the template is the new value of the receiver's place, printed as
+    /// `(place = value, undefined)`; `{&self}` is the place.
+    Assign(String),
     /// A type-directed emitter (`hook = "..."`).
     Hook(Hook),
     /// Not available on this target; the text is the diagnostic and the ledger reason (`unsupported = "..."`).
@@ -257,7 +309,8 @@ impl Row {
 /// The rows of the migrated types, keyed by (type, method name).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LoweringTable {
-    rows: BTreeMap<(CoreType, String), Row>,
+    /// By type, then name: a lookup by `&str` allocates nothing.
+    rows: BTreeMap<CoreType, BTreeMap<String, Row>>,
     widen: BTreeMap<(CoreType, Target), Widen>,
 }
 
@@ -286,19 +339,19 @@ impl LoweringTable {
             }
             for m in &t.methods {
                 let row = row_of(&t.name, m)?;
-                table.rows.insert((ty, m.name.clone()), row);
+                table.rows.entry(ty).or_default().insert(m.name.clone(), row);
             }
         }
         Ok(table)
     }
 
     pub fn row(&self, ty: CoreType, name: &str) -> Option<&Row> {
-        self.rows.get(&(ty, name.to_string()))
+        self.rows.get(&ty)?.get(name)
     }
 
     /// Every row, in (type, name) order.
     pub fn rows(&self) -> impl Iterator<Item = (CoreType, &Row)> {
-        self.rows.iter().map(|((t, _), r)| (*t, r))
+        self.rows.iter().flat_map(|(t, by_name)| by_name.values().map(move |r| (*t, r)))
     }
 
     pub fn widen(&self, ty: CoreType, target: Target) -> Option<Widen> {
@@ -337,14 +390,20 @@ fn row_of(trait_name: &str, m: &RawMethod) -> Result<Row, String> {
 }
 
 fn rule_of(d: &RawDecorator) -> Result<Rule, String> {
-    let unknown = d.args.iter().find(|(k, _)| !["emit", "when", "hook", "unsupported"].contains(&k.as_str()));
+    let unknown = d.args.iter().find(|(k, _)| !["emit", "when", "hook", "unsupported", "assign"].contains(&k.as_str()));
     if let Some((k, _)) = unknown {
         return Err(format!("`@{}` has no argument `{k}`", d.name));
     }
-    let (emit, hook, unsupported) = (d.arg("emit"), d.arg("hook"), d.arg("unsupported"));
-    let given = [emit.is_some(), hook.is_some(), unsupported.is_some()].iter().filter(|b| **b).count();
+    let (emit, hook, unsupported, assign) = (d.arg("emit"), d.arg("hook"), d.arg("unsupported"), d.arg("assign"));
+    let given = [emit.is_some(), hook.is_some(), unsupported.is_some(), assign.is_some()].iter().filter(|b| **b).count();
     if given != 1 {
-        return Err(format!("`@{}` needs exactly one of `emit`, `hook`, `unsupported`", d.name));
+        return Err(format!("`@{}` needs exactly one of `emit`, `assign`, `hook`, `unsupported`", d.name));
+    }
+    if let Some(t) = assign {
+        if d.arg("when").is_some() {
+            return Err(format!("`@{}`: `when` goes with `emit`", d.name));
+        }
+        return Ok(Rule::Assign(t.to_string()));
     }
     if d.arg("when").is_some() && emit.is_none() {
         return Err(format!("`@{}`: `when` goes with `emit`", d.name));
@@ -407,6 +466,24 @@ mod tests {
     }
 
     #[test]
+    fn an_assign_rule_and_the_ok_guards_are_read() {
+        let t = RawTrait {
+            name: "String".into(),
+            decorators: vec![],
+            methods: vec![method(
+                "push",
+                vec![dec("js", &[("assign", "{&self} + {ch}")]), dec("go", &[("emit", "p({&self})"), ("when", "ok_int, ok_f32")]), dec("go", &[("unsupported", "no")])],
+            )],
+        };
+        let table = LoweringTable::from_declarations(&[t]).unwrap();
+        let row = table.row(CoreType::String, "push").unwrap();
+        assert_eq!(row.select(Target::Js, |_| false), Some(&Rule::Assign("{&self} + {ch}".into())));
+        assert_eq!(row.select(Target::Go, |g| g == Guard::OkInt || g == Guard::OkF32), Some(&Rule::Emit { template: "p({&self})".into(), when: vec![Guard::OkInt, Guard::OkF32] }));
+        assert_eq!(row.select(Target::Go, |_| false), Some(&Rule::Unsupported("no".into())));
+        assert_eq!(table.rows().map(|(t, r)| (t, r.name.as_str())).collect::<Vec<_>>(), vec![(CoreType::String, "push")]);
+    }
+
+    #[test]
     fn a_malformed_decorator_is_an_error_not_a_dropped_rule() {
         let bad = |d: RawDecorator| LoweringTable::from_declarations(&[float_trait(vec![method("m", vec![d])], vec![])]);
         assert!(bad(dec("js", &[("emit", "a"), ("hook", "display")])).is_err());
@@ -414,6 +491,8 @@ mod tests {
         assert!(bad(dec("js", &[("emitt", "a")])).is_err());
         assert!(bad(dec("js", &[("emit", "a"), ("when", "no_such_guard")])).is_err());
         assert!(bad(dec("go", &[("hook", "no_such_hook")])).is_err());
+        assert!(bad(dec("js", &[("assign", "a"), ("when", "ok_int")])).is_err());
+        assert!(bad(dec("js", &[("assign", "a"), ("emit", "b")])).is_err());
         assert!(bad(dec("example", &[("src", "1.0")])).is_err());
         let off_type = RawTrait { name: "Vec".into(), decorators: vec![], methods: vec![method("push", vec![dec("js", &[("emit", "a")])])] };
         assert!(LoweringTable::from_declarations(&[off_type]).is_err());

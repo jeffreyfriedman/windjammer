@@ -37,6 +37,7 @@ struct Case {
 /// `unsupported` is a new entry the test refuses until it is listed here with the reason in the declaration. The
 /// diagnostic for these is WJ0195 (stage 7); until then the emitter's refusal, carrying the row's reason, is the check.
 const UNSUPPORTED: &[(&str, &str)] = &[
+    ("Char::is_digit", "go"),
     ("Integer::checked_neg", "go"),
     ("Integer::checked_neg", "js"),
     ("Integer::checked_pow", "go"),
@@ -57,6 +58,16 @@ const UNSUPPORTED: &[(&str, &str)] = &[
     ("Integer::swap_bytes", "js"),
     ("Integer::wrapping_pow", "go"),
     ("Integer::wrapping_pow", "js"),
+    ("String::capacity", "go"),
+    ("String::capacity", "js"),
+    ("String::pop", "go"),
+    ("String::pop", "js"),
+    ("String::push_str", "go"),
+    ("String::push_str", "js"),
+    ("String::rfind", "go"),
+    ("String::rfind", "js"),
+    ("String::truncate", "go"),
+    ("String::truncate", "js"),
 ];
 
 /// Every row with an example, in table order.
@@ -173,7 +184,7 @@ fn outputs<'a>(dir: &Path, probe: &ToolProbe, rows: &'a [Case]) -> Vec<(&'static
 #[test]
 fn every_row_example_prints_its_expected_text_on_every_backend() {
     let rows = examples();
-    assert!(rows.len() >= 60, "the Float and Integer rows carry examples: found {}", rows.len());
+    assert!(rows.len() >= 60, "the Float, Integer, Char and String rows carry examples: found {}", rows.len());
     let probe = ToolProbe::new(&[Tool::Rustc, Tool::Go, Tool::Node]);
     probe.announce();
     let dir = Scratch::new("row-examples");

@@ -35,10 +35,10 @@ impl<'m> Go<'m> {
         }
         match &recv.ty {
             Ty::Vec(_) | Ty::Iter(_) | Ty::Range(_) => self.vec_method(recv, name, &a, args, ty),
-            Ty::Str => self.str_method(recv, name, &a, args, ty),
-            Ty::Char => self.char_method(recv, name, &a),
-            Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &a, ty),
-            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a, ty),
+            Ty::Str => self.lowered(CoreType::String, recv, name, &a, args, ty),
+            Ty::Char => self.lowered(CoreType::Char, recv, name, &a, args, ty),
+            Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &a, args, ty),
+            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a, args, ty),
             Ty::Option(_) => self.opt_method(recv, name, &a),
             Ty::Result(..) => self.res_method(recv, name, &a),
             Ty::Map(..) => self.map_method(recv, name, &a),
@@ -146,76 +146,9 @@ impl<'m> Go<'m> {
         })
     }
 
-    fn str_method(&mut self, recv: &PExpr, name: &str, a: &[String], args: &[PExpr], ty: &Ty) -> PResult<String> {
-        let r = self.rv(recv)?;
-        let arg_str = |i: usize| -> String {
-            if matches!(args.get(i).map(|e| &e.ty), Some(Ty::Char)) { format!("string(rune({}))", a[i]) } else { a[i].clone() }
-        };
-        Ok(match name {
-            "len" => format!("uint(len({r}))"),
-            "is_empty" => format!("(len({r}) == 0)"),
-            "to_uppercase" | "to_ascii_uppercase" => format!("wjUpper({r})"),
-            "to_lowercase" | "to_ascii_lowercase" => format!("wjLower({r})"),
-            "trim" => format!("wjTrim({r})"),
-            "trim_start" => format!("wjTrimStart({r})"),
-            "trim_end" => format!("wjTrimEnd({r})"),
-            "as_str" | "to_owned" | "into_string" | "clone" => r,
-            "contains" => format!("wjStrContains({r}, {})", arg_str(0)),
-            "starts_with" => format!("wjStrStarts({r}, {})", arg_str(0)),
-            "ends_with" => format!("wjStrEnds({r}, {})", arg_str(0)),
-            "replace" => format!("wjStrReplace({r}, {}, {})", arg_str(0), arg_str(1)),
-            "split" => format!("wjStrSplit({r}, {})", arg_str(0)),
-            "chars" => format!("wjChars({r})"),
-            "bytes" | "as_bytes" => format!("wjBytes({r})"),
-            "lines" => format!("wjLines({r})"),
-            "split_whitespace" => format!("wjSplitWs({r})"),
-            "char_indices" => format!("wjCharIndices({r})"),
-            "find" => format!("wjStrFind({r}, {})", arg_str(0)),
-            "repeat" => format!("wjStrRepeat({r}, {})", a[0]),
-            "substring" => format!("wjStrSlice({r}, {}, {}, false)", a[0], a[1]),
-            "push" => format!("wjPushStr({}, string(rune({})))", self.addr(recv)?, a[0]),
-            "push_str" => format!("wjPushStr({}, {})", self.addr(recv)?, a[0]),
-            "clear" => format!("wjClearStr({})", self.addr(recv)?),
-            "parse" => match ty {
-                Ty::Result(ok, _) => match &**ok {
-                    Ty::Int(k) => format!("wjParseInt[{}]({r})", super::types::int_name(*k)),
-                    Ty::F64 => format!("wjParseFloat({r})"),
-                    Ty::F32 => format!("wjParseFloat32({r})"),
-                    Ty::Bool => format!("wjParseBool({r})"),
-                    other => return self.unsupported(format!("parse::<{}>", other.describe())),
-                },
-                _ => return self.unsupported("parse without a target type"),
-            },
-            _ => return self.unsupported(format!("string method `{name}`")),
-        })
-    }
-
-    fn char_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
-        let r = self.rv(recv)?;
-        Ok(match name {
-            "is_alphabetic" => format!("wjIsAlphabetic({r})"),
-            "is_numeric" => format!("wjIsNumeric({r})"),
-            "is_alphanumeric" => format!("(wjIsAlphabetic({r}) || wjIsNumeric({r}))"),
-            "is_whitespace" => format!("wjIsWhitespace({r})"),
-            "is_uppercase" => format!("wjIsUpper({r})"),
-            "is_lowercase" => format!("wjIsLower({r})"),
-            "is_ascii_digit" => format!("({r} >= '0' && {r} <= '9')"),
-            "is_ascii_alphabetic" => format!("(({r} >= 'a' && {r} <= 'z') || ({r} >= 'A' && {r} <= 'Z'))"),
-            "is_ascii_alphanumeric" => format!("(({r} >= 'a' && {r} <= 'z') || ({r} >= 'A' && {r} <= 'Z') || ({r} >= '0' && {r} <= '9'))"),
-            "is_ascii_uppercase" => format!("({r} >= 'A' && {r} <= 'Z')"),
-            "is_ascii_lowercase" => format!("({r} >= 'a' && {r} <= 'z')"),
-            "is_ascii" => format!("({r} < 128)"),
-            "to_ascii_uppercase" => format!("wjAsciiUpper({r})"),
-            "to_ascii_lowercase" => format!("wjAsciiLower({r})"),
-            "to_uppercase" => format!("wjUpper(string(rune({r})))"),
-            "to_lowercase" => format!("wjLower(string(rune({r})))"),
-            "to_digit" => format!("wjToDigit({r}, {})", a[0]),
-            "len_utf8" => format!("uint(len(string(rune({r}))))"),
-            _ => return self.unsupported(format!("char method `{name}`")),
-        })
-    }
-
-    fn lowered(&mut self, ct: CoreType, recv: &PExpr, name: &str, a: &[String], ty: &Ty) -> PResult<String> {
+    /// A call of a std method of a migrated type: print the receiver's row for Go (`std/rust_core.wji`). `args` are the call's
+    /// arguments (a `char` where the row wants a string is converted), `a` the same, printed.
+    fn lowered(&mut self, ct: CoreType, recv: &PExpr, name: &str, a: &[String], args: &[PExpr], ty: &Ty) -> PResult<String> {
         let r = self.rv(recv)?;
         let m = self.m;
         let Some(row) = m.lowering.row(ct, name) else { return self.unsupported(format!("{} method `{name}`", ct.noun())) };
@@ -224,15 +157,18 @@ impl<'m> Go<'m> {
         let guard = |g: Guard| match g {
             Guard::ElemPrim => prim,
             Guard::ElemPrimNotBool => prim && elem != Ty::Bool,
-            g => template::receiver_guard(g, &recv.ty),
+            g => template::type_guard(g, &recv.ty, ty),
         };
         // `widen`: the trait computes in `float64`; an `f32` receiver is converted in and the result converted back.
         let widen = m.lowering.widen(ct, Target::Go).filter(|_| recv.ty == Ty::F32);
         match row.select(Target::Go, guard) {
             Some(Rule::Emit { template, .. }) => {
-                let out = template::render_emit(template, &row.params, &mut GoOperands { receiver: &r, args: a, widen, recv: &recv.ty, result: ty })?;
+                // the receiver's address, for a row that changes it (`{&self}`)
+                let place = if template.contains("{&self}") { Some(self.addr(recv)?) } else { None };
+                let out = template::render_emit(template, &row.params, &mut GoOperands { receiver: &r, place, args: a, arg_exprs: args, widen, recv: &recv.ty, result: ty })?;
                 Ok(if widen.is_some() && row.returns_receiver { format!("float32({out})") } else { out })
             }
+            Some(Rule::Assign(_)) => self.unsupported(format!("{} method `{name}`: `assign` is a JavaScript place update", ct.noun())),
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no Go rule", ct.noun())),
@@ -344,7 +280,11 @@ impl<'m> Go<'m> {
 /// when the trait declares `widen` and the receiver is narrower (`float64(x)` for an `f32`).
 struct GoOperands<'a> {
     receiver: &'a str,
+    /// The receiver's address, when the template asks for it.
+    place: Option<String>,
     args: &'a [String],
+    /// The arguments' expressions, for their types (a `char` where a string is wanted).
+    arg_exprs: &'a [PExpr],
     /// `Some` when the receiver is narrower than the trait's compute type.
     widen: Option<Widen>,
     recv: &'a Ty,
@@ -352,10 +292,14 @@ struct GoOperands<'a> {
 }
 
 impl GoOperands<'_> {
-    fn convert(&self, text: &str, modifier: Option<Modifier>) -> String {
+    fn convert(&self, text: &str, ty: Option<&Ty>, modifier: Option<Modifier>) -> PResult<String> {
         match (modifier, self.widen) {
-            (Some(Modifier::F64), Some(Widen::F64)) => format!("float64({text})"),
-            _ => text.to_string(),
+            (None, _) => Ok(text.to_string()),
+            (Some(Modifier::F64), Some(Widen::F64)) => Ok(format!("float64({text})")),
+            (Some(Modifier::F64), None) => Ok(text.to_string()),
+            // a `char` is a rune: the string functions take its text
+            (Some(Modifier::Str), _) => Ok(if ty == Some(&Ty::Char) { format!("string(rune({text}))") } else { text.to_string() }),
+            (Some(Modifier::Num), _) => unsupported("this target has no `num` operand modifier for the template"),
         }
     }
 }
@@ -363,14 +307,17 @@ impl GoOperands<'_> {
 impl Operands for GoOperands<'_> {
     fn receiver(&mut self, place: bool, modifier: Option<Modifier>) -> PResult<String> {
         if place {
-            return unsupported("a receiver place in a Go template of this type");
+            return match &self.place {
+                Some(p) if modifier.is_none() => Ok(p.clone()),
+                _ => unsupported("a receiver place in a Go template of this type"),
+            };
         }
-        Ok(self.convert(self.receiver, modifier))
+        self.convert(self.receiver, Some(self.recv), modifier)
     }
 
     fn arg(&mut self, index: usize, modifier: Option<Modifier>) -> PResult<String> {
         match self.args.get(index) {
-            Some(a) => Ok(self.convert(a, modifier)),
+            Some(a) => self.convert(a, self.arg_exprs.get(index).map(|e| &e.ty), modifier),
             None => unsupported(format!("the call has no argument {index}")),
         }
     }
