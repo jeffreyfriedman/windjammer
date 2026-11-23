@@ -1,0 +1,46 @@
+// `==` compares by value: an iterator item (a reference to the element) read with `c` or a written `*c` equals an
+// owned `string` local, a `string` field or a literal, and a number item equals a number local.
+// expect: 1
+// expect: true
+// expect: true
+// expect: true
+// expect: true 1 2
+struct Cfg {
+    name: string,
+}
+
+fn filtered(items: Vec<string>) {
+    let needed = String::from("x")
+    let b = items.filter(|c| *c == needed).count()
+    println("${b}")
+}
+
+fn any_owned(items: Vec<string>) {
+    let needed = String::from("x")
+    println("${items.any(|c| c == needed)}")
+}
+
+fn owned_first(items: Vec<string>) {
+    let needed = String::from("x")
+    println("${items.any(|c| needed == c)}")
+}
+
+fn field(items: Vec<string>, cfg: Cfg) {
+    println("${items.any(|c| c == cfg.name)}")
+}
+
+fn numbers(nums: Vec<int>) {
+    let k = 2
+    let f = nums.any(|n| n == k)
+    let g = nums.filter(|n| *n == k).count()
+    let h = nums.filter(|n| n > 1).count()
+    println("${f} ${g} ${h}")
+}
+
+fn main() {
+    filtered(["x", "y"])
+    any_owned(["x", "y"])
+    owned_first(["x", "y"])
+    field(["x", "y"], Cfg { name: "y" })
+    numbers([1, 2, 3])
+}
