@@ -91,6 +91,11 @@ impl FormalScope {
     /// the prediction borrows. True when the vector changed.
     fn publish_emitted_flag(sig: &mut crate::analyzer::FunctionSignature, idx: usize, mode: OwnershipMode) -> bool {
         let before = sig.emitted_rust_ref_params.clone();
+        // Only a shared borrow is published into a signature that has no flags: `Some(false)` reads as "owned by
+        // value", which a `&mut` formal is not (a forward through a self alias must keep passing the borrow on).
+        if sig.emitted_rust_ref_params.is_none() && mode != OwnershipMode::Borrowed {
+            return false;
+        }
         if sig.emitted_rust_ref_params.is_none() {
             let flags = (0..sig.param_ownership.len())
                 .map(|i| {
