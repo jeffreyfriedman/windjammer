@@ -62,12 +62,12 @@ fn test_parent_module_reexport_import() -> Result<()> {
     fs::write(
         &texture_wj,
         r#"
-struct Texture {
+pub struct Texture {
     id: u32,
 }
 
 impl Texture {
-    fn new() -> Texture {
+    pub fn new() -> Texture {
         Texture { id: 0 }
     }
 }
@@ -93,7 +93,7 @@ pub use texture::Texture;
         r#"
 use rendering::Texture
 
-struct Sprite {
+pub struct Sprite {
     tex: Texture,
 }
 "#,

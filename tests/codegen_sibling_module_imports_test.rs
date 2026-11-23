@@ -64,14 +64,14 @@ fn test_sibling_module_import() -> Result<()> {
     fs::write(
         &texture_wj,
         r#"
-struct Texture {
+pub struct Texture {
     id: u32,
     width: i32,
     height: i32,
 }
 
 impl Texture {
-    fn new(id: u32) -> Texture {
+    pub fn new(id: u32) -> Texture {
         Texture { id: id, width: 0, height: 0 }
     }
 }
@@ -85,14 +85,14 @@ impl Texture {
         r#"
 use texture::Texture
 
-struct Sprite {
+pub struct Sprite {
     texture: Texture,
     x: f32,
     y: f32,
 }
 
 impl Sprite {
-    fn new(tex: Texture) -> Sprite {
+    pub fn new(tex: Texture) -> Sprite {
         Sprite { texture: tex, x: 0.0, y: 0.0 }
     }
 }
