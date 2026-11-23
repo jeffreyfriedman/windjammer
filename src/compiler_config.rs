@@ -81,6 +81,9 @@ pub struct CompilerConfig {
     pub shadow_validate_strict: bool,
     /// Do not write Cargo.toml for single-file builds (`--no-generate-cargo-toml`).
     pub skip_cargo_toml_generation: bool,
+    /// `wj build <entry.wj>`: the entry's `use crate::name` paths name sibling modules (`name.wj`, `name/mod.wj`) that
+    /// the build generates and declares. Off for every other compile (`wj test` files, where `crate::` is the library).
+    pub entry_use_paths_name_sibling_modules: bool,
     /// Write `<out>/<file>.rs.map` (the `.wj` -> `.rs` line map) next to each generated Rust file
     /// (`--source-maps`; `--check` turns it on because rustc error translation reads it).
     pub emit_source_maps: bool,
@@ -126,6 +129,7 @@ impl Default for CompilerConfig {
             cache_locality_json: None,
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
+            entry_use_paths_name_sibling_modules: false,
             emit_source_maps: false,
             stdlib_path: None,
             runtime_path: None,
@@ -184,6 +188,7 @@ impl CompilerConfig {
             cache_locality_json: path("WJ_CACHE_LOCALITY_JSON"),
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
+            entry_use_paths_name_sibling_modules: false,
             emit_source_maps: false,
             stdlib_path: path("WINDJAMMER_STDLIB"),
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
@@ -238,6 +243,11 @@ impl CompilerConfig {
 
     pub fn with_capability_install(mut self, install: Option<String>) -> Self {
         self.capability_install = install;
+        self
+    }
+
+    pub fn with_entry_use_paths_name_sibling_modules(mut self, on: bool) -> Self {
+        self.entry_use_paths_name_sibling_modules = on;
         self
     }
 

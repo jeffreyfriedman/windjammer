@@ -81,3 +81,21 @@ fn a_used_crate_module_that_exists_nowhere_is_a_diagnostic() {
     assert!(!b.status.success(), "a missing module built silently:\n{t}");
     assert!(t.contains("ghost.wj") && t.contains("ghost/mod.wj"), "the diagnostic does not name both candidates:\n{t}");
 }
+
+/// In a test file `use crate::name` names an item of the LIBRARY under test (here a function), never a sibling
+/// module beside the test file: compiled `wj test` must not report a missing module.
+#[test]
+fn wj_test_use_crate_item_of_the_library_is_not_a_missing_module() {
+    let d = tempfile::tempdir().unwrap();
+    write(d.path(), "wj.toml", "[package]\nname = \"pkg\"\nversion = \"0.1.0\"\nedition = \"2025\"\n");
+    write(d.path(), "src/lib.wj", "pub fn basic_auth_header(user: string) -> string {\n    \"Basic ${user}\"\n}\n");
+    write(d.path(), "tests/x_test.wj", "use crate::basic_auth_header\n\npub fn test_header() {\n    assert_eq(basic_auth_header(\"a\"), \"Basic a\")\n}\n");
+    let o = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["test", "tests/x_test.wj"])
+        .current_dir(d.path())
+        .env("WJ_CARGO_TARGET_ROOT", d.path().join(".cache"))
+        .output()
+        .unwrap();
+    let t = text(&o);
+    assert!(!t.contains("names module"), "a library item was reported as a missing module:\n{t}");
+}

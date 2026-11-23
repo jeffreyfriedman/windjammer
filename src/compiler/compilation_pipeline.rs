@@ -165,9 +165,9 @@ pub fn build_project_with_config(
     }
 
     let mut deferred_lint_errors: Vec<String> = Vec::new();
-    for file in &super::lone_script_modules::lone_script_files(path, &wj_files, library)? {
+    for file in &super::lone_script_modules::lone_script_files(path, &wj_files, library, config)? {
         let source = std::fs::read_to_string(file)?;
-        let (_parser, program) = super::lone_script_modules::parse_lone_script(file, &source, path, &wj_files, library)?;
+        let (_parser, program) = super::lone_script_modules::parse_lone_script(file, &source, path, &wj_files, library, config)?;
         if let Err(e) = super::emit_parser_warnings(&_parser) {
             deferred_lint_errors.push(format!("{}", e));
         }
@@ -429,7 +429,7 @@ pub fn build_project_with_config(
             }
         }
     }
-    super::lone_script_modules::write_directory_module_files(path, &wj_files, output, library)?;
+    super::lone_script_modules::write_directory_module_files(path, &wj_files, output, library, config)?;
 
     if library && crate_metadata.has_entries() {
         super::write_crate_metadata_json(output, &crate_metadata)?;

@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 
 /// The files a single-file build of `path` compiles: the modules the entry declares (first, so the entry reads
 /// their current metadata), then the entry. A library build compiles `wj_files` only.
-pub(super) fn lone_script_files(path: &Path, wj_files: &[PathBuf], library: bool) -> anyhow::Result<Vec<PathBuf>> {
+pub(super) fn lone_script_files(path: &Path, wj_files: &[PathBuf], library: bool, config: &crate::compiler_config::CompilerConfig) -> anyhow::Result<Vec<PathBuf>> {
     if library || !path.is_file() {
         return Ok(wj_files.to_vec());
     }
     let mut modules = Vec::new();
     let root = path.parent().unwrap_or(Path::new("."));
-    collect_declared_modules(path, path, root, &mut modules)?;
+    collect_declared_modules(path, path, root, config.entry_use_paths_name_sibling_modules, &mut modules)?;
     modules.retain(|m| !wj_files.contains(m));
     modules.extend(wj_files.iter().cloned());
     Ok(modules)
@@ -90,7 +90,7 @@ pub(super) fn declared_module_output(
 /// The module files `file` declares by `mod name` without a body, and theirs, depth first.
 /// `root` is the entry's directory, the crate root that `use crate::name` paths resolve against. A module named by
 /// a `use crate::name` path (or `mod name`) that is neither `name.wj` nor `name/mod.wj` is an error naming both.
-fn collect_declared_modules(entry: &Path, file: &Path, root: &Path, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
+fn collect_declared_modules(entry: &Path, file: &Path, root: &Path, use_paths: bool, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
     let Ok(source) = std::fs::read_to_string(file) else { return Ok(()) };
     let Ok((_parser, program)) = super::parse_wj_source(file, &source) else { return Ok(()) };
     let entry_program_used = crate_root_modules_used(&program);
@@ -114,18 +114,18 @@ fn collect_declared_modules(entry: &Path, file: &Path, root: &Path, out: &mut Ve
             .into_iter()
             .find(|p| p.is_file() && p != file);
         if let Some(module) = found.filter(|m| !out.contains(m)) {
-            collect_declared_modules(entry, &module, root, out)?;
+            collect_declared_modules(entry, &module, root, use_paths, out)?;
             out.push(module);
         }
     }
-    for name in entry_program_used {
+    for name in entry_program_used.into_iter().filter(|_| use_paths) {
         if out.iter().any(|m| crate_module_name(root, m).as_deref() == Some(name.as_str())) {
             continue;
         }
         let candidates = [root.join(format!("{name}.wj")), root.join(&name).join("mod.wj")];
         match candidates.iter().find(|p| p.is_file() && p.as_path() != file) {
             Some(module) => {
-                collect_declared_modules(entry, module, root, out)?;
+                collect_declared_modules(entry, module, root, use_paths, out)?;
                 if !out.contains(module) {
                     out.push(module.clone());
                 }
@@ -154,9 +154,9 @@ fn crate_module_name(root: &Path, file: &Path) -> Option<String> {
 /// After a single-file build generated the entry's declared modules: each directory module's `mod.rs` (`x/mod.wj`)
 /// is written by the writer a project build uses (`pub mod` children and their `pub use self::child::*`
 /// re-exports), so `wj build src/main.wj` emits what `wj build src` does for those modules.
-pub(super) fn write_directory_module_files(path: &Path, wj_files: &[PathBuf], output: &Path, library: bool) -> anyhow::Result<()> {
+pub(super) fn write_directory_module_files(path: &Path, wj_files: &[PathBuf], output: &Path, library: bool, config: &crate::compiler_config::CompilerConfig) -> anyhow::Result<()> {
     let base = path.parent().unwrap_or(Path::new("."));
-    for module in lone_script_files(path, wj_files, library)? {
+    for module in lone_script_files(path, wj_files, library, config)? {
         if wj_files.contains(&module) || module.file_name().is_none_or(|n| n != "mod.wj") {
             continue;
         }
@@ -174,9 +174,10 @@ pub(crate) fn parse_lone_script(
     path: &Path,
     wj_files: &[PathBuf],
     library: bool,
+    config: &crate::compiler_config::CompilerConfig,
 ) -> anyhow::Result<(crate::parser::Parser, crate::parser::Program<'static>)> {
     let (parser, mut program) = super::parse_wj_source(file, source)?;
-    if !library && path.is_file() && wj_files.iter().any(|f| f == file) {
+    if config.entry_use_paths_name_sibling_modules && !library && path.is_file() && wj_files.iter().any(|f| f == file) {
         declare_used_crate_modules(&mut program);
     }
     Ok((parser, program))
