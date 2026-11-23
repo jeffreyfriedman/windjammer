@@ -75,7 +75,9 @@ pub struct FloatInference {
     /// Variable element types: var_name → element_type (for Vec<T>, HashMap<K,V>)
     var_element_types: HashMap<String, Type>,
     /// Const/static types: name → Type (for const F: f32 = 1.0)
-    const_types: HashMap<String, Type>,
+    const_types: crate::type_inference::const_table::ConstTable,
+    /// File being collected (const lookups resolve to this file's own declarations first).
+    current_file_name: String,
     /// External crate metadata: crate_name → path to metadata.json directory
     /// Used for cross-crate type inference (e.g., a game engine project)
     external_crate_metadata_paths: std::collections::HashMap<String, std::path::PathBuf>,
@@ -112,7 +114,8 @@ impl FloatInference {
             source_root: None,
             current_impl_type: None,
             var_element_types: HashMap::new(),
-            const_types: HashMap::new(),
+            const_types: Default::default(),
+            current_file_name: String::new(),
             external_crate_metadata_paths: std::collections::HashMap::new(),
             debug_source: None,
             current_file_module_path: Vec::new(),
@@ -152,6 +155,7 @@ impl FloatInference {
     /// Set current file being analyzed (for file-aware ExprId generation)
     /// Returns the file_id assigned to this file
     pub fn set_current_file(&mut self, file: String) -> usize {
+        self.current_file_name = file.clone();
         if let Some(&id) = self.file_name_to_id.get(&file) {
             self.current_file_id = id;
             id

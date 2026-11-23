@@ -84,7 +84,11 @@ pub struct IntInference {
     id_to_file_name: HashMap<usize, String>,
     next_file_id: usize,
     current_impl_type: Option<String>,
-    const_types: HashMap<String, Type>,
+    const_types: crate::type_inference::const_table::ConstTable,
+    /// File being collected (const lookups resolve to this file's own declarations first).
+    current_file_name: String,
+    /// Source root and shared cache root: where imported modules' cached metadata (their constants) is read.
+    source_root: Option<(PathBuf, PathBuf)>,
 }
 
 impl Default for IntInference {
@@ -116,7 +120,9 @@ impl IntInference {
             id_to_file_name: HashMap::new(),
             next_file_id: 1,
             current_impl_type: None,
-            const_types: HashMap::new(),
+            const_types: Default::default(),
+            current_file_name: String::new(),
+            source_root: None,
         };
 
         // TDD FIX: Register stdlib method signatures (Vec, HashMap, etc.)
@@ -148,6 +154,7 @@ impl IntInference {
     }
 
     pub fn set_current_file(&mut self, file: String) -> usize {
+        self.current_file_name = file.clone();
         if let Some(&id) = self.file_name_to_id.get(&file) {
             self.current_file_id = id;
             id
@@ -202,6 +209,10 @@ impl IntInference {
         self.external_crate_metadata_paths = paths.clone();
     }
 
+    pub fn set_source_root(&mut self, path: &std::path::Path, cache_root: &std::path::Path) {
+        self.source_root = Some((path.to_path_buf(), cache_root.to_path_buf()));
+    }
+
     /// Load function signatures from external `metadata.json` when the program imports
     /// that crate (`use prebuilt_i32_lib::double`). Signature-driven — no name heuristics.
     fn load_imported_external_function_signatures<'ast>(&mut self, program: &Program<'ast>) {
@@ -253,6 +264,8 @@ impl IntInference {
         }
 
         self.load_imported_external_function_signatures(program);
+        let root = self.source_root.clone();
+        self.const_types.load_imported(program, root.as_ref());
         self.register_own_functions(program);
         self.register_use_imports_from_items(&program.items);
     }
@@ -345,12 +358,12 @@ impl IntInference {
     /// Codegen imports these into `module_const_types` so `use crate::m::VIEWER_GRID`
     /// peers range literals correctly (P3.280).
     pub fn export_const_types(&self) -> HashMap<String, Type> {
-        self.const_types.clone()
+        self.const_types.agreed()
     }
 
     /// Imported `const string` (metadata) lowers to `&'static str`.
     pub fn register_string_const(&mut self, name: String) {
-        self.const_types.insert(name, Type::String);
+        self.const_types.insert("", name, Type::String);
     }
 
     /// TDD FIX: Substitute generic type parameters with concrete types
@@ -556,10 +569,10 @@ impl IntInference {
     fn register_const_and_static<'ast>(&mut self, item: &Item<'ast>) {
         match item {
             Item::Const { name, type_, .. } => {
-                self.const_types.insert(name.clone(), type_.clone());
+                self.const_types.insert(&self.current_file_name.clone(), name.clone(), type_.clone());
             }
             Item::Static { name, type_, .. } => {
-                self.const_types.insert(name.clone(), type_.clone());
+                self.const_types.insert(&self.current_file_name.clone(), name.clone(), type_.clone());
             }
             Item::Mod { items, .. } => {
                 for sub_item in items {

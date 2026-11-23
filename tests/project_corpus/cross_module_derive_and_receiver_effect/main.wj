@@ -1,0 +1,13 @@
+// `Pair` has fields of a struct declared in another module: it still derives `PartialEq` (derive eligibility comes
+// from the field type's declaration), and `Pair::first` calls `V4::truncate(self)`, which reads: a method's effect
+// comes from the receiver's declared type, not from the name `truncate` of `Vec`/`String`. `first` takes `&self`,
+// so an immutable binding can call it. Expected by hand: both comparisons hold.
+// expect: true true
+mod v
+mod b
+
+fn main() {
+    let p = b::Pair { lo: v::V4 { x: 1.0, w: 0.0 }, hi: v::V4 { x: 2.0, w: 1.0 } }
+    let q = b::Pair { lo: v::V4 { x: 1.0, w: 0.0 }, hi: v::V4 { x: 2.0, w: 1.0 } }
+    println("${p.first() == 2.0} ${p == q}")
+}

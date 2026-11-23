@@ -366,40 +366,64 @@ impl CodeGenerator<'_> {
     /// registration mirroring `struct_emits_partial_eq` + `is_partial_eq_type`, and interleave
     /// structs with enums so mutually dependent types converge.
     pub(super) fn collect_partial_eq_types(&mut self, program: &Program) {
-        self.collect_user_trait_impls(program); // hand-written impls must be known before derives are inferred
-        for item in &program.items {
-            if let Item::Enum { decl: e, .. } = item {
-                self.collect_enum_variant_types(e);
+        self.collect_partial_eq_types_all(&[program]);
+    }
+
+    /// The same fixpoint over every file of a crate: a struct whose field is a struct (or enum) declared in another
+    /// module is `PartialEq` when that declaration is (the facts come from the declarations, not the file at hand).
+    pub fn collect_partial_eq_types_all(&mut self, programs: &[&Program]) {
+        // hand-written impls must be known before derives are inferred
+        if let [only] = programs {
+            self.collect_user_trait_impls(only);
+        } else {
+            for program in programs {
+                for item in &program.items {
+                    if let Item::Impl { block, .. } = item {
+                        if let Some(tr) = &block.trait_name {
+                            let short = tr.rsplit("::").next().unwrap_or(tr).to_string();
+                            self.idiom.user_trait_impls.insert((block.type_name.clone(), short));
+                        }
+                    }
+                }
+            }
+        }
+        for program in programs {
+            for item in &program.items {
+                if let Item::Enum { decl: e, .. } = item {
+                    self.collect_enum_variant_types(e);
+                }
             }
         }
 
         loop {
             let sz = self.partial_eq_types.len();
 
-            for item in &program.items {
-                if let Item::Struct { decl: s, .. } = item {
-                    if self.partial_eq_types.contains(&s.name) {
-                        continue;
-                    }
-                    if !self.struct_emits_partial_eq(s) {
-                        continue;
-                    }
-                    if s.fields
-                        .iter()
-                        .all(|f| self.is_partial_eq_type(&f.field_type))
-                    {
-                        self.partial_eq_types.insert(s.name.clone());
+            for program in programs {
+                for item in &program.items {
+                    if let Item::Struct { decl: s, .. } = item {
+                        if self.partial_eq_types.contains(&s.name) {
+                            continue;
+                        }
+                        if !self.struct_emits_partial_eq(s) {
+                            continue;
+                        }
+                        if s.fields
+                            .iter()
+                            .all(|f| self.is_partial_eq_type(&f.field_type))
+                        {
+                            self.partial_eq_types.insert(s.name.clone());
+                        }
                     }
                 }
-            }
 
-            for item in &program.items {
-                if let Item::Enum { decl: e, .. } = item {
-                    if self.partial_eq_types.contains(&e.name) {
-                        continue;
-                    }
-                    if self.all_enum_variants_are_partial_eq(&e.variants) {
-                        self.partial_eq_types.insert(e.name.clone());
+                for item in &program.items {
+                    if let Item::Enum { decl: e, .. } = item {
+                        if self.partial_eq_types.contains(&e.name) {
+                            continue;
+                        }
+                        if self.all_enum_variants_are_partial_eq(&e.variants) {
+                            self.partial_eq_types.insert(e.name.clone());
+                        }
                     }
                 }
             }
@@ -408,6 +432,16 @@ impl CodeGenerator<'_> {
                 break;
             }
         }
+    }
+
+    /// The types of the whole crate that support `PartialEq` (see `collect_partial_eq_types_all`).
+    pub fn partial_eq_types_snapshot(&self) -> std::collections::HashSet<String> {
+        self.partial_eq_types.clone()
+    }
+
+    /// Seed the `PartialEq` facts of the other modules of this crate before generating a file.
+    pub fn set_crate_partial_eq_types(&mut self, types: std::collections::HashSet<String>) {
+        self.partial_eq_types.extend(types);
     }
 
     /// True if `generate_struct` will emit a `#[derive(...)]` that includes `PartialEq`

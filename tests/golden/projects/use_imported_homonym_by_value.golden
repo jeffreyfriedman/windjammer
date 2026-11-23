@@ -75,7 +75,7 @@ pub fn total(deps: Deps) -> i64 {
 use super::*;
 
 use crate::deps::Deps;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub struct Listed {
     pub count: i64,

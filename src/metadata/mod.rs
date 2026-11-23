@@ -56,6 +56,11 @@ pub struct ModuleMetadata {
     #[serde(default, serialize_with = "sorted_serde::sorted_map")]
     pub trait_impls: HashMap<String, Vec<String>>,
 
+    /// `const` / `static` declarations of this module: name -> serialized Type (numeric inference of another module
+    /// types `narrow::TAU` from the declaring module, not from a same-named constant elsewhere).
+    #[serde(default, serialize_with = "sorted_serde::sorted_map")]
+    pub consts: HashMap<String, String>,
+
     /// Structs that implement Copy (enables cross-file Copy detection)
     #[serde(default)]
     pub copy_structs: Vec<String>,
@@ -92,6 +97,7 @@ impl ModuleMetadata {
             functions: HashMap::new(),
             structs: HashMap::new(),
             trait_impls: HashMap::new(),
+            consts: HashMap::new(),
             copy_structs: Vec::new(),
             non_copy_structs: Vec::new(),
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -745,6 +751,9 @@ pub fn collect_analyzed_module_metadata(
                     );
                 }
                 meta.structs.insert(decl.name.clone(), fields);
+            }
+            Item::Const { name, type_, .. } | Item::Static { name, type_, .. } => {
+                meta.consts.insert(name.clone(), ModuleMetadata::serialize_type(type_));
             }
             Item::Trait { decl, .. } => {
                 for method in &decl.methods {

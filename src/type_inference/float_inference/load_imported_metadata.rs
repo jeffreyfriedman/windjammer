@@ -65,6 +65,10 @@ impl FloatInference {
                 }
 
                 if module_path.is_empty() {
+                    // `use crate::narrow`: the import names a module; its constants are reachable as `narrow::NAME`.
+                    if let Some(module) = &type_name {
+                        self.load_module_consts(&PathBuf::from(format!("{module}.wj.meta")), module);
+                    }
                     continue; // Import from current module
                 }
 
@@ -155,6 +159,12 @@ impl FloatInference {
                         candidate,
                     ) {
                         {
+                            for (name, ty) in &meta.consts {
+                                if let Some(ty) = ModuleMetadata::deserialize_type(ty) {
+                                    let module = candidate.file_name().and_then(|n| n.to_str()).unwrap_or("").trim_end_matches(".meta").to_string();
+                                    self.const_types.insert(&module, name.clone(), ty);
+                                }
+                            }
                             // Load all function signatures from metadata
                             for (func_name, sig) in meta.functions {
                                 // Convert serialized types back to Type enum
@@ -194,6 +204,24 @@ impl FloatInference {
                 }
 
                 if !found_metadata {}
+            }
+        }
+    }
+}
+
+impl FloatInference {
+    /// Register the constants a module's cached metadata declares, under that module's file (`<module>.wj`).
+    fn load_module_consts(&mut self, candidate: &std::path::Path, module: &str) {
+        use crate::metadata::ModuleMetadata;
+        let Some(meta) = crate::metadata::read_current_cached_meta(
+            self.source_root.as_ref().map(|(root, cache)| (root.as_path(), cache.as_path())),
+            candidate,
+        ) else {
+            return;
+        };
+        for (name, ty) in &meta.consts {
+            if let Some(ty) = ModuleMetadata::deserialize_type(ty) {
+                self.const_types.insert(&format!("{module}.wj"), name.clone(), ty);
             }
         }
     }

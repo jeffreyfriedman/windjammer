@@ -1,0 +1,61 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod narrow;
+pub mod wide;
+
+// Re-export public items
+pub use narrow::*;
+pub use wide::*;
+// ==== main.rs ====
+mod narrow;
+mod wide;
+fn main() {
+    let a = narrow::wrap(7.0_f32) < 1.0_f32;
+    let b = wide::wrap(7.0_f64) < 1.0_f64;
+    let c = narrow::TAU > 6.28_f32;
+    let d = wide::TAU > 6.28_f64;
+    println!("{} {} {} {} {} {}", a, b, c, d, narrow::half(3.0_f32), wide::half(3.0_f64));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod narrow;
+pub mod wide;
+
+// Re-export public items
+pub use narrow::*;
+pub use wide::*;
+// ==== narrow.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub const TAU: f32 = 6.2831855_f32;
+
+#[inline]
+pub fn wrap(r: f32) -> f32 {
+    r % TAU
+}
+
+#[inline]
+pub fn half(x: f32) -> f32 {
+    x * 0.5_f32
+}
+
+// ==== wide.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub const TAU: f64 = 6.283185307179586_f64;
+
+#[inline]
+pub fn wrap(r: f64) -> f64 {
+    r % TAU
+}
+
+#[inline]
+pub fn half(x: f64) -> f64 {
+    x * 0.5_f64
+}
+

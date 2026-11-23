@@ -1,0 +1,10 @@
+pub struct V4 {
+    pub x: f32,
+    pub w: f32,
+}
+
+impl V4 {
+    pub fn truncate(self) -> f32 {
+        self.x
+    }
+}
