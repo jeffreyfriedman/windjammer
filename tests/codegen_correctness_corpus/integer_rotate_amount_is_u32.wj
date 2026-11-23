@@ -1,0 +1,27 @@
+// The rotate amount of an integer `rotate_left` / `rotate_right` is a `u32` (the `Integer<T>` declaration in
+// std/rust_core.wji), not the `usize` of `Vec::rotate_left` that shares the method name.
+// expect: 2251799813685248 96 128 878082066
+
+struct Hasher {
+    state: u32,
+}
+
+impl Hasher {
+    fn scramble(self) -> u32 {
+        self.state.rotate_left(7)
+    }
+}
+
+fn spin(v: u64) -> u64 {
+    v.rotate_right(13)
+}
+
+fn mix(h: u32, k: u32) -> u32 {
+    (h ^ k).rotate_left(5)
+}
+
+fn main() {
+    let x: u32 = 0x12345678
+    let y = x.rotate_left(8)
+    println("${spin(1)} ${mix(1, 2)} ${Hasher { state: 1 }.scramble()} ${y}")
+}

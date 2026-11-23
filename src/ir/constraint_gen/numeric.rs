@@ -828,6 +828,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             None if is_float_literal_tree(object) => true,
             // A receiver of unknown static type (`(a - b).abs()`): a method the integer and float surfaces declare
             // alike relates its `T` arguments and result to the receiver whatever the receiver's number kind is.
+            // A method only the integer surface declares (`rotate_left`, `count_ones`) has an integer receiver, so its
+            // declared parameter types (`n: u32`) apply whatever the receiver's width.
+            None if self.core_surface.is_some_and(|s| s.numeric_method(false, method).is_some() && s.numeric_method(true, method).is_none()) => false,
             None => return self.emit_numeric_method_either_kind(obj_var, method, arguments, arg_vars, result),
         };
         if is_int_literal_tree(object) || is_float_literal_tree(object) {
