@@ -128,27 +128,14 @@ impl<'ast> Analyzer<'ast> {
         self.module_const_types = consts;
     }
 
-    /// The declared types of every top-level `const` / `static` in `programs`, keyed by name; a name declared
-    /// with two different types is left out (its uses resolve to one of them by import, which is not modelled here).
+    /// The declared types of every top-level `const` / `static` in `programs` (the crate-wide pre-pass, read from the
+    /// parsed files and not from cached metadata): a bare name when every declaration of it agrees, and each
+    /// constant as `module::NAME` (`small::LIMIT`) by the file that declares it. A bare name declared with two
+    /// different types is left out: a use resolves it by its own file's declaration or by `module::NAME`.
     pub fn library_const_types(programs: &[crate::parser::Program<'_>]) -> HashMap<String, Type> {
-        let mut out: HashMap<String, Type> = HashMap::new();
-        let mut conflicting: HashSet<String> = HashSet::new();
-        for program in programs {
-            for item in &program.items {
-                if let crate::parser::ast::core::Item::Const { name, type_, .. } | crate::parser::ast::core::Item::Static { name, type_, .. } = item {
-                    match out.get(name) {
-                        Some(t) if t != type_ => {
-                            conflicting.insert(name.clone());
-                        }
-                        Some(_) => {}
-                        None => {
-                            out.insert(name.clone(), type_.clone());
-                        }
-                    }
-                }
-            }
-        }
-        out.retain(|n, _| !conflicting.contains(n));
+        let table = crate::type_inference::const_table::ConstTable::from_programs(programs);
+        let mut out = table.agreed();
+        out.extend(table.qualified());
         out
     }
 

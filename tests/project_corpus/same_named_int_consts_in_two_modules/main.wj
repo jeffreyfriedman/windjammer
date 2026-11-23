@@ -1,0 +1,14 @@
+// `small` and `big` declare `LIMIT` at different integer widths: `small::LIMIT + 55` is a u8 sum (255, no overflow) and
+// `big::LIMIT + 5` a u64 sum. Each literal takes the width of the module the constant is named through, and each
+// module's own literals take that module's declaration. Expected by hand: 255 5000000005 150 4999999990.
+// `imported` reaches `small::LIMIT` through `use crate::small::LIMIT`: its `LIMIT + 5` is a u8 sum (205).
+// expect: 255 5000000005 150 4999999990 205
+mod small
+mod big
+mod imported
+
+fn main() {
+    let a = small::LIMIT + 55
+    let b = big::LIMIT + 5
+    println("${a} ${b} ${small::room(50)} ${big::room(10)} ${imported::bump()}")
+}

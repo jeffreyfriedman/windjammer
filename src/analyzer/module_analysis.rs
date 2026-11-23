@@ -156,6 +156,17 @@ impl<'ast> Analyzer<'ast> {
                         std::sync::Arc::make_mut(&mut self.module_const_types).insert(name.clone(), type_.clone());
                     }
                 }
+                Item::Use { path, alias: None, .. } if path.len() >= 2 && path[0] != "std" => {
+                    // `use crate::small::LIMIT`: the bare name is the constant of that module, even where another
+                    // module declares a `LIMIT` of its own (the library map left the bare name out).
+                    let qualified = path[path.len() - 2..].join("::");
+                    if let Some(type_) = self.module_const_types.get(&qualified).cloned() {
+                        let name = &path[path.len() - 1];
+                        if self.module_const_types.get(name) != Some(&type_) {
+                            std::sync::Arc::make_mut(&mut self.module_const_types).insert(name.clone(), type_);
+                        }
+                    }
+                }
                 Item::TypeAlias { name, type_params, target, .. } => {
                     let params = type_params.iter().map(|p| p.name.clone()).collect();
                     std::sync::Arc::make_mut(&mut self.type_aliases).insert(name.clone(), (params, target.clone()));

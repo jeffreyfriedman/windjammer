@@ -1,0 +1,5 @@
+pub const LIMIT: u64 = 5000000000
+
+pub fn room(x: u64) -> u64 {
+    LIMIT - x
+}
