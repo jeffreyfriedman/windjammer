@@ -1,0 +1,78 @@
+// ==== b.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::v::V4;
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub struct Pair {
+    pub lo: V4,
+    pub hi: V4,
+}
+
+impl Pair {
+#[inline]
+pub fn widen(&self, k: f32) -> V4 {
+        V4 { x: self.lo.x * k, w: self.hi.w }
+}
+#[inline]
+pub fn first(&self) -> f32 {
+        self.widen(2.0_f32).truncate()
+}
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod b;
+pub mod v;
+
+// Re-export public items
+pub use b::*;
+pub use v::*;
+// ==== main.rs ====
+mod v;
+mod b;
+fn main() {
+    let p = b::Pair { lo: v::V4 { x: 1.0_f32, w: 0.0_f32 }, hi: v::V4 { x: 2.0_f32, w: 1.0_f32 } };
+    let q = b::Pair { lo: v::V4 { x: 1.0_f32, w: 0.0_f32 }, hi: v::V4 { x: 2.0_f32, w: 1.0_f32 } };
+    println!("{} {}", p.first() == 2.0_f32, p == q);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod b;
+pub mod v;
+
+// Re-export public items
+pub use b::*;
+pub use v::*;
+// ==== v.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct V4 {
+    pub x: f32,
+    pub w: f32,
+}
+impl V4 {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.x.to_ne_bytes());
+        __bytes.extend_from_slice(&self.w.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl V4 {
+#[inline]
+pub fn truncate(&self) -> f32 {
+        self.x
+}
+}
+
