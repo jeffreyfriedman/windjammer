@@ -276,7 +276,7 @@ digraph deps {
   "compiler" -> "module_system" [label="3"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
-  "compiler" -> "parser" [label="113"];
+  "compiler" -> "parser" [label="114"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
