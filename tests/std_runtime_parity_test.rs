@@ -46,6 +46,9 @@ fn runtime_source(module: &str) -> Option<String> {
     // a module that publishes a private child with `pub use child::*;` (`time.rs`: `pub use calendar::*;`) defines
     // those functions under its own path, so the child's source is part of the module
     let top = top.map(|t| {
+        // the parent's own test module ends its public surface: `runtime_fns` cuts the joined text at the first
+        // `#[cfg(test)]`, so the parent's tests must not hide the children that follow them
+        let t = t.split("#[cfg(test)]").next().unwrap_or(&t).to_string();
         let children: String = t
             .lines()
             .filter_map(|l| l.trim().strip_prefix("pub use ")?.strip_suffix("::*;").map(str::to_string))

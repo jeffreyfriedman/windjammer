@@ -71,6 +71,7 @@ pub mod helpers;
 pub mod identifier_and_literal_generation;
 pub mod if_statement_generation;
 pub mod import_generation;
+mod inline_module_items;
 mod int_promotion_type_inference;
 mod ir_call_site;
 mod slice_arg_to_vec;
