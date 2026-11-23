@@ -92,10 +92,15 @@ impl StdSurface {
         if matches!(&want, Ty::Param(n) if method_generics.contains(n)) {
             return None;
         }
-        // the receiver's generics are known; a method generic is not yet (the closure's result): `Unknown`
-        let mut known = recv_args;
-        known.resize(generics.len(), Ty::Unknown);
-        Some(want.subst(&generics, &known))
+        // The receiver's generics are known. A method generic is not yet (it is the closure's result, which the closure's body
+        // decides): a closure type that mentions one is wanted with an unknown result, not a half-known one (`Option<Unknown>`
+        // would make `if c { Some(x) } else { None }` an untypable body).
+        let ty = want.subst(&type_generics, &recv_args);
+        let open = |t: &Ty| if method_generics.iter().any(|g| mentions(t, g)) { Ty::Unknown } else { t.clone() };
+        Some(match ty {
+            Ty::Fn(params, ret) => Ty::Fn(params.iter().map(open).collect(), Box::new(open(&ret))),
+            other => other,
+        })
     }
 
     /// The declared result of `name` on a type of `std/rust_core.wji` whose generics (`recv_args` for the trait's, then
@@ -163,6 +168,13 @@ fn bind_generics(pattern: &Ty, found: &Ty, generics: &[String], bound: &mut [Opt
         }
         _ => {}
     }
+}
+
+/// Whether a type mentions the generic `name`.
+fn mentions(t: &Ty, name: &str) -> bool {
+    let mut names = Vec::new();
+    mentioned(t, &mut names);
+    names.iter().any(|n| n == name)
 }
 
 /// The generic names a type mentions.
@@ -495,7 +507,7 @@ mod surface_tests {
     }
 
     fn arg_of(ty: Ty) -> PExpr {
-        PExpr::new(ty, super::ir::PK::None)
+        PExpr::new(ty, crate::codegen::portable::ir::PK::None)
     }
 
     fn closure(ret: Ty) -> PExpr {
@@ -544,7 +556,8 @@ mod surface_tests {
         assert_eq!(s.declared_arg(&opt, "ok_or", 0), None, "a bare method generic has no expected type");
         assert_eq!(s.declared_arg(&res, "map_err", 0), Some(Ty::Fn(vec![Ty::Str], Box::new(Ty::Unknown))));
         assert_eq!(s.declared_arg(&res, "unwrap_or_else", 0), Some(Ty::Fn(vec![Ty::Str], Box::new(int.clone()))));
-        assert_eq!(s.declared_arg(&res, "and_then", 0), Some(Ty::Fn(vec![int], Box::new(Ty::Result(Box::new(Ty::Unknown), Box::new(Ty::Str))))));
+        assert_eq!(s.declared_arg(&res, "and_then", 0), Some(Ty::Fn(vec![int.clone()], Box::new(Ty::Unknown))), "a half-known result is no result");
+        assert_eq!(s.declared_arg(&opt, "and_then", 0), Some(Ty::Fn(vec![int], Box::new(Ty::Unknown))));
         assert_eq!(s.declared_arg(&res, "is_ok", 0), None);
     }
 }

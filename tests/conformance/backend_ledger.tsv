@@ -26,7 +26,7 @@ javascript	spec	numeric/SPEC-NUM-018	Error: unsupported on this backend: built-i
 javascript	spec	numeric/SPEC-NUM-026	Error: unsupported on this backend: integer method `swap_bytes`
 javascript	spec	ownership/SPEC-OWN-010	Error: unsupported on this backend: call of unknown function `drop` (line 42)
 javascript	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `drop old`
-javascript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
+javascript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`: taking a value out of an Option place is not part of the portable surface
 javascript	spec	statements/SPEC-STMT-007	Error: unsupported on this backend: defer
 javascript	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
 javascript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
@@ -54,7 +54,7 @@ typescript	spec	numeric/SPEC-NUM-018	Error: unsupported on this backend: built-i
 typescript	spec	numeric/SPEC-NUM-026	Error: unsupported on this backend: integer method `swap_bytes`
 typescript	spec	ownership/SPEC-OWN-010	Error: unsupported on this backend: call of unknown function `drop` (line 42)
 typescript	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `drop old`
-typescript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
+typescript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`: taking a value out of an Option place is not part of the portable surface
 typescript	spec	statements/SPEC-STMT-007	Error: unsupported on this backend: defer
 typescript	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
 typescript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
@@ -88,7 +88,7 @@ go	spec	numeric/SPEC-NUM-018	Error: unsupported on this backend: built-in method
 go	spec	numeric/SPEC-NUM-026	Error: unsupported on this backend: integer method `swap_bytes`
 go	spec	ownership/SPEC-OWN-010	Error: unsupported on this backend: call of unknown function `drop` (line 42)
 go	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `drop old`
-go	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
+go	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`: taking a value out of an Option place is not part of the portable surface
 go	spec	statements/SPEC-STMT-009	go vet or go build rejected the generated code
 go	spec	statements/SPEC-STMT-011	go vet or go build rejected the generated code
 go	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
