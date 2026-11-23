@@ -13,7 +13,7 @@
     "cli.subcommands": 45,
     "conformance.backends": 3,
     "conformance.programs": 156,
-    "conformance.unsupported_pairs": 27,
+    "conformance.unsupported_pairs": 24,
     "drift.corpus_cases": 1946,
     "errors.codes_total": 80,
     "interpreter.features_supported": 44,
@@ -23,7 +23,7 @@
     "lints.w_codes": 7,
     "spec.example_files": 299,
     "stdlib.files": 43,
-    "tests.rust_files": 2099,
-    "tests.wj_programs": 2280
+    "tests.rust_files": 2102,
+    "tests.wj_programs": 2287
   }
 }
