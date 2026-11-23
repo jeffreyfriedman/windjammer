@@ -198,11 +198,11 @@ impl<'e> Lowerer<'e> {
         }
         let mut out = Vec::new();
         for (i, (_, a)) in args.iter().enumerate() {
-            let w = if owner == "String" || owner == "string" { Some(Ty::Str) } else { out.first().map(|p: &PExpr| p.ty.clone()).filter(|_| i > 0) };
+            let w = self.env.surface.declared_static_arg(&owner, name, i).or_else(|| out.first().map(|p: &PExpr| p.ty.clone()).filter(|_| i > 0));
             let v = self.expr(a, w.as_ref())?;
             out.push(self.own(v));
         }
-        match builtins::static_ret(&owner, name, &out, want) {
+        match builtins::static_ret(&self.env.surface, &owner, name, &out, want) {
             Some(ty) => Ok(PExpr::new(ty, PK::StaticCall { owner, name: name.to_string(), args: out })),
             None => self.err(format!("unknown associated function `{owner}::{name}`")),
         }
@@ -423,14 +423,14 @@ impl<'e> Lowerer<'e> {
         };
         let mut lowered: Vec<PExpr> = Vec::new();
         for (i, (_, a)) in args.iter().enumerate() {
-            let w = builtins::arg_want(&recv.ty, method, i, &lowered);
+            let w = builtins::arg_want(&self.env.surface, &recv.ty, method, i, &lowered);
             let v = self.expr(a, w.as_ref())?;
             if let Some(w) = &w {
                 self.constrain(w, &v.ty);
             }
-            lowered.push(if builtins::stores_args(method) { self.own(v) } else { v });
+            lowered.push(if builtins::stores_arg(&self.env.surface, &recv.ty, method, i) { self.own(v) } else { v });
         }
-        let ty = builtins::ret_ty(&recv.ty, method, &lowered, want_for_ret.as_ref());
+        let ty = builtins::ret_ty(&self.env.surface, &recv.ty, method, &lowered, want_for_ret.as_ref());
         let Some(mut ty) = ty else { return self.err(format!("built-in method `{}::{method}` is not supported", recv.ty.describe())) };
         if method == "collect" && ty == Ty::Vec(Box::new(Ty::Unknown)) {
             ty = Ty::Vec(Box::new(recv.ty.elem().unwrap_or(Ty::Unknown)));

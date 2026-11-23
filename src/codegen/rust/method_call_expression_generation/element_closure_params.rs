@@ -50,9 +50,9 @@ pub(in crate::codegen::rust) fn reference_depth(t: &Type) -> (usize, &Type) {
 }
 
 impl<'ast> CodeGenerator<'ast> {
-    /// The Rust core surface (`std/rust_core.wji`), parsed on first use and then kept by this generator.
-    pub(in crate::codegen::rust) fn core_surface(&self) -> &CoreSurface {
-        self.core_surface.get_or_init(CoreSurface::parse)
+    /// The Rust core surface (`std/rust_core.wji`): one parse per process, shared with the solver and the portable backends.
+    pub(in crate::codegen::rust) fn core_surface(&self) -> &'static CoreSurface {
+        crate::ir::stdlib_tables::shared_core_surface()
     }
 
     /// Whether a call can take part in an iterator chain at all: the surface declares the method on an iterator or

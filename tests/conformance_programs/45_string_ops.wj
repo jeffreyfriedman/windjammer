@@ -38,7 +38,7 @@ fn main() {
     println("{}", text.len())
     println("{}", vowels)
     println("{}", h)
-    println("{}", upper.substring(0, 12))
-    println("{}", rev.substring(0, 12))
+    println("{}", upper[0..12])
+    println("{}", rev[0..12])
     println("{}", text.contains("ab"))
 }

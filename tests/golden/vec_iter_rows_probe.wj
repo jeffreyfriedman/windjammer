@@ -1,0 +1,190 @@
+// Every method of the lists (Vec) and iterators the portable emitters lower, on every element kind that changes the text
+// (integer, float, string, bool, struct), and `collect` / `sum` / `product` into every target type.
+// tests/golden/vec_iter_rows_probe.{js,go}.txt hold the JavaScript and Go this program emitted before the Vec and Iterator rows
+// moved into std/rust_core.wji (docs/design/table-driven-std-surface.md, stage 6); the output must stay byte-identical.
+struct Pt {
+    x: i32,
+    y: i32,
+}
+
+fn probe_list_int(n: i32) {
+    let mut xs: Vec<i32> = Vec::new()
+    println("${xs.is_empty()}")
+    xs.push(n)
+    xs.push(n + 1)
+    xs.push(n + 2)
+    xs.push(n)
+    println("${xs.len()}")
+    println("${xs.contains(n)}")
+    println("${xs.first().unwrap_or(0)}")
+    println("${xs.last().unwrap_or(0)}")
+    println("${xs.get(1).unwrap_or(0)}")
+    println("${xs.get(9).is_none()}")
+    xs.insert(1, 40)
+    println("${xs.remove(0)}")
+    println("${xs.swap_remove(0)}")
+    xs.swap(0, 1)
+    xs.sort()
+    xs.reverse()
+    xs.dedup()
+    xs.truncate(5)
+    println("${xs.pop().unwrap_or(0)}")
+    let more: Vec<i32> = [7, 8, 9]
+    xs.extend(more)
+    xs.retain(|v| v > 7)
+    let tail = xs.split_off(1)
+    println("${tail.len()}")
+    let sorted: Vec<i32> = [1, 3, 5, 7]
+    println("${sorted.binary_search(5).is_ok()}")
+    println("${sorted.binary_search(4).is_err()}")
+    for w in sorted.windows(2) {
+        println("${w.len()}")
+    }
+    for c in sorted.chunks(3) {
+        println("${c.len()}")
+    }
+    let (a, b) = sorted.split_at(1)
+    println("${a.len()} ${b.len()}")
+    xs.clear()
+    println("${xs.len()}")
+    let size: int = sorted.len()
+    let small: i32 = sorted.len()
+    let wide: u64 = sorted.len()
+    println("${size} ${small} ${wide}")
+}
+
+fn probe_list_kinds(s: string, f: f64, b: bool) {
+    let mut words: Vec<string> = [s, "b", "a"]
+    words.sort()
+    println("${words.contains("a")}")
+    println("${words.join("-")}")
+    let mut flags: Vec<bool> = [b, true, false]
+    flags.sort()
+    println("${flags.contains(b)}")
+    let mut fs: Vec<f64> = [f, 1.5, 0.5]
+    fs.sort()
+    println("${fs.contains(f)}")
+    let pts: Vec<Pt> = [Pt { x: 1, y: 2 }, Pt { x: 3, y: 4 }]
+    println("${pts.len()}")
+    println("${pts.first().unwrap().x}")
+    println("${pts.iter().map(|p| p.x + p.y).sum()}")
+    let more: Vec<Pt> = pts.iter().map(|p| Pt { x: p.x + 1, y: p.y }).collect()
+    println("${more.len()}")
+    let mut grid: Vec<Vec<i32>> = Vec::new()
+    grid.push([1, 2])
+    grid.push([3])
+    println("${grid.len()}")
+    println("${grid.contains([1, 2])}")
+    let copy = pts.iter().cloned().collect::<Vec<Pt>>()
+    println("${copy.len()}")
+}
+
+fn probe_iter(n: i32, s: string) {
+    let mut xs: Vec<i32> = [n, n + 1, n + 2, n + 3, n + 4]
+    let doubled: Vec<i32> = xs.iter().map(|v| v * 2).collect()
+    println("${doubled.len()}")
+    let evens: Vec<i32> = xs.iter().filter(|v| v % 2 == 0).collect()
+    println("${evens.len()}")
+    xs.iter().for_each(|v| println("${v}"))
+    let fm: Vec<i32> = xs.iter().filter_map(|v| if v > 2 { Some(v) } else { None }).collect()
+    println("${fm.len()}")
+    let flat: Vec<i32> = xs.iter().flat_map(|v| [v, v]).collect()
+    println("${flat.len()}")
+    for (i, v) in xs.iter().enumerate() {
+        println("${i} ${v}")
+    }
+    let ys: Vec<i32> = [10, 20, 30]
+    for (a, b) in xs.iter().zip(ys.iter()) {
+        println("${a} ${b}")
+    }
+    let rev: Vec<i32> = xs.iter().rev().collect()
+    println("${rev.len()}")
+    let t: Vec<i32> = xs.iter().take(2).collect()
+    let k: Vec<i32> = xs.iter().skip(2).collect()
+    let st: Vec<i32> = xs.iter().step_by(2).collect()
+    let tw: Vec<i32> = xs.iter().take_while(|v| v < 3).collect()
+    let sw: Vec<i32> = xs.iter().skip_while(|v| v < 3).collect()
+    let ch: Vec<i32> = xs.iter().chain(ys.iter()).collect()
+    println("${t.len()} ${k.len()} ${st.len()} ${tw.len()} ${sw.len()} ${ch.len()}")
+    let total: i32 = xs.iter().sum()
+    let prod: i32 = xs.iter().product()
+    let t64: i64 = xs.iter().map(|v| v as i64).sum()
+    let p8: u8 = [2, 3].iter().product()
+    println("${total} ${prod} ${t64} ${p8}")
+    let fl: Vec<f64> = [1.5, 2.5]
+    let fsum: f64 = fl.iter().sum()
+    let fprod: f64 = fl.iter().product()
+    println("${fsum} ${fprod}")
+    let folded = xs.iter().fold(0, |acc, v| acc + v)
+    println("${folded}")
+    let cnt: int = xs.iter().filter(|v| v > 2).count()
+    let cnt32: i32 = xs.iter().count()
+    println("${cnt} ${cnt32}")
+    println("${xs.iter().any(|v| v > 3)}")
+    println("${xs.iter().all(|v| v > 3)}")
+    println("${xs.iter().min().unwrap_or(0)}")
+    println("${xs.iter().max().unwrap_or(0)}")
+    println("${xs.iter().find(|v| v > 2).unwrap_or(0)}")
+    println("${xs.iter().position(|v| v > 2).unwrap_or(0)}")
+    println("${xs.iter().last().unwrap_or(0)}")
+    println("${xs.iter().nth(1).unwrap_or(0)}")
+    let mut it = xs.iter()
+    println("${it.next().unwrap_or(0)}")
+    for v in xs.iter_mut() {
+        println("${v}")
+    }
+    for v in xs.into_iter() {
+        println("${v}")
+    }
+    let sq: i32 = (1..4).map(|v| v * v).sum()
+    println("${sq}")
+    let r: Vec<i32> = (0..3).collect()
+    println("${r.len()}")
+    let incl: i32 = (1..=3).product()
+    println("${incl}")
+    let letters: Vec<string> = [s, "x"]
+    let joined: string = letters.iter().map(|w| w.to_uppercase()).collect::<Vec<string>>().join("+")
+    println("${joined}")
+    // direct iterator methods on a list (W0003)
+    let direct: Vec<i32> = xs.map(|v| v + 1).collect()
+    println("${direct.len()}")
+}
+
+fn probe_collect(s: string) {
+    let xs: Vec<i32> = [3, 1, 3, 2]
+    let set: HashSet<i32> = xs.iter().cloned().collect()
+    println("${set.len()}")
+    let bset: BTreeSet<i32> = xs.iter().cloned().collect()
+    println("${bset.len()}")
+    let pairs: Vec<(string, i32)> = [("a", 1), ("b", 2)]
+    let map: HashMap<string, i32> = pairs.iter().cloned().collect()
+    println("${map.len()}")
+    let bmap: BTreeMap<string, i32> = pairs.iter().cloned().collect()
+    println("${bmap.len()}")
+    let text: string = s.chars().collect()
+    println("${text}")
+    let parts: Vec<string> = [s, "y"]
+    let text2: string = parts.iter().cloned().collect()
+    println("${text2}")
+    let strs: Vec<string> = ["1", "2", "x"]
+    let parsed: Result<Vec<i32>, string> = strs.iter().map(|v| v.parse::<i32>()).collect()
+    println("${parsed.is_err()}")
+    let somes: Option<Vec<i32>> = xs.iter().map(|v| if v > 0 { Some(v) } else { None }).collect()
+    println("${somes.is_some()}")
+    let back = xs.iter().copied().collect::<Vec<i32>>()
+    println("${back.len()}")
+    println("${3.to_string()}")
+    println("${2.5.to_string()}")
+    println("${true.to_string()}")
+    println("${s.to_string()}")
+    println("${'c'.to_string()}")
+    println("${Some(4).unwrap().to_string()}")
+    println("${xs.iter().max().unwrap_or(0).to_string()}")
+}
+
+fn main() {
+    probe_list_int(3)
+    probe_list_kinds("z", 2.5, true)
+    probe_iter(1, "w")
+    probe_collect("hey")
+}

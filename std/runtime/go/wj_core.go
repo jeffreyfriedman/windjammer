@@ -981,7 +981,6 @@ func wjOptFilter[T any](o Option[T], f func(T) bool) Option[T] {
 	return Option[T]{}
 }
 
-func wjOptIsSomeAnd[T any](o Option[T], f func(T) bool) bool { return o.Ok && f(o.V) }
 
 func wjOkOr[T, E any](o Option[T], e E) Result[T, E] {
 	if o.Ok {
@@ -990,12 +989,6 @@ func wjOkOr[T, E any](o Option[T], e E) Result[T, E] {
 	return Result[T, E]{E: e}
 }
 
-func wjOptMapOr[T, U any](o Option[T], d U, f func(T) U) U {
-	if o.Ok {
-		return f(o.V)
-	}
-	return d
-}
 
 func wjUnwrapRes[T, E any](r Result[T, E]) T {
 	if !r.Ok {
@@ -1067,7 +1060,6 @@ func wjResErr[T, E any](r Result[T, E]) Option[E] {
 // ---------------------------------------------------------------------------------------------
 
 func wjPush[T any](v *[]T, x T)           { *v = append(*v, x) }
-func wjPushFront[T any](v *[]T, x T)      { *v = append([]T{x}, *v...) }
 func wjClear[T any](v *[]T)               { *v = (*v)[:0] }
 func wjExtend[T any](v *[]T, o []T)       { *v = append(*v, o...) }
 
@@ -1081,14 +1073,6 @@ func wjPop[T any](v *[]T) Option[T] {
 	return Option[T]{Ok: true, V: x}
 }
 
-func wjPopFront[T any](v *[]T) Option[T] {
-	if len(*v) == 0 {
-		return Option[T]{}
-	}
-	x := (*v)[0]
-	*v = (*v)[1:]
-	return Option[T]{Ok: true, V: x}
-}
 
 func wjGet[T any, I integer](v []T, i I) Option[T] {
 	if i < 0 || uint64(i) >= uint64(len(v)) {
@@ -1303,11 +1287,6 @@ func wjTruncate[T any, I integer](v *[]T, n I) {
 
 func wjSwap[T any, I, J integer](v []T, i I, j J) { v[i], v[j] = v[j], v[i] }
 
-func wjDrain[T any](v *[]T) []T {
-	out := slices.Clone(*v)
-	*v = (*v)[:0]
-	return out
-}
 
 func wjWindows[T any, I integer](v []T, n I) [][]T {
 	var out [][]T
@@ -1364,11 +1343,6 @@ func wjSplitAt[T any, I integer](v []T, n I) Tuple2[[]T, []T] {
 	return Tuple2[[]T, []T]{F0: slices.Clone(v[:n]), F1: slices.Clone(v[n:])}
 }
 
-func wjFill[T any](v []T, x T) {
-	for i := range v {
-		v[i] = x
-	}
-}
 
 func wjVecSlice[T any, A, B integer](v []T, a A, b B, incl bool) []T {
 	s, e := int(a), int(b)
@@ -1749,14 +1723,6 @@ func wjValues[K comparable, V any](m map[K]V) []V {
 	return out
 }
 
-func wjEntries[K comparable, V any](m map[K]V) []Tuple2[K, V] {
-	ks := wjSortedKeys(m)
-	out := make([]Tuple2[K, V], 0, len(ks))
-	for _, k := range ks {
-		out = append(out, Tuple2[K, V]{F0: k, F1: m[k]})
-	}
-	return out
-}
 
 func wjSetInsert[K comparable](m map[K]struct{}, k K) bool {
 	_, ok := m[k]
@@ -1956,19 +1922,7 @@ func wjIsWhitespace(c Char) bool { return unicode.IsSpace(rune(c)) }
 func wjIsUpper(c Char) bool      { return unicode.IsUpper(rune(c)) }
 func wjIsLower(c Char) bool      { return unicode.IsLower(rune(c)) }
 
-func wjAsciiUpper(c Char) Char {
-	if c >= 'a' && c <= 'z' {
-		return c - 32
-	}
-	return c
-}
 
-func wjAsciiLower(c Char) Char {
-	if c >= 'A' && c <= 'Z' {
-		return c + 32
-	}
-	return c
-}
 
 func wjToDigit[R integer](c Char, radix R) Option[uint32] {
 	var d int

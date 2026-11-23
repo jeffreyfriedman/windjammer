@@ -5,4 +5,5 @@
 
 pub mod enumerable;
 pub mod known_methods;
+pub mod lowering;
 pub mod std_functions;

@@ -131,11 +131,11 @@ impl IrPipeline {
         self
     }
 
-    /// The typed Rust core surface: the session's copy, or parsed for this pipeline.
-    fn core_surface(&self) -> std::borrow::Cow<'_, crate::typing::core_surface::CoreSurface> {
+    /// The typed Rust core surface: the session's copy, or the process-wide parse.
+    fn core_surface(&self) -> &crate::typing::core_surface::CoreSurface {
         match &self.stdlib {
-            Some(t) => std::borrow::Cow::Borrowed(&t.core_surface),
-            None => std::borrow::Cow::Owned(crate::typing::core_surface::CoreSurface::parse()),
+            Some(t) => &t.core_surface,
+            None => super::stdlib_tables::shared_core_surface(),
         }
     }
 

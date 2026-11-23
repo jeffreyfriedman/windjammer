@@ -1,0 +1,59 @@
+// Probe of the portable module functions (std::math, std::strings, std::fs, std::time): every function the
+// portable sigs table lists, called once. Recorded with the stage 6 compiler before stage 7 touches them;
+// a change in the emitted JS or Go is re-recorded by cause (the lines of the migrated functions only).
+use std::fs
+use std::math
+use std::strings
+use std::time
+
+fn main() {
+    let x = 2.5
+    println("{}", math::sqrt(x) + math::cbrt(x) + math::round(x) + math::floor(x) + math::ceil(x) + math::trunc(x))
+    println("{}", math::sin(x) + math::cos(x) + math::tan(x) + math::asin(0.5) + math::acos(0.5) + math::atan(x))
+    println("{}", math::exp(x) + math::ln(x) + math::log2(x) + math::log10(x) + math::abs_f64(-x) + math::signum(x))
+    println("{}", math::to_radians(x) + math::to_degrees(x) + math::pow(x, 2.0) + math::atan2(x, 1.0) + math::hypot(x, 2.0))
+    println("{}", math::min_f64(x, 1.0) + math::max_f64(x, 1.0) + math::clamp_f64(x, 0.0, 1.0))
+    println("{} {} {} {}", math::abs_i64(-5), math::min_i64(3, 9), math::max_i64(3, 9), math::clamp_i64(12, 0, 10))
+    println("{} {} {}", math::is_nan(x), math::is_infinite(x), math::is_finite(x))
+    let s = "  Hello World  "
+    println("{}|{}|{}|{}|{}", strings::to_upper(s), strings::to_lower(s), strings::trim(s), strings::trim_start(s), strings::trim_end(s))
+    let parts = strings::split("a,b,c", ",")
+    println("{} {}", parts.len(), strings::join(parts, "-"))
+    println("{} {}", strings::split_lines("a\nb").len(), strings::split_whitespace(" a  b ").len())
+    let cs = strings::chars("abc")
+    println("{} {}", cs.len(), strings::from_chars(cs))
+    println("{} {}", strings::substring_chars("hello", 1, 3), strings::substring("hello", 0, 2))
+    println("{} {} {} {}", strings::is_empty(""), strings::starts_with("abc", "a"), strings::ends_with("abc", "c"), strings::contains("abc", "b"))
+    println("{} {} {} {}", strings::replace("aXa", "X", "-"), strings::len("abc"), strings::char_count("日本"), strings::repeat("ab", 3))
+    println("{}", strings::byte_at("abc", 1))
+    let path = "/tmp/wj_module_fns_probe.txt"
+    match fs::write(path, "one\n") {
+        Ok(_) => println("written"),
+        Err(e) => println("failed {}", e),
+    }
+    match fs::append(path, "two\n") {
+        Ok(_) => println("appended"),
+        Err(e) => println("failed {}", e),
+    }
+    match fs::read_to_string(path) {
+        Ok(text) => println("{}", text.len()),
+        Err(e) => println("failed {}", e),
+    }
+    println("{} {} {}", fs::exists(path), fs::is_file(path), fs::is_dir("/tmp"))
+    match fs::create_dir_all("/tmp/wj_module_fns_probe_dir/a") {
+        Ok(_) => println("created"),
+        Err(e) => println("failed {}", e),
+    }
+    match fs::remove_dir_all("/tmp/wj_module_fns_probe_dir") {
+        Ok(_) => println("removed dir"),
+        Err(e) => println("failed {}", e),
+    }
+    match fs::remove_file(path) {
+        Ok(_) => println("removed"),
+        Err(e) => println("failed {}", e),
+    }
+    let a = time::now_millis()
+    time::sleep_millis(5)
+    let b = time::now_millis()
+    println("{} {}", b >= a, time::now_unix() > 0 && time::timestamp() > 0)
+}

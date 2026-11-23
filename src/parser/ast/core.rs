@@ -511,6 +511,8 @@ pub struct TraitDecl<'ast> {
     pub associated_types: Vec<AssociatedType>, // Associated type declarations: type Item;
     pub methods: Vec<TraitMethod<'ast>>,
     pub doc_comment: Option<String>, // Documentation comment (/// lines)
+    /// Attributes on the trait: `@go(widen = "f64")` on a std surface trait (docs/design/table-driven-std-surface.md).
+    pub decorators: Vec<Decorator<'ast>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

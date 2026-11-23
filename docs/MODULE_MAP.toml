@@ -491,7 +491,7 @@ known_violations = ["analyzer", "codegen", "metadata"]
 layer = "types"
 owner_stage = "the type owner (option C; stage C1: typed Rust core surface)"
 module_md = "src/typing/MODULE.md"
-allowed_imports = ["lexer", "parser", "parser_impl", "type_classification"]
+allowed_imports = ["lexer", "parser", "parser_impl", "stdlib_surface", "type_classification"]
 known_violations = []
 
 [modules.type_registry]

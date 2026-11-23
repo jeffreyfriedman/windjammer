@@ -185,7 +185,7 @@ impl<'e> Lowerer<'e> {
                 return Ok(PExpr::new(Ty::Adt(owner.clone(), args), PK::Variant { enum_name: owner, variant: member.to_string(), fields: vec![] }));
             }
         }
-        if let Some(t) = crate::codegen::portable::builtins::static_ret(&owner, member, &[], want) {
+        if let Some(t) = crate::codegen::portable::builtins::static_ret(&self.env.surface, &owner, member, &[], want) {
             return Ok(PExpr::new(t, PK::StaticCall { owner, name: member.to_string(), args: vec![] }));
         }
         if let Some(sig) = self.env.method(&owner, member) {

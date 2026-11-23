@@ -4,17 +4,7 @@
 
 # ---- Rust target: generated Rust rejected by rustc (see docs/known-issues/) ------------------
 [[unsupported]]
-program = "114_hashmap_entry_counting"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
 program = "30_iter_map_filter"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
-program = "44_hashmap_counts"
 backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 
@@ -25,11 +15,6 @@ reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-liter
 
 [[unsupported]]
 program = "62_vec_alias_semantics"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
-program = "72_hashmap_ops"
 backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 

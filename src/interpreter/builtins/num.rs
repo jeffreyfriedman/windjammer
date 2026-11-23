@@ -281,6 +281,38 @@ fn register_int(r: &mut Registry) {
         }
         Ok(Value::Int(t.wrap(out as i128), t))
     });
+    int_pure!(r, "reverse_bits", |_, v, _| {
+        let (n, t) = int_of(v);
+        let bits = t.bits();
+        let u = (n & mask(t)) as u128;
+        let mut out: u128 = 0;
+        for i in 0..bits {
+            out |= ((u >> i) & 1) << (bits - 1 - i);
+        }
+        Ok(Value::Int(t.wrap(out as i128), t))
+    });
+    int_pure!(r, "checked_shl", |_, v, a| {
+        let (n, t) = int_of(v);
+        let s = arg_int(&a, 0, "checked_shl")?;
+        Ok(if s < 0 || s >= t.bits() as i128 { Value::none() } else { Value::some(Value::Int(t.wrap(n << s), t)) })
+    });
+    int_pure!(r, "checked_shr", |_, v, a| {
+        let (n, t) = int_of(v);
+        let s = arg_int(&a, 0, "checked_shr")?;
+        Ok(if s < 0 || s >= t.bits() as i128 { Value::none() } else { Value::some(Value::Int(t.wrap(n >> s), t)) })
+    });
+    int_pure!(r, "saturating_pow", |_, v, a| {
+        let (n, t) = int_of(v);
+        let e = arg_int(&a, 0, "saturating_pow")?;
+        let mut acc: i128 = 1;
+        for _ in 0..e {
+            match acc.checked_mul(n) {
+                Some(x) if t.fits(x) => acc = x,
+                _ => return Ok(Value::Int(if n < 0 && e % 2 == 1 { t.min() } else { t.max() }, t)),
+            }
+        }
+        Ok(Value::Int(acc, t))
+    });
     int_pure!(r, "is_power_of_two", |_, v, _| {
         let n = int_of(v).0;
         Ok(Value::Bool(n > 0 && (n & (n - 1)) == 0))
@@ -445,6 +477,7 @@ fn register_float(r: &mut Registry) {
     r.pure(Kind::Float, "is_infinite", |_, v, _| Ok(Value::Bool(float_of(v).0.is_infinite())));
     r.pure(Kind::Float, "is_finite", |_, v, _| Ok(Value::Bool(float_of(v).0.is_finite())));
     r.pure(Kind::Float, "is_sign_negative", |_, v, _| Ok(Value::Bool(float_of(v).0.is_sign_negative())));
+    r.pure(Kind::Float, "is_sign_positive", |_, v, _| Ok(Value::Bool(float_of(v).0.is_sign_positive())));
     r.pure(Kind::Float, "to_bits", |_, v, _| {
         let (x, t) = float_of(v);
         Ok(if t == FloatTy::F32 {
@@ -546,11 +579,12 @@ fn register_consts(r: &mut Registry) {
         r.add_const(format!("{}::BITS", n), Value::Int(t.bits() as i128, IntTy::U32));
     }
     for (n, t) in [("f64", FloatTy::F64), ("float", FloatTy::F64), ("f32", FloatTy::F32)] {
-        let (max, min, eps) = if t == FloatTy::F32 {
-            (f32::MAX as f64, f32::MIN as f64, f32::EPSILON as f64)
+        let (max, min, eps, tiny) = if t == FloatTy::F32 {
+            (f32::MAX as f64, f32::MIN as f64, f32::EPSILON as f64, f32::MIN_POSITIVE as f64)
         } else {
-            (f64::MAX, f64::MIN, f64::EPSILON)
+            (f64::MAX, f64::MIN, f64::EPSILON, f64::MIN_POSITIVE)
         };
+        r.add_const(format!("{}::MIN_POSITIVE", n), Value::Float(tiny, t));
         r.add_const(format!("{}::MAX", n), Value::Float(max, t));
         r.add_const(format!("{}::MIN", n), Value::Float(min, t));
         r.add_const(format!("{}::EPSILON", n), Value::Float(eps, t));

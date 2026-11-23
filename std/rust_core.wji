@@ -11,68 +11,306 @@
 // stage C1, docs/design/numeric-width-redesign.md section 7); every entry is checked against rustc by
 // `tests/core_surface_rustc_test.rs`. `slice(start, end)` is the parser's spelling of `x[start..end]` (checked as `&x[a..b]`).
 
+// `Vec<T>` is a list. A list also has every iterator row (`@adapts`: `xs.map(f)` is `xs.iter().map(f)`, W0003), so a lookup that finds no
+// row here falls to `trait Iterator`. A function without a receiver is a row of its trait when it carries rules (`Vec::new()` is the
+// empty list, `{R.go}` the Go type of the result). The spellings ADR-0039 removed (R080 `to_vec`, R081 `push_back` and its family, R082
+// `extend_from_slice` / `append`, R083 `sort_unstable`, R085 `capacity` / `fill`) have no rules; `drain` and `concat` are not portable.
+@adapts(to = "Iterator")
 pub trait Vec<T> {
+    @js(emit = "[]")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let v: Vec<i32> = Vec::new()", src = "v.len()", expect = "0")
     fn new() -> Vec<T>;
+    @js(emit = "[]")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let v: Vec<i32> = Vec::with_capacity(8)", src = "v.len()", expect = "0")
     fn with_capacity(capacity: usize) -> Vec<T>;
+    @js(emit = "{items}.slice()")
+    @go(emit = "wjClone({items})")
+    @example(given = "let a: Vec<i32> = [1, 2, 3]; let v: Vec<i32> = Vec::from(a)", src = "v.len()", expect = "3")
+    fn from(items: Vec<T>) -> Vec<T>;
+    @js(emit = "BigInt({self}.length)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.len()", expect = "3")
     fn len(self) -> usize;
+    @internal(reason = "removed spelling (ADR-0039 R085, a storage detail): declared for the Rust backend")
     fn capacity(self) -> usize;
+    @js(emit = "({self}.length === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let v: Vec<i32> = []", src = "v.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "{self}.push({value})")
+    @go(emit = "wjPush({&self}, {value})")
+    @example(given = "let mut v: Vec<i32> = []; v.push(4)", src = "v.len()", expect = "1")
     fn push(&mut self, value: T);
+    @js(emit = "$extend({self}, {other})")
+    @go(emit = "wjExtend({&self}, {other})")
+    @example(given = "let mut v: Vec<i32> = [1]; let w: Vec<i32> = [2, 3]; v.extend(w)", src = "v.len()", expect = "3")
+    fn extend(&mut self, other: Vec<T>);
+    @internal(reason = "removed spelling (ADR-0039 R082: `extend`): declared for the Rust backend")
     fn extend_from_slice(&mut self, other: &[T]);
+    @js(emit = "$pop({self})")
+    @go(emit = "wjPop({&self})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]", src = "v.pop().unwrap_or(0)", expect = "2")
     fn pop(&mut self) -> Option<T>;
+    @js(emit = "$vget({self}, {index})")
+    @go(emit = "wjGet({self}, {index})")
+    @example(given = "let v: Vec<i32> = [5, 6]", src = "v.get(1).unwrap_or(0)", expect = "6")
     fn get(self, index: usize) -> Option<&T>;
+    @internal(reason = "a place: not a portable method yet")
     fn get_mut(&mut self, index: usize) -> Option<&mut T>;
+    @js(emit = "$vget({self}, 0n)")
+    @go(emit = "wjFirst({self})")
+    @example(given = "let v: Vec<i32> = [5, 6]", src = "v.first().unwrap_or(0)", expect = "5")
     fn first(self) -> Option<&T>;
+    @js(emit = "$vlast({self})")
+    @go(emit = "wjLast({self})")
+    @example(given = "let v: Vec<i32> = [5, 6]", src = "v.last().unwrap_or(0)", expect = "6")
     fn last(self) -> Option<&T>;
+    @js(emit = "$vinsert({self}, {index}, {value})")
+    @go(emit = "wjInsert({&self}, {index}, {value})")
+    @example(given = "let mut v: Vec<i32> = [1, 3]; v.insert(1, 2)", src = "v.get(1).unwrap_or(0)", expect = "2")
     fn insert(&mut self, index: usize, value: T);
+    @js(emit = "$vremove({self}, {index})")
+    @go(emit = "wjRemove({&self}, {index})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]", src = "v.remove(1)", expect = "2")
     fn remove(&mut self, index: usize) -> T;
+    @js(emit = "$vswapRemove({self}, {index})")
+    @go(emit = "wjSwapRemove({&self}, {index})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]", src = "v.swap_remove(0)", expect = "1")
     fn swap_remove(&mut self, index: usize) -> T;
+    @js(emit = "$swap({self}, {a}, {b})")
+    @go(emit = "wjSwap({self}, {a}, {b})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]; v.swap(0, 1)", src = "v.get(0).unwrap_or(0)", expect = "2")
     fn swap(&mut self, a: usize, b: usize);
+    @js(emit = "$truncate({self}, {len})")
+    @go(emit = "wjTruncate({&self}, {len})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]; v.truncate(1)", src = "v.len()", expect = "1")
     fn truncate(&mut self, len: usize);
+    @js(emit = "$splitOff({self}, {at})")
+    @go(emit = "wjSplitOff({&self}, {at})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]; let t = v.split_off(1)", src = "t.len()", expect = "2")
     fn split_off(&mut self, at: usize) -> Vec<T>;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> Vec<T>;
+    @internal(reason = "the parser's spelling of `xs[a..b]`, lowered to an index of a range")
     fn slice(self, start: usize, end: usize) -> Vec<T>;
+    @js(emit = "{self}.includes({value})", when = "elem_prim")
+    @js(emit = "{self}.some((x) => $eq(x, {value}))")
+    @go(emit = "wjContains({self}, {value})", when = "elem_prim")
+    @go(emit = "wjContainsEq({self}, {value})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.contains(2)", expect = "true")
     fn contains(self, value: &T) -> bool;
+    @js(emit = "({self}.length = 0)")
+    @go(emit = "wjClear({&self})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]; v.clear()", src = "v.len()", expect = "0")
     fn clear(&mut self);
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().count()", expect = "2")
     fn iter(self) -> Iterator<&T>;
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let mut v: Vec<i32> = [1, 2]", src = "v.iter_mut().count()", expect = "2")
     fn iter_mut(&mut self) -> Iterator<&mut T>;
+    @js(emit = "$sort({self})")
+    @go(emit = "wjSort({self})", when = "elem_prim_not_bool")
+    @go(emit = "wjSortAny({self})")
+    @example(given = "let mut v: Vec<i32> = [3, 1, 2]; v.sort()", src = "v.get(0).unwrap_or(0)", expect = "1")
     fn sort(&mut self);
+    @js(emit = "{self}.reverse()")
+    @go(emit = "wjReverseInPlace({self})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]; v.reverse()", src = "v.get(0).unwrap_or(0)", expect = "2")
     fn reverse(&mut self);
+    @js(emit = "$dedup({self})")
+    @go(emit = "wjDedup({&self})")
+    @example(given = "let mut v: Vec<i32> = [1, 1, 2]; v.dedup()", src = "v.len()", expect = "2")
     fn dedup(&mut self);
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.into_iter().count()", expect = "2")
     fn into_iter(self) -> Iterator<T>;
+    @js(emit = "$windows({self}, {size})")
+    @go(emit = "wjWindows({self}, {size})")
+    @rustc(tail = ".map(|w| w.to_vec()).collect()")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.windows(2).count()", expect = "2")
+    fn windows(self, size: usize) -> Iterator<Vec<T>>;
+    @js(emit = "$chunks({self}, {size})")
+    @go(emit = "wjChunks({self}, {size})")
+    @rustc(tail = ".map(|w| w.to_vec()).collect()")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.chunks(2).count()", expect = "2")
+    fn chunks(self, size: usize) -> Iterator<Vec<T>>;
+    @js(emit = "{self}.join({sep})")
+    @go(emit = "wjJoin({self}, {sep})")
+    @rustc(on = "Vec<String>")
+    @example(given = "let v: Vec<string> = [\"a\", \"b\"]", src = "v.join(\"-\")", expect = "a-b")
+    fn join(self, sep: &str) -> String;
+    @js(emit = "$bsearch({self}, {value})")
+    @go(emit = "wjBsearch({self}, {value})")
+    @example(given = "let v: Vec<i32> = [1, 3, 5]", src = "v.binary_search(3).is_ok()", expect = "true")
+    fn binary_search(self, value: &T) -> Result<usize, usize>;
+    @js(emit = "$retain({self}, {f})")
+    @go(emit = "wjRetain({&self}, {f})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]; v.retain(|x| x > 1)", src = "v.len()", expect = "2")
+    fn retain(&mut self, f: fn(&T) -> bool);
+    @js(emit = "$splitAt({self}, {mid})")
+    @go(emit = "wjSplitAt({self}, {mid})")
+    @rustc(ret = "(&[i64], &[i64])")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]; let (a, b) = v.split_at(1)", src = "a.len() + b.len()", expect = "3")
+    fn split_at(self, mid: usize) -> (Vec<T>, Vec<T>);
+}
+
+// Every value has these: the last place a lookup falls to, whatever the receiver's type.
+pub trait Any {
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(src = "5.to_string()", expect = "5")
+    fn to_string(self) -> String;
 }
 
 // An iterator over `T`. A closure argument meets a `fn(..)` parameter: its parameters and result take these
-// types. `collect` and `sum` take their result type from a turbofish when one is written.
+// types. `collect`, `sum` and `product` take their result type from the expected type (a turbofish or an annotation).
 pub trait Iterator<T> {
+    @js(emit = "{self}.map((x) => ({f})(x))")
+    @go(emit = "wjMap({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().map(|x| x * 2).fold(0, |a, x| a + x)", expect = "12")
     fn map<U>(self, f: fn(T) -> U) -> Iterator<U>;
+    @js(emit = "{self}.filter((x) => ({f})(x))")
+    @go(emit = "wjFilter({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().filter(|x| x > 1).count()", expect = "2")
     fn filter(self, f: fn(&T) -> bool) -> Iterator<T>;
+    @js(emit = "$filterMap({self}, {f})")
+    @go(emit = "wjFilterMap({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().filter_map(|x| if x > 1 { Some(x) } else { None }).count()", expect = "2")
     fn filter_map<U>(self, f: fn(T) -> Option<U>) -> Iterator<U>;
+    @js(emit = "{self}.flatMap((x) => ({f})(x))")
+    @go(emit = "wjFlatMap({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().flat_map(|x| [x, x]).count()", expect = "4")
+    fn flat_map<U>(self, f: fn(T) -> Iterator<U>) -> Iterator<U>;
+    @js(emit = "{self}.reduce((acc, x) => ({f})(acc, x), {init})")
+    @go(emit = "wjFold({self}, {init}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().fold(10, |a, x| a + x)", expect = "16")
     fn fold<A>(self, init: A, f: fn(A, T) -> A) -> A;
+    @js(emit = "{self}.forEach((x) => ({f})(x))")
+    @go(emit = "wjForEach({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]; v.iter().for_each(|x| { let y = x + 1 })", src = "v.len()", expect = "2")
     fn for_each(self, f: fn(T));
+    @js(emit = "{self}.some((x) => ({f})(x))")
+    @go(emit = "wjAny({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().any(|x| x > 1)", expect = "true")
     fn any(&mut self, f: fn(T) -> bool) -> bool;
+    @js(emit = "{self}.every((x) => ({f})(x))")
+    @go(emit = "wjAll({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().all(|x| x > 1)", expect = "false")
     fn all(&mut self, f: fn(T) -> bool) -> bool;
+    @js(emit = "$find({self}, {f})")
+    @go(emit = "wjFind({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.into_iter().find(|x| x > 1).unwrap_or(0)", expect = "2")
     fn find(&mut self, f: fn(&T) -> bool) -> Option<T>;
+    @js(emit = "$position({self}, {f})")
+    @go(emit = "wjPosition({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.into_iter().position(|x| x > 1).unwrap_or(0)", expect = "1")
     fn position(&mut self, f: fn(T) -> bool) -> Option<usize>;
+    @js(emit = "$takeWhile({self}, {f})")
+    @go(emit = "wjTakeWhile({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().take_while(|x| x < 3).count()", expect = "2")
     fn take_while(self, f: fn(&T) -> bool) -> Iterator<T>;
+    @js(emit = "$skipWhile({self}, {f})")
+    @go(emit = "wjSkipWhile({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().skip_while(|x| x < 3).count()", expect = "1")
     fn skip_while(self, f: fn(&T) -> bool) -> Iterator<T>;
+    @js(emit = "{self}.slice().reverse()")
+    @go(emit = "wjRev({self})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.into_iter().rev().next().unwrap_or(0)", expect = "3")
     fn rev(self) -> Iterator<T>;
+    @js(emit = "{self}.slice(0, {n:num})")
+    @go(emit = "wjTake({self}, {n})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().take(2).count()", expect = "2")
     fn take(self, n: usize) -> Iterator<T>;
+    @js(emit = "{self}.slice({n:num})")
+    @go(emit = "wjSkip({self}, {n})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().skip(2).count()", expect = "1")
     fn skip(self, n: usize) -> Iterator<T>;
+    @js(emit = "{self}.filter((_, i) => i % {step:num} === 0)")
+    @go(emit = "wjStepBy({self}, {step})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().step_by(2).count()", expect = "2")
     fn step_by(self, step: usize) -> Iterator<T>;
-    fn chain(self, other: Iterator<T>) -> Iterator<T>;
+    @js(emit = "{self}.concat({other})")
+    @go(emit = "wjChain({self}, {other})")
+    @example(given = "let v: Vec<i32> = [1, 2]; let w: Vec<i32> = [3]", src = "v.iter().chain(w.iter()).count()", expect = "3")
+    fn chain<U>(self, other: Iterator<U>) -> Iterator<T>;
+    @js(emit = "$zip({self}, {other})")
+    @go(emit = "wjZip({self}, {other})")
+    @example(given = "let v: Vec<i32> = [1, 2]; let w: Vec<i32> = [3, 4]", src = "v.iter().zip(w.iter()).count()", expect = "2")
     fn zip<U>(self, other: Iterator<U>) -> Iterator<(T, U)>;
+    @js(emit = "{self}.map((x, i) => [BigInt(i), x])")
+    @go(emit = "wjEnumerate({self})")
+    @example(given = "let v: Vec<i32> = [7, 8]", src = "v.iter().enumerate().count()", expect = "2")
     fn enumerate(self) -> Iterator<(usize, T)>;
+    @js(hook = "clone")
+    @go(emit = "wjClone({self})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().cloned().count()", expect = "2")
     fn cloned(self) -> Iterator<T>;
+    @js(hook = "clone")
+    @go(emit = "wjClone({self})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().copied().count()", expect = "2")
     fn copied(self) -> Iterator<T>;
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().peekable().count()", expect = "2")
+    fn peekable(self) -> Iterator<T>;
+    @js(emit = "BigInt({self}.length)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().count()", expect = "2")
     fn count(self) -> usize;
+    @js(emit = "{self}.reduce((a, x) => {R.chk}(a + x), {R.zero})", when = "r_int")
+    @js(emit = "{self}.reduce((a, x) => a + x, 0)", when = "r_float")
+    @js(unsupported = "`sum()` needs an integer or float result")
+    @go(emit = "wjSum({self})")
+    @result_from_context(kind = "numeric")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]; let total: i32 = v.iter().sum()", src = "total", expect = "6")
     fn sum(self) -> T;
+    @js(emit = "{self}.reduce((a, x) => {R.chk}(a * x), {R.one})", when = "r_int")
+    @js(emit = "{self}.reduce((a, x) => a * x, 1)", when = "r_float")
+    @js(unsupported = "`product()` needs an integer or float result")
+    @go(emit = "wjProduct({self})")
+    @result_from_context(kind = "numeric")
+    @example(given = "let v: Vec<i32> = [2, 3]; let total: i32 = v.iter().product()", src = "total", expect = "6")
     fn product(self) -> T;
+    @js(emit = "$minmax({self}, -1)")
+    @go(emit = "wjMinOf({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]", src = "v.into_iter().min().unwrap_or(0)", expect = "1")
     fn min(self) -> Option<T>;
+    @js(emit = "$minmax({self}, 1)")
+    @go(emit = "wjMaxOf({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]", src = "v.into_iter().max().unwrap_or(0)", expect = "2")
     fn max(self) -> Option<T>;
+    @js(emit = "$vlast({self})")
+    @go(emit = "wjLast({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]", src = "v.iter().last().unwrap_or(0)", expect = "1")
     fn last(self) -> Option<T>;
+    @js(emit = "$vget({self}, 0n)")
+    @go(emit = "wjFirst({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]; let mut it = v.into_iter()", src = "it.next().unwrap_or(0)", expect = "2")
     fn next(&mut self) -> Option<T>;
+    @js(emit = "$vget({self}, {n})")
+    @go(emit = "wjGet({self}, {n})")
+    @example(given = "let v: Vec<i32> = [2, 1]; let mut it = v.into_iter()", src = "it.nth(1).unwrap_or(0)", expect = "1")
     fn nth(&mut self, n: usize) -> Option<T>;
+    @js(emit = "new Set({self})", when = "r_set")
+    @js(emit = "new Map({self})", when = "r_map")
+    @js(emit = "{self}.join(\"\")", when = "r_str")
+    @js(emit = "$collectResult({self})", when = "r_result")
+    @js(emit = "$collectOption({self})", when = "r_option")
+    @js(emit = "{self}.slice()")
+    @go(emit = "wjToSet({self})", when = "r_set")
+    @go(emit = "wjToMap({self})", when = "r_map")
+    @go(emit = "wjCollectStr({self})", when = "r_str")
+    @go(emit = "wjCollectResult({self})", when = "r_result")
+    @go(emit = "wjCollectOption({self})", when = "r_option")
+    @go(emit = "wjClone({self})")
+    @result_from_context(kind = "collection")
+    @example(given = "let v: Vec<i32> = [1, 2, 2]; let s: HashSet<i32> = v.iter().cloned().collect()", src = "s.len()", expect = "2")
     fn collect(self) -> Vec<T>;
 }
 
@@ -97,20 +335,71 @@ pub trait VecDeque<T> {
     fn contains(self, value: &T) -> bool;
 }
 
+// Maps and sets. `HashMap` and `BTreeMap` are one portable type (iteration is in key order on every target), `HashSet` and
+// `BTreeSet` another: the instance rows are the `HashMap` and `HashSet` traits', the associated functions are each trait's
+// own. A JavaScript `Map` compares its keys by value only for an integer, string, char or bool, so every JavaScript call of a
+// map is refused for another key (`requires`; `{K}` is the key type). The spellings ADR-0039 removed (R010 `iter`, `iter_mut`,
+// `into_iter`; R091 `into_keys`, `into_values`, `values_mut`; R030 `capacity`) have no declaration; `contains_key` stays (the
+// Rust name of the canonical `contains`, and what `m.entry(k).or_insert(v)` lowers to).
+@js(requires = "key_prim", reason = "HashMap/HashSet key type `{K}` (only integer, string, char and bool keys)")
 pub trait HashMap<K, V> {
+    @js(emit = "new Map()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let m: HashMap<i32, i32> = HashMap::new()", src = "m.len()", expect = "0")
     fn new() -> HashMap<K, V>;
+    @js(emit = "new Map()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let m: HashMap<i32, i32> = HashMap::with_capacity(8)", src = "m.is_empty()", expect = "true")
+    fn with_capacity(capacity: usize) -> HashMap<K, V>;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> HashMap<K, V>;
+    @js(emit = "BigInt({self}.size)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10); m.insert(2, 20)", src = "m.len()", expect = "2")
     fn len(self) -> usize;
-    fn capacity(self) -> usize;
+    @js(emit = "({self}.size === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let m: HashMap<i32, i32> = HashMap::new()", src = "m.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "$mapGetOpt({self}, {key})")
+    @go(emit = "wjMapGet({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.get(1).unwrap_or(0)", expect = "10")
     fn get(self, key: &K) -> Option<&V>;
+    @js(emit = "$mapGetOpt({self}, {key})")
+    @go(emit = "wjMapGet({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.get_mut(1).is_some()", expect = "true")
     fn get_mut(&mut self, key: &K) -> Option<&mut V>;
+    @js(emit = "$mapInsert({self}, {key}, {value})")
+    @go(emit = "wjMapInsert({self}, {key}, {value})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.insert(1, 11).unwrap_or(0)", expect = "10")
     fn insert(&mut self, key: K, value: V) -> Option<V>;
+    @js(emit = "$mapRemove({self}, {key})")
+    @go(emit = "wjMapRemove({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.remove(1).unwrap_or(0)", expect = "10")
     fn remove(&mut self, key: &K) -> Option<V>;
+    @js(emit = "{self}.has({key})")
+    @go(emit = "wjHas({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.contains_key(1)", expect = "true")
     fn contains_key(self, key: &K) -> bool;
+    @js(emit = "{self}.clear()")
+    @go(emit = "clear({self})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10); m.clear()", src = "m.len()", expect = "0")
+    fn clear(&mut self);
+    @js(emit = "$sortedKeys({self})")
+    @go(emit = "wjKeys({self})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.keys().fold(0, |a, k| a + k)", expect = "3")
+    fn keys(self) -> Iterator<&K>;
+    @js(emit = "$sortedValues({self})")
+    @go(emit = "wjValues({self})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.values().fold(0, |a, v| a + v)", expect = "30")
+    fn values(self) -> Iterator<&V>;
 }
 
+@js(requires = "key_prim", reason = "HashMap/HashSet key type `{K}` (only integer, string, char and bool keys)")
 pub trait BTreeMap<K, V> {
+    @js(emit = "new Map()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let m: BTreeMap<i32, i32> = BTreeMap::new()", src = "m.len()", expect = "0")
     fn new() -> BTreeMap<K, V>;
     fn clone(self) -> BTreeMap<K, V>;
     fn len(self) -> usize;
@@ -123,17 +412,46 @@ pub trait BTreeMap<K, V> {
 }
 
 pub trait HashSet<T> {
+    @js(emit = "new Set()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let s: HashSet<i32> = HashSet::new()", src = "s.len()", expect = "0")
     fn new() -> HashSet<T>;
+    @js(emit = "new Set()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let s: HashSet<i32> = HashSet::with_capacity(8)", src = "s.is_empty()", expect = "true")
+    fn with_capacity(capacity: usize) -> HashSet<T>;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> HashSet<T>;
+    @js(emit = "BigInt({self}.size)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1); s.insert(2)", src = "s.len()", expect = "2")
     fn len(self) -> usize;
-    fn capacity(self) -> usize;
+    @js(emit = "({self}.size === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let s: HashSet<i32> = HashSet::new()", src = "s.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "$setInsert({self}, {value})")
+    @go(emit = "wjSetInsert({self}, {value})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1)", src = "s.insert(1)", expect = "false")
     fn insert(&mut self, value: T) -> bool;
+    @js(emit = "{self}.delete({value})")
+    @go(emit = "wjSetRemove({self}, {value})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1)", src = "s.remove(1)", expect = "true")
     fn remove(&mut self, value: &T) -> bool;
+    @js(emit = "{self}.has({value})")
+    @go(emit = "wjHas({self}, {value})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1)", src = "s.contains(1)", expect = "true")
     fn contains(self, value: &T) -> bool;
+    @js(emit = "{self}.clear()")
+    @go(emit = "clear({self})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1); s.clear()", src = "s.len()", expect = "0")
+    fn clear(&mut self);
 }
 
 pub trait BTreeSet<T> {
+    @js(emit = "new Set()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let s: BTreeSet<i32> = BTreeSet::new()", src = "s.len()", expect = "0")
     fn new() -> BTreeSet<T>;
     fn clone(self) -> BTreeSet<T>;
     fn len(self) -> usize;
@@ -143,62 +461,343 @@ pub trait BTreeSet<T> {
     fn contains(self, value: &T) -> bool;
 }
 
+// Option and Result methods. Lowering rows as for `String` below, plus: a closure parameter is declared `fn(T) -> U` and a
+// method generic (`U`, `F`, `E`) takes its type from the closure's result or the argument (so `map` is typed `Option<U>` with
+// `U` the closure's result), and `{E.dbg}` is the target's debug formatter of a `Result`'s error type (what `unwrap` and
+// `expect` print of an `Err`). `Option` is `null | {v}` in JavaScript and `.Ok` / `.V` in Go. `unwrap` is `@internal`: `x?`
+// lowers to a match that returns early and then the `unwrap` of the checked local (portable/flatten.rs `try_expr`);
+// `unwrap_or` and `unwrap_or_else` are `@internal`: `x ?? d` parses to them (a literal or variable default is the eager
+// `unwrap_or`, anything else the lazy `unwrap_or_else`). The other spellings ADR-0039 removed have no portable lowering:
+// `unwrap_or_default`, `cloned` and `copied` stay declared for the Rust side (rustc-checked, the receiver-mode check reads
+// them) and are `unsupported` here; `unwrap_err` is still lowered. `map_or`, `is_some_and` and `expect_err` (R045, R046, R044)
+// have no declaration, so a portable backend refuses them as an unknown method.
 pub trait Option<T> {
+    @internal(reason = "`x?` on an Option lowers to an early-return match on a local and then its `unwrap` (portable/flatten.rs try_expr)")
+    @js(emit = "$unwrapOpt({self})")
+    @go(emit = "wjUnwrapOpt({self})")
+    @example(given = "let o: Option<i32> = Some(7)", src = "o.unwrap()", expect = "7")
     fn unwrap(self) -> T;
+    @js(emit = "$expectOpt({self}, {message})")
+    @go(emit = "wjExpectOpt({self}, {message})")
+    @example(given = "let o: Option<i32> = Some(7)", src = "o.expect(\"present\")", expect = "7")
     fn expect(self, message: &str) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or(d)` when `d` is a literal or a variable (parser/binary_expression_parser.rs)")
+    @js(emit = "$unwrapOr({self}, {default})")
+    @go(emit = "wjUnwrapOr({self}, {default})")
+    @example(given = "let o: Option<i32> = None; let d: i32 = 9", src = "o.unwrap_or(d)", expect = "9")
     fn unwrap_or(self, default: T) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or_else(|| d)` for any other default, evaluated only when `x` is absent (parser/binary_expression_parser.rs)")
+    @js(emit = "$optOrElse({self}, {f})")
+    @go(emit = "wjOptOrElse({self}, {f})")
+    @example(given = "let o: Option<i32> = None", src = "o.unwrap_or_else(|| 4)", expect = "4")
+    fn unwrap_or_else(self, f: fn() -> T) -> T;
+    @js(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @go(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @example(given = "let o: Option<i32> = None", src = "o.unwrap_or_default()", expect = "0")
     fn unwrap_or_default(self) -> T;
+    @js(emit = "$okOr({self}, {err})")
+    @go(emit = "wjOkOr({self}, {err})")
+    @example(given = "let o: Option<i32> = None", src = "o.ok_or(\"missing\").err().expect(\"err\")", expect = "missing")
     fn ok_or<E>(self, err: E) -> Result<T, E>;
+    @js(emit = "({self} !== null)")
+    @go(emit = "{self}.Ok")
+    @example(given = "let o: Option<i32> = Some(3)", src = "o.is_some()", expect = "true")
     fn is_some(self) -> bool;
+    @js(emit = "({self} === null)")
+    @go(emit = "(!{self}.Ok)")
+    @example(given = "let o: Option<i32> = None", src = "o.is_none()", expect = "true")
     fn is_none(self) -> bool;
+    @js(emit = "$optMap({self}, {f})")
+    @go(emit = "wjOptMap({self}, {f})")
+    @example(given = "let o: Option<i32> = Some(7); let two: i32 = 2; let z: i32 = 0", src = "o.map(|x| x * two).unwrap_or(z)", expect = "14")
+    fn map<U>(self, f: fn(T) -> U) -> Option<U>;
+    @js(emit = "$optAndThen({self}, {f})")
+    @go(emit = "wjOptAndThen({self}, {f})")
+    @example(given = "let o: Option<i32> = Some(7); let one: i32 = 1; let z: i32 = 0", src = "o.and_then(|x| Some(x + one)).unwrap_or(z)", expect = "8")
+    fn and_then<U>(self, f: fn(T) -> Option<U>) -> Option<U>;
+    @js(emit = "$optFilter({self}, {f})")
+    @go(emit = "wjOptFilter({self}, {f})")
+    @example(given = "let o: Option<i32> = Some(7)", src = "o.filter(|x| x > 9).unwrap_or(1)", expect = "1")
+    fn filter(self, f: fn(&T) -> bool) -> Option<T>;
     // On `Option<&T>`: the copy of the referent (references carry no width).
+    @js(unsupported = "elements are values, there is nothing to copy (ADR-0039 R012)")
+    @go(unsupported = "elements are values, there is nothing to copy (ADR-0039 R012)")
+    @example(given = "let v: Vec<i32> = vec![1, 2]", src = "v.first().copied().unwrap_or(0)", expect = "1")
     fn copied(self) -> Option<T>;
+    @js(unsupported = "elements are values, there is nothing to clone (ADR-0039 R012)")
+    @go(unsupported = "elements are values, there is nothing to clone (ADR-0039 R012)")
+    @example(given = "let v: Vec<i32> = vec![1, 2]", src = "v.first().cloned().unwrap_or(0)", expect = "1")
     fn cloned(self) -> Option<T>;
+    @js(unsupported = "taking a value out of an Option place is not part of the portable surface")
+    @go(unsupported = "taking a value out of an Option place is not part of the portable surface")
+    @example(given = "let mut o: Option<i32> = Some(5)", src = "o.take().unwrap_or(0)", expect = "5")
     fn take(&mut self) -> Option<T>;
 }
 
 pub trait Result<T, E> {
+    @internal(reason = "`x?` on a Result lowers to an early-return match on a local and then its `unwrap` (portable/flatten.rs try_expr)")
+    @js(emit = "$unwrapRes({self}, {E.dbg})")
+    @go(emit = "wjUnwrapRes({self})")
+    @example(given = "let res: Result<i32, string> = Ok(7)", src = "res.unwrap()", expect = "7")
     fn unwrap(self) -> T;
+    @js(emit = "$expectRes({self}, {message}, {E.dbg})")
+    @go(emit = "wjExpectRes({self}, {message})")
+    @example(given = "let res: Result<i32, string> = Ok(7)", src = "res.expect(\"ok\")", expect = "7")
     fn expect(self, message: &str) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or(d)` when `d` is a literal or a variable (parser/binary_expression_parser.rs)")
+    @js(emit = "({self}.ok ? {self}.v : {default})")
+    @go(emit = "wjResUnwrapOr({self}, {default})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\"); let d: i32 = 9", src = "res.unwrap_or(d)", expect = "9")
     fn unwrap_or(self, default: T) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or_else(|| d)` for any other default, evaluated only when `x` is an error (parser/binary_expression_parser.rs)")
+    @js(emit = "$resOrElse({self}, {f})")
+    @go(emit = "wjResOrElse({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.unwrap_or_else(|e| 4)", expect = "4")
+    fn unwrap_or_else(self, f: fn(E) -> T) -> T;
+    @js(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @go(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.unwrap_or_default()", expect = "0")
     fn unwrap_or_default(self) -> T;
+    @js(emit = "$resOk({self})")
+    @go(emit = "wjResOk({self})")
+    @example(given = "let res: Result<i32, string> = Ok(7); let z: i32 = 0", src = "res.ok().unwrap_or(z)", expect = "7")
     fn ok(self) -> Option<T>;
+    @js(emit = "$resErr({self})")
+    @go(emit = "wjResErr({self})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.err().expect(\"e\")", expect = "bad")
     fn err(self) -> Option<E>;
+    @js(emit = "$unwrapErr({self})")
+    @go(emit = "wjUnwrapErr({self})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.unwrap_err()", expect = "bad")
     fn unwrap_err(self) -> E;
-    fn expect_err(self, message: &str) -> E;
+    @js(emit = "{self}.ok")
+    @go(emit = "{self}.Ok")
+    @example(given = "let res: Result<i32, string> = Ok(3)", src = "res.is_ok()", expect = "true")
     fn is_ok(self) -> bool;
+    @js(emit = "(!{self}.ok)")
+    @go(emit = "(!{self}.Ok)")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.is_err()", expect = "true")
     fn is_err(self) -> bool;
+    @js(emit = "$resMap({self}, {f})")
+    @go(emit = "wjResMap({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Ok(7); let two: i32 = 2; let z: i32 = 0", src = "res.map(|x| x * two).unwrap_or(z)", expect = "14")
+    fn map<U>(self, f: fn(T) -> U) -> Result<U, E>;
+    @js(emit = "$resMapErr({self}, {f})")
+    @go(emit = "wjResMapErr({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.map_err(|e| \"worse\").err().expect(\"e\")", expect = "worse")
+    fn map_err<F>(self, f: fn(E) -> F) -> Result<T, F>;
+    @js(emit = "$resAndThen({self}, {f})")
+    @go(emit = "wjResAndThen({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Ok(7); let one: i32 = 1; let z: i32 = 0", src = "res.and_then(|x| Ok(x + one)).unwrap_or(z)", expect = "8")
+    fn and_then<U>(self, f: fn(T) -> Result<U, E>) -> Result<U, E>;
 }
 
+// String methods. Lowering rows as for `Float<T>` below: the JavaScript / TypeScript and Go text of a call, with the
+// receiver `{self}`, its place `{&self}` (Go: its address; an `assign` rule, JavaScript: the place the new value is stored
+// in, printed `(place = value, undefined)`), the arguments by their declared names, and `{name:str}` / `{name:num}` for an
+// operand that is converted (a `char` where Go wants a string; an integer JavaScript wants as a Number). `parse<F>` takes
+// its target from the expected type: `ok_int`, `ok_f32`, `ok_f64` and `ok_bool` select on the `Ok` type of the result, and
+// `{O.lo}`, `{O.hi}`, `{O.wide}`, `{O.go}` are facts about an integer one. A row marked `@internal` is not a spelling a
+// program writes: `clone` is a copy and `x[a..b]` an index before any emitter sees them. The spellings ADR-0039 removed
+// (`to_owned`, `as_str`, `into_string`, `substring`, `as_bytes`, `to_ascii_uppercase`, ...) have no row: a portable backend
+// refuses them; `push_str` and `capacity` stay declared for the Rust side (the receiver-mode check reads them) and are
+// `unsupported` on the portable targets.
+@owner(names = "string")
 pub trait String {
+    @js(emit = "\"\"")
+    @go(emit = "\"\"")
+    @example(src = "String::new().len()", expect = "0")
     fn new() -> String;
+    @js(emit = "\"\"")
+    @go(emit = "\"\"")
+    @example(src = "String::with_capacity(4).len()", expect = "0")
+    fn with_capacity(capacity: usize) -> String;
+    @js(emit = "{value}")
+    @go(emit = "{value}")
+    @example(src = "String::from(\"abc\").len()", expect = "3")
+    fn from(value: string) -> String;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> String;
+    @js(emit = "BigInt($strlen({self}))")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let s = \"héllo\"", src = "s.len()", expect = "6")
     fn len(self) -> usize;
+    @js(unsupported = "capacity is a storage detail, not part of the portable string surface (ADR-0039 R056)")
+    @go(unsupported = "capacity is a storage detail, not part of the portable string surface (ADR-0039 R056)")
+    @example(given = "let s = \"abc\"", src = "s.capacity() >= 3", expect = "true")
     fn capacity(self) -> usize;
+    @js(emit = "({self}.length === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let s = \"\"", src = "s.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "{self}.trim()")
+    @go(emit = "wjTrim({self})")
+    @example(given = "let s = \"  ab  \"", src = "s.trim().len()", expect = "2")
     fn trim(self) -> &str;
+    @js(emit = "{self}.trimStart()")
+    @go(emit = "wjTrimStart({self})")
+    @example(given = "let s = \"  ab  \"", src = "s.trim_start().len()", expect = "4")
     fn trim_start(self) -> &str;
+    @js(emit = "{self}.trimEnd()")
+    @go(emit = "wjTrimEnd({self})")
+    @example(given = "let s = \"  ab  \"", src = "s.trim_end().len()", expect = "4")
     fn trim_end(self) -> &str;
+    @js(emit = "{self}.toLowerCase()")
+    @go(emit = "wjLower({self})")
+    @example(given = "let s = \"HeLLo\"", src = "s.to_lowercase()", expect = "hello")
     fn to_lowercase(self) -> String;
+    @js(emit = "{self}.toUpperCase()")
+    @go(emit = "wjUpper({self})")
+    @example(given = "let s = \"HeLLo\"", src = "s.to_uppercase()", expect = "HELLO")
     fn to_uppercase(self) -> String;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(given = "let s = \"abc\"", src = "s.to_string()", expect = "abc")
     fn to_string(self) -> String;
+    @js(emit = "{self}.includes({pattern})")
+    @go(emit = "wjStrContains({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.contains(\"ell\") && s.contains('o')", expect = "true")
     fn contains(self, pattern: &str) -> bool;
+    @js(emit = "{self}.startsWith({pattern})")
+    @go(emit = "wjStrStarts({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.starts_with(\"he\") && s.starts_with('h')", expect = "true")
     fn starts_with(self, pattern: &str) -> bool;
+    @js(emit = "{self}.endsWith({pattern})")
+    @go(emit = "wjStrEnds({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.ends_with(\"lo\") && s.ends_with('o')", expect = "true")
     fn ends_with(self, pattern: &str) -> bool;
+    @js(emit = "$strFind({self}, {pattern})")
+    @go(emit = "wjStrFind({self}, {pattern:str})")
+    @example(given = "let s = \"hello\"", src = "s.find(\"l\").unwrap_or(99) + s.find('o').unwrap_or(99)", expect = "6")
     fn find(self, pattern: &str) -> Option<usize>;
+    @js(unsupported = "the portable backends have no lowering for rfind yet")
+    @go(unsupported = "the portable backends have no lowering for rfind yet")
+    @example(given = "let s = \"hello\"", src = "s.rfind(\"l\").unwrap_or(99)", expect = "3")
     fn rfind(self, pattern: &str) -> Option<usize>;
+    @internal(reason = "the parser's spelling of `x[a..b]`: lowered to an index expression before any emitter sees it")
     fn slice(self, start: usize, end: usize) -> &str;
+    @js(emit = "$parseInt({self}, {O.lo}, {O.hi}, {O.wide})", when = "ok_int")
+    @js(emit = "$parseFloat({self})", when = "ok_f64")
+    @js(emit = "$parseFloat({self})", when = "ok_f32")
+    @js(emit = "$parseBool({self})", when = "ok_bool")
+    @js(unsupported = "parse reads an integer, a float or a bool")
+    @go(emit = "wjParseInt[{O.go}]({self})", when = "ok_int")
+    @go(emit = "wjParseFloat({self})", when = "ok_f64")
+    @go(emit = "wjParseFloat32({self})", when = "ok_f32")
+    @go(emit = "wjParseBool({self})", when = "ok_bool")
+    @go(unsupported = "parse reads an integer, a float or a bool")
+    @example(given = "let s = \"42\"", src = "s.parse::<i32>().unwrap_or(0)", expect = "42")
     fn parse<F>(self) -> Result<F, String>;
+    @js(unsupported = "push_str is a removed spelling (ADR-0039 R050): write s += t")
+    @go(unsupported = "push_str is a removed spelling (ADR-0039 R050): write s += t")
+    @example(given = "let mut s = \"ab\"; s.push_str(\"cd\")", src = "s", expect = "abcd")
     fn push_str(&mut self, text: &str);
+    @js(unsupported = "the portable backends have no lowering for truncate yet")
+    @go(unsupported = "the portable backends have no lowering for truncate yet")
+    @example(given = "let mut s = \"hello\"; s.truncate(2)", src = "s", expect = "he")
     fn truncate(&mut self, len: usize);
+    @js(assign = "{&self} + {ch}")
+    @go(emit = "wjPushStr({&self}, {ch:str})")
+    @example(given = "let mut s = \"ab\"; s.push('c')", src = "s", expect = "abc")
     fn push(&mut self, ch: char);
+    @js(unsupported = "the portable backends have no lowering for pop yet")
+    @go(unsupported = "the portable backends have no lowering for pop yet")
+    @example(given = "let mut s = \"abc\"", src = "s.pop().unwrap_or('z')", expect = "c")
     fn pop(&mut self) -> Option<char>;
+    @js(assign = "\"\"")
+    @go(emit = "wjClearStr({&self})")
+    @example(given = "let mut s = \"ab\"; s.clear()", src = "s.len()", expect = "0")
     fn clear(&mut self);
+    @js(emit = "$split({self}, {pattern})")
+    @go(emit = "wjStrSplit({self}, {pattern:str})")
+    @example(given = "let s = \"a,b,c\"", src = "s.split(\",\").count()", expect = "3")
     fn split(self, pattern: &str) -> Iterator<&str>;
+    @js(emit = "{self}.split(/\\s+/).filter((s) => s.length > 0)")
+    @go(emit = "wjSplitWs({self})")
+    @example(given = "let s = \"a  b c\"", src = "s.split_whitespace().count()", expect = "3")
     fn split_whitespace(self) -> Iterator<&str>;
+    @js(emit = "$lines({self})")
+    @go(emit = "wjLines({self})")
+    @example(given = "let s = \"a\\nb\\nc\"", src = "s.lines().count()", expect = "3")
     fn lines(self) -> Iterator<&str>;
+    @js(emit = "Array.from({self})")
+    @go(emit = "wjChars({self})")
+    @example(given = "let s = \"héllo\"", src = "s.chars().count()", expect = "5")
     fn chars(self) -> Iterator<char>;
+    @js(emit = "$bytes({self})")
+    @go(emit = "wjBytes({self})")
+    @example(given = "let s = \"héllo\"", src = "s.bytes().count()", expect = "6")
     fn bytes(self) -> Iterator<u8>;
+    @js(emit = "$charIndices({self})")
+    @go(emit = "wjCharIndices({self})")
+    @example(given = "let s = \"héllo\"", src = "s.char_indices().count()", expect = "5")
+    fn char_indices(self) -> Iterator<(usize, char)>;
+    @js(emit = "{self}.repeat({n:num})")
+    @go(emit = "wjStrRepeat({self}, {n})")
+    @example(given = "let s = \"ab\"", src = "s.repeat(3)", expect = "ababab")
+    fn repeat(self, n: usize) -> String;
+    @js(emit = "{self}.split({pattern}).join({replacement})")
+    @go(emit = "wjStrReplace({self}, {pattern:str}, {replacement:str})")
+    @example(given = "let s = \"hello\"", src = "s.replace(\"l\", \"L\")", expect = "heLLo")
+    fn replace(self, pattern: &str, replacement: &str) -> String;
+}
+
+// `char` methods (the receiver is a `char`; checked against rustc on `char`). Lowering rows as for `String` above. A
+// `char`'s `to_uppercase` / `to_lowercase` are Rust iterators over the case-mapped characters, lowered to the string they
+// spell (`@rustc(tail = ..)` is the adapter the rustc gate adds to Rust's result to get the declared one). The spellings
+// ADR-0039 removed (`is_ascii_digit`, `is_numeric`, `is_ascii_alphabetic`, `len_utf8`, `to_ascii_uppercase`, ...) have no row.
+@owner(names = "char")
+pub trait Char {
+    @js(emit = "$charFromU32({value})")
+    @go(emit = "wjCharFromU32({value})")
+    @example(given = "let n: u32 = 65", src = "char::from_u32(n).unwrap_or('?')", expect = "A")
+    fn from_u32(value: u32) -> Option<char>;
+    @js(emit = "/^\\p{{L}}$/u.test({self})")
+    @go(emit = "wjIsAlphabetic({self})")
+    @example(given = "let c: char = 'q'", src = "c.is_alphabetic()", expect = "true")
+    fn is_alphabetic(self) -> bool;
+    @js(emit = "/^[\\p{{L}}\\p{{N}}]$/u.test({self})")
+    @go(emit = "(wjIsAlphabetic({self}) || wjIsNumeric({self}))")
+    @example(given = "let c: char = '7'", src = "c.is_alphanumeric()", expect = "true")
+    fn is_alphanumeric(self) -> bool;
+    @js(emit = "/^\\s$/u.test({self})")
+    @go(emit = "wjIsWhitespace({self})")
+    @example(given = "let c: char = ' '", src = "c.is_whitespace()", expect = "true")
+    fn is_whitespace(self) -> bool;
+    @js(emit = "/^\\p{{Lu}}$/u.test({self})")
+    @go(emit = "wjIsUpper({self})")
+    @example(given = "let c: char = 'Q'", src = "c.is_uppercase()", expect = "true")
+    fn is_uppercase(self) -> bool;
+    @js(emit = "/^\\p{{Ll}}$/u.test({self})")
+    @go(emit = "wjIsLower({self})")
+    @example(given = "let c: char = 'q'", src = "c.is_lowercase()", expect = "true")
+    fn is_lowercase(self) -> bool;
+    @js(emit = "({self}.codePointAt(0) < 128)")
+    @go(emit = "({self} < 128)")
+    @example(given = "let c: char = 'a'", src = "c.is_ascii()", expect = "true")
+    fn is_ascii(self) -> bool;
+    @js(emit = "{self}.toUpperCase()")
+    @go(emit = "wjUpper(string(rune({self})))")
+    @rustc(tail = ".collect::<String>()")
+    @example(given = "let c: char = 'a'", src = "c.to_uppercase()", expect = "A")
+    fn to_uppercase(self) -> String;
+    @js(emit = "{self}.toLowerCase()")
+    @go(emit = "wjLower(string(rune({self})))")
+    @rustc(tail = ".collect::<String>()")
+    @example(given = "let c: char = 'Q'", src = "c.to_lowercase()", expect = "q")
+    fn to_lowercase(self) -> String;
+    @js(emit = "$toDigit({self}, {radix})")
+    @go(emit = "wjToDigit({self}, {radix})")
+    @example(given = "let c: char = '7'; let r: u32 = 10", src = "c.to_digit(r).unwrap_or(r)", expect = "7")
+    fn to_digit(self, radix: u32) -> Option<u32>;
+    @js(emit = "($toDigit({self}, {radix}) !== null)")
+    @go(unsupported = "the Go backend has no lowering for char is_digit yet")
+    @example(given = "let c: char = 'f'; let r: u32 = 16", src = "c.is_digit(r)", expect = "true")
+    fn is_digit(self, radix: u32) -> bool;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(given = "let c: char = 'x'", src = "c.to_string()", expect = "x")
+    fn to_string(self) -> String;
 }
 
 // A thread handle (`std::thread::JoinHandle<T>`): `join` returns the spawned closure's result, or the panic payload.
@@ -265,58 +864,301 @@ pub trait Instant {
 // Integer methods, for every integer type `T` (`int`, `i32`, `u8`, `usize`, ...): `T` is the receiver's type, so
 // an argument or result of type `T` has the receiver's width (`10.min(3)`: one class); exponents, rotations and
 // shift amounts are `u32` and bit counts are `u32`, as in Rust. Signed-only methods (`abs`, `signum`) are checked
-// against rustc on `i64`.
+// against rustc on `i64`; `@rustc(on = "u64")` names the type a method that exists only on unsigned integers (or whose
+// result is the unsigned type, `abs_diff`) is checked on instead.
+//
+// Lowering rows, as for `Float<T>` below. Facts about the receiver's type `T` (`{T.bits}`, `{T.min}`, `{T.chk}`, ...) are
+// computed by each emitter's numeric helpers, so one row covers every width; `{T.wrap_open}` / `{T.wrap_close}` bracket an
+// expression that is wrapped into `T`'s range (two's complement). `when = "t_wide"` is a 64-bit receiver (a BigInt in
+// JavaScript), `t_i32` / `t_u32` the 32-bit ones `Math.imul` multiplies. A method with `unsupported` has no lowering on that
+// target yet; the reason is the diagnostic. An `@example` may declare the typed local it uses with `given = "let x: u8 = 250"`.
+@owner(names = "i8, i16, i32, i64, u8, u16, u32, u64, usize, isize")
 pub trait Integer<T> {
+    // Associated functions and constants of the integer types (`i64::MAX`). A constant is declared as a function without
+    // parameters and marked `@constant` (Rust spells it without the call); `{R.max}` is the type's bound printed by the target.
+    @constant
+    @js(emit = "{R.max}")
+    @go(emit = "{R.max}")
+    @example(src = "i32::MAX", expect = "2147483647")
+    fn MAX() -> T;
+    @constant
+    @js(emit = "{R.min}")
+    @go(emit = "{R.min}")
+    @example(src = "i8::MIN", expect = "-128")
+    fn MIN() -> T;
+    @js(hook = "cast")
+    @go(hook = "cast")
+    @example(given = "let n: i32 = 7", src = "i64::from(n)", expect = "7")
+    fn from<U>(value: U) -> T;
+    @js(emit = "$parseIntRadix({s}, {radix}, {O.lo}, {O.hi}, {O.wide})")
+    @go(emit = "wjParseIntRadix[{O.go}]({s}, {radix})")
+    @example(src = "i32::from_str_radix(\"ff\", 16).unwrap_or(0)", expect = "255")
+    @rustc(ret = "Result<i64, _>")
+    fn from_str_radix(s: &string, radix: u32) -> Result<T, string>;
+    @js(emit = "({self} < {T.zero} ? {T.chk}(-{self}) : {self})")
+    @go(emit = "wjAbs({self})")
+    @example(given = "let x: i32 = -7", src = "x.abs()", expect = "7")
     fn abs(self) -> T;
+    @js(emit = "({self} > {T.zero} ? {T.one} : {self} < {T.zero} ? -{T.one} : {T.zero})")
+    @go(emit = "wjSignum({self})")
+    @example(given = "let x: i64 = -9", src = "x.signum()", expect = "-1")
     fn signum(self) -> T;
+    @js(emit = "{T.chk}({self} ** BigInt({exp}))", when = "t_wide")
+    @js(emit = "{T.chk}({self} ** {exp})")
+    @go(emit = "wjPow({self}, {exp})")
+    @example(given = "let x: i32 = 3", src = "x.pow(4)", expect = "81")
     fn pow(self, exp: u32) -> T;
+    @js(emit = "$min2({self}, {other})")
+    @go(emit = "wjMin2({self}, {other})")
+    @example(given = "let x: i32 = 4", src = "x.min(9)", expect = "4")
     fn min(self, other: T) -> T;
+    @js(emit = "$max2({self}, {other})")
+    @go(emit = "wjMax2({self}, {other})")
+    @example(given = "let x: i32 = 4", src = "x.max(9)", expect = "9")
     fn max(self, other: T) -> T;
+    @js(emit = "$min2($max2({self}, {min}), {max})")
+    @go(emit = "wjMin2(wjMax2({self}, {min}), {max})")
+    @example(given = "let x: i32 = 15", src = "x.clamp(1, 10)", expect = "10")
     fn clamp(self, min: T, max: T) -> T;
+    @js(emit = "$divEuclid({self}, {rhs})")
+    @go(emit = "wjDivEuclid({self}, {rhs})")
+    @example(given = "let x: i32 = -7", src = "x.div_euclid(2)", expect = "-4")
     fn div_euclid(self, rhs: T) -> T;
+    @js(emit = "$remEuclid({self}, {rhs})")
+    @go(emit = "wjRemEuclid({self}, {rhs})")
+    @example(given = "let x: i32 = -7", src = "x.rem_euclid(2)", expect = "1")
     fn rem_euclid(self, rhs: T) -> T;
+    @js(emit = "$rotl({self}, {n}, {T.bits}, {T.signed})")
+    @go(emit = "wjRotl({self}, {n})")
+    @example(given = "let x: u32 = 2147483649", src = "x.rotate_left(1)", expect = "3")
     fn rotate_left(self, n: u32) -> T;
+    @js(emit = "$rotr({self}, {n}, {T.bits}, {T.signed})")
+    @go(emit = "wjRotr({self}, {n})")
+    @example(given = "let x: u32 = 3", src = "x.rotate_right(1)", expect = "2147483649")
     fn rotate_right(self, n: u32) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u16 = 1", src = "x.swap_bytes()", expect = "256")
     fn swap_bytes(self) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 1", src = "x.reverse_bits()", expect = "128")
     fn reverse_bits(self) -> T;
+    @js(emit = "$popcnt({self}, {T.bits})")
+    @go(emit = "wjPopcnt({self})")
+    @example(given = "let x: u8 = 255", src = "x.count_ones()", expect = "8")
     fn count_ones(self) -> u32;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 255", src = "x.count_zeros()", expect = "0")
     fn count_zeros(self) -> u32;
+    @js(emit = "$clz({self}, {T.bits})")
+    @go(emit = "wjClz({self})")
+    @example(given = "let x: u32 = 1", src = "x.leading_zeros()", expect = "31")
     fn leading_zeros(self) -> u32;
+    @js(emit = "$ctz({self}, {T.bits})")
+    @go(emit = "wjCtz({self})")
+    @example(given = "let x: u32 = 8", src = "x.trailing_zeros()", expect = "3")
     fn trailing_zeros(self) -> u32;
+    @js(emit = "$chkd({T.min}, {T.max}, {self} + {rhs})")
+    @go(emit = "wjCheckedAdd({self}, {rhs})")
+    @example(given = "let x: u8 = 250", src = "x.checked_add(10).is_none()", expect = "true")
     fn checked_add(self, rhs: T) -> Option<T>;
+    @js(emit = "$chkd({T.min}, {T.max}, {self} - {rhs})")
+    @go(emit = "wjCheckedSub({self}, {rhs})")
+    @example(given = "let x: u8 = 5", src = "x.checked_sub(3) ?? 99", expect = "2")
     fn checked_sub(self, rhs: T) -> Option<T>;
+    @js(emit = "$chkd({T.min}, {T.max}, {self} * {rhs})")
+    @go(emit = "wjCheckedMul({self}, {rhs})")
+    @example(given = "let x: u8 = 100", src = "x.checked_mul(3).is_none()", expect = "true")
     fn checked_mul(self, rhs: T) -> Option<T>;
+    @js(emit = "({rhs} === {T.zero} ? null : $chkd({T.min}, {T.max}, {self} / {rhs}))", when = "t_wide")
+    @js(emit = "({rhs} === {T.zero} ? null : $chkd({T.min}, {T.max}, Math.trunc({self} / {rhs})))")
+    @go(emit = "wjCheckedDiv({self}, {rhs})")
+    @example(given = "let x: i32 = 7", src = "x.checked_div(0).is_none()", expect = "true")
     fn checked_div(self, rhs: T) -> Option<T>;
+    @js(emit = "({rhs} === {T.zero} ? null : {{ v: {self} % {rhs} }})")
+    @go(emit = "wjCheckedRem({self}, {rhs})")
+    @example(given = "let x: i32 = 7", src = "x.checked_rem(4) ?? 99", expect = "3")
     fn checked_rem(self, rhs: T) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: i32 = 5", src = "x.checked_neg() ?? 99", expect = "-5")
     fn checked_neg(self) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 2", src = "x.checked_pow(9).is_none()", expect = "true")
     fn checked_pow(self, exp: u32) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 1", src = "x.checked_shl(9).is_none()", expect = "true")
     fn checked_shl(self, rhs: u32) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 128", src = "x.checked_shr(7) ?? 99", expect = "1")
     fn checked_shr(self, rhs: u32) -> Option<T>;
+    @js(emit = "{T.wrap_open}{self} + {rhs}{T.wrap_close}")
+    @go(emit = "wjWAdd({self}, {rhs})")
+    @example(given = "let x: u8 = 250", src = "x.wrapping_add(10)", expect = "4")
     fn wrapping_add(self, rhs: T) -> T;
+    @js(emit = "{T.wrap_open}{self} - {rhs}{T.wrap_close}")
+    @go(emit = "wjWSub({self}, {rhs})")
+    @example(given = "let x: u8 = 3", src = "x.wrapping_sub(5)", expect = "254")
     fn wrapping_sub(self, rhs: T) -> T;
+    @js(emit = "Math.imul({self}, {rhs})", when = "t_i32")
+    @js(emit = "(Math.imul({self}, {rhs}) >>> 0)", when = "t_u32")
+    @js(emit = "{T.wrap_open}{self} * {rhs}{T.wrap_close}")
+    @go(emit = "wjWMul({self}, {rhs})")
+    @example(given = "let x: u8 = 200", src = "x.wrapping_mul(2)", expect = "144")
     fn wrapping_mul(self, rhs: T) -> T;
+    @js(emit = "{T.wrap_open}-{self}{T.wrap_close}")
+    @go(emit = "wjWNeg({self})")
+    @example(given = "let x: u8 = 5", src = "x.wrapping_neg()", expect = "251")
     fn wrapping_neg(self) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 3", src = "x.wrapping_pow(6)", expect = "217")
     fn wrapping_pow(self, exp: u32) -> T;
+    @js(emit = "{T.wrap_open}{self} << BigInt((Number({rhs}) % {T.bits})){T.wrap_close}", when = "t_wide")
+    @js(emit = "{T.wrap_open}{self} << (Number({rhs}) % {T.bits}){T.wrap_close}")
+    @go(emit = "({self} << (uint({rhs}) % {T.bits}))")
+    @example(given = "let x: u8 = 129", src = "x.wrapping_shl(9)", expect = "2")
     fn wrapping_shl(self, rhs: u32) -> T;
+    @js(emit = "({self} >> BigInt((Number({rhs}) % {T.bits})))", when = "t_wide")
+    @js(emit = "({self} >> (Number({rhs}) % {T.bits}))")
+    @go(emit = "({self} >> (uint({rhs}) % {T.bits}))")
+    @example(given = "let x: u8 = 128", src = "x.wrapping_shr(9)", expect = "64")
     fn wrapping_shr(self, rhs: u32) -> T;
+    @js(emit = "$sat({T.min}, {T.max}, {self} + {rhs})")
+    @go(emit = "wjSatAdd({self}, {rhs})")
+    @example(given = "let x: u8 = 250", src = "x.saturating_add(10)", expect = "255")
     fn saturating_add(self, rhs: T) -> T;
+    @js(emit = "$sat({T.min}, {T.max}, {self} - {rhs})")
+    @go(emit = "wjSatSub({self}, {rhs})")
+    @example(given = "let x: u8 = 5", src = "x.saturating_sub(10)", expect = "0")
     fn saturating_sub(self, rhs: T) -> T;
+    @js(emit = "$sat({T.min}, {T.max}, {self} * {rhs})")
+    @go(emit = "wjSatMul({self}, {rhs})")
+    @example(given = "let x: i8 = 100", src = "x.saturating_mul(2)", expect = "127")
     fn saturating_mul(self, rhs: T) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 2", src = "x.saturating_pow(9)", expect = "255")
     fn saturating_pow(self, exp: u32) -> T;
+    @js(emit = "({self} > {T.zero})")
+    @go(emit = "({self} > 0)")
+    @example(given = "let x: i32 = 5", src = "x.is_positive()", expect = "true")
     fn is_positive(self) -> bool;
+    @js(emit = "({self} < {T.zero})")
+    @go(emit = "({self} < 0)")
+    @example(given = "let x: i32 = 5", src = "x.is_negative()", expect = "false")
     fn is_negative(self) -> bool;
+    @js(emit = "({self} > {other} ? {self} - {other} : {other} - {self})")
+    @go(emit = "wjAbsDiff({self}, {other})")
+    @example(given = "let x: u32 = 3", src = "x.abs_diff(10)", expect = "7")
+    @rustc(on = "u64")
+    fn abs_diff(self, other: T) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet (it needs a runtime helper, which changes every emitted program)")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet (it needs a runtime helper, which changes every emitted program)")
+    @example(given = "let x: i32 = 99", src = "x.isqrt()", expect = "9")
+    fn isqrt(self) -> T;
+    @js(emit = "($popcnt({self}, {T.bits}) === 1)")
+    @go(emit = "(wjPopcnt({self}) == 1)")
+    @example(given = "let x: u32 = 64", src = "x.is_power_of_two()", expect = "true")
+    @rustc(on = "u64")
+    fn is_power_of_two(self) -> bool;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(given = "let x: i32 = 42", src = "x.to_string()", expect = "42")
     fn to_string(self) -> String;
 }
 
 // Methods whose result type depends on the float's width (`f32::to_bits` is a `u32`, `f64::to_bits` a `u64`): one
 // trait per width, consulted before `Float<T>`.
+@owner(names = "f32")
 pub trait F32 {
+    @constant
+    @js(emit = "Math.fround(3.4028234663852886e38)")
+    @go(emit = "float32(3.4028234663852886e38)")
+    @example(src = "f32::MAX > 1000000.0", expect = "true")
+    fn MAX() -> f32;
+    @constant
+    @js(emit = "Math.fround(-3.4028234663852886e38)")
+    @go(emit = "float32(-3.4028234663852886e38)")
+    @example(src = "f32::MIN < -1000000.0", expect = "true")
+    fn MIN() -> f32;
+    @constant
+    @js(emit = "Math.fround(1.1920928955078125e-7)")
+    @go(emit = "float32(1.1920928955078125e-7)")
+    @example(src = "f32::EPSILON < 0.001", expect = "true")
+    fn EPSILON() -> f32;
+    @constant
+    @js(emit = "Math.fround(1.1754943508222875e-38)")
+    @go(emit = "float32(1.1754943508222875e-38)")
+    @example(src = "f32::MIN_POSITIVE > 0.0", expect = "true")
+    fn MIN_POSITIVE() -> f32;
+    @constant
+    @js(emit = "Math.fround(Infinity)")
+    @go(emit = "float32(wjInf(1))")
+    @example(src = "f32::INFINITY.is_infinite()", expect = "true")
+    fn INFINITY() -> f32;
+    @constant
+    @js(emit = "Math.fround((-Infinity))")
+    @go(emit = "float32(wjInf(-1))")
+    @example(src = "f32::NEG_INFINITY < 0.0", expect = "true")
+    fn NEG_INFINITY() -> f32;
+    @constant
+    @js(emit = "Math.fround(NaN)")
+    @go(emit = "float32(wjNaN())")
+    @example(src = "f32::NAN.is_nan()", expect = "true")
+    fn NAN() -> f32;
     fn to_bits(self) -> u32;
     fn to_le_bytes(self) -> Vec<u8>;
     fn to_be_bytes(self) -> Vec<u8>;
 }
 
+@owner(names = "f64")
 pub trait F64 {
+    @constant
+    @js(emit = "1.7976931348623157e308")
+    @go(emit = "float64(1.7976931348623157e308)")
+    @example(src = "f64::MAX > 1000000.0", expect = "true")
+    fn MAX() -> f64;
+    @constant
+    @js(emit = "(-1.7976931348623157e308)")
+    @go(emit = "float64(-1.7976931348623157e308)")
+    @example(src = "f64::MIN < -1000000.0", expect = "true")
+    fn MIN() -> f64;
+    @constant
+    @js(emit = "2.220446049250313e-16")
+    @go(emit = "float64(2.220446049250313e-16)")
+    @example(src = "f64::EPSILON < 0.001", expect = "true")
+    fn EPSILON() -> f64;
+    @constant
+    @js(emit = "2.2250738585072014e-308")
+    @go(emit = "float64(2.2250738585072014e-308)")
+    @example(src = "f64::MIN_POSITIVE > 0.0", expect = "true")
+    fn MIN_POSITIVE() -> f64;
+    @constant
+    @js(emit = "Infinity")
+    @go(emit = "float64(wjInf(1))")
+    @example(src = "f64::INFINITY.is_infinite()", expect = "true")
+    fn INFINITY() -> f64;
+    @constant
+    @js(emit = "(-Infinity)")
+    @go(emit = "float64(wjInf(-1))")
+    @example(src = "f64::NEG_INFINITY < 0.0", expect = "true")
+    fn NEG_INFINITY() -> f64;
+    @constant
+    @js(emit = "NaN")
+    @go(emit = "float64(wjNaN())")
+    @example(src = "f64::NAN.is_nan()", expect = "true")
+    fn NAN() -> f64;
+    @js(hook = "cast")
+    @go(hook = "cast")
+    @example(given = "let n: i32 = 7", src = "f64::from(n)", expect = "7")
+    @rustc(arg = "i32")
+    fn from<U>(value: U) -> f64;
     fn to_bits(self) -> u64;
     fn to_le_bytes(self) -> Vec<u8>;
     fn to_be_bytes(self) -> Vec<u8>;
@@ -324,34 +1166,157 @@ pub trait F64 {
 
 // Float methods, for `T` = `f32` or `f64` (`float`): an argument and the result of type `T` have the receiver's
 // width (`x.min(1.0)` on an `f32` takes an `f32`); `powi` takes an `i32`.
+//
+// Lowering rows (docs/design/table-driven-std-surface.md): `@js(emit = "...")` and `@go(emit = "...")` are the text the
+// JavaScript / TypeScript and Go backends print for a call, `{self}` being the receiver and `{name}` the argument of
+// that declared parameter; `@example(src, expect)` is the program the per-row conformance runner builds (`println` of
+// `src` prints `expect` on every backend). `@go(widen = "f64")` says Go computes in `float64`: `{x:f64}` converts an
+// operand of an `f32` receiver, and a result declared `T` is converted back. The rows copy what the emitters printed
+// before they were tables, byte for byte (tests/golden/float_rows_probe.*).
+@go(widen = "f64")
 pub trait Float<T> {
+    @js(emit = "Math.abs({self})")
+    @go(emit = "wjMath_abs({self:f64})")
+    @example(src = "(-2.5).abs()", expect = "2.5")
     fn abs(self) -> T;
+    @js(emit = "Math.sqrt({self})")
+    @go(emit = "wjMath_sqrt({self:f64})")
+    @example(src = "(16.0).sqrt()", expect = "4")
     fn sqrt(self) -> T;
+    @js(emit = "Math.cbrt({self})")
+    @go(emit = "wjMath_cbrt({self:f64})")
+    @example(src = "(27.0).cbrt()", expect = "3")
     fn cbrt(self) -> T;
+    @js(emit = "Math.exp({self})")
+    @go(emit = "wjMath_exp({self:f64})")
+    @example(src = "(((1.0).exp()) * 1000.0).round() / 1000.0", expect = "2.718")
     fn exp(self) -> T;
+    @js(emit = "Math.log({self})")
+    @go(emit = "wjMath_log({self:f64})")
+    @example(src = "(1.0).ln()", expect = "0")
     fn ln(self) -> T;
+    @js(emit = "Math.log10({self})")
+    @go(emit = "wjMath_log10({self:f64})")
+    @example(src = "(1000.0).log10()", expect = "3")
     fn log10(self) -> T;
+    @js(emit = "Math.log2({self})")
+    @go(emit = "wjMath_log2({self:f64})")
+    @example(src = "(8.0).log2()", expect = "3")
     fn log2(self) -> T;
+    @js(emit = "Math.sin({self})")
+    @go(emit = "wjMath_sin({self:f64})")
+    @example(src = "(0.0).sin()", expect = "0")
     fn sin(self) -> T;
+    @js(emit = "Math.cos({self})")
+    @go(emit = "wjMath_cos({self:f64})")
+    @example(src = "(0.0).cos()", expect = "1")
     fn cos(self) -> T;
+    @js(emit = "Math.tan({self})")
+    @go(emit = "wjMath_tan({self:f64})")
+    @example(src = "(0.0).tan()", expect = "0")
     fn tan(self) -> T;
+    @js(emit = "Math.asin({self})")
+    @go(emit = "wjMath_asin({self:f64})")
+    @example(src = "(0.0).asin()", expect = "0")
+    fn asin(self) -> T;
+    @js(emit = "Math.acos({self})")
+    @go(emit = "wjMath_acos({self:f64})")
+    @example(src = "(1.0).acos()", expect = "0")
+    fn acos(self) -> T;
+    @js(emit = "Math.atan({self})")
+    @go(emit = "wjMath_atan({self:f64})")
+    @example(src = "(((1.0).atan()) * 1000.0).round() / 1000.0", expect = "0.785")
+    fn atan(self) -> T;
+    @js(emit = "Math.atan2({self}, {other})")
+    @go(emit = "wjMath_atan2({self:f64}, {other:f64})")
+    @example(src = "(((1.0).atan2(2.0)) * 1000.0).round() / 1000.0", expect = "0.464")
     fn atan2(self, other: T) -> T;
+    @js(emit = "Math.hypot({self}, {other})")
+    @go(emit = "wjMath_hypot({self:f64}, {other:f64})")
+    @example(src = "(3.0).hypot(4.0)", expect = "5")
     fn hypot(self, other: T) -> T;
+    @js(emit = "Math.floor({self})")
+    @go(emit = "wjMath_floor({self:f64})")
+    @example(src = "(2.7).floor()", expect = "2")
     fn floor(self) -> T;
+    @js(emit = "Math.ceil({self})")
+    @go(emit = "wjMath_ceil({self:f64})")
+    @example(src = "(2.1).ceil()", expect = "3")
     fn ceil(self) -> T;
+    @js(emit = "$round({self})")
+    @go(emit = "wjRound({self:f64})")
+    @example(src = "(2.5).round()", expect = "3")
     fn round(self) -> T;
+    @js(emit = "Math.trunc({self})")
+    @go(emit = "wjMath_trunc({self:f64})")
+    @example(src = "(-2.7).trunc()", expect = "-2")
     fn trunc(self) -> T;
+    @js(emit = "({self} - Math.trunc({self}))")
+    @go(emit = "({self:f64} - wjMath_trunc({self:f64}))")
+    @example(src = "(2.75).fract()", expect = "0.75")
     fn fract(self) -> T;
+    @js(emit = "$fmin({self}, {other})")
+    @go(emit = "wjFmin({self:f64}, {other:f64})")
+    @example(src = "(1.5).min(2.5)", expect = "1.5")
     fn min(self, other: T) -> T;
+    @js(emit = "$fmax({self}, {other})")
+    @go(emit = "wjFmax({self:f64}, {other:f64})")
+    @example(src = "(1.5).max(2.5)", expect = "2.5")
     fn max(self, other: T) -> T;
+    @js(emit = "$fmin($fmax({self}, {min}), {max})")
+    @go(emit = "wjFmin(wjFmax({self:f64}, {min:f64}), {max:f64})")
+    @example(src = "(5.0).clamp(0.0, 3.0)", expect = "3")
     fn clamp(self, min: T, max: T) -> T;
+    @js(emit = "({self} * {a} + {b})")
+    @go(emit = "({self:f64} * {a:f64} + {b:f64})")
+    @example(src = "(2.0).mul_add(3.0, 1.0)", expect = "7")
     fn mul_add(self, a: T, b: T) -> T;
+    @internal(reason = "R071: the removed spelling of `pow`; kept as the rust lowering target (`pow` lowers to powi / powf by the exponent) and until G2 shows no accepted program reaches it")
+    @js(emit = "Math.pow({self}, Number({n}))")
+    @go(emit = "wjMath_pow({self:f64}, float64({n}))")
+    @example(src = "(2.0).powi(10)", expect = "1024")
     fn powi(self, n: i32) -> T;
+    @internal(reason = "R071: the removed spelling of `pow`; kept as the rust lowering target (`pow` lowers to powi / powf by the exponent) and until G2 shows no accepted program reaches it")
+    @js(emit = "Math.pow({self}, {n})")
+    @go(emit = "wjMath_pow({self:f64}, {n:f64})")
+    @example(src = "(9.0).powf(0.5)", expect = "3")
     fn powf(self, n: T) -> T;
+    @js(emit = "$fsignum({self})")
+    @go(emit = "wjFsignum({self:f64})")
+    @example(src = "(-2.0).signum()", expect = "-1")
     fn signum(self) -> T;
+    @js(emit = "({self} * Math.PI / 180)")
+    @go(emit = "({self:f64} * wjPi / 180)")
+    @example(src = "(((180.0).to_radians()) * 1000.0).round() / 1000.0", expect = "3.142")
     fn to_radians(self) -> T;
+    @js(emit = "({self} * 180 / Math.PI)")
+    @go(emit = "({self:f64} * 180 / wjPi)")
+    @example(src = "(((3.141592653589793).to_degrees()) * 1000.0).round() / 1000.0", expect = "180")
     fn to_degrees(self) -> T;
+    @js(emit = "Number.isNaN({self})")
+    @go(emit = "wjIsNaN({self:f64})")
+    @example(src = "(1.5).is_nan()", expect = "false")
     fn is_nan(self) -> bool;
+    @js(emit = "(Math.abs({self}) === Infinity)")
+    @go(emit = "wjIsInf({self:f64})")
+    @example(src = "(1.5).is_infinite()", expect = "false")
+    fn is_infinite(self) -> bool;
+    @js(emit = "Number.isFinite({self})")
+    @go(emit = "wjIsFinite({self:f64})")
+    @example(src = "(1.5).is_finite()", expect = "true")
     fn is_finite(self) -> bool;
+    @internal(reason = "R074: a removed spelling (`x < 0.0` is the canonical form); kept until G2 shows no accepted program reaches it")
+    @js(emit = "$signNeg({self})")
+    @go(emit = "wjSignNeg({self:f64})")
+    @example(src = "(-1.5).is_sign_negative()", expect = "true")
+    fn is_sign_negative(self) -> bool;
+    @internal(reason = "R074: a removed spelling (`x < 0.0` is the canonical form); kept until G2 shows no accepted program reaches it")
+    @js(emit = "(!$signNeg({self}))")
+    @go(emit = "(!wjSignNeg({self:f64}))")
+    @example(src = "(-1.5).is_sign_positive()", expect = "false")
+    fn is_sign_positive(self) -> bool;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(src = "(2.5).to_string()", expect = "2.5")
     fn to_string(self) -> String;
 }

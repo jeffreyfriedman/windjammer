@@ -17,7 +17,7 @@ mod arch_scan;
 mod heuristic_scan;
 
 use arch_scan::{compare, format_diff, Counts, SrcFile};
-use heuristic_scan::{count_file, is_test_file, spells_name, string_literals, Exempt, FileCounts};
+use heuristic_scan::{count_file, is_test_file, spells_name, string_literals, uncounted_forms, Exempt, FileCounts, UncountedForms};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -202,6 +202,56 @@ fn test_modules_and_test_files_are_not_counted() {
     assert_eq!(counts_of(src), FileCounts { name_matches: 1, match_arm_names: 0, fallback_legacy: 0 });
     assert!(is_test_file("src/codegen/rust/foo_tests.rs") && is_test_file("src/ir/tests/a.rs"));
     assert!(!is_test_file("src/codegen/rust/test_detection.rs"));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Forms the counts do not see yet (report-only; stage 9 of docs/design/table-driven-std-surface.md enforces them)
+// ---------------------------------------------------------------------------------------------
+
+fn uncounted_of(src: &str) -> UncountedForms {
+    uncounted_forms(src, &arch_scan::strip_code(src), &Exempt::new(Vec::new(), Vec::new()))
+}
+
+#[test]
+fn tuple_pattern_and_matches_list_names_are_found_without_double_counting() {
+    // hand-counted: two tuple-pattern literals ("insert", "get"), one in a guarded arm; one matches! list of three
+    let src = r#"
+fn a(name: &str, i: usize) -> u8 {
+    match (name, i) {
+        ("insert", 0) => 1,
+        ("get", 0) | ("peek", 1) => 2,
+        (n, _) if n.len() > 3 => 3,
+        _ => 0,
+    }
+}
+fn b(name: &str) -> bool { matches!(name, "len" | "count" | "capacity") }
+fn c(name: &str) -> bool { matches!(name.len(), 0) }
+"#;
+    assert_eq!(uncounted_of(src), UncountedForms { tuple_pattern_names: 3, matches_list_names: 3 });
+    // already counted forms stay in their own counts; a call with a literal argument is not a pattern
+    let counted = r#"fn f(n: &str) -> u8 { match n { "Alpha" => 1, _ => 0 } }
+fn g(n: &str) -> bool { n == "Beta" || foo("Gamma", 1) }
+"#;
+    assert_eq!(uncounted_of(counted), UncountedForms::default());
+}
+
+/// Print the uncounted forms per file and in total. Never fails: stage 9 enforces them with the baseline this
+/// prints (`cargo test --test all heuristic_surface_test::report_uncounted_name_forms -- --nocapture`).
+#[test]
+fn report_uncounted_name_forms() {
+    let ex = exempt(&load_allowlist());
+    let mut rows: Vec<(String, UncountedForms)> = Vec::new();
+    for f in arch_scan::load_src_files(&root()).iter().filter(|f| counted(f)) {
+        let u = uncounted_forms(&f.raw, &f.code, &ex);
+        if u != UncountedForms::default() {
+            rows.push((f.rel.clone(), u));
+        }
+    }
+    let (t, m): (u64, u64) = rows.iter().fold((0, 0), |(t, m), (_, u)| (t + u.tuple_pattern_names, m + u.matches_list_names));
+    for (rel, u) in &rows {
+        println!("uncounted\t{rel}\ttuple_pattern_names={}\tmatches_list_names={}", u.tuple_pattern_names, u.matches_list_names);
+    }
+    println!("uncounted total: tuple_pattern_names {t}, matches_list_names {m} (sum {})", t + m);
 }
 
 // ---------------------------------------------------------------------------------------------

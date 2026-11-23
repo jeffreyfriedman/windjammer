@@ -311,7 +311,6 @@ export function $replace(dst, src) {
   Object.assign(dst, src);
 }
 export const $pop = (v) => (v.length ? { v: v.pop() } : null);
-export const $popFront = (v) => (v.length ? { v: v.shift() } : null);
 export const $vget = (v, i) => {
   const n = Number(i);
   return n >= 0 && n < v.length ? { v: v[n] } : null;
@@ -352,9 +351,6 @@ export function $swap(v, i, j) {
   const a = $ix(v, i);
   const b = $ix(v, j);
   [v[a], v[b]] = [v[b], v[a]];
-}
-export function $drain(v) {
-  return v.splice(0, v.length);
 }
 export function $windows(v, n) {
   const k = Number(n);
@@ -484,7 +480,6 @@ export const $optMap = (o, f) => (o === null ? null : { v: f(o.v) });
 export const $optAndThen = (o, f) => (o === null ? null : f(o.v));
 export const $optFilter = (o, f) => (o !== null && f(o.v) ? o : null);
 export const $okOr = (o, e) => (o === null ? { ok: false, v: e } : { ok: true, v: o.v });
-export const $optMapOr = (o, d, f) => (o === null ? d : f(o.v));
 export const $unwrapRes = (r, dbg) => (r.ok ? r.v : $panic(`called \`Result::unwrap()\` on an \`Err\` value: ${dbg(r.v)}`));
 export const $expectRes = (r, m, dbg) => (r.ok ? r.v : $panic(`${m}: ${dbg(r.v)}`));
 export const $unwrapErr = (r) => (r.ok ? $panic("called `Result::unwrap_err()` on an `Ok` value") : r.v);
@@ -574,8 +569,6 @@ export function $strFind(s, pat) {
   const i = s.indexOf(pat);
   return i < 0 ? null : { v: BigInt($strlen(s.slice(0, i))) };
 }
-export const $asciiUpper = (c) => (c >= "a" && c <= "z" ? c.toUpperCase() : c);
-export const $asciiLower = (c) => (c >= "A" && c <= "Z" ? c.toLowerCase() : c);
 export function $toDigit(c, radix) {
   const r = Number(radix);
   const d = parseInt(c, 36);

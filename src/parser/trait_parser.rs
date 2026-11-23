@@ -221,6 +221,7 @@ impl Parser {
             associated_types,
             methods,
             doc_comment: None,
+            decorators: Vec::new(),
         })
     }
 }

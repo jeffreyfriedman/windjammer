@@ -1,10 +1,12 @@
 //! Program-wide symbol tables used while lowering (types of items, never of locals).
 
 use super::alias::Aliases;
-use super::ir::ParamMode;
+use super::ir::{PExpr, ParamMode};
 use super::ty::{from_ast, Ty};
 use crate::analyzer::{OwnershipMode, SignatureRegistry};
 use crate::parser::{EnumVariantData, FunctionDecl, Item, Program};
+use crate::ir::stdlib_tables::CoreSurface;
+use crate::stdlib_surface::lowering::{ContextKind, CoreType, LoweringTable};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -35,8 +37,320 @@ pub struct EnumInfo {
     pub variants: Vec<VariantInfo>,
 }
 
-#[derive(Debug, Default)]
+/// The typed std surface (`std/rust_core.wji`) and its lowering table: one parse per process, shared.
+#[derive(Debug, Clone, Copy)]
+pub struct StdSurface {
+    pub core: &'static CoreSurface,
+    pub lowering: &'static LoweringTable,
+}
+
+impl StdSurface {
+    pub fn shared() -> StdSurface {
+        StdSurface { core: crate::ir::stdlib_tables::shared_core_surface(), lowering: crate::ir::stdlib_tables::shared_lowering() }
+    }
+
+    /// The result type the declaration in `std/rust_core.wji` gives `recv.name(args)` for a float, integer, char, string,
+    /// `Option` or `Result` receiver, `T` being the receiver's own type (an `Option<T>`'s `T`, a `Result<T, E>`'s `T` and
+    /// `E`); `None` when the surface declares no such method. A method generic is bound from the arguments (`map<U>`
+    /// takes `U` from the closure's result type) and then from the expected result `want` (`parse<F>`: `Result<i32, string>`
+    /// binds `F = i32`).
+    pub fn declared_ret(&self, recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
+        let (receiver, core_type) = match numeric_receiver(recv) {
+            Some(r) => r,
+            None => {
+                // the type's own rows, the types it adapts (a list has the iterator's), then what every value has
+                let (ct, recv_args) = core_receiver(recv);
+                let (owner, _) = self.lowering.lookup(ct, name)?;
+                let recv_args = if owner == CoreType::Any { Vec::new() } else { recv_args };
+                return self.declared_on_trait(owner, &recv_args, name, args, want);
+            }
+        };
+        // Only a method with a row: the width traits (`f32::to_bits`) are declared too, but have no lowering yet.
+        self.lowering.row(core_type, name)?;
+        let ret = self.core.method_signature(&receiver, name, &[])?.ret?;
+        Some(from_ast(&ret, &[], &Aliases::default()))
+    }
+
+    /// The expected type of argument `index` of `recv.name(..)` as the declaration gives it (a string's `contains` takes a
+    /// `&str`, `repeat` a `usize`; an `Option<T>`'s `map` takes a `fn(T) -> ?`, its `unwrap_or` a `T`); `None` when the
+    /// receiver's type has no rows, the method no such parameter, or the parameter is a bare method generic.
+    pub fn declared_arg(&self, recv: &Ty, name: &str, index: usize) -> Option<Ty> {
+        self.declared_arg_after(recv, name, index, &[])
+    }
+
+    /// [`Self::declared_arg`] with the arguments before `index` known: a method generic they fix (`fold<A>(init: A, f: fn(A, T) -> A)`:
+    /// `A` is the type of `init`) is fixed in the parameter's type too.
+    pub fn declared_arg_after(&self, recv: &Ty, name: &str, index: usize, prev: &[PExpr]) -> Option<Ty> {
+        if *recv == Ty::Str {
+            self.lowering.row(CoreType::String, name)?;
+            let (_, generics, params, _) = self.core.declared(CoreType::String.trait_name(), name)?;
+            return Some(from_ast(params.get(index)?, &generics, &Aliases::default()));
+        }
+        if let Some((receiver, core_type)) = numeric_receiver(recv) {
+            // a numeric method's parameter is the receiver's own type or the type it declares (`pow` takes a `u32`)
+            self.lowering.row(core_type, name)?;
+            let sig = self.core.method_signature(&receiver, name, &[])?;
+            return Some(from_ast(sig.params.get(index)?, &[], &Aliases::default()));
+        }
+        let (ct, recv_args) = core_receiver(recv);
+        let (core_type, _) = self.lowering.lookup(ct, name)?;
+        if matches!(core_type, CoreType::Char | CoreType::Any) {
+            return None;
+        }
+        let (type_generics, method_generics, params, _) = self.core.declared(core_type.trait_name(), name)?;
+        let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
+        let want = from_ast(params.get(index)?, &generics, &Aliases::default());
+        if matches!(&want, Ty::Param(n) if method_generics.contains(n)) {
+            return None;
+        }
+        // The receiver's generics are known. A method generic is not yet (it is the closure's result, which the closure's body
+        // decides) unless an earlier argument fixed it: a closure type is wanted with what is known of it (`Result<?, E>`: the
+        // error type the body's `Ok(..)` needs), and with no result at all when nothing is (`Option<?>` is a shape with no
+        // information: it makes `if c { Some(x) } else { None }` an untypable body).
+        let mut bound: Vec<Option<Ty>> = vec![None; generics.len()];
+        for (param, arg) in params.iter().zip(prev) {
+            bind_generics(&from_ast(param, &generics, &Aliases::default()), &arg.ty, &generics, &mut bound, true);
+        }
+        let fixed: Vec<(String, Ty)> = generics.iter().zip(bound).skip(type_generics.len()).filter_map(|(g, b)| Some((g.clone(), b.filter(informs)?))).collect();
+        let ty = want.subst(&type_generics, &recv_args);
+        let ty = ty.subst(&fixed.iter().map(|(g, _)| g.clone()).collect::<Vec<_>>(), &fixed.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>());
+        let open = |t: &Ty| {
+            if !method_generics.iter().any(|g| mentions(t, g)) {
+                return t.clone();
+            }
+            let unknowns = vec![Ty::Unknown; method_generics.len()];
+            let known = t.subst(&method_generics, &unknowns);
+            if informs(&known) { known } else { Ty::Unknown }
+        };
+        Some(match ty {
+            Ty::Fn(params, ret) => Ty::Fn(params.iter().map(open).collect(), Box::new(open(&ret))),
+            other => open(&other),
+        })
+    }
+
+    /// Whether argument `index` of `recv.name(..)` is stored by the call (a value that outlives it: `push`, `insert`, `unwrap_or`), so a
+    /// place passed there is copied: the declared parameter is owned (`value: T`), not borrowed (`&T`) and not a closure.
+    pub fn stores_arg(&self, recv: &Ty, name: &str, index: usize) -> bool {
+        if numeric_receiver(recv).is_some() {
+            return false;
+        }
+        let (ct, _) = core_receiver(recv);
+        let Some((owner, _)) = self.lowering.lookup(ct, name) else { return false };
+        let Some((_, _, params, _)) = self.core.declared(owner.trait_name(), name) else { return false };
+        params.get(index).is_some_and(|p| !matches!(p, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_) | crate::parser::Type::FunctionPointer { .. }))
+    }
+
+    /// The result type of the associated function `owner::name(args)` (`Vec::new`, `HashMap::with_capacity`, `i64::MAX`,
+    /// `char::from_u32`) as its declaration gives it, `owner` being the type's spelling. The type's generics come from the
+    /// owner when it is a primitive (`Integer<T>` of `i64`: `T` is `i64`), else from the expected type (`HashMap<K, V>`
+    /// against `Map<string, i32>`), and stay unknown when nothing says (`Vec::new()` alone is a `Vec<?>`); the function's own
+    /// generics from the arguments. `None` when the surface declares no such function with rules.
+    pub fn declared_static_ret(&self, owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
+        let (trait_name, _) = self.lowering.static_row(owner, name)?;
+        let (type_generics, method_generics, params, ret) = self.core.declared_static(trait_name, name)?;
+        let ret = ret.unwrap_or(crate::parser::Type::Tuple(vec![]));
+        let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
+        let ty = from_ast(&ret, &generics, &Aliases::default());
+        let mut bound: Vec<Option<Ty>> = vec![None; generics.len()];
+        let owner_ty = from_ast(&crate::parser::Type::Custom(owner.to_string()), &[], &Aliases::default());
+        if type_generics.len() == 1 && !matches!(owner_ty, Ty::Adt(..)) {
+            bound[0] = Some(owner_ty);
+        }
+        for (param, arg) in params.iter().zip(args) {
+            bind_generics(&from_ast(param, &generics, &Aliases::default()), &arg.ty, &generics, &mut bound, true);
+        }
+        if let Some(want) = want {
+            bind_generics(&ty, want, &generics, &mut bound, false);
+        }
+        let all: Vec<Ty> = bound.into_iter().map(|b| b.unwrap_or(Ty::Unknown)).collect();
+        Some(ty.subst(&generics, &all))
+    }
+
+    /// The expected type of argument `index` of `owner::name(..)` as the declaration gives it (`String::from` takes a string,
+    /// `from_str_radix` a `u32` radix); `None` for a bare function generic (`i64::from(x)` takes anything) or no such function.
+    pub fn declared_static_arg(&self, owner: &str, name: &str, index: usize) -> Option<Ty> {
+        let (trait_name, _) = self.lowering.static_row(owner, name)?;
+        let (type_generics, method_generics, params, _) = self.core.declared_static(trait_name, name)?;
+        let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
+        let want = from_ast(params.get(index)?, &generics, &Aliases::default());
+        (!matches!(&want, Ty::Param(_))).then_some(want).map(|t| t.subst(&generics, &vec![Ty::Unknown; generics.len()])).filter(informs)
+    }
+
+    /// The declared result of `name` on a type of `std/rust_core.wji` whose generics (`recv_args` for the trait's, then
+    /// the method's own) are instantiated: the receiver's, then the arguments' types (`map<U>(f: fn(T) -> U)` binds `U` to
+    /// the closure's result), then the expected type.
+    fn declared_on_trait(&self, core_type: CoreType, recv_args: &[Ty], name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
+        let row = self.lowering.row(core_type, name)?;
+        // `@result_from_context`: the call is what it is expected to be when that has the declared kind of shape (`collect` into a
+        // set, `sum` into an `i64`)
+        if let (Some(kind), Some(want)) = (row.from_context, want) {
+            let accepted = match kind {
+                ContextKind::Collection => matches!(want, Ty::Vec(_) | Ty::Set(_) | Ty::Map(..) | Ty::Str | Ty::Result(..) | Ty::Option(_)),
+                ContextKind::Numeric => want.is_numeric(),
+            };
+            if accepted {
+                return Some(want.clone());
+            }
+        }
+        let (type_generics, method_generics, params, ret) = self.core.declared(core_type.trait_name(), name)?;
+        let Some(ret) = ret else { return Some(Ty::Unit) };
+        let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
+        let ty = match from_ast(&ret, &generics, &Aliases::default()) {
+            // `Iterator<T>` is the portable type of a lazy sequence
+            Ty::Adt(n, mut args) if n == crate::ir::stdlib_tables::ITERATOR && args.len() == 1 => Ty::Iter(Box::new(args.remove(0))),
+            other => other,
+        };
+        if generics.is_empty() {
+            return Some(ty);
+        }
+        let mut bound: Vec<Option<Ty>> = vec![None; generics.len()];
+        for (slot, t) in bound.iter_mut().zip(recv_args) {
+            *slot = Some(t.clone());
+        }
+        for (param, arg) in params.iter().zip(args) {
+            bind_generics(&from_ast(param, &generics, &Aliases::default()), &arg.ty, &generics, &mut bound, true);
+        }
+        if let Some(want) = want {
+            bind_generics(&ty, want, &generics, &mut bound, false);
+        }
+        let all: Option<Vec<Ty>> = bound.into_iter().collect();
+        Some(ty.subst(&generics, &all?))
+    }
+}
+
+/// The surface type and trait of a float or integer receiver (`Float<T>` of `f64`, `Integer<T>` of an integer type).
+fn numeric_receiver(recv: &Ty) -> Option<(crate::parser::Type, CoreType)> {
+    Some(match recv {
+        Ty::F64 => (crate::parser::Type::Custom("f64".to_string()), CoreType::Float),
+        Ty::F32 => (crate::parser::Type::Custom("f32".to_string()), CoreType::Float),
+        Ty::Int(k) => (crate::parser::Type::Custom(k.name().to_string()), CoreType::Integer),
+        _ => return None,
+    })
+}
+
+/// The migrated type a receiver is a value of, with the type arguments of its trait (an `Option<T>`'s `T`, a `Result<T, E>`'s `T` and `E`).
+/// `None` for a receiver no trait is declared for (a bool, a tuple, a user type): only what every value has applies to it.
+pub fn core_receiver(recv: &Ty) -> (Option<CoreType>, Vec<Ty>) {
+    match recv {
+        Ty::Char => (Some(CoreType::Char), vec![]),
+        Ty::Str => (Some(CoreType::String), vec![]),
+        Ty::Option(t) => (Some(CoreType::Option), vec![(**t).clone()]),
+        Ty::Result(t, e) => (Some(CoreType::Result), vec![(**t).clone(), (**e).clone()]),
+        Ty::Map(k, v) => (Some(CoreType::Map), vec![(**k).clone(), (**v).clone()]),
+        Ty::Set(t) => (Some(CoreType::Set), vec![(**t).clone()]),
+        Ty::Vec(t) => (Some(CoreType::Vec), vec![(**t).clone()]),
+        Ty::Iter(t) | Ty::Range(t) => (Some(CoreType::Iter), vec![(**t).clone()]),
+        _ => (None, vec![]),
+    }
+}
+
+/// The migrated type whose rows a call on `recv` looks up first (`None`: only what every value has applies).
+pub fn core_type(recv: &Ty) -> Option<CoreType> {
+    numeric_receiver(recv).map(|(_, c)| c).or_else(|| core_receiver(recv).0)
+}
+
+/// What a value yields when it is iterated: a list, set, iterator or range its element, a map its `(key, value)` pairs, an `Option` its value.
+pub fn iterated(t: &Ty) -> Option<Ty> {
+    match t {
+        Ty::Vec(e) | Ty::Set(e) | Ty::Iter(e) | Ty::Range(e) | Ty::Option(e) => Some((**e).clone()),
+        Ty::Map(k, v) => Some(Ty::Tuple(vec![(**k).clone(), (**v).clone()])),
+        _ => None,
+    }
+}
+
+/// Bind the generics that `pattern` mentions to the parts of `found` in the same places (`Result<F, string>` against
+/// `Result<i32, string>` binds `F = i32`; `fn(T) -> U` against a closure type binds `U` to its result). The first binding
+/// of a generic wins. `lenient`: an argument whose type is not known yet (`Unknown`) binds every generic the pattern mentions
+/// to `Unknown` (a closure whose result is not known types the call as not known, it does not make it untypable).
+fn bind_generics(pattern: &Ty, found: &Ty, generics: &[String], bound: &mut [Option<Ty>], lenient: bool) {
+    if lenient && *found == Ty::Unknown && !matches!(pattern, Ty::Param(_)) {
+        let mut names = Vec::new();
+        mentioned(pattern, &mut names);
+        for n in names {
+            if let Some(i) = generics.iter().position(|g| *g == n) {
+                bound[i].get_or_insert(Ty::Unknown);
+            }
+        }
+        return;
+    }
+    match (pattern, found) {
+        (Ty::Param(n), w) => {
+            if let Some(i) = generics.iter().position(|g| g == n) {
+                bound[i].get_or_insert_with(|| w.clone());
+            }
+        }
+        (Ty::Result(a, b), Ty::Result(wa, wb)) => {
+            bind_generics(a, wa, generics, bound, lenient);
+            bind_generics(b, wb, generics, bound, lenient);
+        }
+        (Ty::Option(a), Ty::Option(wa)) | (Ty::Vec(a), Ty::Vec(wa)) | (Ty::Set(a), Ty::Set(wa)) => bind_generics(a, wa, generics, bound, lenient),
+        // an iterator parameter takes anything iterable (`flat_map(|x| [x, x])`, `zip(other_list)`)
+        (Ty::Iter(a), w) => {
+            if let Some(e) = iterated(w) {
+                bind_generics(a, &e, generics, bound, lenient);
+            }
+        }
+        // the declaration spells it `Iterator<U>` inside a parameter's type
+        (Ty::Adt(n, a), w) if n == crate::ir::stdlib_tables::ITERATOR && a.len() == 1 => {
+            if let Some(e) = iterated(w) {
+                bind_generics(&a[0], &e, generics, bound, lenient);
+            }
+        }
+        (Ty::Map(a, b), Ty::Map(wa, wb)) => {
+            bind_generics(a, wa, generics, bound, lenient);
+            bind_generics(b, wb, generics, bound, lenient);
+        }
+        (Ty::Fn(pa, pr), Ty::Fn(wa, wr)) => {
+            for (p, w) in pa.iter().zip(wa) {
+                bind_generics(p, w, generics, bound, lenient);
+            }
+            bind_generics(pr, wr, generics, bound, lenient);
+        }
+        _ => {}
+    }
+}
+
+/// Whether a type says anything: `Unknown` and shells of `Unknown` (`Option<Unknown>`) do not.
+fn informs(t: &Ty) -> bool {
+    match t {
+        Ty::Unknown => false,
+        Ty::Vec(a) | Ty::Set(a) | Ty::Iter(a) | Ty::Range(a) | Ty::Option(a) => informs(a),
+        Ty::Map(a, b) | Ty::Result(a, b) => informs(a) || informs(b),
+        Ty::Tuple(ts) | Ty::Adt(_, ts) => ts.iter().any(informs),
+        Ty::Fn(ps, r) => ps.iter().any(informs) || informs(r),
+        _ => true,
+    }
+}
+
+/// Whether a type mentions the generic `name`.
+fn mentions(t: &Ty, name: &str) -> bool {
+    let mut names = Vec::new();
+    mentioned(t, &mut names);
+    names.iter().any(|n| n == name)
+}
+
+/// The generic names a type mentions.
+fn mentioned(t: &Ty, out: &mut Vec<String>) {
+    match t {
+        Ty::Param(n) => out.push(n.clone()),
+        Ty::Vec(a) | Ty::Set(a) | Ty::Iter(a) | Ty::Range(a) | Ty::Option(a) => mentioned(a, out),
+        Ty::Map(a, b) | Ty::Result(a, b) => {
+            mentioned(a, out);
+            mentioned(b, out);
+        }
+        Ty::Tuple(ts) | Ty::Adt(_, ts) => ts.iter().for_each(|t| mentioned(t, out)),
+        Ty::Fn(ps, r) => {
+            ps.iter().for_each(|t| mentioned(t, out));
+            mentioned(r, out);
+        }
+        _ => {}
+    }
+}
+
+#[derive(Debug)]
 pub struct ItemEnv {
+    /// The std methods' types and lowering rules (`builtins::ret_ty` reads signatures, the emitters read the rules).
+    pub surface: StdSurface,
     pub structs: HashMap<String, StructInfo>,
     pub enums: HashMap<String, EnumInfo>,
     pub fns: HashMap<String, FnSig>,
@@ -133,7 +447,24 @@ fn sig_of(decl: &FunctionDecl, key: &str, reg: Option<&SignatureRegistry>, outer
 
 impl ItemEnv {
     pub fn build(program: &Program, reg: Option<&SignatureRegistry>) -> ItemEnv {
-        let mut env = ItemEnv { aliases: Aliases::from_program(program), ..ItemEnv::default() };
+        Self::build_with(program, reg, StdSurface::shared())
+    }
+
+    pub fn build_with(program: &Program, reg: Option<&SignatureRegistry>, surface: StdSurface) -> ItemEnv {
+        let mut env = ItemEnv {
+            surface,
+            structs: HashMap::new(),
+            enums: HashMap::new(),
+            fns: HashMap::new(),
+            methods: HashMap::new(),
+            trait_methods: HashMap::new(),
+            impl_traits: HashMap::new(),
+            consts: HashMap::new(),
+            trait_defaults: HashMap::new(),
+            without_facts: false,
+            trait_impls: HashMap::new(),
+            aliases: Aliases::from_program(program),
+        };
         // Traits first so impls can inherit default-method signatures regardless of source order.
         for item in &program.items {
             if matches!(item, Item::Trait { .. }) {
@@ -270,5 +601,161 @@ fn trait_sig(m: &crate::parser::TraitMethod, trait_name: &str, al: &Aliases) -> 
         recv: if has_self { Some(mode(&m.parameters[0])) } else { None },
         params: m.parameters.iter().filter(|p| p.name != "self").map(|p| (p.name.clone(), fix_self(from_ast(&p.type_, &[], al), Some(&self_ty)), ParamMode::Value)).collect(),
         ret: m.return_type.as_ref().map(|t| fix_self(from_ast(t, &[], al), Some(&self_ty))).unwrap_or(Ty::Unit),
+    }
+}
+
+#[cfg(test)]
+mod surface_tests {
+    use super::*;
+    use crate::codegen::portable::ty::IntKind;
+
+    fn parsed(ok: Ty) -> Ty {
+        Ty::Result(Box::new(ok), Box::new(Ty::Str))
+    }
+
+    #[test]
+    fn a_string_or_char_method_has_the_type_its_declaration_gives() {
+        let s = StdSurface::shared();
+        assert_eq!(s.declared_ret(&Ty::Str, "len", &[], None), Some(Ty::usize()));
+        assert_eq!(s.declared_ret(&Ty::Str, "trim", &[], None), Some(Ty::Str));
+        assert_eq!(s.declared_ret(&Ty::Str, "chars", &[], None), Some(Ty::Iter(Box::new(Ty::Char))));
+        assert_eq!(s.declared_ret(&Ty::Str, "char_indices", &[], None), Some(Ty::Iter(Box::new(Ty::Tuple(vec![Ty::usize(), Ty::Char])))));
+        assert_eq!(s.declared_ret(&Ty::Str, "find", &[], None), Some(Ty::Option(Box::new(Ty::usize()))));
+        assert_eq!(s.declared_ret(&Ty::Str, "push", &[], None), Some(Ty::Unit), "no declared result is a unit");
+        assert_eq!(s.declared_ret(&Ty::Char, "to_digit", &[], None), Some(Ty::Option(Box::new(Ty::Int(IntKind::U32)))));
+        assert_eq!(s.declared_ret(&Ty::Char, "to_uppercase", &[], None), Some(Ty::Str));
+        assert_eq!(s.declared_ret(&Ty::Char, "is_alphabetic", &[], None), Some(Ty::Bool));
+    }
+
+    #[test]
+    fn a_removed_spelling_or_an_undeclared_method_has_no_type() {
+        let s = StdSurface::shared();
+        for name in ["as_str", "into_string", "substring", "to_ascii_uppercase", "as_bytes"] {
+            assert_eq!(s.declared_ret(&Ty::Str, name, &[], None), None, "{name}");
+        }
+        for name in ["is_ascii_digit", "is_numeric", "len_utf8", "to_ascii_lowercase"] {
+            assert_eq!(s.declared_ret(&Ty::Char, name, &[], None), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_method_generic_takes_its_type_from_the_expected_result() {
+        let s = StdSurface::shared();
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", &[], Some(&parsed(Ty::Int(IntKind::U8)))), Some(parsed(Ty::Int(IntKind::U8))));
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", &[], Some(&parsed(Ty::F32))), Some(parsed(Ty::F32)));
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", &[], None), None, "no expected type, no target");
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", &[], Some(&Ty::Bool)), None);
+    }
+
+    #[test]
+    fn a_string_argument_has_the_type_its_parameter_declares() {
+        let s = StdSurface::shared();
+        assert_eq!(s.declared_arg(&Ty::Str, "contains", 0), Some(Ty::Str));
+        assert_eq!(s.declared_arg(&Ty::Str, "replace", 1), Some(Ty::Str));
+        assert_eq!(s.declared_arg(&Ty::Str, "repeat", 0), Some(Ty::usize()));
+        assert_eq!(s.declared_arg(&Ty::Str, "push", 0), Some(Ty::Char));
+        assert_eq!(s.declared_arg(&Ty::Str, "len", 0), None);
+        assert_eq!(s.declared_arg(&Ty::Char, "to_digit", 0), None, "a char argument keeps the numeric rule");
+    }
+
+    fn arg_of(ty: Ty) -> PExpr {
+        PExpr::new(ty, crate::codegen::portable::ir::PK::None)
+    }
+
+    fn closure(ret: Ty) -> PExpr {
+        arg_of(Ty::Fn(vec![Ty::Int(IntKind::I32)], Box::new(ret)))
+    }
+
+    #[test]
+    fn an_option_or_result_method_has_the_type_its_declaration_gives() {
+        let s = StdSurface::shared();
+        let int = Ty::Int(IntKind::I32);
+        let opt = Ty::Option(Box::new(int.clone()));
+        let res = Ty::Result(Box::new(int.clone()), Box::new(Ty::Str));
+        let ret = |recv: &Ty, name: &str, args: &[PExpr]| s.declared_ret(recv, name, args, None);
+        assert_eq!(ret(&opt, "is_some", &[]), Some(Ty::Bool));
+        assert_eq!(ret(&opt, "unwrap", &[]), Some(int.clone()));
+        assert_eq!(ret(&opt, "filter", &[closure(Ty::Bool)]), Some(opt.clone()));
+        assert_eq!(ret(&opt, "map", &[closure(Ty::Bool)]), Some(Ty::Option(Box::new(Ty::Bool))), "U is the closure's result");
+        assert_eq!(ret(&opt, "map", &[closure(Ty::Unknown)]), Some(Ty::Option(Box::new(Ty::Unknown))));
+        assert_eq!(ret(&opt, "map", &[arg_of(Ty::Bool)]), None, "no closure, no U");
+        assert_eq!(ret(&opt, "and_then", &[closure(Ty::Option(Box::new(Ty::Str)))]), Some(Ty::Option(Box::new(Ty::Str))));
+        assert_eq!(ret(&opt, "ok_or", &[arg_of(Ty::F64)]), Some(Ty::Result(Box::new(int.clone()), Box::new(Ty::F64))));
+        assert_eq!(ret(&res, "err", &[]), Some(Ty::Option(Box::new(Ty::Str))));
+        assert_eq!(ret(&res, "unwrap_err", &[]), Some(Ty::Str));
+        assert_eq!(ret(&res, "map_err", &[closure(Ty::F64)]), Some(Ty::Result(Box::new(int.clone()), Box::new(Ty::F64))));
+        assert_eq!(ret(&res, "map", &[closure(Ty::Bool)]), Some(Ty::Result(Box::new(Ty::Bool), Box::new(Ty::Str))));
+        // the error type of `and_then`'s closure result is the receiver's: an `Ok(..)` whose error is not known still types
+        let ok_only = Ty::Result(Box::new(Ty::Bool), Box::new(Ty::Unknown));
+        assert_eq!(ret(&res, "and_then", &[closure(ok_only)]), Some(Ty::Result(Box::new(Ty::Bool), Box::new(Ty::Str))));
+        for name in ["map_or", "is_some_and", "expect_err"] {
+            assert_eq!(ret(&opt, name, &[closure(Ty::Bool)]), None, "{name}: no declaration (ADR-0039)");
+            assert_eq!(ret(&res, name, &[closure(Ty::Bool)]), None, "{name}: no declaration (ADR-0039)");
+        }
+    }
+
+    #[test]
+    fn an_option_or_result_argument_has_the_type_its_parameter_declares() {
+        let s = StdSurface::shared();
+        let int = Ty::Int(IntKind::I32);
+        let opt = Ty::Option(Box::new(int.clone()));
+        let res = Ty::Result(Box::new(int.clone()), Box::new(Ty::Str));
+        assert_eq!(s.declared_arg(&opt, "unwrap_or", 0), Some(int.clone()));
+        assert_eq!(s.declared_arg(&opt, "expect", 0), Some(Ty::Str));
+        assert_eq!(s.declared_arg(&opt, "map", 0), Some(Ty::Fn(vec![int.clone()], Box::new(Ty::Unknown))));
+        assert_eq!(s.declared_arg(&opt, "filter", 0), Some(Ty::Fn(vec![int.clone()], Box::new(Ty::Bool))));
+        assert_eq!(s.declared_arg(&opt, "unwrap_or_else", 0), Some(Ty::Fn(vec![], Box::new(int.clone()))));
+        assert_eq!(s.declared_arg(&opt, "ok_or", 0), None, "a bare method generic has no expected type");
+        assert_eq!(s.declared_arg(&res, "map_err", 0), Some(Ty::Fn(vec![Ty::Str], Box::new(Ty::Unknown))));
+        assert_eq!(s.declared_arg(&res, "unwrap_or_else", 0), Some(Ty::Fn(vec![Ty::Str], Box::new(int.clone()))));
+        assert_eq!(s.declared_arg(&res, "and_then", 0), Some(Ty::Fn(vec![int.clone()], Box::new(Ty::Result(Box::new(Ty::Unknown), Box::new(Ty::Str))))), "the error type is known");
+        assert_eq!(s.declared_arg(&opt, "and_then", 0), Some(Ty::Fn(vec![int], Box::new(Ty::Unknown))), "`Option<?>` says nothing: no result is wanted");
+        assert_eq!(s.declared_arg(&res, "is_ok", 0), None);
+    }
+
+    #[test]
+    fn an_associated_function_has_the_type_its_declaration_gives() {
+        let s = StdSurface::shared();
+        let int = Ty::Int(IntKind::I32);
+        let map = |k: Ty, v: Ty| Ty::Map(Box::new(k), Box::new(v));
+        let none: &[PExpr] = &[];
+        assert_eq!(s.declared_static_ret("HashMap", "new", none, Some(&map(Ty::Str, int.clone()))), Some(map(Ty::Str, int.clone())), "K and V from the expected type");
+        assert_eq!(s.declared_static_ret("BTreeMap", "new", none, None), Some(map(Ty::Unknown, Ty::Unknown)), "nothing says the key");
+        assert_eq!(s.declared_static_ret("HashSet", "with_capacity", &[arg_of(Ty::usize())], Some(&Ty::Set(Box::new(Ty::Char)))), Some(Ty::Set(Box::new(Ty::Char))));
+        assert_eq!(s.declared_static_ret("Vec", "from", &[arg_of(Ty::Vec(Box::new(Ty::Bool)))], None), Some(Ty::Vec(Box::new(Ty::Bool))), "T from the argument");
+        assert_eq!(s.declared_static_ret("i64", "MAX", none, None), Some(Ty::Int(IntKind::I64)), "T is the owner");
+        assert_eq!(s.declared_static_ret("u8", "from", &[arg_of(int.clone())], None), Some(Ty::Int(IntKind::U8)));
+        assert_eq!(s.declared_static_ret("i16", "from_str_radix", &[arg_of(Ty::Str), arg_of(Ty::Int(IntKind::U32))], None), Some(Ty::Result(Box::new(Ty::Int(IntKind::I16)), Box::new(Ty::Str))));
+        assert_eq!(s.declared_static_ret("f32", "EPSILON", none, None), Some(Ty::F32));
+        assert_eq!(s.declared_static_ret("f64", "NAN", none, None), Some(Ty::F64));
+        assert_eq!(s.declared_static_ret("char", "from_u32", none, None), Some(Ty::Option(Box::new(Ty::Char))));
+        assert_eq!(s.declared_static_ret("string", "new", none, None), Some(Ty::Str), "`string` is the String trait's owner");
+        assert_eq!(s.declared_static_ret("BTreeMap", "with_capacity", none, None), None, "Rust has none");
+        assert_eq!(s.declared_static_arg("String", "from", 0), Some(Ty::Str));
+        assert_eq!(s.declared_static_arg("i32", "from_str_radix", 1), Some(Ty::Int(IntKind::U32)));
+        assert_eq!(s.declared_static_arg("i64", "from", 0), None, "a bare function generic says nothing");
+    }
+
+    #[test]
+    fn a_map_or_set_method_has_the_type_its_declaration_gives() {
+        let s = StdSurface::shared();
+        let (k, v) = (Ty::Str, Ty::Int(IntKind::I32));
+        let m = Ty::Map(Box::new(k.clone()), Box::new(v.clone()));
+        let set = Ty::Set(Box::new(Ty::Char));
+        let ret = |recv: &Ty, name: &str| s.declared_ret(recv, name, &[], None);
+        assert_eq!(ret(&m, "len"), Some(Ty::usize()));
+        assert_eq!(ret(&m, "get"), Some(Ty::Option(Box::new(v.clone()))));
+        assert_eq!(ret(&m, "insert"), Some(Ty::Option(Box::new(v.clone()))));
+        assert_eq!(ret(&m, "contains_key"), Some(Ty::Bool));
+        assert_eq!(ret(&m, "keys"), Some(Ty::Iter(Box::new(k.clone()))));
+        assert_eq!(ret(&m, "values"), Some(Ty::Iter(Box::new(v.clone()))));
+        assert_eq!(ret(&set, "insert"), Some(Ty::Bool));
+        assert_eq!(ret(&set, "clear"), Some(Ty::Unit));
+        for name in ["iter", "into_iter", "iter_mut", "into_keys", "into_values", "values_mut", "capacity"] {
+            assert_eq!(ret(&m, name), None, "{name}: removed (ADR-0039)");
+        }
+        assert_eq!(s.declared_arg(&m, "insert", 0), Some(k.clone()));
+        assert_eq!(s.declared_arg(&m, "insert", 1), Some(v));
+        assert_eq!(s.declared_arg(&set, "contains", 0), Some(Ty::Char));
     }
 }

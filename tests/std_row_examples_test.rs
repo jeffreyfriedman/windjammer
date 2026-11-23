@@ -1,0 +1,267 @@
+//! G3 of docs/design/table-driven-std-surface.md: the per-row conformance runner. Every row of the lowering table
+//! carries `@example(src = "<expression>", expect = "<printed result>")`; this test turns the examples into one
+//! program, runs it interpreted, as Rust, JavaScript, TypeScript and Go, and holds each printed line against the
+//! row's `expect`. A row whose template is wrong (swapped operands, a misspelled helper) fails on that backend with
+//! the row's name. A backend whose toolchain is missing is skipped loudly (`WJ_REQUIRE_TOOLCHAINS=1` makes it fail).
+
+#![allow(clippy::duplicate_mod)]
+
+#[path = "common/conformance/toolchain.rs"]
+mod toolchain;
+#[path = "common/scratch.rs"]
+mod scratch;
+
+use scratch::Scratch;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use toolchain::{Tool, ToolProbe};
+use windjammer::stdlib_surface::lowering::{Row, Rule, Target};
+use windjammer::typing::core_surface::CoreSurface;
+
+fn wj() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
+
+/// One row's example, with the targets its rules say it is not available on.
+struct Case {
+    id: String,
+    given: Vec<String>,
+    src: String,
+    expect: String,
+    /// `(target, reason)` of each target whose rule for the row is `unsupported`.
+    unsupported: Vec<(Target, String)>,
+}
+
+/// Rows with an `unsupported` rule, per target (`Trait::method`, target decorator). Pinned: a row that stops working is
+/// a row that leaves this list (shrink-only, delete the entry when the lowering lands); a working row that turns
+/// `unsupported` is a new entry the test refuses until it is listed here with the reason in the declaration. The
+/// diagnostic for these is WJ0195 (stage 7); until then the emitter's refusal, carrying the row's reason, is the check.
+const UNSUPPORTED: &[(&str, &str)] = &[
+    ("Char::is_digit", "go"),
+    ("Integer::checked_neg", "go"),
+    ("Integer::checked_neg", "js"),
+    ("Integer::checked_pow", "go"),
+    ("Integer::checked_pow", "js"),
+    ("Integer::checked_shl", "go"),
+    ("Integer::checked_shl", "js"),
+    ("Integer::checked_shr", "go"),
+    ("Integer::checked_shr", "js"),
+    ("Integer::count_zeros", "go"),
+    ("Integer::count_zeros", "js"),
+    ("Integer::isqrt", "go"),
+    ("Integer::isqrt", "js"),
+    ("Integer::reverse_bits", "go"),
+    ("Integer::reverse_bits", "js"),
+    ("Integer::saturating_pow", "go"),
+    ("Integer::saturating_pow", "js"),
+    ("Integer::swap_bytes", "go"),
+    ("Integer::swap_bytes", "js"),
+    ("Integer::wrapping_pow", "go"),
+    ("Integer::wrapping_pow", "js"),
+    ("Option::cloned", "go"),
+    ("Option::cloned", "js"),
+    ("Option::copied", "go"),
+    ("Option::copied", "js"),
+    ("Option::take", "go"),
+    ("Option::take", "js"),
+    ("Option::unwrap_or_default", "go"),
+    ("Option::unwrap_or_default", "js"),
+    ("Result::unwrap_or_default", "go"),
+    ("Result::unwrap_or_default", "js"),
+    ("String::capacity", "go"),
+    ("String::capacity", "js"),
+    ("String::pop", "go"),
+    ("String::pop", "js"),
+    ("String::push_str", "go"),
+    ("String::push_str", "js"),
+    ("String::rfind", "go"),
+    ("String::rfind", "js"),
+    ("String::truncate", "go"),
+    ("String::truncate", "js"),
+];
+
+/// Every row with an example, in table order.
+fn examples() -> Vec<Case> {
+    // from the file on disk, like the other gates: a mutation of a row is seen by the runner with the wj binary it was built into
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("std/rust_core.wji")).unwrap();
+    let table = CoreSurface::parse_source(&text).lowering();
+    table
+        .rows()
+        .map(|(ty, row): (windjammer::stdlib_surface::lowering::CoreType, &Row)| (ty.trait_name(), row))
+        .chain(table.statics())
+        .filter_map(|(trait_name, row): (&str, &Row)| {
+            let e = row.example.as_ref()?;
+            // unsupported on a target: its only rule says so (a row with a guarded rule and an `unsupported` fallback, like
+            // `parse`, works for the types its guards name)
+            let unsupported = Target::ALL
+                .into_iter()
+                .filter_map(|t| match row.rules(t) {
+                    [Rule::Unsupported(why)] => Some((t, why.clone())),
+                    _ => None,
+                })
+                .collect();
+            let given = e.given.iter().flat_map(|g| g.split(';')).map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+            Some(Case { id: format!("{trait_name}::{}", row.name), given, src: e.src.clone(), expect: e.expect.clone(), unsupported })
+        })
+        .collect()
+}
+
+/// One function per example, so each declares its own typed locals (`let x: u8 = 250`): a literal receiver would be
+/// folded by the target's compiler (Go refuses `uint8(129) << 9` as a constant overflow) and takes its type from
+/// inference, which is not what the row is about.
+fn program(rows: &[&Case]) -> String {
+    let mut s = String::from("// generated by tests/std_row_examples_test.rs from the @example of every lowering row\n");
+    // the ordered collections are not in the Rust backend's prelude: a program imports them
+    s.push_str("use std::collections::{BTreeMap, BTreeSet}\n");
+    for (i, c) in rows.iter().enumerate() {
+        s.push_str(&format!("fn ex{i}() {{\n"));
+        for g in &c.given {
+            s.push_str(&format!("    {g}\n"));
+        }
+        s.push_str(&format!("    let r = {}\n    println(\"${{r}}\")\n}}\n", c.src));
+    }
+    s.push_str("fn main() {\n");
+    for i in 0..rows.len() {
+        s.push_str(&format!("    ex{i}()\n"));
+    }
+    s.push_str("}\n");
+    s
+}
+
+fn run(cmd: &mut Command) -> Result<String, String> {
+    let out = cmd.output().map_err(|e| format!("cannot run: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+fn build(dir: &Path, target: Option<&str>, out: &Path) -> Result<(), String> {
+    let mut c = Command::new(wj());
+    c.current_dir(dir).args(["build", "--no-lint", "rows.wj"]);
+    match target {
+        Some(t) => c.args(["-t", t]).arg("-o").arg(out),
+        None => c.arg("-o").arg(out).arg("--no-cargo"),
+    };
+    run(&mut c).map(|_| ())
+}
+
+/// What each backend runs: the rows its lowering supports (the interpreter and Rust run them all).
+fn rows_for<'a>(rows: &'a [Case], target: Option<Target>) -> Vec<&'a Case> {
+    rows.iter().filter(|c| !target.is_some_and(|t| c.unsupported.iter().any(|(u, _)| *u == t))).collect()
+}
+
+/// Per backend: the rows it ran and the printed text, or why it could not be produced. Each backend builds in its own
+/// directory, from the program of the rows it supports.
+#[allow(clippy::type_complexity)]
+fn outputs<'a>(dir: &Path, probe: &ToolProbe, rows: &'a [Case]) -> Vec<(&'static str, Vec<&'a Case>, Option<Result<String, String>>)> {
+    let mut v = Vec::new();
+    let mut backend = |name: &'static str, target: Option<Target>, run: &dyn Fn(&Path) -> Option<Result<String, String>>| {
+        let cases = rows_for(rows, target);
+        let d = dir.join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("rows.wj"), program(&cases)).unwrap();
+        let out = run(&d);
+        v.push((name, cases, out));
+    };
+    backend("interpreter", None, &|d| Some(run(Command::new(wj()).current_dir(d).args(["run", "--interpret", "--no-lint", "rows.wj"]))));
+    backend("rust", None, &|d| {
+        probe.has(Tool::Rustc).then(|| {
+            let out = d.join("out_rust");
+            build(d, None, &out)?;
+            run(Command::new("rustc").args(["--edition", "2021", "-A", "warnings", "--crate-name", "conf", "-o"]).arg(d.join("prog")).arg(out.join("rows.rs")))?;
+            run(&mut Command::new(d.join("prog")))
+        })
+    });
+    backend("javascript", Some(Target::Js), &|d| {
+        probe.has(Tool::Node).then(|| {
+            let out = d.join("out_js");
+            build(d, Some("javascript"), &out)?;
+            run(Command::new("node").current_dir(&out).arg("main.mjs"))
+        })
+    });
+    backend("typescript", Some(Target::Js), &|d| {
+        probe.has(Tool::Node).then(|| {
+            let out = d.join("out_ts");
+            build(d, Some("typescript"), &out)?;
+            run(Command::new("node").current_dir(&out).args(["--experimental-strip-types", "--no-warnings", "main.ts"]))
+        })
+    });
+    backend("go", Some(Target::Go), &|d| {
+        probe.has(Tool::Go).then(|| {
+            let out = d.join("out_go");
+            build(d, Some("go"), &out)?;
+            run(Command::new("go").current_dir(&out).args(["run", "."]))
+        })
+    });
+    v
+}
+
+#[test]
+fn every_row_example_prints_its_expected_text_on_every_backend() {
+    let rows = examples();
+    assert!(rows.len() >= 60, "the Float, Integer, Char and String rows carry examples: found {}", rows.len());
+    let probe = ToolProbe::new(&[Tool::Rustc, Tool::Go, Tool::Node]);
+    probe.announce();
+    let dir = Scratch::new("row-examples");
+    let mut bad = Vec::new();
+    for (backend, cases, result) in outputs(dir.path(), &probe, &rows) {
+        let Some(result) = result else { continue };
+        match result {
+            Err(e) => bad.push(format!("{backend}: the examples program did not run:\n{e}")),
+            Ok(text) => {
+                let lines: Vec<&str> = text.lines().collect();
+                if lines.len() != cases.len() {
+                    bad.push(format!("{backend}: printed {} lines for {} rows", lines.len(), cases.len()));
+                }
+                for (i, c) in cases.iter().enumerate() {
+                    if lines.get(i).map(|l| l.trim()) != Some(c.expect.as_str()) {
+                        bad.push(format!("{backend}: {}: `{}` printed {:?}, expected {:?}", c.id, c.src, lines.get(i), c.expect));
+                    }
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "row examples:\n{}", bad.join("\n"));
+}
+
+/// The rows a target does not support are exactly the pinned list, and the emitter refuses each with the row's reason
+/// (not a different error): a working row marked `unsupported` fails the first check, a row whose `unsupported` is
+/// ignored fails the second.
+#[test]
+fn unsupported_rows_are_the_pinned_list_and_are_refused_with_their_reason() {
+    let rows = examples();
+    let mut found: Vec<(String, &'static str)> = Vec::new();
+    for c in &rows {
+        for (t, _) in &c.unsupported {
+            found.push((c.id.clone(), t.decorator()));
+        }
+    }
+    found.sort();
+    let mut pinned: Vec<(String, &'static str)> = UNSUPPORTED.iter().map(|(id, t)| (id.to_string(), *t)).collect();
+    pinned.sort();
+    let new: Vec<_> = found.iter().filter(|f| !pinned.contains(f)).collect();
+    let stale: Vec<_> = pinned.iter().filter(|p| !found.contains(p)).collect();
+    assert!(new.is_empty(), "rows that are `unsupported` and not in UNSUPPORTED (a working row must not be marked unsupported): {new:?}");
+    assert!(stale.is_empty(), "UNSUPPORTED lists rows that are supported now: delete the entries {stale:?}");
+
+    let dir = Scratch::new("row-unsupported");
+    let mut bad = Vec::new();
+    for c in rows.iter().filter(|c| !c.unsupported.is_empty()) {
+        for (t, why) in &c.unsupported {
+            let (name, backend) = match t {
+                Target::Js => ("js", "javascript"),
+                Target::Go => ("go", "go"),
+            };
+            let d = dir.path().join(format!("{}_{name}", c.id.replace("::", "_")));
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("rows.wj"), program(&[c])).unwrap();
+            match build(&d, Some(backend), &d.join("out")) {
+                Ok(()) => bad.push(format!("{}: built for {backend} although its rule is `unsupported = {why:?}`", c.id)),
+                Err(e) if !e.contains(why.as_str()) => bad.push(format!("{}: refused for {backend}, but not with the row's reason {why:?}:\n{e}", c.id)),
+                Err(_) => {}
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}

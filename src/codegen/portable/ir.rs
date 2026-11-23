@@ -23,6 +23,8 @@ pub struct PModule {
     pub traits: Vec<PTrait>,
     pub fns: Vec<PFn>,
     pub consts: Vec<PConst>,
+    /// The std lowering table the emitters interpret (`std/rust_core.wji`: `@js` / `@go` rules).
+    pub lowering: &'static crate::stdlib_surface::lowering::LoweringTable,
 }
 
 #[derive(Debug, Clone)]

@@ -210,6 +210,7 @@ fn build_stdlib_trait_definitions<'ast>(trait_definitions: &mut HashMap<String, 
                 concrete_type: None,
             }],
             doc_comment: None,
+            decorators: Vec::new(),
         }
     };
 
@@ -250,6 +251,7 @@ fn build_stdlib_trait_definitions<'ast>(trait_definitions: &mut HashMap<String, 
                 concrete_type: None,
             }],
             doc_comment: None,
+            decorators: Vec::new(),
         },
     );
 
@@ -280,6 +282,7 @@ fn build_stdlib_trait_definitions<'ast>(trait_definitions: &mut HashMap<String, 
             }],
             associated_types: vec![],
             doc_comment: None,
+            decorators: Vec::new(),
         },
     );
 }
