@@ -268,7 +268,7 @@ digraph deps {
   "compiler" -> "embedded_assets" [label="2"];
   "compiler" -> "error_mapper" [label="1"];
   "compiler" -> "inference" [label="1"];
-  "compiler" -> "ir" [label="19"];
+  "compiler" -> "ir" [label="20"];
   "compiler" -> "lexer" [label="4"];
   "compiler" -> "linter" [label="2"];
   "compiler" -> "mem_report" [label="10"];
