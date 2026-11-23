@@ -93,10 +93,18 @@ impl StdSurface {
             return None;
         }
         // The receiver's generics are known. A method generic is not yet (it is the closure's result, which the closure's body
-        // decides): a closure type that mentions one is wanted with an unknown result, not a half-known one (`Option<Unknown>`
-        // would make `if c { Some(x) } else { None }` an untypable body).
+        // decides): a closure type is wanted with what is known of it (`Result<?, E>`: the error type the body's `Ok(..)` needs),
+        // and with no result at all when nothing is (`Option<?>` is a shape with no information: it makes
+        // `if c { Some(x) } else { None }` an untypable body).
         let ty = want.subst(&type_generics, &recv_args);
-        let open = |t: &Ty| if method_generics.iter().any(|g| mentions(t, g)) { Ty::Unknown } else { t.clone() };
+        let open = |t: &Ty| {
+            if !method_generics.iter().any(|g| mentions(t, g)) {
+                return t.clone();
+            }
+            let unknowns = vec![Ty::Unknown; method_generics.len()];
+            let known = t.subst(&method_generics, &unknowns);
+            if informs(&known) { known } else { Ty::Unknown }
+        };
         Some(match ty {
             Ty::Fn(params, ret) => Ty::Fn(params.iter().map(open).collect(), Box::new(open(&ret))),
             other => other,
@@ -167,6 +175,18 @@ fn bind_generics(pattern: &Ty, found: &Ty, generics: &[String], bound: &mut [Opt
             bind_generics(pr, wr, generics, bound, lenient);
         }
         _ => {}
+    }
+}
+
+/// Whether a type says anything: `Unknown` and shells of `Unknown` (`Option<Unknown>`) do not.
+fn informs(t: &Ty) -> bool {
+    match t {
+        Ty::Unknown => false,
+        Ty::Vec(a) | Ty::Set(a) | Ty::Iter(a) | Ty::Range(a) | Ty::Option(a) => informs(a),
+        Ty::Map(a, b) | Ty::Result(a, b) => informs(a) || informs(b),
+        Ty::Tuple(ts) | Ty::Adt(_, ts) => ts.iter().any(informs),
+        Ty::Fn(ps, r) => ps.iter().any(informs) || informs(r),
+        _ => true,
     }
 }
 
@@ -556,8 +576,8 @@ mod surface_tests {
         assert_eq!(s.declared_arg(&opt, "ok_or", 0), None, "a bare method generic has no expected type");
         assert_eq!(s.declared_arg(&res, "map_err", 0), Some(Ty::Fn(vec![Ty::Str], Box::new(Ty::Unknown))));
         assert_eq!(s.declared_arg(&res, "unwrap_or_else", 0), Some(Ty::Fn(vec![Ty::Str], Box::new(int.clone()))));
-        assert_eq!(s.declared_arg(&res, "and_then", 0), Some(Ty::Fn(vec![int.clone()], Box::new(Ty::Unknown))), "a half-known result is no result");
-        assert_eq!(s.declared_arg(&opt, "and_then", 0), Some(Ty::Fn(vec![int], Box::new(Ty::Unknown))));
+        assert_eq!(s.declared_arg(&res, "and_then", 0), Some(Ty::Fn(vec![int.clone()], Box::new(Ty::Result(Box::new(Ty::Unknown), Box::new(Ty::Str))))), "the error type is known");
+        assert_eq!(s.declared_arg(&opt, "and_then", 0), Some(Ty::Fn(vec![int], Box::new(Ty::Unknown))), "`Option<?>` says nothing: no result is wanted");
         assert_eq!(s.declared_arg(&res, "is_ok", 0), None);
     }
 }
