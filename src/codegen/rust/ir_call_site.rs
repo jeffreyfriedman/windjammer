@@ -6706,19 +6706,9 @@ impl<'ast> CodeGenerator<'ast> {
         if self.solver_typed_numeric_call(receiver, arg_expr) { return; }
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         // Prefer receiver-qualified formals so suffix-ambiguous methods (`insert` → Vec vs HashMap) never drive numeric casts from the wrong sig.
-        let user_argc = sig
-            .param_types
-            .len()
-            .saturating_sub(usize::from(sig.has_self_receiver_slot()));
+        let user_argc = sig.param_types.len().saturating_sub(usize::from(sig.has_self_receiver_slot()));
         let inferred_recv = receiver.and_then(|r| self.infer_expression_type(r));
-        // An integer receiver's method is declared by the core surface (`Integer<T>`: `rotate_left(n: u32)`): its
-        // parameter widths come from that declaration, not from a same-named method of another type (`Vec`'s
-        // `rotate_left(usize)` in the fallback registry).
-        if inferred_recv.as_ref().is_some_and(crate::codegen::rust::type_classification_utilities::is_integer_type)
-            && self.core_surface().numeric_method(false, simple).is_some()
-        {
-            return;
-        }
+        if self.integer_method_declared_by_core_surface(inferred_recv.as_ref(), simple) { return; }
         let mut cast_sig = receiver_type_name
             .and_then(|rt| {
                 self.resolve_method_function_signature_specialized(

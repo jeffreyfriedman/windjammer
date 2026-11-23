@@ -55,6 +55,12 @@ impl<'ast> CodeGenerator<'ast> {
         crate::ir::stdlib_tables::shared_core_surface()
     }
 
+    /// An integer receiver's method is declared by the core surface (`Integer<T>`: `rotate_left(n: u32)`): its parameter
+    /// widths come from that declaration, not from a same-named method of another type (`Vec`'s `rotate_left(usize)`).
+    pub(in crate::codegen::rust) fn integer_method_declared_by_core_surface(&self, recv: Option<&crate::parser::Type>, method: &str) -> bool {
+        recv.is_some_and(crate::codegen::rust::type_classification_utilities::is_integer_type) && self.core_surface().numeric_method(false, method).is_some()
+    }
+
     /// Whether a call can take part in an iterator chain at all: the surface declares the method on an iterator or
     /// on a type that produces one. Asked before any receiver is inferred (inferring walks the whole call chain, once
     /// per link, which is exponential in a long builder chain).
