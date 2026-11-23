@@ -258,9 +258,9 @@ digraph deps {
   "compiler" -> "analyzer" [label="37"];
   "compiler" -> "build_utils" [label="4"];
   "compiler" -> "cargo_cache" [label="3"];
-  "compiler" -> "cargo_toml" [label="4"];
+  "compiler" -> "cargo_toml" [label="5"];
   "compiler" -> "codegen" [label="39"];
-  "compiler" -> "compiler_config" [label="10"];
+  "compiler" -> "compiler_config" [label="11"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
   "compiler" -> "debug_env" [label="4"];
@@ -277,7 +277,7 @@ digraph deps {
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
   "compiler" -> "parser" [label="115"];
-  "compiler" -> "project_paths" [label="9"];
+  "compiler" -> "project_paths" [label="13"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
   "compiler" -> "type_classification" [label="7"];
@@ -294,6 +294,7 @@ digraph deps {
   "diagnostics" -> "error" [label="3"];
   "diagnostics" -> "error_mapper" [label="1"];
   "diagnostics" -> "intrinsics" [label="1"];
+  "diagnostics" -> "lexer" [label="1"];
   "diagnostics" -> "linter" [label="1"];
   "diagnostics" -> "source_map" [label="1"];
   "diagnostics" -> "type_classification" [label="2"];
