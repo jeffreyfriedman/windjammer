@@ -624,4 +624,50 @@ mod surface_tests {
         assert_eq!(s.declared_arg(&opt, "and_then", 0), Some(Ty::Fn(vec![int], Box::new(Ty::Unknown))), "`Option<?>` says nothing: no result is wanted");
         assert_eq!(s.declared_arg(&res, "is_ok", 0), None);
     }
+
+    #[test]
+    fn an_associated_function_has_the_type_its_declaration_gives() {
+        let s = StdSurface::shared();
+        let int = Ty::Int(IntKind::I32);
+        let map = |k: Ty, v: Ty| Ty::Map(Box::new(k), Box::new(v));
+        let none: &[PExpr] = &[];
+        assert_eq!(s.declared_static_ret("HashMap", "new", none, Some(&map(Ty::Str, int.clone()))), Some(map(Ty::Str, int.clone())), "K and V from the expected type");
+        assert_eq!(s.declared_static_ret("BTreeMap", "new", none, None), Some(map(Ty::Unknown, Ty::Unknown)), "nothing says the key");
+        assert_eq!(s.declared_static_ret("HashSet", "with_capacity", &[arg_of(Ty::usize())], Some(&Ty::Set(Box::new(Ty::Char)))), Some(Ty::Set(Box::new(Ty::Char))));
+        assert_eq!(s.declared_static_ret("Vec", "from", &[arg_of(Ty::Vec(Box::new(Ty::Bool)))], None), Some(Ty::Vec(Box::new(Ty::Bool))), "T from the argument");
+        assert_eq!(s.declared_static_ret("i64", "MAX", none, None), Some(Ty::Int(IntKind::I64)), "T is the owner");
+        assert_eq!(s.declared_static_ret("u8", "from", &[arg_of(int.clone())], None), Some(Ty::Int(IntKind::U8)));
+        assert_eq!(s.declared_static_ret("i16", "from_str_radix", &[arg_of(Ty::Str), arg_of(Ty::Int(IntKind::U32))], None), Some(Ty::Result(Box::new(Ty::Int(IntKind::I16)), Box::new(Ty::Str))));
+        assert_eq!(s.declared_static_ret("f32", "EPSILON", none, None), Some(Ty::F32));
+        assert_eq!(s.declared_static_ret("f64", "NAN", none, None), Some(Ty::F64));
+        assert_eq!(s.declared_static_ret("char", "from_u32", none, None), Some(Ty::Option(Box::new(Ty::Char))));
+        assert_eq!(s.declared_static_ret("string", "new", none, None), Some(Ty::Str), "`string` is the String trait's owner");
+        assert_eq!(s.declared_static_ret("BTreeMap", "with_capacity", none, None), None, "Rust has none");
+        assert_eq!(s.declared_static_arg("String", "from", 0), Some(Ty::Str));
+        assert_eq!(s.declared_static_arg("i32", "from_str_radix", 1), Some(Ty::Int(IntKind::U32)));
+        assert_eq!(s.declared_static_arg("i64", "from", 0), None, "a bare function generic says nothing");
+    }
+
+    #[test]
+    fn a_map_or_set_method_has_the_type_its_declaration_gives() {
+        let s = StdSurface::shared();
+        let (k, v) = (Ty::Str, Ty::Int(IntKind::I32));
+        let m = Ty::Map(Box::new(k.clone()), Box::new(v.clone()));
+        let set = Ty::Set(Box::new(Ty::Char));
+        let ret = |recv: &Ty, name: &str| s.declared_ret(recv, name, &[], None);
+        assert_eq!(ret(&m, "len"), Some(Ty::usize()));
+        assert_eq!(ret(&m, "get"), Some(Ty::Option(Box::new(v.clone()))));
+        assert_eq!(ret(&m, "insert"), Some(Ty::Option(Box::new(v.clone()))));
+        assert_eq!(ret(&m, "contains_key"), Some(Ty::Bool));
+        assert_eq!(ret(&m, "keys"), Some(Ty::Iter(Box::new(k.clone()))));
+        assert_eq!(ret(&m, "values"), Some(Ty::Iter(Box::new(v.clone()))));
+        assert_eq!(ret(&set, "insert"), Some(Ty::Bool));
+        assert_eq!(ret(&set, "clear"), Some(Ty::Unit));
+        for name in ["iter", "into_iter", "iter_mut", "into_keys", "into_values", "values_mut", "capacity"] {
+            assert_eq!(ret(&m, name), None, "{name}: removed (ADR-0039)");
+        }
+        assert_eq!(s.declared_arg(&m, "insert", 0), Some(k.clone()));
+        assert_eq!(s.declared_arg(&m, "insert", 1), Some(v));
+        assert_eq!(s.declared_arg(&set, "contains", 0), Some(Ty::Char));
+    }
 }

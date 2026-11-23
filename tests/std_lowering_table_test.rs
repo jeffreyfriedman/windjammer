@@ -77,6 +77,14 @@ fn row_problems(core: &CoreSurface, table: &LoweringTable) -> Vec<String> {
             check_row(&id, row, &mut bad);
         }
     }
+    // a trait's `requires` names a guard and gives the reason a refused call reports
+    for t in core.declared_traits() {
+        for target in Target::ALL {
+            if table.requirement(&t.name, target).is_some_and(|r| r.reason.trim().is_empty()) {
+                bad.push(format!("{}: empty `reason` of the `@{}` requirement", t.name, target.decorator()));
+            }
+        }
+    }
     // an associated function (`Vec::new`, `i64::MAX`) is held to the same rules, and a template of it has no receiver
     for (trait_name, row) in table.statics() {
         let id = format!("{trait_name}::{}", row.name);
