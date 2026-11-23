@@ -87,19 +87,24 @@ fn the_size_budget_never_removes_files_of_a_held_tree_or_recent_files() {
     let _scr = Scratch::new("cache-budget");
     let root = _scr.path().to_path_buf();
     let _ = fs::remove_dir_all(&root);
-    let tree = root.join("cargo-target");
-    file(&tree.join("release/deps/old.rlib"), 4096, Duration::from_secs(3 * 3600));
-    file(&tree.join("release/deps/fresh.rlib"), 4096, Duration::from_secs(60));
-    // over a 1-byte budget: only the old file may go
+    let tree = root.join("cargo-target/shared");
+    fs::create_dir_all(&tree).unwrap();
+    fs::write(tree.join(".wj-cache-root"), b"").unwrap();
+    let old = Duration::from_secs(3 * 3600);
+    file(&tree.join("release/deps/libold-00000000000000a1.rlib"), 4096, old);
+    file(&tree.join("release/.fingerprint/old-00000000000000a1/fingerprint"), 8, old);
+    file(&tree.join("release/deps/libfresh-00000000000000a2.rlib"), 4096, Duration::from_secs(60));
+    // over a 1-byte budget: only the old unit may go, whole
     let mut report = cargo_cache::PruneReport::default();
     cargo_cache::enforce_size_budget_for_test(&tree, 1, &mut report);
-    assert!(!tree.join("release/deps/old.rlib").exists());
-    assert!(tree.join("release/deps/fresh.rlib").exists(), "a file written a minute ago was removed");
+    assert!(!tree.join("release/deps/libold-00000000000000a1.rlib").exists());
+    assert!(!tree.join("release/.fingerprint/old-00000000000000a1").exists(), "a unit goes whole, fingerprint too");
+    assert!(tree.join("release/deps/libfresh-00000000000000a2.rlib").exists(), "a file written a minute ago was removed");
     // held: nothing goes
-    file(&tree.join("release/deps/old2.rlib"), 4096, Duration::from_secs(3 * 3600));
+    file(&tree.join("release/deps/libold2-00000000000000a3.rlib"), 4096, old);
     let held = active::hold_path(&tree).expect("lock");
     cargo_cache::enforce_size_budget_for_test(&tree, 1, &mut report);
-    assert!(tree.join("release/deps/old2.rlib").exists(), "the budget removed a file of a held tree");
+    assert!(tree.join("release/deps/libold2-00000000000000a3.rlib").exists(), "the budget removed a file of a held tree");
     drop(held);
     let _ = fs::remove_dir_all(&root);
 }

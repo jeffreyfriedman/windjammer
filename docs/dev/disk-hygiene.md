@@ -18,6 +18,21 @@ healthy without anyone watching it.
 4. **The janitor tidies what we create, and only that.** It removes our own idle build output and scratch. It sizes
    other tools' and other sessions' directories, and never deletes them.
 
+## The compiler's own size budget
+
+`wj build`, `run`, `test` and `clean` keep wj's generated-project cache (`<cache>/cargo-target/shared`) under
+`WJ_CACHE_MAX_GIB` (default 8). The budget sweep is safe by construction:
+
+- It evicts only whole cargo units (a unit's `.fingerprint` directory, `build/` directory and `deps/` files together)
+  or whole `incremental/` sessions, least recently used first. It never deletes a single file from `build/` or
+  `deps/`: that leaves cargo believing a unit is fresh while its outputs (a build script's `bindgen.rs`, an `.rlib`,
+  linker inputs) are gone.
+- It sweeps only a tree that holds the `.wj-cache-root` marker, which wj writes into the trees it creates. A
+  compiler build (`debug/`, `release/`) and any directory wj did not create is never swept.
+- Over budget with nothing safe to evict gives one warning line, not corruption.
+
+Anything written within the last hour, and any tree a `wj` process holds, is skipped.
+
 ## Floors
 
 | Free space | What happens |
