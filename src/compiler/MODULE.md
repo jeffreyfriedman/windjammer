@@ -15,8 +15,9 @@ In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` met
   library into `<cache root>/path-deps/<crate>-<fingerprint>/` (compiler identity, location, sources), and that
   metadata is used; a dependency that cannot be analyzed is named in an error, never given guessed formals. A
   `.wj-deriving` marker in the output directory guards against dependency cycles (no thread-local state).
-- `lone_script_modules.rs`: a lone script (no `wj.toml` above it) is its own crate root; a single-file build also
-  generates the modules it declares (`mod dep` -> `dep.wj` / `dep/mod.wj`), as a project build does.
+- `lone_script_modules.rs`: the file a single-file build is given (a lone script, or a project's `main.wj`) is the
+  crate root of that build; it also generates the modules it declares (`mod dep` -> `dep.wj` / `dep/mod.wj`), as a
+  project build does, `mod.rs` files with the `pub use self::child::*` re-exports.
 - `value_formal_fixed_point.rs` makes callers and callees agree on value-formal modes (convergence O4): after each IR
   lowering round the solved modes are published to the registry and lowering repeats until none changes. Single-file
   builds run the same rounds over their one program (`attach_ir_module_if_missing`).

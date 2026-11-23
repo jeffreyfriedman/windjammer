@@ -335,6 +335,11 @@ pub(crate) fn generate_mod_file_with_layout(
 
 /// Recursively generate mod.rs for a directory and all its subdirectories.
 /// Processes subdirectories first (depth-first) so parent mod.rs can reference child modules.
+/// The `mod.rs` of one directory module (and its subdirectories), written as a project build writes it.
+pub(crate) fn generate_directory_mod_file(dir: &Path, layout: Option<(&Path, &Path)>) -> Result<()> {
+    generate_mod_file_recursive(dir, layout)
+}
+
 fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>) -> Result<()> {
     use colored::*;
     use std::fs;
