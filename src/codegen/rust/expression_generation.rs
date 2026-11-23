@@ -89,7 +89,17 @@ impl<'ast> CodeGenerator<'ast> {
         };
         self.lookup_struct_field_types(sn)
             .and_then(|fields| fields.get(fnm))
-            .is_some_and(crate::type_classification::type_is_vec_container)
+            .is_some_and(Self::wraps_vec_payload)
+    }
+
+    /// A `Vec`/list type, or an `Option`/`Result` whose payload is one (`tags: Some([..])` on an `Option<Vec<T>>` field:
+    /// the list literal inside the constructor is the field's `Vec`).
+    fn wraps_vec_payload(t: &Type) -> bool {
+        match t {
+            Type::Option(inner) => Self::wraps_vec_payload(inner),
+            Type::Result(ok, _) => Self::wraps_vec_payload(ok),
+            other => crate::type_classification::type_is_vec_container(other),
+        }
     }
 
     pub(in crate::codegen::rust) fn struct_array_field_element_type(&self) -> Option<Type> {

@@ -202,6 +202,7 @@ corpus_tests!(
     slice_to_vec_extend_argument,
     collect_owned_from_unknown_receiver,
     list_adapter_owned_option_return,
+    option_vec_some_literal_field,
 );
 
 // ------------------------------------------------------------------ generated programs
