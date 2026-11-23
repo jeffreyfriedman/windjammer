@@ -230,7 +230,7 @@ digraph deps {
   "cli_project_build" -> "parser_impl" [label="1"];
   "cli_project_build" -> "project_paths" [label="1"];
   "cli_project_build" -> "type_classification" [label="1"];
-  "codegen" -> "analyzer" [label="643"];
+  "codegen" -> "analyzer" [label="644"];
   "codegen" -> "auto_clone" [label="6"];
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
@@ -244,7 +244,7 @@ digraph deps {
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "module_system" [label="2"];
-  "codegen" -> "parser" [label="717"];
+  "codegen" -> "parser" [label="718"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="4"];
   "codegen" -> "source_map" [label="9"];
@@ -260,7 +260,7 @@ digraph deps {
   "compiler" -> "cargo_cache" [label="3"];
   "compiler" -> "cargo_toml" [label="4"];
   "compiler" -> "codegen" [label="38"];
-  "compiler" -> "compiler_config" [label="6"];
+  "compiler" -> "compiler_config" [label="9"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
   "compiler" -> "debug_env" [label="4"];
