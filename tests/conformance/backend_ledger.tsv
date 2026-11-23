@@ -29,7 +29,7 @@ javascript	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `dr
 javascript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
 javascript	spec	statements/SPEC-STMT-007	Error: unsupported on this backend: defer
 javascript	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
-javascript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+javascript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
 javascript	spec	strings/SPEC-STR-016	Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
 javascript	spec	strings/SPEC-STR-017	Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
 javascript	spec	strings/SPEC-STR-018	Error: unsupported on this backend: unknown identifier `strings` (line 22)
@@ -57,7 +57,7 @@ typescript	spec	ownership/SPEC-OWN-011	output line 1: got `assigned`, wanted `dr
 typescript	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method `take`
 typescript	spec	statements/SPEC-STMT-007	Error: unsupported on this backend: defer
 typescript	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
-typescript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+typescript	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
 typescript	spec	strings/SPEC-STR-016	Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
 typescript	spec	strings/SPEC-STR-017	Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
 typescript	spec	strings/SPEC-STR-018	Error: unsupported on this backend: unknown identifier `strings` (line 22)
@@ -92,7 +92,7 @@ go	spec	ownership/SPEC-OWN-012	Error: unsupported on this backend: Option method
 go	spec	statements/SPEC-STMT-009	go vet or go build rejected the generated code
 go	spec	statements/SPEC-STMT-011	go vet or go build rejected the generated code
 go	spec	stdlib/SPEC-STD-002	error: W0010: use `string` instead of `str` -- Windjammer has one string type
-go	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+go	spec	strings/SPEC-STR-012	Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
 go	spec	strings/SPEC-STR-014	panics with the expected exit status but the message does not contain the expected text
 go	spec	strings/SPEC-STR-016	Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
 go	spec	strings/SPEC-STR-017	Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
