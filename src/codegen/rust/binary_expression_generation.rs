@@ -1557,7 +1557,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// `n` (or a written `*n`) where `n` is an adapter closure parameter whose declared type is at least two
     /// references deep over a Copy type: dereferenced to the value for a comparison, to one reference for
     /// arithmetic (never fewer `*` than the operand already has).
-    fn deref_adapter_closure_param(&self, expr: &Expression<'ast>, generated: String, to_value: bool) -> String {
+    fn deref_adapter_closure_param(&self, expr: &Expression<'ast>, peer: &Expression<'ast>, generated: String, to_value: bool) -> String {
         let name = match expr {
             Expression::Identifier { name, .. } => name,
             Expression::Unary { op: UnaryOp::Deref, operand, .. } => match &**operand {
@@ -1569,7 +1569,10 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(&depth) = self.idiom.adapter_closure_param_depth.get(name.as_str()) else { return generated };
         let Some(ty) = self.local_var_types.get(name.as_str()) else { return generated };
         let (declared_depth, value) = crate::codegen::rust::method_call_expression_generation::reference_depth(ty);
-        if depth < 2 || declared_depth != depth || !self.is_type_copy(value) || generated.trim_start_matches('*') != name.as_str() {
+        // Text is not Copy, but `String == String` compares by value: a comparison with an owned text peer takes
+        // the value under every reference, so `*c == needed` (`c: &&String`) reads `**c == needed`.
+        let text_by_value = to_value && crate::codegen::rust::types::is_windjammer_text_type(value) && self.owned_text_value(peer);
+        if depth < 2 || declared_depth != depth || !(self.is_type_copy(value) || text_by_value) || generated.trim_start_matches('*') != name.as_str() {
             return generated;
         }
         let needed = if to_value { depth } else { depth - 1 };
@@ -1581,6 +1584,12 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// An operand whose declared or inferred type is owned text (`String`, not a reference to one).
+    fn owned_text_value(&self, e: &Expression<'ast>) -> bool {
+        self.infer_expression_type(e)
+            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && crate::codegen::rust::types::is_windjammer_text_type(&t))
+    }
+
     /// A local whose type is a borrowed `&str` (a binding of a `text[a..b]` slice).
     pub(in crate::codegen::rust) fn is_str_slice_local(&self, e: &Expression<'ast>) -> bool {
         matches!(e, Expression::Identifier { .. })
@@ -1605,8 +1614,8 @@ impl<'ast> CodeGenerator<'ast> {
         (is_arithmetic, is_comparison): (bool, bool),
     ) -> (String, String) {
         if is_arithmetic || is_comparison {
-            left_str = self.deref_adapter_closure_param(left, left_str, is_comparison);
-            right_str = self.deref_adapter_closure_param(right, right_str, is_comparison);
+            left_str = self.deref_adapter_closure_param(left, right, left_str, is_comparison);
+            right_str = self.deref_adapter_closure_param(right, left, right_str, is_comparison);
         }
         if matches!(op, BinaryOp::Add)
             && (self.is_text_slice_expr(left) || self.is_str_slice_local(left))

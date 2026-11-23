@@ -130,6 +130,7 @@ corpus_tests!(
     std_idioms,
     literal_default_through_adapters,
     adapter_closure_param_depth,
+    borrowed_item_equals_owned_value,
     loop_return_in_else_branch,
     text_slice_into_owned_string,
     generic_element_read_clone,
