@@ -17,8 +17,8 @@ Run in a checkout of the branch, `CARGO_BUILD_JOBS=2`, through the slot gate; `<
 8. Mutation: on the parent commit the new corpus cases fail (field_passed_to_owned_formal_keeps_borrowed_receiver,
    builder_reads_fields_after_storing_one, std_text_formal_borrows_owned_argument, borrowed_copy_key_into_map_lookup,
    library_module_receiver_shapes::a_method_does_not_take_the_formals_of_a_same_named_free_function)
-9. Engine by code, parent and head: `WJ=<wj> scripts/build_engine.sh transpile` (game-host), then in
-   game-host-core `cargo check --lib --message-format short > c.log 2>&1; grep -oE "error\[E[0-9]+\]" c.log | sort | uniq -c`
+9. Engine by code, parent and head: `WJ=<wj> scripts/build_engine.sh transpile` (the game-engine repo), then in
+   the engine core crate `cargo check --lib --message-format short > c.log 2>&1; grep -oE "error\[E[0-9]+\]" c.log | sort | uniq -c`
 10. Full suite once: `<all> --test-threads=3`, compared with the parent's failure list
 11. On wt-ownership-17 (class 1): steps 1-4 and 9; gate 5's printed list before/after shows the entries class 1 removes
 
