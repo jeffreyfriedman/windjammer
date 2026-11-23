@@ -96,6 +96,22 @@ impl FormalScope {
         if sig.emitted_rust_ref_params.is_none() && mode == OwnershipMode::MutBorrowed {
             return false;
         }
+        // A signature that has no flags is an incomplete signature to its callers (`string_utilities`: missing
+        // flags fall through to the Borrowed / `&str` contracts; present flags read as the emitted truth). A
+        // vector created here would invent a flag for every other text formal, which the backend still decides
+        // when it emits the callee (`replay(room: &str)` emitted after a caller that read `room` as owned).
+        // So the vector is created only when this formal is the only undecided text formal of the signature.
+        if sig.emitted_rust_ref_params.is_none() {
+            let undecided_text = (0..sig.param_ownership.len()).any(|i| {
+                i != idx
+                    && sig.formal_param_types.get(i).is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && crate::ir::formal_predicates::is_windjammer_text_type(t)
+                    })
+            });
+            if undecided_text {
+                return false;
+            }
+        }
         if sig.emitted_rust_ref_params.is_none() {
             let flags = (0..sig.param_ownership.len())
                 .map(|i| {

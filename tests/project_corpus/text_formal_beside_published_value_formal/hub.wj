@@ -1,0 +1,38 @@
+pub struct Conn {
+    pub id: int,
+    pub user: string,
+    pub rooms: Vec<string>,
+}
+
+pub struct Frame {
+    pub room: string,
+    pub n: int,
+}
+
+pub struct Hub {
+    pub names: Vec<string>,
+}
+
+impl Hub {
+    pub fn receive(self, conn: Conn, kind: string, raw: string) -> Frame {
+        let mut me = conn.clone()
+        me.id = me.id + 0
+        if me.user == "" {
+            return Frame { room: "", n: -1 }
+        }
+        let room = raw.clone()
+        if kind == "history" {
+            return self.replay(me, room)
+        }
+        Frame { room: me.user.clone(), n: 0 }
+    }
+
+    fn replay(self, me: Conn, room: string) -> Frame {
+        if !me.rooms.contains(room) {
+            return Frame { room: "", n: 0 }
+        }
+        let mut out = Frame { room: "", n: me.id }
+        out.room = room
+        out
+    }
+}
