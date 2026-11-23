@@ -180,8 +180,8 @@ pub fn iterator_as_list(path: &Path) -> Result<Checked> {
 }
 
 /// The resolver-backed diagnostics `wj build` stops on before generating code, exactly as `wj check` reports them:
-/// `WJ0013` (a call with the wrong number of arguments) and `WJ0019` (a private item called, imported or
-/// re-exported outside its module).
+/// `WJ0013` (a call with the wrong number of arguments), `WJ0019` (a private item called, imported or
+/// re-exported outside its module) and `WJ0194` (a name the program reaches through an implicit module re-export).
 pub fn resolver_errors(path: &Path) -> Result<Checked> {
     let (sources, _) = inputs(path)?;
     let mut sink = Vec::new();
@@ -190,7 +190,7 @@ pub fn resolver_errors(path: &Path) -> Result<Checked> {
     let by_file: HashMap<String, &front::Parsed> = refs.iter().map(|p| (p.file.clone(), *p)).collect();
     let mut found = Vec::new();
     project::resolve_phase(path, &refs, &by_file, &mut found);
-    found.retain(|d| d.code == "WJ0013" || d.code == "WJ0019");
+    found.retain(|d| matches!(d.code.as_str(), "WJ0013" | "WJ0019" | "WJ0194"));
     Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 

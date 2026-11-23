@@ -55,7 +55,7 @@ impl<'a> Collected<'a> {
         self.modules.get(&module).and_then(|m| m.parent)
     }
 
-    fn lookup_in_module(&self, module: DefId, name: &str, ns: Ns, guard: &mut Guard) -> Vec<Found> {
+    pub(super) fn lookup_in_module(&self, module: DefId, name: &str, ns: Ns, guard: &mut Guard) -> Vec<Found> {
         if let Some(special) = self.special_segment(module, name) {
             return if ns == Ns::Type { special } else { Vec::new() };
         }
@@ -68,7 +68,7 @@ impl<'a> Collected<'a> {
         if found.is_empty() {
             found = self.lookup_globs(module, name, ns, guard);
         }
-        if found.is_empty() {
+        if found.is_empty() && !self.explicit_only.get() {
             found = self.lookup_child_reexports(module, name, ns, guard);
         }
         guard.pop();
@@ -117,9 +117,10 @@ impl<'a> Collected<'a> {
         out
     }
 
-    /// A module re-exports the public items of its child modules (`pub mod http` makes `crate::adapters::serve`
-    /// the same function as `crate::adapters::http::serve`): the generated Rust module declares
-    /// `pub use self::child::*` for every child, and the interpreter binds the same names.
+    /// The lenient rule ADR-0040 retires: a module re-exports the public items of its child modules (`pub mod http`
+    /// makes `crate::adapters::serve` the same function as `crate::adapters::http::serve`). The generated Rust module
+    /// still declares `pub use self::child::*` for every child, so resolution stays lenient and `reexports.rs`
+    /// reports (WJ0194) every use that depends on it; with `explicit_only` set this lookup is skipped.
     fn lookup_child_reexports(&self, module: DefId, name: &str, ns: Ns, guard: &mut Guard) -> Vec<Found> {
         let mut out = Vec::new();
         let mut children: Vec<DefId> = self.modules[&module]

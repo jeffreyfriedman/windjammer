@@ -433,6 +433,16 @@ process::run_with_args("echo", [name])"#.to_string()),
             rust_codes: vec![],
             maturity: GuaranteeMaturity::HighConfidence,
         });
+        self.register(WjErrorCode {
+            code: "WJ0194".to_string(),
+            title: "Name is not re-exported".to_string(),
+            explanation: "A path or import names an item through a module that only gets it from one of its child modules; `pub mod child` re-exports nothing, a module re-exports a name only through an explicit `pub use` (ADR-0040).".to_string(),
+            causes: vec!["`adapters::serve` where `serve` is declared in `adapters::http` and `adapters` has no `pub use http::serve`".to_string()],
+            solutions: vec!["Add `pub use http::serve` to the re-exporting module (`wj fix` does)".to_string(), "Name the item by its declaring module: `adapters::http::serve`".to_string()],
+            example: None,
+            rust_codes: vec!["E0425".to_string(), "E0433".to_string()],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
     }
 
     /// ADR-0002: explicit `let mut` (WJ0051).

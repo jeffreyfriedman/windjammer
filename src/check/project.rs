@@ -356,6 +356,7 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
         }
         out.push(d.with_help(pu.help(&r)));
     }
+    implicit_reexport_diagnostics(&r, &base, parsed, by_file, out);
     for rd in &r.report.diagnostics {
         if rd.kind == DiagnosticKind::BadImport {
             let word = rd.message.rsplit("::").next().unwrap_or("").trim_matches('`').to_string();
@@ -421,4 +422,86 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     }
     crate::debug_env::phase("check-moves");
     out
+}
+
+/// Where `line` goes in a module file: after its last top-level `mod` / `pub mod` / `use` / `pub use` line (a multi-line
+/// `use { .. }` counts to its closing brace), else after the leading comments. Returns the byte offset.
+fn reexport_insertion_offset(text: &str) -> usize {
+    let mut at = 0;
+    let mut after_comments = 0;
+    let mut in_braces = false;
+    let mut leading = true;
+    let mut pos = 0;
+    for line in text.split_inclusive('\n') {
+        let end = pos + line.len();
+        let t = line.trim_end();
+        if in_braces {
+            if t.contains('}') {
+                in_braces = false;
+                at = end;
+            }
+        } else if ["mod ", "pub mod ", "use ", "pub use "].iter().any(|k| t.starts_with(k)) {
+            if t.contains('{') && !t.contains('}') {
+                in_braces = true;
+            } else {
+                at = end;
+            }
+            leading = false;
+        } else if leading && (t.is_empty() || t.starts_with("//")) {
+            after_comments = end;
+        } else {
+            leading = false;
+        }
+        pos = end;
+    }
+    if at == 0 { after_comments } else { at }
+}
+
+/// WJ0194 (ADR-0040): a use that depends on a module re-exporting its child's item without a `pub use`. One
+/// diagnostic per (re-exporting module, item), at the first use; its fix inserts the `pub use` line in the module file.
+fn implicit_reexport_diagnostics(r: &resolve::ResolvedProgram<'_>, base: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
+    let module_files: HashMap<String, &Parsed> = parsed
+        .iter()
+        .map(|p| (resolve::module_path_from_file(base, Path::new(&p.file)).join("::"), *p))
+        .collect();
+    let mut seen: Vec<(resolve::DefId, resolve::DefId)> = Vec::new();
+    for ir in resolve::implicit_reexports(r) {
+        if seen.contains(&(ir.reexporter, ir.def)) {
+            continue;
+        }
+        seen.push((ir.reexporter, ir.def));
+        let mut d = Diagnostic::error("WJ0194", ir.message(r));
+        let last = ir.written.rsplit("::").next().unwrap_or(&ir.written).to_string();
+        if let Some(l) = &ir.location {
+            if let Some(p) = by_file.get(l.file.to_string_lossy().as_ref()) {
+                let ix = SourceIndex::new(p.file.clone(), &p.text);
+                let sl = Some(l.clone());
+                if let Some(sp) = Locator::new(&ix).word(&sl, &last) {
+                    d = d.at(sp.with_label("relies on an implicit re-export"));
+                }
+            }
+        }
+        let line = ir.line(r);
+        let def_path = &r.defs().get(ir.def).path;
+        d = d.with_help(format!("add `{line}` to {}, or name the item `{def_path}`", match module_files.get(&r.defs().get(ir.reexporter).path) {
+            Some(p) => p.file.clone(),
+            None => "the module".to_string(),
+        }));
+        if let Some(p) = module_files.get(&r.defs().get(ir.reexporter).path) {
+            let at = reexport_insertion_offset(&p.text);
+            let ix = SourceIndex::new(p.file.clone(), &p.text);
+            let mut text = format!("{line}\n");
+            // a file whose last line has no newline: the insertion point is the end of text
+            if at > 0 && !p.text[..at].ends_with('\n') {
+                text.insert(0, '\n');
+            }
+            let edit = crate::diagnostics::Edit { span: ix.span(at, at), replacement: text };
+            d = d.with_fix(crate::diagnostics::Fix {
+                description: format!("add `{line}`"),
+                applicability: crate::diagnostics::Applicability::MachineApplicable,
+                edits: vec![edit],
+            });
+        }
+        out.push(d);
+    }
 }

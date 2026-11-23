@@ -1,0 +1,13 @@
+pub struct Server {
+    pub port: int,
+}
+
+impl Server {
+    pub fn new(port: int) -> Server {
+        Server { port: port }
+    }
+}
+
+pub fn serve() -> int {
+    7
+}

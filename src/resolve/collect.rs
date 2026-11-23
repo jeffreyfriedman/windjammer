@@ -68,6 +68,8 @@ pub struct Collected<'a> {
     pub diagnostics: Vec<Diagnostic>,
     /// Roots of dependency crates mounted under the program root: `crate::` inside one means that root.
     pub crate_roots: std::collections::HashSet<DefId>,
+    /// While set, lookups skip the implicit child re-export rule (ADR-0040); `reexports.rs` flips it to find reliance.
+    pub(crate) explicit_only: std::cell::Cell<bool>,
 }
 
 pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
@@ -86,6 +88,7 @@ pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
         trait_method_decorators: HashMap::new(),
         diagnostics: Vec::new(),
         crate_roots: std::collections::HashSet::new(),
+        explicit_only: std::cell::Cell::new(false),
     };
     for f in files {
         let m = c.module_for_path(&f.module_path);

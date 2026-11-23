@@ -1,0 +1,8 @@
+mod adapters
+
+use adapters::Server
+
+fn main() {
+    let s = Server::new(8080)
+    println("${s.port} ${adapters::serve()} ${adapters::encode(2)}")
+}

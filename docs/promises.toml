@@ -894,6 +894,9 @@ id = "code WJ0192"
 id = "code WJ0193"
 
 [[promise]]
+id = "code WJ0194"
+
+[[promise]]
 id = "wj mcp"
 statement = "MCP tools as typed Windjammer for code mode (ADR-0021)"
 
