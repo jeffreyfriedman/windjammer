@@ -113,7 +113,7 @@ impl IntInference {
                 } else {
                     self.var_types
                         .get(name)
-                        .or_else(|| self.const_types.get(name))
+                        .or_else(|| self.const_types.get(&self.current_file_name, name))
                         .cloned()
                 }
             }
@@ -274,7 +274,7 @@ impl IntInference {
         // Registry key is `strings::len`, not a receiver method — skip when `object`
         // is a local (e.g. `map.get(k)` must not resolve as `map::get`).
         if let Expression::Identifier { name, .. } = object {
-            if !self.var_types.contains_key(name) && !self.const_types.contains_key(name) {
+            if !self.var_types.contains_key(name) && !self.const_types.is_declared(name) {
                 let qualified = format!("{name}::{method}");
                 if let Some((params, ret)) = self.function_signatures.get(&qualified).cloned() {
                     return Some((params, ret));

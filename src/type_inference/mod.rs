@@ -8,6 +8,7 @@
 /// 3. Unify constraints (all uses of a literal must agree)
 /// 4. Detect conflicts (f32 * f64 → Windjammer error)
 /// 5. Assign final types (each literal gets f32 or f64)
+pub mod const_table;
 pub mod float_inference;
 pub mod int_implicit_casts;
 pub mod int_inference;

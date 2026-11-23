@@ -605,6 +605,45 @@ impl<'ast> Analyzer<'ast> {
             .and_then(|ty| type_base_for_registry_lookup(&ty))
     }
 
+    /// The receiver's type base decided by declaration: a field chain's declared type, or the declared return type of
+    /// the method call the receiver is (`self.widen(2.0).truncate()`: what `Pair::widen` is declared to return, from
+    /// this impl or the crate registry, whichever module declares it). `None` when no declaration answers.
+    fn receiver_base_by_declaration(
+        &self,
+        param_name: &str,
+        object: &Expression,
+        registry: &SignatureRegistry,
+        param_type_hint: Option<&Type>,
+    ) -> Option<String> {
+        if let Expression::Identifier { name, .. } = object {
+            if name == "self" && param_name == "self" {
+                if let Some(ctx) = self.self_impl_context.as_ref() {
+                    return Some(ctx.impl_type_base.clone());
+                }
+            }
+        }
+        if !matches!(object, Expression::MethodCall { .. }) {
+            if let Some(base) = self.receiver_type_base_for_param_method_call(param_name, object, param_type_hint) {
+                return Some(base);
+            }
+        }
+        match object {
+            Expression::MethodCall { object: inner, method, .. } => {
+                let base = self.receiver_base_by_declaration(param_name, inner, registry, param_type_hint)?;
+                let in_impl = self
+                    .self_impl_context
+                    .as_ref()
+                    .filter(|c| c.impl_type_base == base)
+                    .and_then(|_| self.current_impl_functions.as_ref())
+                    .and_then(|f| f.get(method.as_str()))
+                    .and_then(|f| f.return_type.clone());
+                let ret = in_impl.or_else(|| registry.signature_declared_at(&format!("{base}::{method}"))?.return_type.clone())?;
+                type_base_for_registry_lookup(&ret)
+            }
+            _ => None,
+        }
+    }
+
     /// Receiver type for a method call when deciding whether an *argument* is `&mut`.
     ///
     /// Only resolves when the receiver expression is rooted at `checked_param`.
@@ -634,11 +673,8 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 if self.is_in_receiver_chain(name, object) {
-                    let receiver_base = self.receiver_type_base_for_param_method_call(
-                        name,
-                        object,
-                        param_type_hint,
-                    );
+                    let receiver_base =
+                        self.receiver_base_by_declaration(name, object, registry, param_type_hint);
                     if super::stdlib_method_traits::method_call_mutates_receiver(
                         method,
                         receiver_base.as_deref(),

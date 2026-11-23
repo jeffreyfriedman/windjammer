@@ -4,7 +4,7 @@ use super::*;
 
 use crate::vec3::Vec3;
 use crate::grid::Grid;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub struct Camera {
     pub pos: Vec3,

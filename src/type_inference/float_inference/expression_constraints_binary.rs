@@ -34,7 +34,7 @@ impl FloatInference {
                     if let Some(var_type) = self
                         .var_types
                         .get(name)
-                        .or_else(|| self.const_types.get(name))
+                        .or_else(|| self.const_types.get(&self.current_file_name, name))
                     {
                         if let Some(float_ty) = self.extract_float_type(var_type) {
                             match float_ty {
@@ -59,7 +59,7 @@ impl FloatInference {
                     if let Some(var_type) = self
                         .var_types
                         .get(name)
-                        .or_else(|| self.const_types.get(name))
+                        .or_else(|| self.const_types.get(&self.current_file_name, name))
                     {
                         if let Some(float_ty) = self.extract_float_type(var_type) {
                             match float_ty {
@@ -120,7 +120,7 @@ impl FloatInference {
                     if let Some(var_type) = self
                         .var_types
                         .get(name)
-                        .or_else(|| self.const_types.get(name))
+                        .or_else(|| self.const_types.get(&self.current_file_name, name))
                     {
                         if let Some(float_ty) = self.extract_float_type(var_type) {
                             match float_ty {
@@ -145,7 +145,7 @@ impl FloatInference {
                     if let Some(var_type) = self
                         .var_types
                         .get(name)
-                        .or_else(|| self.const_types.get(name))
+                        .or_else(|| self.const_types.get(&self.current_file_name, name))
                     {
                         if let Some(float_ty) = self.extract_float_type(var_type) {
                             match float_ty {

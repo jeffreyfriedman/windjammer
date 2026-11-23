@@ -1,0 +1,8 @@
+// ==== main.rs ====
+use std::f32::consts::PI;
+const SIX: f32 = 6.0_f32;
+
+fn main() {
+    println!("{} {}", PI.to_degrees(), SIX.abs());
+}
+

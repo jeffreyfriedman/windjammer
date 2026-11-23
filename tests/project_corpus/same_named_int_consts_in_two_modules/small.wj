@@ -1,0 +1,5 @@
+pub const LIMIT: u8 = 200
+
+pub fn room(x: u8) -> u8 {
+    LIMIT - x
+}

@@ -1,0 +1,64 @@
+// ==== big.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub const LIMIT: u64 = 5000000000_u64;
+
+#[inline]
+pub fn room(x: u64) -> u64 {
+    LIMIT - x
+}
+
+// ==== imported.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::small::LIMIT;
+#[inline]
+pub fn bump() -> u8 {
+    LIMIT + 5_u8
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod big;
+pub mod imported;
+pub mod small;
+
+// Re-export public items
+pub use big::*;
+pub use imported::*;
+pub use small::*;
+// ==== main.rs ====
+mod small;
+mod big;
+mod imported;
+fn main() {
+    let a = small::LIMIT + 55_u8;
+    let b = big::LIMIT + 5_u64;
+    println!("{} {} {} {} {}", a, b, small::room(50_u8), big::room(10_u64), imported::bump());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod big;
+pub mod imported;
+pub mod small;
+
+// Re-export public items
+pub use big::*;
+pub use imported::*;
+pub use small::*;
+// ==== small.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub const LIMIT: u8 = 200_u8;
+
+#[inline]
+pub fn room(x: u8) -> u8 {
+    LIMIT - x
+}
+
