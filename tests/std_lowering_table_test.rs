@@ -497,21 +497,15 @@ fn every_helper_a_template_calls_is_defined_in_the_shim() {
 }
 
 /// Helpers a shim defines that neither a row nor the Rust source of the backend (`src/codegen`) names. Shrink-only: a
-/// helper that nothing calls is deleted, not listed. (Measured at stage 1: none.)
-///
-/// Stage 3 dropped the char spellings ADR-0039 removed (`to_ascii_uppercase`, `to_ascii_lowercase`); their helpers are dead.
-/// Deleting them changes the runtime shim, which is part of every emitted program, so it changes every G2 hash: they go with
-/// the next stage that re-records (stage 7 wires `json` into the shim).
-///
-/// Stage 4 dropped `map_or` and `is_some_and` (ADR-0039 R045, R046): `$optMapOr`, `wjOptMapOr` and `wjOptIsSomeAnd` are dead
-/// for the same reason and go with them.
-const DEAD_HELPERS_JS: &[&str] = &["$asciiLower", "$asciiUpper", "$drain", "$optMapOr", "$popFront"];
+/// helper that nothing calls is deleted, not listed. The lists are empty: stage 7 deleted the helpers the earlier stages listed
+/// (the removed spellings of ADR-0039 R010, R045, R046, R081-R085 and the char `to_ascii_*` forms), re-recording G2 for the shim text.
+const DEAD_HELPERS_JS: &[&str] = &[];
 /// Helpers the emitters name by building the text (`$std_<module>_<fn>`, `wjstd_<module>_<fn>` for the module
 /// functions of `portable/stdlib.rs`): no literal names them, so a text search cannot tell them dead. The module-function
 /// stage (7) turns them into rows and removes this exemption.
 const DYNAMIC_PREFIXES: &[&str] = &["$std_", "$caps_", "wjstd_", "wjcaps_"];
 /// Stage 5 dropped a map's `iter` (ADR-0039 R010): Go's `wjEntries` is dead for the same reason (`for (k, v) in m` is `$sortedEntries` in JavaScript, a range in Go).
-const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper", "wjDrain", "wjEntries", "wjFill", "wjOptIsSomeAnd", "wjOptMapOr", "wjPopFront", "wjPushFront"];
+const DEAD_HELPERS_GO: &[&str] = &[];
 
 #[test]
 fn no_shim_helper_is_dead() {
