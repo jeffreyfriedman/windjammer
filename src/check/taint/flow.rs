@@ -165,7 +165,12 @@ pub enum Pragma {
 }
 
 pub fn pragma(decl: &FunctionDecl<'_>) -> Pragma {
-    let Some(doc) = &decl.doc_comment else { return Pragma::None };
+    pragma_of_doc(decl.doc_comment.as_deref())
+}
+
+/// The `wj-taint:` pragma of a doc comment (functions, methods and trait methods all carry one).
+pub fn pragma_of_doc(doc: Option<&str>) -> Pragma {
+    let Some(doc) = doc else { return Pragma::None };
     for line in doc.lines() {
         let l = line.trim().trim_start_matches('/').trim();
         let Some(rest) = l.strip_prefix("wj-taint:") else { continue };

@@ -90,6 +90,11 @@ fn body_matches(body: &[&crate::parser::ast::core::Statement<'_>], names: &[&str
 }
 
 pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
+    // The annotation check is syntactic and independent of the pre-scan: a malformed `trusted` is an error even in a program
+    // where no source can reach a sink.
+    for p in parsed {
+        malformed_annotations(&p.program.items, p, out);
+    }
     let flows = may_flow(parsed);
     crate::debug_env::phase("check-taint-prescan");
     if !flows {
@@ -130,20 +135,33 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
     let mut findings: BTreeSet<Finding> = BTreeSet::new();
     for (_, d, file) in &fns {
         findings.extend(flow::analyze_fn(&prog, &summaries, d, file).findings);
-        if flow::pragma(d) == Pragma::TrustedNoReason {
-            if let Some(p) = by_file.get(file) {
-                let ix = SourceIndex::new(p.file.clone(), &p.text);
-                let at = Locator::new(&ix).top_level_decl("fn", &d.name, 0).unwrap_or_else(|| ix.span_at(1, 1, 1));
-                out.push(
-                    Diagnostic::error(CODE, format!("`{ANNOTATION} trusted` on `{}` needs a reason", d.name))
-                        .at(at.with_label("annotated without a reason"))
-                        .with_help(format!("write `/// {ANNOTATION} trusted(<why this function may use the value>)`: the reason is the review record")),
-                );
-            }
-        }
     }
     for f in &findings {
         out.push(diagnostic(f, by_file));
+    }
+}
+
+/// `/// wj-taint: trusted` with no `(<reason>)` on any function, method or trait method of `items`.
+fn malformed_annotations(items: &[Item<'_>], p: &Parsed, out: &mut Vec<Diagnostic>) {
+    let report = |name: &str, doc: Option<&str>, out: &mut Vec<Diagnostic>| {
+        if flow::pragma_of_doc(doc) == Pragma::TrustedNoReason {
+            let ix = SourceIndex::new(p.file.clone(), &p.text);
+            let at = Locator::new(&ix).top_level_decl("fn", name, 0).unwrap_or_else(|| ix.span_at(1, 1, 1));
+            out.push(
+                Diagnostic::error(CODE, format!("`{ANNOTATION} trusted` on `{name}` needs a reason"))
+                    .at(at.with_label("annotated without a reason"))
+                    .with_help(format!("write `/// {ANNOTATION} trusted(<why this function may use the value>)`: the reason is the review record")),
+            );
+        }
+    };
+    for i in items {
+        match i {
+            Item::Function { decl, .. } => report(&decl.name, decl.doc_comment.as_deref(), out),
+            Item::Impl { block, .. } => block.functions.iter().for_each(|f| report(&f.name, f.doc_comment.as_deref(), out)),
+            Item::Trait { decl, .. } => decl.methods.iter().for_each(|f| report(&f.name, f.doc_comment.as_deref(), out)),
+            Item::Mod { items, .. } => malformed_annotations(items, p, out),
+            _ => {}
+        }
     }
 }
 
