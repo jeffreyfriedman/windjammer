@@ -329,3 +329,18 @@ polarity = "positive"
 files = { "m.wj" = "use std::rc::Rc\n\nfn main() {\n    let r = Rc::new(5)\n    let t = async { *r + 1 }\n    println(\"${t.wait()}\")\n}\n" }
 args = ["check", "{w}/m.wj"]
 output_has = ["0 error(s)"]
+
+[[case]]
+name = "check rejects a name used through a module that does not re-export it (WJ0194)"
+polarity = "negative"
+files = { "m.wj" = "mod adapters {\n    pub mod http {\n        pub fn serve() -> int {\n            1\n        }\n    }\n}\n\nfn main() {\n    println(\"${adapters::serve()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0194\"", "pub use http::serve"]
+
+[[case]]
+name = "check accepts a name the module re-exports with pub use (WJ0194)"
+polarity = "positive"
+files = { "m.wj" = "mod adapters {\n    pub mod http {\n        pub fn serve() -> int {\n            1\n        }\n    }\n\n    pub use http::serve\n}\n\nfn main() {\n    println(\"${adapters::serve()}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]

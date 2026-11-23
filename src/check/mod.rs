@@ -194,6 +194,23 @@ pub fn resolver_errors(path: &Path) -> Result<Checked> {
     Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 
+/// The `WJ0194` diagnostics (a name used through a module that does not re-export it, ADR-0040) of the program at
+/// `path`, with their `pub use` fixes: the input of `wj fix`.
+pub fn implicit_reexports(path: &Path) -> Result<Checked> {
+    let (sources, _) = inputs(path)?;
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut sink = Vec::new();
+    let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+    let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
+    let by_file: HashMap<String, &front::Parsed> = refs.iter().map(|p| (p.file.clone(), *p)).collect();
+    let mut found = Vec::new();
+    project::resolve_phase(path, &refs, &by_file, &mut found);
+    std::panic::set_hook(previous);
+    found.retain(|d| d.code == "WJ0194");
+    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+}
+
 /// `local_mutability` over in-memory sources (one program); files that do not parse are left out.
 pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic> {
     let previous = std::panic::take_hook();

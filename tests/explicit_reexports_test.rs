@@ -2,7 +2,8 @@
 //!
 //! `tests/fixtures/explicit_reexports/before` relies on the implicit rule (`adapters::serve`, `use adapters::Server`
 //! with both items declared in the child `adapters::http`); `after` is the same program with the `pub use` lines.
-//! `wj check`, `wj run --interpret` and `wj build` refuse `before` with WJ0194, and `after` passes all three with the same output. The pair is the gate's own
+//! `wj check`, `wj run --interpret` and `wj build` refuse `before` with WJ0194, `wj fix` turns it into `after` (and a
+//! second run changes nothing), and `after` passes all three with the same output. The pair is the gate's own
 //! mutation check: with the resolver rule restored, `before` passes `wj check` and the first test fails.
 
 use std::path::{Path, PathBuf};
@@ -89,7 +90,36 @@ fn naming_the_declaring_module_needs_no_reexport() {
 }
 
 #[test]
-fn inline_module_reexport_is_reported() {
+fn wj_fix_adds_the_missing_pub_use_lines_and_is_idempotent() {
+    let tmp = scratch("fix");
+    copy_dir(&fixture("before"), &tmp);
+    let (ok, text) = run(&tmp, &["fix", "--check", "."]);
+    assert!(!ok, "--check must fail while a line is missing:\n{text}");
+    assert_eq!(read(&tmp.join("src/adapters/mod.wj")), read(&fixture("before").join("src/adapters/mod.wj")), "--check writes nothing");
+
+    let (ok, text) = run(&tmp, &["fix", "."]);
+    assert!(ok, "{text}");
+    let fixed = read(&tmp.join("src/adapters/mod.wj"));
+    assert_eq!(fixed, read(&fixture("after").join("src/adapters/mod.wj")), "after wj fix:\n{fixed}");
+    for f in ["src/main.wj", "src/adapters/http.wj", "src/adapters/codec.wj"] {
+        assert_eq!(read(&tmp.join(f)), read(&fixture("before").join(f)), "{f} must not change");
+    }
+
+    let (ok, text) = run(&tmp, &["fix", "--check", "."]);
+    assert!(ok, "second fix would still change a file:\n{text}");
+    let (ok, text) = run(&tmp, &["fix", "."]);
+    assert!(ok, "{text}");
+    assert_eq!(read(&tmp.join("src/adapters/mod.wj")), fixed, "idempotent");
+
+    let (ok, text) = run(&tmp, &["check"]);
+    assert!(ok && !text.contains("WJ0194"), "{text}");
+    let (ok, text) = run(&tmp, &["run", "--interpret"]);
+    assert!(ok && text.contains("8080 7 20"), "{text}");
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn inline_module_has_no_file_to_fix_and_is_left_alone() {
     let tmp = scratch("inline");
     std::fs::create_dir_all(&tmp).unwrap();
     let src = "mod adapters {\n    pub mod http {\n        pub fn serve() -> int {\n            1\n        }\n    }\n}\n\nfn main() {\n    println(\"${adapters::serve()}\")\n}\n";
