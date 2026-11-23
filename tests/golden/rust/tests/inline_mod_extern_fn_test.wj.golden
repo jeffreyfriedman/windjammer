@@ -1,7 +1,7 @@
 use windjammer_runtime::test::*;
 mod ffi {
     #[inline]
-fn my_extern_function(_value: i64) {
+pub fn my_extern_function(value: i64) {
 }}
 
 extern "C" {
