@@ -7,9 +7,11 @@
 pub mod active;
 pub mod entries;
 pub mod build_profile;
+mod evict;
 mod test_api;
 pub use test_api::enforce_size_budget_for_test;
 
+use evict::enforce_size_budget;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -133,6 +135,8 @@ fn ensure_writable_dir(dir: &Path) -> std::io::Result<()> {
     let probe = dir.join(".wj-cache-write-probe");
     fs::write(&probe, b"ok")?;
     let _ = fs::remove_file(&probe);
+    // wj created this tree: it may sweep whole cargo units out of it (and out of nothing without this marker)
+    evict::mark(dir)?;
     Ok(())
 }
 
@@ -385,8 +389,8 @@ fn cache_max_bytes() -> u64 {
 ///
 /// 1. Always drops stale `wj_*` scratch dirs and an oversized verify tree.
 /// 2. Reclaims aggressively when the volume is low on free space.
-/// 3. Enforces a size budget (`WJ_CACHE_MAX_GIB`, default 8) on the shared cargo-target tree by
-///    deleting the oldest compiled artifacts first (cargo rebuilds whatever is missing).
+/// 3. Enforces a size budget (`WJ_CACHE_MAX_GIB`, default 8) on wj's own marked `shared` tree by evicting whole
+///    cargo units, least recently used first (never single files; see `evict.rs`).
 pub fn reclaim() -> PruneReport {
     let root = cache_root();
     let stamp = root.join(".last_reclaim");
@@ -411,79 +415,9 @@ pub fn reclaim() -> PruneReport {
         ..PruneOptions::default()
     });
     report.freed_bytes += build_profile::prune_run_workdirs(&root, Duration::from_secs(14 * 24 * 3600));
-    let tree = root.join("cargo-target");
-    report.freed_bytes += enforce_size_budget(&tree, cache_max_bytes(), &mut report);
+    // only the trees wj created (`shared`); the compiler's own `debug/` / `release/` in `cargo-target` is never swept
+    report.freed_bytes += enforce_size_budget(&shared, cache_max_bytes(), &mut report);
     report
-}
-
-/// Delete oldest artifacts under `<tree>/<profile>/{deps,build,incremental}` until `tree` fits
-/// in `budget` bytes. Returns bytes freed.
-fn enforce_size_budget(tree: &Path, budget: u64, report: &mut PruneReport) -> u64 {
-    let size = dir_size(tree);
-    if size <= budget {
-        return 0;
-    }
-    // a running build may need any artifact of its tree, however old: leave a held tree alone
-    if active::held(tree) {
-        report.messages.push(format!("{} is in use by a running build: size budget not enforced", tree.display()));
-        return 0;
-    }
-    let mut excess = size - budget;
-    // Incremental state is cheap to regenerate and goes first; compiled dependency artifacts (the
-    // pre-built runtime and its crates, minutes of CPU) go last, oldest first.
-    let mut files: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
-    for profile in ["debug", "release"] {
-        collect_files(&tree.join(profile).join("incremental"), &mut files);
-    }
-    files.sort_by_key(|(mtime, _, _)| *mtime);
-    let mut rest: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
-    for profile in ["debug", "release"] {
-        for sub in ["build", "deps"] {
-            collect_files(&tree.join(profile).join(sub), &mut rest);
-        }
-    }
-    rest.sort_by_key(|(mtime, _, _)| *mtime);
-    files.extend(rest);
-    let mut freed = 0u64;
-    for (mtime, len, path) in files {
-        if excess == 0 {
-            break;
-        }
-        // written within the hour: possibly by a build that holds no lock
-        if active::is_recent(Some(mtime)) {
-            continue;
-        }
-        if fs::remove_file(&path).is_ok() {
-            freed += len;
-            excess = excess.saturating_sub(len);
-        }
-    }
-    if freed > 0 {
-        report.messages.push(format!(
-            "Cache over budget ({}): removed oldest artifacts, freed {}",
-            format_size(budget),
-            format_size(freed)
-        ));
-    }
-    freed
-}
-
-fn collect_files(dir: &Path, out: &mut Vec<(SystemTime, u64, PathBuf)>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_files(&path, out);
-        } else if let Ok(meta) = entry.metadata() {
-            out.push((
-                meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
-                meta.len(),
-                path,
-            ));
-        }
-    }
 }
 
 /// Scratch dirs that tests/tools create under the OS temp dir (`wj_*`, `.wj_*`).
@@ -654,24 +588,32 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn size_budget_removes_oldest_artifacts_first() {
+    fn size_budget_evicts_whole_units_oldest_first() {
         let tmp = tempfile::tempdir().unwrap();
-        let deps = tmp.path().join("release").join("deps");
-        fs::create_dir_all(&deps).unwrap();
-        let old = deps.join("old.rlib");
-        let new = deps.join("new.rlib");
-        fs::write(&old, vec![0u8; 4096]).unwrap();
-        std::thread::sleep(Duration::from_millis(30));
-        fs::write(&new, vec![0u8; 4096]).unwrap();
-
+        evict::mark(tmp.path()).unwrap();
+        let old = SystemTime::now() - Duration::from_secs(3 * 3600);
+        let older = old - Duration::from_secs(3600);
+        let mut seed = |name: &str, mtime: SystemTime| {
+            let hash = format!("{:016x}", name.len() as u64 * 0x1111);
+            let p = tmp.path().join("release/deps").join(format!("lib{name}-{hash}.rlib"));
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, vec![0u8; 4096]).unwrap();
+            fs::File::options().write(true).open(&p).unwrap().set_modified(mtime).unwrap();
+            let fp = tmp.path().join("release/.fingerprint").join(format!("{name}-{hash}"));
+            fs::create_dir_all(&fp).unwrap();
+            fs::write(fp.join("fingerprint"), b"x").unwrap();
+            fs::File::options().write(true).open(fp.join("fingerprint")).unwrap().set_modified(mtime).unwrap();
+            p
+        };
+        let first = seed("aa", older);
+        let second = seed("bbb", old);
         let mut report = PruneReport::default();
-        // Budget leaves room for exactly one of the two files.
-        let freed = enforce_size_budget(tmp.path(), 4096, &mut report);
-        assert_eq!(freed, 4096);
-        assert!(!old.exists(), "oldest artifact goes first");
-        assert!(new.exists());
-        // Already within budget: nothing more is removed.
-        assert_eq!(enforce_size_budget(tmp.path(), 4096, &mut report), 0);
+        // budget leaves room for one unit: the older goes whole (rlib and fingerprint), the newer stays
+        let freed = enforce_size_budget(tmp.path(), 4200, &mut report);
+        assert!(freed >= 4096);
+        assert!(!first.exists(), "the least recently used unit goes first");
+        assert!(second.exists());
+        assert!(!tmp.path().join("release/.fingerprint").join(format!("aa-{:016x}", 2u64 * 0x1111)).exists());
     }
 
     #[test]
