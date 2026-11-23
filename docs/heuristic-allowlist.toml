@@ -43,7 +43,7 @@
 "src/codegen/javascript/tree_shaker.rs" = 1
 "src/codegen/portable/enumerable.rs" = 1
 "src/codegen/portable/lower/arena.rs" = 5
-"src/codegen/portable/lower/call.rs" = 8
+"src/codegen/portable/lower/call.rs" = 7
 "src/codegen/portable/lower/stmt.rs" = 4
 "src/codegen/portable/prelude.rs" = 2
 "src/codegen/rust/assignment_statement_generation.rs" = 2
@@ -142,14 +142,14 @@
 "src/analyzer/optimization_detectors/const_smallvec_detection.rs" = 1
 "src/analyzer/parameter_analysis.rs" = 5
 "src/codegen/backend.rs" = 11
-"src/codegen/go/emit/builtin.rs" = 102
+"src/codegen/go/emit/builtin.rs" = 68
 "src/codegen/go/emit/enumerable.rs" = 22
 "src/codegen/go/emit/ordering.rs" = 16
-"src/codegen/javascript/emit/builtin.rs" = 107
+"src/codegen/javascript/emit/builtin.rs" = 70
 "src/codegen/javascript/emit/enumerable.rs" = 18
 "src/codegen/javascript/emit/ordering.rs" = 16
 "src/codegen/javascript/emit/refs.rs" = 2
-"src/codegen/portable/builtins.rs" = 112
+"src/codegen/portable/builtins.rs" = 79
 "src/codegen/portable/enumerable.rs" = 8
 "src/codegen/portable/lower/call.rs" = 3
 "src/codegen/portable/lower/fmt.rs" = 6

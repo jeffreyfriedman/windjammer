@@ -244,7 +244,7 @@ digraph deps {
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "module_system" [label="2"];
-  "codegen" -> "parser" [label="720"];
+  "codegen" -> "parser" [label="722"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="4"];
   "codegen" -> "source_map" [label="9"];

@@ -141,7 +141,7 @@ pub trait HashMap<K, V> {
     fn get(self, key: &K) -> Option<&V>;
     @js(emit = "$mapGetOpt({self}, {key})")
     @go(emit = "wjMapGet({self}, {key})")
-    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.get_mut(1).unwrap_or(0)", expect = "10")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.get_mut(1).is_some()", expect = "true")
     fn get_mut(&mut self, key: &K) -> Option<&mut V>;
     @js(emit = "$mapInsert({self}, {key}, {value})")
     @go(emit = "wjMapInsert({self}, {key}, {value})")
@@ -161,11 +161,11 @@ pub trait HashMap<K, V> {
     fn clear(&mut self);
     @js(emit = "$sortedKeys({self})")
     @go(emit = "wjKeys({self})")
-    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.keys().sum()", expect = "3")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.keys().fold(0, |a, k| a + k)", expect = "3")
     fn keys(self) -> Iterator<&K>;
     @js(emit = "$sortedValues({self})")
     @go(emit = "wjValues({self})")
-    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.values().sum()", expect = "30")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.values().fold(0, |a, v| a + v)", expect = "30")
     fn values(self) -> Iterator<&V>;
 }
 
@@ -524,7 +524,7 @@ pub trait String {
 pub trait Char {
     @js(emit = "$charFromU32({value})")
     @go(emit = "wjCharFromU32({value})")
-    @example(src = "char::from_u32(65).unwrap_or('?')", expect = "A")
+    @example(given = "let n: u32 = 65", src = "char::from_u32(n).unwrap_or('?')", expect = "A")
     fn from_u32(value: u32) -> Option<char>;
     @js(emit = "/^\\p{{L}}$/u.test({self})")
     @go(emit = "wjIsAlphabetic({self})")

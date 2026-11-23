@@ -579,11 +579,12 @@ fn register_consts(r: &mut Registry) {
         r.add_const(format!("{}::BITS", n), Value::Int(t.bits() as i128, IntTy::U32));
     }
     for (n, t) in [("f64", FloatTy::F64), ("float", FloatTy::F64), ("f32", FloatTy::F32)] {
-        let (max, min, eps) = if t == FloatTy::F32 {
-            (f32::MAX as f64, f32::MIN as f64, f32::EPSILON as f64)
+        let (max, min, eps, tiny) = if t == FloatTy::F32 {
+            (f32::MAX as f64, f32::MIN as f64, f32::EPSILON as f64, f32::MIN_POSITIVE as f64)
         } else {
-            (f64::MAX, f64::MIN, f64::EPSILON)
+            (f64::MAX, f64::MIN, f64::EPSILON, f64::MIN_POSITIVE)
         };
+        r.add_const(format!("{}::MIN_POSITIVE", n), Value::Float(tiny, t));
         r.add_const(format!("{}::MAX", n), Value::Float(max, t));
         r.add_const(format!("{}::MIN", n), Value::Float(min, t));
         r.add_const(format!("{}::EPSILON", n), Value::Float(eps, t));
