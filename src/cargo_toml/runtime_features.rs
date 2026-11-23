@@ -88,6 +88,13 @@ impl FeatureMap {
                 self.add(first, path, &mut need)?;
             }
         }
+        // `use windjammer_runtime::time;` brings the module in: its uses (`time::item`) decide the feature, not the import.
+        if need.remove(BARE_TIME) {
+            let calendar_use = bare_time_uses(src).any(|item| !UNGATED_TIME_ITEMS.contains(&item));
+            if calendar_use {
+                need.insert("datetime".to_string());
+            }
+        }
         Some(need)
     }
 
@@ -111,15 +118,39 @@ impl FeatureMap {
             need.insert(f);
         }
         // `time` is always compiled (`Duration`, `Instant`, `SystemTime` are std's); its calendar part needs chrono.
-        if first == "time" && !path.split("::").nth(1).is_some_and(|item| UNGATED_TIME_ITEMS.contains(&item)) {
-            need.insert("datetime".to_string());
+        if first == "time" {
+            match path.split("::").nth(1).filter(|i| !i.is_empty()) {
+                Some(item) if UNGATED_TIME_ITEMS.contains(&item) => {}
+                Some(_) => {
+                    need.insert("datetime".to_string());
+                }
+                None => {
+                    need.insert(BARE_TIME.to_string());
+                }
+            }
         }
         Some(())
     }
 }
 
+/// Marker (never a feature) for a bare `use windjammer_runtime::time;`, resolved against the file's `time::item` uses.
+const BARE_TIME: &str = "\u{0}bare-time";
+
+/// The item names of `time::item` paths in `src` (a `time` segment not preceded by an identifier character or `:`).
+fn bare_time_uses(src: &str) -> impl Iterator<Item = &str> {
+    src.match_indices("time::").filter_map(move |(at, _)| {
+        let before = src[..at].chars().next_back();
+        if before.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == ':') {
+            return None;
+        }
+        let rest = &src[at + "time::".len()..];
+        let end = rest.find(|c: char| !(c.is_alphanumeric() || c == '_')).unwrap_or(rest.len());
+        Some(&rest[..end])
+    })
+}
+
 /// The items of the runtime's `time` module that need no feature (checked against `time.rs` below).
-const UNGATED_TIME_ITEMS: &[&str] = &["Duration", "Instant", "SystemTime", "instant_now", "sleep", "sleep_millis"];
+const UNGATED_TIME_ITEMS: &[&str] = &["Duration", "Instant", "SystemTime", "instant_now", "sleep", "sleep_millis", "parse_duration_ms", "format_duration_ms"];
 
 /// Feature list for a program: the union over `sources`, or `["full"]` when any file is unclear.
 pub(crate) fn runtime_features<'a>(map: Option<&FeatureMap>, sources: impl Iterator<Item = &'a str>) -> Vec<String> {
@@ -179,7 +210,9 @@ mod tests {
         assert!(f("windjammer_runtime::time::Duration::from_millis(1)").is_empty());
         assert!(f("use windjammer_runtime::time::Instant;").is_empty());
         assert_eq!(f("windjammer_runtime::time::now()"), vec!["datetime"]);
-        assert_eq!(f("use windjammer_runtime::time;"), vec!["datetime"]);
+        // a bare module import is judged by its uses
+        assert!(f("use windjammer_runtime::time;\nfn m() { time::parse_duration_ms(&t); }").is_empty());
+        assert_eq!(f("use windjammer_runtime::time;\nfn m() { time::now(); }"), vec!["datetime"]);
     }
 
     /// The ungated list is exactly the runtime's ungated `time` items (everything before the calendar `mod`).

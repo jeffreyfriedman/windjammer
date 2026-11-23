@@ -685,6 +685,11 @@ pub(crate) fn collect_stdlib_api_types_for_modules(
         for item in items {
             match item {
                 Item::Struct { decl, .. } => {
+                    // A std struct whose name the core surface declares (`Duration`) is the surface's type, not this
+                    // placeholder: registering it made `Duration::from_millis(10)` read as a program struct's call (10_i32).
+                    if crate::ir::stdlib_tables::surface_type_name(&crate::parser::Type::Parameterized(decl.name.clone(), Vec::new())).is_some() {
+                        continue;
+                    }
                     let mut fields = HashMap::new();
                     for field in &decl.fields {
                         fields.insert(field.name.clone(), field.field_type.clone());

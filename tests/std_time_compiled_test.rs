@@ -16,18 +16,35 @@ fn shared_target() -> PathBuf {
     std::env::var_os("WJ_STD_TIME_TEST_TARGET").map(PathBuf::from).unwrap_or_else(|| scratch::shared_cache_dir("std-time-target"))
 }
 
+/// The literal's width comes from the declared formal (`from_millis(u64)` on the core surface), not from the std module's
+/// placeholder `struct Duration` (which, registered as a program struct, made it `10_i32`). Fast: no cargo.
+#[test]
+fn a_duration_literal_takes_the_declared_u64_width() {
+    let out = Scratch::new("std-time-width");
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/std_time_programs/duration_surface.wj");
+    let st = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", "--no-cargo", "--no-lint", "-o"])
+        .arg(&out)
+        .arg(&p)
+        .env("WJ_ALLOW_TOOLCHAIN_MISMATCH", "1")
+        .output()
+        .unwrap();
+    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+    let rs = std::fs::read_to_string(out.join("duration_surface.rs")).unwrap();
+    assert!(rs.contains("Duration::from_millis(10_u64)"), "from_millis takes a u64:\n{rs}");
+}
+
 #[test]
 fn duration_program_is_the_same_interpreted_and_compiled() {
     same_interpreted_and_compiled("duration_surface.wj", true);
 }
 
-/// `time.parse_duration_ms(text)` with an owned `string`: the runtime declares it in `time/calendar.rs`, which `time.rs`
-/// re-exports with `pub use calendar::*;`, so its `text: &str` formal is read under `time::parse_duration_ms` and the
+/// `time.parse_duration_ms(text)` with an owned `string`: the runtime declares it in `time.rs` (ungated, no chrono; it was in `time/calendar.rs`, which `time.rs`
+/// re-exported with `pub use calendar::*;`), so its `text: &str` formal is read under `time::parse_duration_ms` and the
 /// argument is borrowed (rustc E0308 expected `&str`, found `String`).
 #[test]
 fn parse_duration_of_an_owned_string_is_the_same_interpreted_and_compiled() {
-    // `parse_duration_ms` is declared in the runtime's calendar module (feature `datetime`), so this program honestly enables it
-    same_interpreted_and_compiled("parse_duration_owned_text.wj", false);
+    same_interpreted_and_compiled("parse_duration_owned_text.wj", true);
 }
 
 fn same_interpreted_and_compiled(program: &str, no_calendar: bool) {
