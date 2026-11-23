@@ -8,15 +8,63 @@ use std::path::{Path, PathBuf};
 
 /// The files a single-file build of `path` compiles: the modules the entry declares (first, so the entry reads
 /// their current metadata), then the entry. A library build compiles `wj_files` only.
-pub(super) fn lone_script_files(path: &Path, wj_files: &[PathBuf], library: bool) -> Vec<PathBuf> {
+pub(super) fn lone_script_files(path: &Path, wj_files: &[PathBuf], library: bool) -> anyhow::Result<Vec<PathBuf>> {
     if library || !path.is_file() {
-        return wj_files.to_vec();
+        return Ok(wj_files.to_vec());
     }
     let mut modules = Vec::new();
-    collect_declared_modules(path, &mut modules);
+    let root = path.parent().unwrap_or(Path::new("."));
+    collect_declared_modules(path, path, root, &mut modules)?;
     modules.retain(|m| !wj_files.contains(m));
     modules.extend(wj_files.iter().cloned());
-    modules
+    Ok(modules)
+}
+
+/// The first segments of the `use crate::<module>::...` paths of `program` that name no item the program itself
+/// declares: they name modules of the crate root, i.e. siblings of the entry file (decided by declaration: an item
+/// the entry declares, `fn`/`struct`/`enum`/`trait`/`const`/`static`/`mod`, is not a module).
+fn crate_root_modules_used(program: &crate::parser::Program<'_>) -> Vec<String> {
+    use crate::parser::Item;
+    let declared: Vec<&str> = program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Function { decl, .. } => Some(decl.name.as_str()),
+            Item::Struct { decl, .. } => Some(decl.name.as_str()),
+            Item::Enum { decl, .. } => Some(decl.name.as_str()),
+            Item::Trait { decl, .. } => Some(decl.name.as_str()),
+            Item::Const { name, .. } | Item::Static { name, .. } | Item::Mod { name, .. } => Some(name.as_str()),
+            Item::TypeAlias { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    let mut used: Vec<String> = Vec::new();
+    for item in &program.items {
+        if let Item::Use { path, .. } = item {
+            if path.len() >= 2 && path[0] == "crate" && !declared.contains(&path[1].as_str()) && !used.contains(&path[1]) {
+                used.push(path[1].clone());
+            }
+        }
+    }
+    used
+}
+
+/// The entry file's `mod name` declarations for the sibling modules its `use crate::name::...` paths reach, added
+/// to `program` so the generated `main.rs` declares them (`mod adapters;`), as a project build's crate root does.
+pub(super) fn declare_used_crate_modules(program: &mut crate::parser::Program<'static>) {
+    let used = crate_root_modules_used(program);
+    for name in used {
+        let already = program.items.iter().any(|i| matches!(i, crate::parser::Item::Mod { name: n, .. } if *n == name));
+        if !already {
+            let location = program.items.iter().find_map(|i| match i {
+                crate::parser::Item::Use { location, .. } => Some(location.clone()),
+                _ => None,
+            });
+            if let Some(location) = location {
+                program.items.insert(0, crate::parser::Item::Mod { name, items: Vec::new(), is_public: false, location });
+            }
+        }
+    }
 }
 
 /// Where a declared module of the entry at `entry` is generated: its path relative to the entry's directory,
@@ -40,9 +88,12 @@ pub(super) fn declared_module_output(
 }
 
 /// The module files `file` declares by `mod name` without a body, and theirs, depth first.
-fn collect_declared_modules(file: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(source) = std::fs::read_to_string(file) else { return };
-    let Ok((_parser, program)) = super::parse_wj_source(file, &source) else { return };
+/// `root` is the entry's directory, the crate root that `use crate::name` paths resolve against. A module named by
+/// a `use crate::name` path (or `mod name`) that is neither `name.wj` nor `name/mod.wj` is an error naming both.
+fn collect_declared_modules(entry: &Path, file: &Path, root: &Path, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
+    let Ok(source) = std::fs::read_to_string(file) else { return Ok(()) };
+    let Ok((_parser, program)) = super::parse_wj_source(file, &source) else { return Ok(()) };
+    let entry_program_used = crate_root_modules_used(&program);
     let dir = file.parent().unwrap_or(Path::new("."));
     // `dep/mod.wj` declares its children beside itself; `dep.wj` declares them in `dep/`.
     let child_dir = if file.file_stem().is_some_and(|s| s == "mod") {
@@ -63,10 +114,41 @@ fn collect_declared_modules(file: &Path, out: &mut Vec<PathBuf>) {
             .into_iter()
             .find(|p| p.is_file() && p != file);
         if let Some(module) = found.filter(|m| !out.contains(m)) {
-            collect_declared_modules(&module, out);
+            collect_declared_modules(entry, &module, root, out)?;
             out.push(module);
         }
     }
+    for name in entry_program_used {
+        if out.iter().any(|m| crate_module_name(root, m).as_deref() == Some(name.as_str())) {
+            continue;
+        }
+        let candidates = [root.join(format!("{name}.wj")), root.join(&name).join("mod.wj")];
+        match candidates.iter().find(|p| p.is_file() && p.as_path() != file) {
+            Some(module) => {
+                collect_declared_modules(entry, module, root, out)?;
+                if !out.contains(module) {
+                    out.push(module.clone());
+                }
+            }
+            None if file == entry => {
+                anyhow::bail!(
+                    "{}: `use crate::{name}` names module `{name}`, but neither {} nor {} exists",
+                    file.display(),
+                    candidates[0].display(),
+                    candidates[1].display()
+                );
+            }
+            None => {}
+        }
+    }
+    Ok(())
+}
+
+/// The top-level module a file at `root/name.wj` or `root/name/...` belongs to.
+fn crate_module_name(root: &Path, file: &Path) -> Option<String> {
+    let rel = file.strip_prefix(root).ok()?;
+    let first = rel.components().next()?.as_os_str().to_string_lossy().to_string();
+    Some(first.strip_suffix(".wj").unwrap_or(&first).to_string())
 }
 
 /// After a single-file build generated the entry's declared modules: each directory module's `mod.rs` (`x/mod.wj`)
@@ -74,7 +156,7 @@ fn collect_declared_modules(file: &Path, out: &mut Vec<PathBuf>) {
 /// re-exports), so `wj build src/main.wj` emits what `wj build src` does for those modules.
 pub(super) fn write_directory_module_files(path: &Path, wj_files: &[PathBuf], output: &Path, library: bool) -> anyhow::Result<()> {
     let base = path.parent().unwrap_or(Path::new("."));
-    for module in lone_script_files(path, wj_files, library) {
+    for module in lone_script_files(path, wj_files, library)? {
         if wj_files.contains(&module) || module.file_name().is_none_or(|n| n != "mod.wj") {
             continue;
         }
