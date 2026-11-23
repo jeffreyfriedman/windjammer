@@ -34,7 +34,7 @@ fn walk(t: Tree, out: Vec<i64>) -> Vec<i64> {
 fn height(t: Tree) -> i64 {
     match t {
         Tree::Leaf => 0_i64,
-        Tree::Node(l, _, r) => 1_i64 + height(*l).max((height(*r) as i32)),
+        Tree::Node(l, _, r) => 1_i64 + height(*l).max(height(*r)),
     }
 }
 
