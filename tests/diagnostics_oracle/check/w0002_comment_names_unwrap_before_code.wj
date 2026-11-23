@@ -1,0 +1,16 @@
+// Header comments that spell `.unwrap()` and `.expect("x")` before the code must not attract W0002.
+// Expected: exactly the W0002 at the bare call below, not one inside these lines.
+fn pick(o: Option<int>) -> int {
+    o.unwrap_or(0)
+}
+
+fn first(o: Option<int>) -> int {
+    o.unwrap()
+//~@7+6 ERROR W0002 explicit .unwrap() call
+}
+
+fn second(o: Option<int>) -> int {
+    /* a block comment: .unwrap() */
+    o.unwrap()
+//~@7+6 ERROR W0002 explicit .unwrap() call
+}

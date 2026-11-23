@@ -83,11 +83,7 @@ pub(crate) fn generate_cargo_manifests(
     clean_nested: bool,
     config: &crate::compiler_config::CompilerConfig,
 ) -> anyhow::Result<()> {
-    let source_dir = if input_path.is_file() {
-        input_path.parent().unwrap_or(input_path)
-    } else {
-        input_path
-    };
+    let source_dir = crate::project_paths::entry_root(input_path);
     if target == crate::CompilationTarget::Rust {
         if clean_nested {
             cache_management::clean_nested_cargo_toml(output);

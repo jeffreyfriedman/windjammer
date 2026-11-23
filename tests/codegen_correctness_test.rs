@@ -236,6 +236,7 @@ corpus_tests!(
     operator_impl_selected_by_rhs_type,
     operator_traits_as_supertraits_imported,
     thread_handles,
+    option_vec_some_literal_field,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:

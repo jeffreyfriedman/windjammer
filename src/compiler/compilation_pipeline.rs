@@ -140,11 +140,7 @@ pub fn build_project_with_config(
 
     let mut crate_metadata = CrateMetadata::new();
 
-    let base_path = if path.is_file() {
-        path.parent().unwrap_or(path)
-    } else {
-        path
-    };
+    let base_path = crate::project_paths::entry_root(path);
     let has_nested_structure = wj_files.iter().any(|f| {
         f.strip_prefix(base_path)
             .map(|r| r.components().count() > 1)
@@ -322,11 +318,7 @@ pub fn build_project_with_config(
         }
 
         let output_file = if !wj_files.contains(file) { super::lone_script_modules::declared_module_output(path, file, output, &mut codegen)? } else if wj_files.len() > 1 && library {
-            let base_path = if path.is_file() {
-                path.parent().unwrap_or(path)
-            } else {
-                path
-            };
+            let base_path = crate::project_paths::entry_root(path);
             let src_base =
                 std::fs::canonicalize(base_path).unwrap_or_else(|_| base_path.to_path_buf());
             let output_file =

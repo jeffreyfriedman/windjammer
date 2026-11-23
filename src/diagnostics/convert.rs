@@ -129,6 +129,32 @@ fn ends_at_word_boundary(text: &str, end: usize) -> bool {
     !text[..end.min(text.len())].ends_with(name_char) || !text[end.min(text.len())..].starts_with(name_char)
 }
 
+/// `text` with every comment blanked (same byte length, newlines kept), so a text search for a method name never
+/// lands in a comment that mentions it. Comments are what the lexer leaves between tokens (plain `//`, `/* */`) and
+/// its `DocComment` tokens; the code inside a string interpolation belongs to its token and stays.
+fn without_comments(text: &str) -> String {
+    use crate::lexer::{Lexer, Token};
+    let tokens = Lexer::new(text).tokenize_with_locations();
+    let mut bytes = text.as_bytes().to_vec();
+    let blank = |bytes: &mut Vec<u8>, from: usize, to: usize| {
+        for b in &mut bytes[from.min(to)..to.min(text.len())] {
+            if !b.is_ascii_whitespace() {
+                *b = b' ';
+            }
+        }
+    };
+    let mut at = 0;
+    for t in &tokens {
+        blank(&mut bytes, at, t.byte_start);
+        if matches!(t.token, Token::DocComment(_)) {
+            blank(&mut bytes, t.byte_start, t.byte_end);
+        }
+        at = t.byte_end.max(at);
+    }
+    blank(&mut bytes, at, text.len());
+    String::from_utf8(bytes).unwrap_or_else(|_| text.to_string())
+}
+
 /// Lint locations come from AST nodes (0-based columns, often just after the construct, or a
 /// default of 1:1); find the offending text itself.
 fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::Span {
@@ -141,11 +167,12 @@ fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::
         "W0001" => &["&mut self", "&self", "&mut ", "&"],
         _ => &[],
     };
-    let text = ix.text();
     let loc = &d.location;
     if markers.is_empty() {
         return ix.word_span_at(loc.line.max(1), loc.column);
     }
+    let code_only = without_comments(ix.text());
+    let text = code_only.as_str();
     let offset = ix.offset(loc.line.max(1), loc.column);
     let lo = offset.saturating_sub(600);
     let lo = (lo..=offset).find(|&i| text.is_char_boundary(i)).unwrap_or(0);
@@ -160,6 +187,29 @@ fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::
                 .map(|i| (i, m.len()))
         })
         .max_by_key(|(i, _)| *i);
+    // A method call's location is where the call's receiver starts, so its `.method` lies AHEAD of it; the match
+    // behind it belongs to an earlier call (a second `o.unwrap()` would else land on the first one's span, and
+    // the two diagnostics collapse into one). The nearer of the two is the call itself.
+    let ahead = || {
+        let hi = (offset + 600).min(text.len());
+        let hi = (offset..=hi).rev().find(|&i| text.is_char_boundary(i)).unwrap_or(offset);
+        markers
+            .iter()
+            .filter(|m| m.starts_with('.'))
+            .filter_map(|m| {
+                text.get(offset.min(text.len())..hi)?
+                    .match_indices(m)
+                    .map(|(i, _)| offset + i)
+                    .find(|&i| ends_at_word_boundary(text, i + m.len()))
+                    .map(|i| (i, m.len()))
+            })
+            .min_by_key(|(i, _)| *i)
+    };
+    let near = match (near, ahead()) {
+        (Some(back), Some(fwd)) if fwd.0 - offset <= offset.saturating_sub(back.0) => Some(fwd),
+        (None, Some(fwd)) => Some(fwd),
+        (back, _) => back,
+    };
     let found = near.or_else(|| {
         let from_decl = |i: usize| {
             code != "W0001" || {

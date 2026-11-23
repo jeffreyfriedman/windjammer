@@ -1,0 +1,20 @@
+// A list literal inside `Some(..)` stored in an `Option<Vec<T>>` struct field is the field's Vec.
+// expect: 1 2 none
+
+pub struct Req {
+    pub name: Option<string>,
+    pub tags: Option<Vec<string>>,
+    pub counts: Option<Vec<int>>,
+}
+
+fn tag_count(r: Req) -> int {
+    r.tags.unwrap_or([]).len()
+}
+
+fn main() {
+    let a = Req { name: None, tags: Some([String::from("a")]), counts: Some([1, 2, 3]) }
+    let c = Req { name: None, tags: None, counts: Some([1, 2, 3]) }
+    let b = Req { name: None, tags: None, counts: None }
+    let n = c.counts.unwrap_or([]).len()
+    println("${tag_count(a)} ${n - 1} ${if b.name.is_none() { "none" } else { "some" }}")
+}
