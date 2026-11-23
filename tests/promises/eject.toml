@@ -4,11 +4,20 @@
 name = "eject writes a standalone Cargo project with the runtime vendored"
 polarity = "positive"
 covers = ["wj eject --output"]
-files = { "m.wj" = "fn main() {\n    println(\"hi ${40 + 2}\")\n}\n" }
+# a program that imports a std module needs the runtime (a program that imports none is lean: next case)
+files = { "m.wj" = "use std::env\n\nfn main() {\n    println(\"hi ${env::get_or(\"HOME\", \"x\").len()}\")\n}\n" }
 args = ["eject", "{w}/m.wj", "--output", "{w}/ejected"]
 creates = ["ejected/m.rs", "ejected/Cargo.toml", "ejected/vendor/windjammer-runtime/Cargo.toml", "ejected/README.md"]
 file_has = { "ejected/m.rs" = "fn main()", "ejected/Cargo.toml" = "path = \"vendor/windjammer-runtime\"" }
 absent = ["ejected/.wj-compiler-stamp"]
+
+[[case]]
+name = "eject of a program with no std import vendors no runtime"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hi ${40 + 2}\")\n}\n" }
+args = ["eject", "{w}/m.wj", "--output", "{w}/ejected"]
+creates = ["ejected/m.rs", "ejected/Cargo.toml"]
+absent = ["ejected/vendor"]
 
 [[case]]
 name = "eject --target wasm is accepted"
