@@ -18,7 +18,7 @@ pub fn shared_core_surface() -> &'static CoreSurface {
 pub fn shared_lowering() -> &'static crate::stdlib_surface::lowering::LoweringTable {
     struct Lowering(crate::stdlib_surface::lowering::LoweringTable);
     let core = shared_core_surface(); // before the closure: the derived tables are built under a lock
-    &crate::analyzer::SignatureRegistry::stdlib().derived().get_or_build(|| Lowering(core.lowering())).0
+    &crate::analyzer::SignatureRegistry::stdlib().derived().get_or_build(|| Lowering(core.lowering_on_demand())).0
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -68,7 +68,7 @@ mod tests {
         let text = serde_json::to_string(&tables).unwrap();
         let back: StdlibTables = serde_json::from_str(&text).unwrap();
         assert_eq!(serde_json::to_string(&back).unwrap(), text);
-        assert_eq!(format!("{:?}", back.core_surface), format!("{:?}", tables.core_surface));
+        assert_eq!(back.core_surface.declared_traits(), tables.core_surface.declared_traits());
         assert!(!tables.taint_sinks.is_empty() && !tables.effect_declarations.is_empty());
     }
 }

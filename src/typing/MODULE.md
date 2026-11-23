@@ -24,7 +24,7 @@ Layer `types`. May import: lexer, parser, parser_impl, stdlib_surface (the lower
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`core_surface::method_signature`, `core_surface::declared`, `core_surface::entries`; `CoreSurface::lowering()` / `declared_traits()` hand the `@js` / `@go` / `@example` decorators of the declarations to `stdlib_surface::lowering` (docs/design/table-driven-std-surface.md).
+`core_surface::method_signature`, `core_surface::declared`, `core_surface::entries`; `CoreSurface` reads each `trait` of the surface on first use (split by a line scan; signatures by the parser; attribute lines by `read_decorator`, compared with the parser by a unit test), and `lowering_on_demand()` builds the lowering rows of a trait on first use; `CoreSurface::lowering()` / `declared_traits()` (every row, for the gates) hand the `@js` / `@go` / `@example` decorators of the declarations to `stdlib_surface::lowering` (docs/design/table-driven-std-surface.md).
 
 ## Tests
 Unit tests in `core_surface.rs`; `tests/core_surface_rustc_test.rs` (every entry type-checks in rustc).

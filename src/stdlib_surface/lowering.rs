@@ -417,14 +417,27 @@ pub struct Requirement {
     pub reason: String,
 }
 
-/// The rows of the migrated types, keyed by (type, method name).
+/// Reads one declared trait on demand (the typed surface, which parses a trait the first time it is asked for).
+pub type TraitSource = std::sync::Arc<dyn Fn(&str) -> RawTrait + Send + Sync>;
+
+/// The rows of one trait: its methods (a migrated type's) and its associated functions with a rule.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct TraitRows {
+    /// By name: a lookup by `&str` allocates nothing.
+    rows: BTreeMap<String, Row>,
+    /// The associated functions (`Vec::new`, `i64::MAX`): of a migrated type all of them, of any other trait only those with rules
+    /// (the other `Vec` methods are not migrated yet).
+    statics: BTreeMap<String, Row>,
+}
+
+/// The rows of the migrated types, keyed by (type, method name). The rows of a trait are built the first time a call on it is
+/// lowered (a table made by [`LoweringTable::on_demand`]), so a compilation pays for the traits it uses.
+#[derive(Clone, Default)]
 pub struct LoweringTable {
-    /// By type, then name: a lookup by `&str` allocates nothing.
-    rows: BTreeMap<CoreType, BTreeMap<String, Row>>,
+    /// Every declared trait; the rows are built on first use.
+    traits: BTreeMap<String, std::sync::OnceLock<TraitRows>>,
+    source: Option<TraitSource>,
     widen: BTreeMap<(CoreType, Target), Widen>,
-    /// The associated functions with a rule (`Vec::new`, `i64::MAX`), by trait name, then name.
-    statics: BTreeMap<String, BTreeMap<String, Row>>,
     /// The trait that declares the associated functions of a type spelling (`i64` -> `Integer`, `BTreeMap` -> itself).
     owners: BTreeMap<String, String>,
     requires: BTreeMap<String, BTreeMap<Target, Requirement>>,
@@ -432,68 +445,96 @@ pub struct LoweringTable {
     adapts: BTreeMap<CoreType, Vec<CoreType>>,
 }
 
+impl std::fmt::Debug for LoweringTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoweringTable").field("traits", &self.traits.keys().collect::<Vec<_>>()).finish()
+    }
+}
+
+impl PartialEq for LoweringTable {
+    fn eq(&self, other: &Self) -> bool {
+        self.traits.keys().eq(other.traits.keys())
+            && self.traits.keys().all(|t| self.built(t) == other.built(t))
+            && self.widen == other.widen
+            && self.owners == other.owners
+            && self.requires == other.requires
+            && self.adapts == other.adapts
+    }
+}
+impl Eq for LoweringTable {}
+
 impl LoweringTable {
     /// Build the table from the declared traits. Only traits named by a [`CoreType`] are rows; a decorator the table
-    /// does not know is an error (a typo must not silently drop a rule).
+    /// does not know is an error (a typo must not silently drop a rule). Every row is read now.
     pub fn from_declarations(traits: &[RawTrait]) -> Result<LoweringTable, String> {
         let mut table = LoweringTable::default();
         for t in traits {
-            let ty = CoreType::from_trait(&t.name);
-            for d in &t.decorators {
-                if d.name == "owner" {
-                    // `@owner(names = "i8, i16")`: the spellings of the types whose associated functions this trait declares
-                    let names = d.arg("names").ok_or_else(|| format!("trait `{}`: `@owner` takes `names = \"..\"`", t.name))?;
-                    for n in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                        table.owners.insert(n.to_string(), t.name.clone());
-                    }
-                    continue;
-                }
-                if d.name == "adapts" {
-                    let ty = ty.ok_or_else(|| format!("trait `{}`: `@adapts` on a trait that is not a migrated std type", t.name))?;
-                    let to = d.arg("to").and_then(CoreType::from_trait).ok_or_else(|| format!("trait `{}`: `@adapts` takes `to = \"<migrated trait>\"`", t.name))?;
-                    table.adapts.entry(ty).or_default().push(to);
-                    continue;
-                }
-                let target = target_of(&d.name).ok_or_else(|| format!("trait `{}`: decorator `@{}` is not a lowering decorator", t.name, d.name))?;
-                match (d.arg("widen"), d.arg("requires")) {
-                    (Some("f64"), None) if d.args.len() == 1 => {
-                        let ty = ty.ok_or_else(|| format!("trait `{}`: `@{} widen` on a trait that is not a migrated std type", t.name, d.name))?;
-                        table.widen.insert((ty, target), Widen::F64);
-                    }
-                    (None, Some(g)) if d.args.len() == 2 && d.arg("reason").is_some() => {
-                        let guard = Guard::ALL.into_iter().find(|k| k.name() == g).ok_or_else(|| format!("trait `{}`: unknown guard `{g}`", t.name))?;
-                        let reason = d.arg("reason").unwrap_or_default().to_string();
-                        table.requires.entry(t.name.clone()).or_default().insert(target, Requirement { guard, reason });
-                    }
-                    _ => return Err(format!("trait `{}`: `@{}` takes `widen = \"f64\"` or `requires = \"<guard>\", reason = \"..\"`", t.name, d.name)),
-                }
-            }
-            for m in &t.methods {
-                let lowered = m.decorators.iter().any(|d| is_lowering_decorator(&d.name));
-                match ty {
-                    Some(ty) if !m.is_static => {
-                        table.rows.entry(ty).or_default().insert(m.name.clone(), row_of(&t.name, m)?);
-                    }
-                    // an associated function of a migrated type is a row (the gates ask for its rules); of any other trait, only
-                    // when it has rules (`Vec::new`: the other `Vec` methods are not migrated yet)
-                    _ if m.is_static && (ty.is_some() || lowered) => {
-                        table.statics.entry(t.name.clone()).or_default().insert(m.name.clone(), row_of(&t.name, m)?);
-                    }
-                    _ if lowered => return Err(format!("`{}::{}`: `@{}` on a trait that is not a migrated std type (CoreType)", t.name, m.name, m.decorators[0].name)),
-                    _ => {}
-                }
-            }
+            table.add_trait_level(t)?;
+            let _ = table.traits.entry(t.name.clone()).or_default().set(build_trait(t)?);
         }
         Ok(table)
     }
 
+    /// A table whose trait-level decorators are read now (`traits`: each declared trait with its own decorators) and whose rows
+    /// are read from `source` when first asked for.
+    pub fn on_demand(traits: Vec<(String, Vec<RawDecorator>)>, source: TraitSource) -> Result<LoweringTable, String> {
+        let mut table = LoweringTable { source: Some(source), ..Default::default() };
+        for (name, decorators) in traits {
+            table.add_trait_level(&RawTrait { name: name.clone(), decorators, methods: Vec::new() })?;
+            table.traits.entry(name).or_default();
+        }
+        Ok(table)
+    }
+
+    fn add_trait_level(&mut self, t: &RawTrait) -> Result<(), String> {
+        let table = self;
+        let ty = CoreType::from_trait(&t.name);
+        for d in &t.decorators {
+            if d.name == "owner" {
+                // `@owner(names = "i8, i16")`: the spellings of the types whose associated functions this trait declares
+                let names = d.arg("names").ok_or_else(|| format!("trait `{}`: `@owner` takes `names = \"..\"`", t.name))?;
+                for n in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
+                    table.owners.insert(n.to_string(), t.name.clone());
+                }
+                continue;
+            }
+            if d.name == "adapts" {
+                let ty = ty.ok_or_else(|| format!("trait `{}`: `@adapts` on a trait that is not a migrated std type", t.name))?;
+                let to = d.arg("to").and_then(CoreType::from_trait).ok_or_else(|| format!("trait `{}`: `@adapts` takes `to = \"<migrated trait>\"`", t.name))?;
+                table.adapts.entry(ty).or_default().push(to);
+                continue;
+            }
+            let target = target_of(&d.name).ok_or_else(|| format!("trait `{}`: decorator `@{}` is not a lowering decorator", t.name, d.name))?;
+            match (d.arg("widen"), d.arg("requires")) {
+                (Some("f64"), None) if d.args.len() == 1 => {
+                    let ty = ty.ok_or_else(|| format!("trait `{}`: `@{} widen` on a trait that is not a migrated std type", t.name, d.name))?;
+                    table.widen.insert((ty, target), Widen::F64);
+                }
+                (None, Some(g)) if d.args.len() == 2 && d.arg("reason").is_some() => {
+                    let guard = Guard::ALL.into_iter().find(|k| k.name() == g).ok_or_else(|| format!("trait `{}`: unknown guard `{g}`", t.name))?;
+                    let reason = d.arg("reason").unwrap_or_default().to_string();
+                    table.requires.entry(t.name.clone()).or_default().insert(target, Requirement { guard, reason });
+                }
+                _ => return Err(format!("trait `{}`: `@{}` takes `widen = \"f64\"` or `requires = \"<guard>\", reason = \"..\"`", t.name, d.name)),
+            }
+        }
+        Ok(())
+    }
+
+    /// The rows of the trait `name`, built on first use.
+    fn built(&self, name: &str) -> Option<&TraitRows> {
+        let cell = self.traits.get(name)?;
+        Some(cell.get_or_init(|| {
+            let source = self.source.as_ref().unwrap_or_else(|| panic!("lowering table: trait `{name}` has no rows"));
+            build_trait(&source(name)).unwrap_or_else(|e| panic!("std/rust_core.wji lowering decorators: {e}"))
+        }))
+    }
+
     /// The associated function `name` of the type spelled `owner` (`Vec`, `i64`, `BTreeMap`), with the trait that declares it.
     pub fn static_row(&self, owner: &str, name: &str) -> Option<(&str, &Row)> {
-        let (trait_name, by_name) = match self.owners.get(owner) {
-            Some(t) => self.statics.get_key_value(t.as_str())?,
-            None => self.statics.get_key_value(owner)?,
-        };
-        Some((trait_name.as_str(), by_name.get(name)?))
+        let trait_name = self.owners.get(owner).map_or(owner, String::as_str);
+        let (trait_name, _) = self.traits.get_key_value(trait_name)?;
+        Some((trait_name.as_str(), self.built(trait_name)?.statics.get(name)?))
     }
 
     /// The trait whose associated functions the type spelled `owner` has.
@@ -503,7 +544,7 @@ impl LoweringTable {
 
     /// Every associated function with its trait, in (trait, name) order.
     pub fn statics(&self) -> impl Iterator<Item = (&str, &Row)> {
-        self.statics.iter().flat_map(|(t, by_name)| by_name.values().map(move |r| (t.as_str(), r)))
+        self.traits.keys().filter_map(|t| Some((t, self.built(t)?))).flat_map(|(t, b)| b.statics.values().map(move |r| (t.as_str(), r)))
     }
 
     /// The condition `trait_name` puts on every call on `target`.
@@ -512,7 +553,7 @@ impl LoweringTable {
     }
 
     pub fn row(&self, ty: CoreType, name: &str) -> Option<&Row> {
-        self.rows.get(&ty)?.get(name)
+        self.built(ty.trait_name())?.rows.get(name)
     }
 
     /// The row a call of `name` on a value of `ty` is, with the type that declares it: the type's own, then the types it adapts
@@ -524,12 +565,34 @@ impl LoweringTable {
 
     /// Every row, in (type, name) order.
     pub fn rows(&self) -> impl Iterator<Item = (CoreType, &Row)> {
-        self.rows.iter().flat_map(|(t, by_name)| by_name.values().map(move |r| (*t, r)))
+        CoreType::ALL.into_iter().filter_map(|t| Some((t, self.built(t.trait_name())?))).flat_map(|(t, b)| b.rows.values().map(move |r| (t, r)))
     }
 
     pub fn widen(&self, ty: CoreType, target: Target) -> Option<Widen> {
         self.widen.get(&(ty, target)).copied()
     }
+}
+
+/// The rows of one declared trait.
+fn build_trait(t: &RawTrait) -> Result<TraitRows, String> {
+    let ty = CoreType::from_trait(&t.name);
+    let mut built = TraitRows::default();
+    for m in &t.methods {
+        let lowered = m.decorators.iter().any(|d| is_lowering_decorator(&d.name));
+        match ty {
+            Some(_) if !m.is_static => {
+                built.rows.insert(m.name.clone(), row_of(&t.name, m)?);
+            }
+            // an associated function of a migrated type is a row (the gates ask for its rules); of any other trait, only
+            // when it has rules (`Vec::new`: the other `Vec` methods are not migrated yet)
+            _ if m.is_static && (ty.is_some() || lowered) => {
+                built.statics.insert(m.name.clone(), row_of(&t.name, m)?);
+            }
+            _ if lowered => return Err(format!("`{}::{}`: `@{}` on a trait that is not a migrated std type (CoreType)", t.name, m.name, m.decorators[0].name)),
+            _ => {}
+        }
+    }
+    Ok(built)
 }
 
 fn is_lowering_decorator(name: &str) -> bool {

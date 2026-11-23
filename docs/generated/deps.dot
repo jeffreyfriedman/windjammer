@@ -471,9 +471,9 @@ digraph deps {
   "type_inference" -> "type_classification" [label="20"];
   "type_inference" -> "type_display" [label="1"];
   "type_registry" -> "parser" [label="1"];
-  "typing" -> "lexer" [label="1"];
+  "typing" -> "lexer" [label="2"];
   "typing" -> "parser" [label="6"];
-  "typing" -> "parser_impl" [label="1"];
-  "typing" -> "stdlib_surface" [label="1"];
+  "typing" -> "parser_impl" [label="2"];
+  "typing" -> "stdlib_surface" [label="3"];
   "typing" -> "type_classification" [label="6"];
 }
