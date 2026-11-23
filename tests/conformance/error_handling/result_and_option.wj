@@ -18,7 +18,7 @@
 // [result_ok] parse(42) -> 42
 // [result_err] parse(abc) -> error: invalid number
 // [result_match] Ok(100) -> success: 100
-// [result_match] Err -> failure: oops
+// [result_match] Err -> failure: invalid number
 // [error_all] PASSED
 
 // --- Option basics ---

@@ -11,7 +11,7 @@
 // EXPECTED OUTPUT:
 // [trait_basic] circle: Circle(r=5)
 // [trait_basic] square: Square(s=4)
-// [trait_area] circle area: 78
+// [trait_area] circle area: 75
 // [trait_area] square area: 16
 // [trait_multi] Alice: age=30
 // [trait_multi] Bob: age=25

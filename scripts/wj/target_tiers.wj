@@ -266,9 +266,13 @@ fn mismatch(p: Program, stdout: string) -> string {
     "output differs"
 }
 
-fn limited(cmd: string) -> string {
+fn limited_for(secs: int, cmd: string) -> string {
     // a hung program must not hang the gate
-    "perl -e 'alarm 120; exec @ARGV' sh -c ${quote(cmd)}"
+    "perl -e 'alarm ${secs}; exec @ARGV' sh -c ${quote(cmd)}"
+}
+
+fn limited(cmd: string) -> string {
+    limited_for(120, cmd)
 }
 
 // build and run one program on one backend; the status token
@@ -283,8 +287,11 @@ fn run_one(wj: string, backend: string, p: Program, scratch: string) -> string {
     let mut build = ""
     let mut exec = ""
     if backend == "rust" {
-        build = "${w} build --no-lint ${quote(src)} -o ${quote(out)} --no-cargo && test -f ${quote(out)}/${n}.rs && rustc --edition 2021 -A warnings --crate-name conf -o ${quote(dir)}/prog ${quote(out)}/${n}.rs"
-        exec = "${quote(dir)}/prog"
+        // a program whose Rust names `windjammer_runtime`, `tokio` or `serde`, or whose generated Cargo.toml relaxes the overflow
+        // lints (the spec says a constant overflow panics at run time; plain rustc would reject it), is built by cargo as `wj build`
+        // builds it, the rest by plain rustc; `needs_cargo` records the choice for the run step
+        build = "${w} build --no-lint ${quote(src)} -o ${quote(out)} --no-cargo && test -f ${quote(out)}/${n}.rs && if grep -q 'windjammer_runtime\\|tokio\\|serde' ${quote(out)}/${n}.rs || grep -q arithmetic_overflow ${quote(out)}/Cargo.toml; then touch ${quote(dir)}/needs_cargo && cargo build --quiet --manifest-path ${quote(out)}/Cargo.toml; else rustc --edition 2021 -A warnings --crate-name conf -o ${quote(dir)}/prog ${quote(out)}/${n}.rs; fi"
+        exec = "if [ -f ${quote(dir)}/needs_cargo ]; then cargo run --quiet --manifest-path ${quote(out)}/Cargo.toml; else ${quote(dir)}/prog; fi"
     } else if backend == "javascript" {
         build = "${w} build --no-lint ${quote(src)} -t javascript -o ${quote(out)} && test -f ${quote(out)}/main.mjs"
         exec = "cd ${quote(out)} && node main.mjs"
@@ -295,13 +302,15 @@ fn run_one(wj: string, backend: string, p: Program, scratch: string) -> string {
         build = "${w} build --no-lint ${quote(src)} -t go -o ${quote(out)} && cd ${quote(out)} && go vet ./... && go build -o ${quote(dir)}/prog ."
         exec = "${quote(dir)}/prog"
     } else if backend == "wasm" {
-        build = "${w} build --no-lint ${quote(src)} -o ${quote(out)} --no-cargo && test -f ${quote(out)}/${n}.rs && rustc --target wasm32-wasip1 --edition 2021 -A warnings --crate-name conf -o ${quote(dir)}/prog.wasm ${quote(out)}/${n}.rs"
-        exec = "wasmtime run ${quote(dir)}/prog.wasm"
+        // the same split as the rust row: cargo for a program that needs windjammer_runtime (target wasm32-wasip1, the shared target
+        // directory when CARGO_TARGET_DIR is set), plain rustc for the rest
+        build = "${w} build --no-lint ${quote(src)} -o ${quote(out)} --no-cargo && test -f ${quote(out)}/${n}.rs && if grep -q 'windjammer_runtime\\|tokio\\|serde' ${quote(out)}/${n}.rs || grep -q arithmetic_overflow ${quote(out)}/Cargo.toml; then touch ${quote(dir)}/needs_cargo && cargo build --quiet --target wasm32-wasip1 --manifest-path ${quote(out)}/Cargo.toml; else rustc --target wasm32-wasip1 --edition 2021 -A warnings --crate-name conf -o ${quote(dir)}/prog.wasm ${quote(out)}/${n}.rs; fi"
+        exec = "if [ -f ${quote(dir)}/needs_cargo ]; then CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime cargo run --quiet --target wasm32-wasip1 --manifest-path ${quote(out)}/Cargo.toml; else wasmtime run ${quote(dir)}/prog.wasm; fi"
     } else {
         build = "true"
         exec = "${w} run --interpret --no-lint ${quote(src)}"
     }
-    match sh(limited("( " + build + " ) > " + quote(dir) + "/build.log 2>&1")) {
+    match sh(limited_for(900, "( " + build + " ) > " + quote(dir) + "/build.log 2>&1")) {
         Ok(r) => {
             if r.status != 0 {
                 let log = fs.read_to_string("${dir}/build.log").unwrap_or("")
