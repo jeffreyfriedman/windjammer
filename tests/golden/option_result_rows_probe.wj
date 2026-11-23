@@ -1,0 +1,85 @@
+// Every method of `trait Option` and `trait Result` that the portable emitters lower, on locals, literals, expressions and
+// closures, with the error types the debug text of `unwrap` / `expect` depends on (string, integer, list, tuple).
+// tests/golden/option_result_rows_probe.{js,go}.txt hold the JavaScript and Go this program emitted before the Option and Result
+// rows moved into std/rust_core.wji (docs/design/table-driven-std-surface.md, stage 4); the output must stay byte-identical.
+// (map_or and is_some_and, the spellings ADR-0039 removed (R045, R046), are not in the probe: no program of the conformance
+// corpus reaches them and the rows do not carry them.)
+fn probe_option(o: Option<i32>, p: Option<string>, d: i32, s: string) {
+    println("${o.is_some()}")
+    println("${o.is_none()}")
+    println("${p.is_some()}")
+    println("${Some(4).is_some()}")
+    println("${o.unwrap()}")
+    println("${p.unwrap()}")
+    println("${o.expect("o is present")}")
+    println("${p.expect(s)}")
+    println("${o.unwrap_or(d)}")
+    println("${o.unwrap_or(9)}")
+    println("${p.unwrap_or(s)}")
+    println("${p.unwrap_or("none")}")
+    println("${o.unwrap_or_else(|| d + 1)}")
+    println("${p.unwrap_or_else(|| s)}")
+    println("${o.map(|x| x * 2).unwrap_or(0)}")
+    println("${o.map(|x| x + d).unwrap_or(d)}")
+    println("${p.map(|t| t.len()).unwrap_or(0)}")
+    println("${o.and_then(|x| Some(x + 1)).unwrap_or(0)}")
+    println("${o.and_then(|x| if x > d { Some(x) } else { None }).unwrap_or(d)}")
+    println("${o.filter(|x| x > 3).unwrap_or(d)}")
+    println("${p.filter(|t| t.len() > 2).unwrap_or(s)}")
+    println("${o.ok_or("missing").is_ok()}")
+    println("${o.ok_or(d).is_err()}")
+    println("${p.ok_or(s).is_ok()}")
+    let q = o.map(|x| x + 1)
+    println("${q.is_some()}")
+    println("${o.map(|x| x * 2).map(|x| x + 1).unwrap_or(0)}")
+}
+
+fn step(x: i32) -> Result<i32, string> {
+    if x > 3 { Ok(x + 1) } else { Err("small") }
+}
+
+fn measure(t: string) -> Result<usize, i32> {
+    Ok(t.len())
+}
+
+fn probe_result(a: Result<i32, string>, b: Result<string, i32>, c: Result<i32, Vec<i32>>, e: Result<bool, (i32, string)>, d: i32, s: string) {
+    println("${a.is_ok()}")
+    println("${a.is_err()}")
+    println("${b.is_ok()}")
+    println("${c.is_err()}")
+    println("${e.is_ok()}")
+    println("${a.unwrap()}")
+    println("${b.unwrap()}")
+    println("${c.unwrap()}")
+    println("${e.unwrap()}")
+    println("${a.expect("a is ok")}")
+    println("${b.expect(s)}")
+    println("${c.expect("c is ok")}")
+    println("${e.expect("e is ok")}")
+    println("${a.unwrap_err()}")
+    println("${b.unwrap_err()}")
+    println("${a.unwrap_or(d)}")
+    println("${a.unwrap_or(9)}")
+    println("${b.unwrap_or(s)}")
+    println("${a.unwrap_or_else(|m| m.len())}")
+    println("${b.unwrap_or_else(|n| s)}")
+    println("${a.map(|x| x * 2).unwrap_or(0)}")
+    println("${b.map(|t| t.len()).unwrap_or(0)}")
+    println("${a.map_err(|m| m.len()).is_err()}")
+    println("${b.map_err(|n| n + 1).is_err()}")
+    println("${a.and_then(|x| step(x)).unwrap_or(0)}")
+    println("${b.and_then(|t| measure(t)).unwrap_or(0)}")
+    println("${a.ok().unwrap_or(0)}")
+    println("${a.err().unwrap_or(s)}")
+    println("${b.ok().is_some()}")
+    println("${b.err().is_none()}")
+    let f = a.map(|x| x + d)
+    println("${f.is_ok()}")
+}
+
+fn main() {
+    probe_option(Some(5), Some("abc"), 7, "dflt")
+    probe_option(None, None, 7, "dflt")
+    probe_result(Ok(5), Ok("abc"), Ok(3), Ok(true), 7, "dflt")
+    probe_result(Err("bad"), Err(2), Err([1, 2]), Err((1, "x")), 7, "dflt")
+}
