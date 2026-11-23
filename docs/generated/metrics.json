@@ -4,7 +4,7 @@
     "adr.count": 40,
     "book.drafts": 0,
     "book.examples": 135,
-    "book.examples_ignored": 1,
+    "book.examples_ignored": 0,
     "book.examples_interpreter_only": 4,
     "book.features": 44,
     "book.features_uncovered": 0,

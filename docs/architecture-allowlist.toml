@@ -169,9 +169,9 @@
 "src/codegen/rust/call_signature_resolution.rs" = 3284
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4006
 "src/codegen/rust/function_generation_prepare.rs" = 12712
-"src/codegen/rust/generator.rs" = 4634
+"src/codegen/rust/generator.rs" = 4566
 "src/codegen/rust/int_promotion_type_inference.rs" = 2183
-"src/codegen/rust/ir_call_site.rs" = 10427
+"src/codegen/rust/ir_call_site.rs" = 10425
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2154
 "src/codegen/rust/self_analysis.rs" = 2025
 "src/codegen/rust/signature_promotion.rs" = 4519

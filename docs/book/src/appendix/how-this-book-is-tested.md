@@ -25,7 +25,7 @@ runs as a project in the interpreter and compiled, with the same agreement check
 | Measure | Count |
 |---|---|
 | Programs in the book | 135 |
-| Blocks marked `ignore` | 1 |
+| Blocks marked `ignore` | 0 |
 | Programs that run interpreted only | 4 |
 | Chapters still to be written | 0 |
 | Pages | 62 |
