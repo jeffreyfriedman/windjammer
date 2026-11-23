@@ -4,10 +4,10 @@ last_verified: 8a9941cacf68
 ---
 # Table-driven std surface: one declaration per std function, backends as interpreters
 
-> **Stages 1 and 2 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
-> and `Integer` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
+> **Stages 1, 2 and 3 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
+> `Integer`, `Char` and `String` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
 > `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, the portability diagnostic and the
-> module-function rows are stages 3-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
+> module-function rows are stages 4-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
 > (`tests/common/heuristic_scan.rs`, run standalone over each file).
 >
 > What stage 1 settled that the text below leaves open: the signature stays in `CoreSurface` (the `support`-layer
@@ -26,13 +26,29 @@ last_verified: 8a9941cacf68
 > added, `{T.wrap_open}` / `{T.wrap_close}`, because a template is linear and the JavaScript wrap of an expression into
 > `T`'s range brackets it (`BigInt.asIntN(64, ..)`, `((..) | 0)`, `(((..) << 24) >> 24)`). The `wrapping_mul` guards are
 > `t_i32` and `t_u32` (the `Math.imul` forms) and `t_wide` (a 64-bit receiver, a BigInt) replaces `if wide` in the
-> JavaScript text; they read the receiver's own type, which both emitters answer through `template::receiver_guard`.
+> JavaScript text; they read the receiver's own type, which both emitters answer through `template::type_guard`.
 > `lowered()` is the one row interpreter for `Float` and `Integer`. A method the emitters never handled
 > (`swap_bytes`, `count_zeros`, `checked_neg`, `checked_pow`, `checked_shl`, `checked_shr`, `wrapping_pow`,
 > `saturating_pow`, `reverse_bits`, and `isqrt`, whose runtime helper would change every emitted program: the shims are part of the emitted output that G2 hashes) is declared with `@js(unsupported = ..)` / `@go(unsupported = ..)`; G3 pins that list
 > (shrink-only), and builds each unsupported row to see the emitter refuse it with the row's reason. `@example(given = "let x: u8 = 250", ..)` declares the typed local an example needs
 > (a literal receiver is folded by Go's compiler and takes its type from inference); `@rustc(on = "u64")` names the type
 > an entry is checked against rustc on when it exists only on some integer types (`is_power_of_two`, `abs_diff`).
+>
+> What stage 3 settled: `trait Char` is new (checked against rustc on `char`; `@rustc(tail = ".collect::<String>()")` is the adapter
+> the gate adds to Rust's iterator-valued `to_uppercase` / `to_lowercase`, which the surface types as the string they spell) and
+> `trait String` gained `char_indices`, `repeat`, `replace`. `parse<F>` takes its target from the expected result (the method
+> generic is bound against the expected `Result<T, string>`) and each emitter selects its parser with the `ok_int`, `ok_f32`,
+> `ok_f64`, `ok_bool` guards, which `type_guard` answers from the call's result type; `{O.go}`, `{O.lo}`, `{O.hi}`, `{O.wide}` are
+> facts about its `Ok` type (`lo` / `hi` are the bounds as BigInt literals, what the JavaScript parser compares in). The modifiers
+> `str` (a `char` operand where Go wants a string, `string(rune(c))`) and `num` (an integer JavaScript wants as a Number)
+> and the rule `assign` (JavaScript's place update, `(s = s + c, undefined)`) are what `push`, `clear`, `repeat` and the
+> string-argument methods needed. The ADR-0039 spellings the emitters used to accept (`to_owned`, `as_str`, `into_string`,
+> `as_bytes`, `substring`, `to_ascii_*`, `is_ascii_*`, `is_numeric`, `len_utf8`) have no row: no program of the corpus reaches
+> them (the emit hashes stay identical), `clone` / `to_owned` never reached an emitter (they lower to a copy), and a portable
+> backend now refuses the rest. `push_str` and `capacity` stay declared (the `let mut` check reads their receiver mode) and are
+> `unsupported` on both portable targets; `clone` and `slice` are `@internal` rows (a copy, and the parser's spelling of `x[a..b]`).
+> An associated function (`String::new`) is not a method row: statics are stage 5. Rows are looked up by type then name, so a
+> lookup allocates nothing.
 
 ## 1. Problem, in numbers
 

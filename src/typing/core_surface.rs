@@ -437,6 +437,45 @@ mod tests {
         Type::Vec(Box::new(t))
     }
 
+    /// The per-process cost of the typed surface (parse, lowering table, stored copy): `wj build` pays it once (the budget
+    /// of docs/design/table-driven-std-surface.md section 6 is +2% on the conformance corpus). Report only:
+    /// `cargo test --release --lib core_surface::tests::parse_cost_report -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "a cost report, not a check"]
+    fn parse_cost_report() {
+        let time = |label: &str, f: &mut dyn FnMut()| {
+            let n = 200;
+            let mut best = std::time::Duration::MAX;
+            for _ in 0..n {
+                let t = std::time::Instant::now();
+                f();
+                best = best.min(t.elapsed());
+            }
+            eprintln!("{label}: {:?}", best);
+        };
+        time("CoreSurface::parse", &mut || {
+            std::hint::black_box(CoreSurface::parse());
+        });
+        let s = CoreSurface::parse();
+        time("declared_traits", &mut || {
+            std::hint::black_box(s.declared_traits());
+        });
+        time("lowering()", &mut || {
+            std::hint::black_box(s.lowering());
+        });
+        time("clone", &mut || {
+            std::hint::black_box(s.clone());
+        });
+        let json = serde_json::to_string(&s).unwrap();
+        eprintln!("stored form: {} bytes", json.len());
+        time("to_string", &mut || {
+            std::hint::black_box(serde_json::to_string(&s).unwrap());
+        });
+        time("from_str", &mut || {
+            std::hint::black_box(serde_json::from_str::<CoreSurface>(&json).unwrap());
+        });
+    }
+
     #[test]
     fn surface_parses_and_declares_the_core_types() {
         let e = entries();

@@ -50,7 +50,7 @@ impl St {
 }
 
 fn add_s(s: &mut string) {
-    s.push_str("!")
+    *s += "!"
 }
 
 fn set_s(s: &mut string) {

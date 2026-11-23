@@ -86,7 +86,7 @@ impl StdSurface {
         let Some(ret) = ret else { return Some(Ty::Unit) };
         let ty = match from_ast(&ret, &generics, &Aliases::default()) {
             // `Iterator<T>` is the portable type of a lazy sequence
-            Ty::Adt(n, mut args) if n == "Iterator" && args.len() == 1 => Ty::Iter(Box::new(args.remove(0))),
+            Ty::Adt(n, mut args) if n == crate::typing::core_surface::ITERATOR && args.len() == 1 => Ty::Iter(Box::new(args.remove(0))),
             other => other,
         };
         if generics.is_empty() {

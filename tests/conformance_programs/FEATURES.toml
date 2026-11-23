@@ -22,7 +22,7 @@ methods = [
   "sqrt", "floor", "ceil", "round", "trunc", "powi", "abs", "signum",
   # strings
   "to_uppercase", "trim", "split", "replace", "parse", "chars", "char_indices", "find", "starts_with",
-  "ends_with", "repeat", "lines", "split_whitespace", "to_string", "substring",
+  "ends_with", "repeat", "lines", "split_whitespace", "to_string",
   # option / result
   "unwrap", "unwrap_or", "map_err", "and_then", "ok_or", "is_some", "unwrap_or",
   # macros / functions

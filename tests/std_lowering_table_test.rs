@@ -74,9 +74,9 @@ fn row_problems(core: &CoreSurface, table: &LoweringTable) -> Vec<String> {
                 bad.push(format!("{id}: no row"));
                 continue;
             };
-            // an `@internal` row is a form the compiler lowers before any emitter sees it (`clone` is a copy, `x[a..b]` an
-            // index): it has no rule and no example to hold
-            if row.internal.is_some() {
+            // an `@internal` row without rules is a form the compiler lowers before any emitter sees it (`clone` is a copy,
+            // `x[a..b]` an index): it has no rule and no example to hold. One with rules (`powi`) is held to them.
+            if row.internal.is_some() && Target::ALL.iter().all(|t| row.rules(*t).is_empty()) {
                 continue;
             }
             for target in Target::ALL {
@@ -160,7 +160,7 @@ fn the_row_checker_sees_a_planted_mistake() {
     assert!(plant("@go(emit = \"wjTrim({self})\")", "").iter().any(|p| p.contains("String::trim") && p.contains("no `@go` rule")));
     assert!(plant("@go(emit = \"wjIsWhitespace({self})\")", "").iter().any(|p| p.contains("Char::is_whitespace") && p.contains("no `@go` rule")));
     assert!(plant("{self}.repeat({n:num})", "{self}.repeat({count:num})").iter().any(|p| p.contains("{count}")));
-    assert!(plant("{O.lo}", "{O.low}").iter().any(|p| p.contains("unknown fact")));
+    assert!(plant("$parseInt({self}, {O.lo}", "$parseInt({self}, {O.low}").iter().any(|p| p.contains("unknown fact")));
     assert!(plant("@js(unsupported = \"parse reads an integer, a float or a bool\")", "@js(emit = \"$parseBool({self})\", when = \"ok_bool\")").iter().any(|p| p.contains("String::parse") && p.contains("guarded")));
     assert!(plant("$min2({self}, {other})", "$min2({self}, {othr})").iter().any(|p| p.contains("{othr}")));
     assert!(plant("@js(emit = \"$max2({self}, {other})\")", "@js(emit = \"$max2({self}, {other})\", when = \"t_wide\")").iter().any(|p| p.contains("Integer::max") && p.contains("guarded")));
@@ -387,12 +387,16 @@ fn every_helper_a_template_calls_is_defined_in_the_shim() {
 
 /// Helpers a shim defines that neither a row nor the Rust source of the backend (`src/codegen`) names. Shrink-only: a
 /// helper that nothing calls is deleted, not listed. (Measured at stage 1: none.)
-const DEAD_HELPERS_JS: &[&str] = &[];
+///
+/// Stage 3 dropped the char spellings ADR-0039 removed (`to_ascii_uppercase`, `to_ascii_lowercase`); their helpers are dead.
+/// Deleting them changes the runtime shim, which is part of every emitted program, so it changes every G2 hash: they go with
+/// the next stage that re-records (stage 7 wires `json` into the shim).
+const DEAD_HELPERS_JS: &[&str] = &["$asciiLower", "$asciiUpper"];
 /// Helpers the emitters name by building the text (`$std_<module>_<fn>`, `wjstd_<module>_<fn>` for the module
 /// functions of `portable/stdlib.rs`): no literal names them, so a text search cannot tell them dead. The module-function
 /// stage (7) turns them into rows and removes this exemption.
 const DYNAMIC_PREFIXES: &[&str] = &["$std_", "$caps_", "wjstd_", "wjcaps_"];
-const DEAD_HELPERS_GO: &[&str] = &[];
+const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper"];
 
 #[test]
 fn no_shim_helper_is_dead() {
@@ -608,6 +612,12 @@ fn the_removed_spelling_check_sees_a_planted_declaration() {
 const ROWS_WITHOUT_ONE_DECLARATION: &[(CoreType, &str, &[&str])] = &[
     (CoreType::Float, "float", &["cmp", "log", "pow", "rem_euclid", "copysign", "to_bits", "to_be_bytes", "to_le_bytes"]),
     (CoreType::Integer, "int", &["cmp", "to_be_bytes", "to_le_bytes", "is_digit", "is_alphabetic", "is_whitespace", "to_uppercase", "to_lowercase"]),
+    (CoreType::Char, "char", &["is_control", "is_punctuation"]),
+    (
+        CoreType::String,
+        "string",
+        &["eq_ignore_case", "matches", "replacen", "rsplit", "rsplit_once", "split_once", "splitn", "strip_prefix", "strip_suffix", "trim_end_matches", "trim_matches", "trim_start_matches"],
+    ),
 ];
 
 #[derive(serde::Deserialize)]

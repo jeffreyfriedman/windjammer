@@ -79,10 +79,12 @@ fn examples() -> Vec<Case> {
         .rows()
         .filter_map(|(ty, row): (windjammer::stdlib_surface::lowering::CoreType, &Row)| {
             let e = row.example.as_ref()?;
+            // unsupported on a target: its only rule says so (a row with a guarded rule and an `unsupported` fallback, like
+            // `parse`, works for the types its guards name)
             let unsupported = Target::ALL
                 .into_iter()
-                .filter_map(|t| match row.select(t, |_| false) {
-                    Some(Rule::Unsupported(why)) => Some((t, why.clone())),
+                .filter_map(|t| match row.rules(t) {
+                    [Rule::Unsupported(why)] => Some((t, why.clone())),
                     _ => None,
                 })
                 .collect();

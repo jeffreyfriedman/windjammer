@@ -35,8 +35,8 @@ fn main() {
     println("${apply(f, 1)}")
     let mut log = "".to_string()
     let mut say = |s: string| {
-        log.push_str(s)
-        log.push_str(" ")
+        log += s
+        log += " "
     }
     say("a")
     say("b")
