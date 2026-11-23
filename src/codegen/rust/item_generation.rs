@@ -879,26 +879,10 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|d| d.name == "export" || d.name == "wasm_bindgen");
 
-        // Generate decorators (map Windjammer decorators to Rust attributes)
-        for decorator in &impl_block.decorators {
-            let rust_attr = self.map_decorator(&decorator.name);
-            if decorator.arguments.is_empty() {
-                output.push_str(&format!("#[{}]\n", rust_attr));
-            } else {
-                output.push_str(&format!("#[{}(", rust_attr));
-                let args: Vec<String> = decorator
-                    .arguments
-                    .iter()
-                    .map(|(key, expr)| {
-                        format!("{} = {}", key, self.generate_expression_immut(expr))
-                    })
-                    .collect();
-                output.push_str(&args.join(", "));
-                output.push_str(")]\n");
-            }
-        }
+        output.push_str(&self.impl_decorator_attributes(impl_block));
 
         // Generate impl with type parameters
+        let header_start = output.len();
         output.push_str("impl");
         if !impl_block.type_params.is_empty() {
             output.push('<');
@@ -954,7 +938,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if !impl_block.associated_types.is_empty() {
+        let inferred_output = Self::inferred_operator_output(impl_block).map(|ret| format!("type Output = {};\n", self.type_to_rust(ret)));
+        if let Some(decl) = &inferred_output {
+            output.push_str(&self.indent());
+            output.push_str(decl);
+        }
+        if !impl_block.associated_types.is_empty() || inferred_output.is_some() {
             output.push('\n');
         }
 
@@ -1265,6 +1254,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.indent_level -= 1;
         output.push('}');
+        self.add_clone_bound_for_self_clones(&mut output, impl_block, header_start);
         output
     }
 
@@ -1552,6 +1542,64 @@ impl<'ast> CodeGenerator<'ast> {
         self.user_declared_struct_names.insert(name.to_string());
         if generic {
             self.generic_user_struct_names.insert(name.to_string());
+        }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `#[..]` attributes for an impl block's decorators (Windjammer decorators mapped to Rust attributes).
+    fn impl_decorator_attributes(&mut self, impl_block: &ImplBlock<'ast>) -> String {
+        let mut output = String::new();
+        for decorator in &impl_block.decorators {
+            let rust_attr = self.map_decorator(&decorator.name);
+            if decorator.arguments.is_empty() {
+                output.push_str(&format!("#[{}]\n", rust_attr));
+            } else {
+                output.push_str(&format!("#[{}(", rust_attr));
+                let args: Vec<String> = decorator
+                    .arguments
+                    .iter()
+                    .map(|(key, expr)| {
+                        format!("{} = {}", key, self.generate_expression_immut(expr))
+                    })
+                    .collect();
+                output.push_str(&args.join(", "));
+                output.push_str(")]\n");
+            }
+        }
+
+        output
+    }
+
+    /// An operator impl (`impl Add for V`) that omits `type Output` takes the declared return type of its one
+    /// operator method: the trait declares `Output` as that method's result, so the signature is the declaration.
+    fn inferred_operator_output<'a>(impl_block: &'a ImplBlock<'ast>) -> Option<&'a Type> {
+        impl_block
+            .trait_name
+            .as_deref()
+            .filter(|t| crate::type_classification::is_consuming_operator_trait(t))
+            .filter(|_| !impl_block.associated_types.iter().any(|a| a.name == "Output"))
+            .and_then(|_| match impl_block.functions.as_slice() {
+                [only] => only.return_type.as_ref(),
+                _ => None,
+            })
+    }
+
+    /// `self.clone()` (written, or inserted where `self` is reused) clones `Self<T>`, whose derived `Clone` needs
+    /// `T: Clone`: an impl whose parameters do not state it gets it, so the Rust output type-checks.
+    fn add_clone_bound_for_self_clones(&self, output: &mut String, impl_block: &ImplBlock<'ast>, header_start: usize) {
+        if !impl_block.type_params.is_empty() && output.contains("self.clone()") {
+            let missing = |p: &crate::parser::TypeParam| !p.bounds.iter().any(|b| b == "Clone");
+            if impl_block.type_params.iter().any(missing) {
+                let mut with_clone = impl_block.type_params.clone();
+                for p in with_clone.iter_mut().filter(|p| missing(p)) {
+                    p.bounds.push("Clone".to_string());
+                }
+                let (old_tp, new_tp) = (self.format_type_params(&impl_block.type_params), self.format_type_params(&with_clone));
+                let header_end = output[header_start..].find(" {\n").map_or(header_start, |i| header_start + i);
+                let header = output[header_start..header_end].replacen(&old_tp, &new_tp, 1);
+                output.replace_range(header_start..header_end, &header);
+            }
         }
     }
 }

@@ -282,12 +282,30 @@ pub fn resolve(root: &Path) -> Result<Vec<DepNode>, String> {
 /// The dependencies declared by the manifest in `dir`. Git checkouts live in the cache of `cache_root` (the project
 /// being built), so a dependency's own dependencies resolve into the same cache.
 pub(crate) fn resolve_in(cache_root: &Path, dir: &Path, lock: &mut BTreeMap<String, LockEntry>, policy: Policy, dirty: &mut bool) -> Result<Vec<DepNode>, String> {
+    resolve_table_in(cache_root, dir, lock, policy, dirty, "dependencies")
+}
+
+/// The project's `[dependencies]` and its `[dev-dependencies]` (what its tests see; a dependency's own
+/// dev-dependencies are never part of a build, so only the project being tested asks for them).
+pub fn resolve_with_dev(root: &Path) -> Result<Vec<DepNode>, String> {
+    let mut nodes = resolve(root)?;
+    let mut lock = lock::read(root);
+    let mut dirty = false;
+    for dev in resolve_table_in(root, root, &mut lock, Policy::Follow, &mut dirty, "dev-dependencies")? {
+        if !nodes.iter().any(|n| n.name == dev.name) {
+            nodes.push(dev);
+        }
+    }
+    Ok(nodes)
+}
+
+fn resolve_table_in(cache_root: &Path, dir: &Path, lock: &mut BTreeMap<String, LockEntry>, policy: Policy, dirty: &mut bool, table: &str) -> Result<Vec<DepNode>, String> {
     let root = dir;
     let manifest = root.join("wj.toml");
     let Ok(text) = std::fs::read_to_string(&manifest) else { return Ok(Vec::new()) };
     let v: toml::Value = text.parse().map_err(|e| format!("{}: {}", manifest.display(), e))?;
     let mut out = Vec::new();
-    let Some(deps) = v.get("dependencies").and_then(|d| d.as_table()) else { return Ok(out) };
+    let Some(deps) = v.get(table).and_then(|d| d.as_table()) else { return Ok(out) };
     for (name, spec) in deps {
         let s = |k: &str| spec.get(k).and_then(|x| x.as_str()).map(str::to_string);
         if let Some(p) = s("path") {

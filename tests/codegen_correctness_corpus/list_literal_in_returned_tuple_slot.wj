@@ -1,0 +1,20 @@
+// A list literal in a tuple slot declared `Vec<..>` of the returned value (also under `Ok`) is a list: `([values], shape)`.
+// expect: 1 2 1
+// expect: 1
+fn rows(values: Vec<f64>) -> (Vec<Vec<f64>>, Vec<usize>) {
+    ([values], [1])
+}
+
+fn wrapped(values: Vec<f64>) -> Result<(Vec<Vec<f64>>, Vec<usize>), string> {
+    Ok(([values], [2]))
+}
+
+fn main() {
+    let (r, s) = rows([1.0])
+    let w = wrapped([1.0, 2.0])
+    match w {
+        Ok((rr, ss)) => println("${r.len()} ${ss[0]} ${rr.len()}"),
+        Err(e) => println("${e}")
+    }
+    println("${s.len()}")
+}

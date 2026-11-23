@@ -1,0 +1,7 @@
+// A method call on an imported constant stays a method call: `PI.to_degrees()`, not `PI::to_degrees()`.
+// expect: 180
+use std::f32::consts::PI
+
+fn main() {
+    println("${PI.to_degrees()}")
+}

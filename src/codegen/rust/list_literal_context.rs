@@ -25,32 +25,34 @@ impl<'ast> CodeGenerator<'ast> {
     /// Closures have their own return position and are not entered.
     pub(in crate::codegen::rust) fn collect_return_position_lists(
         body: &[&Statement<'_>],
+        return_type: &Type,
     ) -> std::collections::HashSet<usize> {
-        fn stmts(list: &[&Statement<'_>], tail: bool, out: &mut std::collections::HashSet<usize>) {
+        type Out = std::collections::HashSet<usize>;
+        fn stmts(list: &[&Statement<'_>], tail: bool, ret: &Type, out: &mut Out) {
             for (i, st) in list.iter().enumerate() {
                 let last = tail && i + 1 == list.len();
                 match st {
-                    Statement::Return { value: Some(e), .. } => expr(e, true, out),
-                    Statement::Expression { expr: e, .. } => expr(e, last, out),
+                    Statement::Return { value: Some(e), .. } => expr(e, true, ret, out),
+                    Statement::Expression { expr: e, .. } => expr(e, last, ret, out),
                     Statement::If { then_block, else_block, .. } => {
-                        stmts(then_block, last, out);
+                        stmts(then_block, last, ret, out);
                         if let Some(b) = else_block {
-                            stmts(b, last, out);
+                            stmts(b, last, ret, out);
                         }
                     }
                     Statement::Match { arms, .. } => {
                         for a in arms {
-                            expr(a.body, last, out);
+                            expr(a.body, last, ret, out);
                         }
                     }
                     Statement::For { body, .. }
                     | Statement::While { body, .. }
-                    | Statement::Loop { body, .. } => stmts(body, false, out),
+                    | Statement::Loop { body, .. } => stmts(body, false, ret, out),
                     _ => {}
                 }
             }
         }
-        fn expr(e: &Expression<'_>, tail: bool, out: &mut std::collections::HashSet<usize>) {
+        fn expr(e: &Expression<'_>, tail: bool, ret: &Type, out: &mut Out) {
             match e {
                 Expression::Array { elements, .. } if tail && !elements.is_empty() => {
                     out.insert(elements.as_ptr() as usize);
@@ -62,26 +64,42 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     out.insert(args.as_ptr() as usize);
                 }
-                Expression::Block { statements, .. } => stmts(statements, tail, out),
+                Expression::Block { statements, .. } => stmts(statements, tail, ret, out),
+                // `([values], shape)` returned as `(Vec<Vec<f64>>, Vec<usize>)`: each slot declared a list takes one
+                Expression::Tuple { elements, .. } if tail => {
+                    if let Type::Tuple(slots) = ret {
+                        for (el, slot) in elements.iter().zip(slots) {
+                            if CodeGenerator::holds_list(slot) {
+                                expr(el, tail, slot, out);
+                            }
+                        }
+                    }
+                }
                 // `Ok([1])` / `Some([1])` returned from a `Result<Vec<_>, _>` / `Option<Vec<_>>` function
                 Expression::Call { function: Expression::Identifier { name, .. }, arguments, .. }
                     if matches!(name.as_str(), "Ok" | "Some" | "Err") && arguments.len() == 1 =>
                 {
-                    expr(arguments[0].1, tail, out)
+                    let payload = match ret {
+                        Type::Result(ok, _) => ok.as_ref(),
+                        Type::Option(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    expr(arguments[0].1, tail, payload, out)
                 }
                 _ => {}
             }
         }
         let mut out = std::collections::HashSet::new();
-        stmts(body, true, &mut out);
+        stmts(body, true, return_type, &mut out);
         out
     }
 
     /// The type is a `Vec`, or a `Result` / `Option` holding one (`Ok([1])` is then a list too).
     pub(in crate::codegen::rust) fn holds_list(t: &Type) -> bool {
         match t {
-            Type::Result(ok, _) => crate::type_classification::type_is_vec_container(ok),
-            Type::Option(inner) => crate::type_classification::type_is_vec_container(inner),
+            Type::Result(ok, _) => Self::holds_list(ok),
+            Type::Option(inner) => Self::holds_list(inner),
+            Type::Tuple(slots) => slots.iter().any(Self::holds_list),
             other => crate::type_classification::type_is_vec_container(other),
         }
     }

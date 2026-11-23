@@ -1,0 +1,9 @@
+// `to_le_bytes` / `from_le_bytes` (and the big-endian forms) exist on floats and integers in both modes.
+// expect: [0, 0, 160, 63] 1.25
+// expect: [63, 160, 0, 0] 258
+fn main() {
+    let b = (1.25 as f32).to_le_bytes()
+    println("${b:?} ${f32::from_le_bytes(b)}")
+    let n = u16::from_be_bytes([1, 2])
+    println("${(1.25 as f32).to_be_bytes():?} ${n}")
+}

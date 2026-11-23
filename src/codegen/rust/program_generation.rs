@@ -518,6 +518,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if path_str.contains("HashSet") {
                     self.needs_hashset_import = true;
                 }
+                self.note_imported_constant(path);
                 // Track explicit std::ops imports to prevent duplication
                 if path_str.starts_with("std::ops::") {
                     if let Some(trait_name) = path_str.strip_prefix("std::ops::") {
@@ -583,19 +584,16 @@ impl<'ast> CodeGenerator<'ast> {
                     if explicitly_imported_traits.contains(trait_name.as_str()) {
                         continue;
                     }
-                    match trait_name.as_str() {
-                        "Add" | "Sub" | "Mul" | "Div" | "Neg" | "Rem" | "AddAssign"
-                        | "SubAssign" | "MulAssign" | "DivAssign" => {
-                            self.needs_trait_imports.insert(trait_name.clone());
-                        }
-                        "Display" | "Debug" => {
-                            self.needs_trait_imports.insert(trait_name.clone());
-                        }
-                        _ => {}
+                    if crate::type_classification::is_std_ops_trait(trait_name)
+                        || matches!(trait_name.as_str(), "Display" | "Debug")
+                    {
+                        self.needs_trait_imports.insert(trait_name.clone());
                     }
                 }
             }
         }
+
+        self.note_operator_trait_imports_from_bounds(program, &explicitly_imported_traits);
 
         // Collect inline module names for self:: prefix generation in pub use
         self.inline_module_names.clear();
@@ -1051,8 +1049,7 @@ impl<'ast> CodeGenerator<'ast> {
                     "Clone" => {
                         // Clone is in prelude, no import needed
                     }
-                    "Add" | "Sub" | "Mul" | "Div" | "Neg" | "Rem" | "AddAssign" | "SubAssign"
-                    | "MulAssign" | "DivAssign" => {
+                    t if crate::type_classification::is_std_ops_trait(t) => {
                         implicit_imports.push_str(&format!("use std::ops::{};\n", trait_name));
                     }
                     "PartialEq" | "Eq" | "PartialOrd" | "Ord" => {
@@ -1497,4 +1494,57 @@ fn impl_method_identities(program: &Program<'_>) -> std::collections::HashSet<(S
         }
     }
     ids
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Operator traits named only in a bound, where clause or supertrait still need their `use std::ops::..`.
+    fn note_operator_trait_imports_from_bounds(
+        &mut self,
+        program: &Program<'ast>,
+        explicitly_imported_traits: &std::collections::HashSet<String>,
+    ) {
+            let mut named: Vec<&str> = Vec::new();
+            fn walk<'a>(items: &'a [Item<'_>], named: &mut Vec<&'a str>) {
+                for item in items {
+                    match item {
+                        Item::Trait { decl, .. } => {
+                            named.extend(decl.supertraits.iter().map(String::as_str))
+                        }
+                        Item::Impl { block, .. } => {
+                            for p in &block.type_params {
+                                named.extend(p.bounds.iter().map(String::as_str));
+                            }
+                            for (_, bs) in &block.where_clause {
+                                named.extend(bs.iter().map(String::as_str));
+                            }
+                        }
+                        Item::Struct { decl, .. } => {
+                            for p in &decl.type_params {
+                                named.extend(p.bounds.iter().map(String::as_str));
+                            }
+                        }
+                        Item::Mod { items, .. } => walk(items, named),
+                        _ => {}
+                    }
+                }
+            }
+            walk(&program.items, &mut named);
+            for bound in named {
+                let base = bound.split('<').next().unwrap_or(bound);
+                if crate::type_classification::is_std_ops_trait(base)
+                    && !explicitly_imported_traits.contains(base)
+                {
+                    self.needs_trait_imports.insert(base.to_string());
+                }
+            }
+    }
+
+    /// `use std::f32::consts::PI`: the module `consts` declares constants, so the leaf is a value.
+    fn note_imported_constant(&mut self, path: &[String]) {
+        if let [.., module, leaf] = path {
+            if module == "consts" {
+                self.imported_const_names.insert(leaf.clone());
+            }
+        }
+    }
 }

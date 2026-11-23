@@ -1,8 +1,66 @@
 //! Signature lookups by identity (C3): a key the declarations name, never a search over homonyms.
 
 use super::{FunctionSignature, SignatureRegistry};
+use std::collections::HashMap;
+
+/// Every declaration of a key that two impls of one type share with different formals (`impl Mul<f32> for V` and
+/// `impl Mul<V> for V` both define `V::mul`): `signatures` holds the last, this holds all, so a call is resolved by
+/// its arguments' types. Not part of the metadata snapshot: a dependency's overloads fall back to the last one.
+#[derive(Clone, Debug, Default)]
+pub(super) struct Overloads(HashMap<String, Vec<FunctionSignature>>);
+
+impl Overloads {
+    /// `sig` collides with the already registered `existing` under `name`: both are overloads (methods only).
+    pub(super) fn record_collision(&mut self, name: &str, existing: &FunctionSignature, sig: &FunctionSignature) {
+        if existing.has_self_receiver && sig.has_self_receiver {
+            let all = self.0.entry(name.to_string()).or_default();
+            if all.is_empty() {
+                all.push(existing.clone());
+            }
+        }
+    }
+
+    /// `sig` is registered under `name`: a refresh of one overload replaces it, a new one is added.
+    pub(super) fn note(&mut self, name: &str, sig: &FunctionSignature) {
+        if let Some(all) = self.0.get_mut(name) {
+            match all.iter_mut().find(|o| o.declares_same_function(sig)) {
+                Some(slot) => *slot = sig.clone(),
+                None => all.push(sig.clone()),
+            }
+        }
+    }
+
+    pub(super) fn extend_from(&mut self, other: &Overloads) {
+        self.0.extend(other.0.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+}
 
 impl SignatureRegistry {
+    /// Every declaration of method key `key` when several impls of one type define it with different formals
+    /// (this layer, then the layers below); empty when the key has one declaration.
+    pub fn overloads_at(&self, key: &str) -> &[FunctionSignature] {
+        self.layers().find_map(|reg| reg.overloads.0.get(key)).map_or(&[], Vec::as_slice)
+    }
+
+    /// Index `Type::method` under `method`; buckets stay sorted so "first homonym" is deterministic.
+    /// True when [`Self::add_function`]`(name, sig)` would leave this registry unchanged: this layer already
+    /// holds exactly `sig` under `name` and `name` is in the method index.
+    pub fn add_function_is_noop(&self, name: &str, sig: &FunctionSignature) -> bool {
+        if self.signatures.get(name) != Some(sig) {
+            return false;
+        }
+        let Some((_, suffix)) = name.rsplit_once("::") else { return true };
+        self.method_index
+            .get(suffix)
+            .is_some_and(|bucket| bucket.binary_search_by(|k| k.as_str().cmp(name)).is_ok())
+    }
+
+    pub(super) fn index_method_key(&mut self, name: &str) {
+        let Some((_, suffix)) = name.rsplit_once("::") else { return };
+        let bucket = self.method_index.entry(suffix.to_string()).or_default();
+        if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) { bucket.insert(pos, name.to_string()); }
+    }
+
     /// The signature a file registers for its own definition `name` (its analysis, kept by `keep_own_definitions`):
     /// this layer only, never a layer below it, where a same-named function of another module may sit.
     pub fn own_definition(&self, name: &str) -> Option<&FunctionSignature> {

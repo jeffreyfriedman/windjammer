@@ -119,3 +119,29 @@ fn main() {
 Combining different numeric types in one operation is specified as a compile-time error. The enforcement in `wj check` is
 being completed, so convert with `as` rather than relying on the compiler to accept a mix; the
 [open questions](https://github.com/jeffreyfriedman/windjammer/blob/main/docs/spec/OPEN_QUESTIONS.md) record the state.
+
+## Operators on your own types
+
+`impl Add for V` (and `Sub`, `Mul`, `Div`, `Rem`, `Neg`, `Not`, `BitAnd`, `BitOr`, `BitXor`, `Shl`, `Shr`) makes the
+operator work on `V`. The trait's `Output` is the return type of the operator method, so `type Output` can be left out.
+A type may implement one operator for several right-hand types (`Mul<f32>` and `Mul<V>`): the right operand's declared
+type picks the impl, and an unsuffixed literal takes the width of the impl's parameter. A bound can state the result
+type: `T: Add<Output = T>`.
+
+```wj
+// expect: 2 1
+struct V { x: f32 }
+
+impl Mul<f32> for V {
+    fn mul(self, k: f32) -> V { V { x: self.x * k } }
+}
+
+impl Mul<V> for V {
+    fn mul(self, o: V) -> V { V { x: self.x * o.x } }
+}
+
+fn main() {
+    let a = V { x: 1.0 }
+    println("${(a * 2.0).x} ${(a * a).x}")
+}
+```

@@ -1,0 +1,12 @@
+// `T: Add<Output = T>` states that adding two `T` yields a `T`: the bound parses and reaches the Rust output.
+// expect: 3.5
+struct Pair<T> { a: T, b: T }
+
+impl<T: Add<Output = T> + Copy> Pair<T> {
+    fn sum(self) -> T { self.a + self.b }
+}
+
+fn main() {
+    let p = Pair { a: 1.5, b: 2.0 }
+    println("${p.sum()}")
+}

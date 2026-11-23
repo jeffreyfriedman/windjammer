@@ -246,4 +246,6 @@ float | rem_euclid | x.rem_euclid(y: float) -> float | non-negative remainder
 float | total_cmp | a.total_cmp(&b) -> Ordering | total order including NaN
 float | to_string | x.to_string() -> string | decimal text
 float | to_bits | x.to_bits() -> u64 | IEEE-754 bit pattern
+float | to_be_bytes | x.to_be_bytes() -> Vec<u8> | big-endian IEEE-754 bytes (4 for f32, 8 for f64)
+float | to_le_bytes | x.to_le_bytes() -> Vec<u8> | little-endian IEEE-754 bytes (4 for f32, 8 for f64)
 float | partial_cmp | a.partial_cmp(&b) -> Option<Ordering> | compare floats (use .unwrap_or(Ordering::Equal))

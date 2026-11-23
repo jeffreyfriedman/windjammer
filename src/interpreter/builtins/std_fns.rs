@@ -2,6 +2,7 @@
 //! (`std::fs`, `std::env`, `std::process`, `std::io`, `std::time`, `std::mem`, `std::cmp`).
 
 use super::*;
+use crate::interpreter::error::Ctl;
 use crate::interpreter::error::{ErrorKind, RuntimeError};
 use std::collections::BTreeMap;
 
@@ -425,6 +426,17 @@ fn register_std_modules(r: &mut Registry) {
 }
 
 /// `u8::from(x)`, `i64::try_from(x)`, `u32::from_str_radix(s, 16)`, `f64::from(x)`, `char::from_u32`, `T::default()`.
+/// The `Vec<u8>` argument of `T::from_le_bytes(bytes)` / `T::from_be_bytes(bytes)`.
+fn byte_args(it: &mut Interpreter, args: &[Value], what: &str) -> Result<Vec<u8>, Ctl> {
+    it.to_items(arg(args, 0, what)?)?
+        .into_iter()
+        .map(|v| match v {
+            Value::Int(n, _) if (0..=255).contains(&n) => Ok(n as u8),
+            other => Err(semantic(format!("{what} takes bytes (u8), got {}", other.type_name()))),
+        })
+        .collect()
+}
+
 pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option<R> {
     let (ty, method) = path.rsplit_once("::")?;
     let ty = ty.rsplit("::").next().unwrap_or(ty);
@@ -469,6 +481,17 @@ pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option
                 })
             })()),
             "default" => Some(Ok(Value::Int(0, ity))),
+            "from_le_bytes" | "from_be_bytes" => Some((|| {
+                let mut bytes = byte_args(it, args, method)?;
+                if bytes.len() != (ity.bits() / 8) as usize {
+                    return Err(semantic(format!("{ty}::{method} takes {} bytes, got {}", ity.bits() / 8, bytes.len())));
+                }
+                if method == "from_be_bytes" {
+                    bytes.reverse();
+                }
+                let n = bytes.iter().rev().fold(0i128, |acc, b| (acc << 8) | *b as i128);
+                Ok(Value::Int(ity.wrap(n), ity))
+            })()),
             "pow" | "abs" | "min" | "max" | "wrapping_add" | "wrapping_mul" | "wrapping_sub" | "checked_add" | "checked_mul" | "checked_sub" | "saturating_sub" | "saturating_add" | "rem_euclid" | "signum" | "count_ones" | "leading_zeros" | "trailing_zeros" | "abs_diff" => {
                 // UFCS: i32::pow(x, 2)
                 let recv = match args.first() {
@@ -493,6 +516,17 @@ pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option
             "from_bits" => Some((|| {
                 let n = arg_int(args, 0, "from_bits")?;
                 Ok(if ft == FloatTy::F32 { Value::Float(f32::from_bits(n as u32) as f64, ft) } else { Value::Float(f64::from_bits(n as u64), ft) })
+            })()),
+            "from_le_bytes" | "from_be_bytes" => Some((|| {
+                let mut bytes = byte_args(it, args, method)?;
+                if method == "from_be_bytes" {
+                    bytes.reverse();
+                }
+                match (ft, bytes.len()) {
+                    (FloatTy::F32, 4) => Ok(Value::Float(f32::from_le_bytes(bytes.try_into().expect("4 bytes")) as f64, ft)),
+                    (_, 8) if ft != FloatTy::F32 => Ok(Value::Float(f64::from_le_bytes(bytes.try_into().expect("8 bytes")), ft)),
+                    (_, n) => Err(semantic(format!("{ty}::{method} takes {} bytes, got {n}", if ft == FloatTy::F32 { 4 } else { 8 }))),
+                }
             })()),
             "sqrt" | "abs" | "floor" | "ceil" | "powi" | "powf" | "min" | "max" | "sin" | "cos" | "exp" | "ln" => {
                 let recv = match args.first() {

@@ -151,6 +151,8 @@ pub struct SignatureRegistry {
     /// Write-back restores trait AST `string` onto these without touching
     /// inherent homonyms (`DbReportReader::report_lines`).
     trait_impl_method_keys: HashSet<String>,
+    /// Keys two impls of one type define with different formals (`Mul<f32>` and `Mul<V>`); not in the snapshot.
+    overloads: identity::Overloads,
     impl_method_traits: HashMap<String, String>, // `Type::method` of `impl Trait for Type` -> the declared `Trait`
     /// Types declared by dependencies, with whether their crate derives `Serialize` for them.
     dependency_type_serde: std::collections::BTreeMap<String, bool>,
@@ -239,6 +241,7 @@ impl SignatureRegistry {
             trait_method_keys: TraitKeySet::default(),
             trait_impl_method_keys: HashSet::new(),
             impl_method_traits: HashMap::new(),
+            overloads: Default::default(),
             dependency_type_serde: std::collections::BTreeMap::new(),
             inherent_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
@@ -775,6 +778,7 @@ impl SignatureRegistry {
                         .all(|(a, b)| param_types_are_ownership_refinement(a, b));
                 if !stub_like && !ownership_refinement {
                     self.type_collision_keys.insert(name.clone());
+                    self.overloads.record_collision(&name, existing, &sig);
                 } else if ownership_refinement {
                     // Prior Owned→Reference refresh may have flagged this key; clear it.
                     self.type_collision_keys.remove(&name);
@@ -804,27 +808,9 @@ impl SignatureRegistry {
                 }
             }
         }
+        self.overloads.note(&name, &sig);
         self.index_method_key(&name);
         self.signatures.insert(name, sig);
-    }
-
-    /// Index `Type::method` under `method`; buckets stay sorted so "first homonym" is deterministic.
-    /// True when [`Self::add_function`]`(name, sig)` would leave this registry unchanged: this layer already
-    /// holds exactly `sig` under `name` and `name` is in the method index.
-    pub fn add_function_is_noop(&self, name: &str, sig: &FunctionSignature) -> bool {
-        if self.signatures.get(name) != Some(sig) {
-            return false;
-        }
-        let Some((_, suffix)) = name.rsplit_once("::") else { return true };
-        self.method_index
-            .get(suffix)
-            .is_some_and(|bucket| bucket.binary_search_by(|k| k.as_str().cmp(name)).is_ok())
-    }
-
-    fn index_method_key(&mut self, name: &str) {
-        let Some((_, suffix)) = name.rsplit_once("::") else { return };
-        let bucket = self.method_index.entry(suffix.to_string()).or_default();
-        if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) { bucket.insert(pos, name.to_string()); }
     }
 
     /// INTR-009: is `name` a user-defined (non-extern) function that is not also a stdlib one? Such a function
@@ -1885,6 +1871,7 @@ impl SignatureRegistry {
         self.trait_method_keys.extend(other.trait_method_keys.iter().cloned());
         self.trait_impl_method_keys.extend(other.trait_impl_method_keys.iter().cloned());
         self.impl_method_traits.extend(other.impl_method_traits.iter().map(|(k, v)| (k.clone(), v.clone())));
+        self.overloads.extend_from(&other.overloads);
         self.dependency_type_serde
             .extend(other.dependency_type_serde.iter().map(|(k, v)| (k.clone(), *v)));
         self.inherent_method_keys.extend(other.inherent_method_keys.iter().cloned());

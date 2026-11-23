@@ -1,0 +1,14 @@
+// An operator impl that omits `type Output` takes the declared return type of its one operator method (the trait
+// declares `Output` as that method's result): the Rust output carries `type Output = V2;`, so rustc accepts it.
+// expect: (4, 6)
+struct V2 { x: int, y: int }
+
+impl Add for V2 {
+    fn add(self, o: V2) -> V2 { V2 { x: self.x + o.x, y: self.y + o.y } }
+}
+
+fn main() {
+    let a = V2 { x: 1, y: 2 }
+    let c = a + V2 { x: 3, y: 4 }
+    println("(${c.x}, ${c.y})")
+}

@@ -1,0 +1,24 @@
+// In a generic impl whose bounds do not include Clone, `self.dot(self)` passes `self` twice without inserting a
+// `.clone()` the type parameter cannot support.
+// expect: 25
+trait Num {
+    fn times(&self, o: Self) -> Self
+    fn plus(&self, o: Self) -> Self
+}
+
+impl Num for f64 {
+    fn times(self, o: f64) -> f64 { self * o }
+    fn plus(self, o: f64) -> f64 { self + o }
+}
+
+struct Vec2<T> { x: T, y: T }
+
+impl<T: Num> Vec2<T> {
+    fn dot(self, o: Vec2<T>) -> T { self.x.times(o.x).plus(self.y.times(o.y)) }
+    fn length_squared(self) -> T { self.dot(self) }
+}
+
+fn main() {
+    let v: Vec2<f64> = Vec2 { x: 3.0, y: 4.0 }
+    println("${v.length_squared()}")
+}

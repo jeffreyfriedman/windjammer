@@ -148,11 +148,45 @@ impl<'ast> CodeGenerator<'ast> {
         if !bound.contains('<') {
             return bound.to_string();
         }
+        if let Some(open) = bound.find('<') {
+            // Associated-type bindings (`Add<Output = T>`) are not types: map each side separately.
+            if let Some(inner) = bound[open + 1..].strip_suffix('>') {
+                if Self::split_top_level_commas(inner).iter().any(|a| a.contains(" = ")) {
+                    let args: Vec<String> = Self::split_top_level_commas(inner)
+                        .iter()
+                        .map(|a| match a.split_once(" = ") {
+                            Some((name, ty)) => format!("{} = {}", name, self.bound_to_rust(ty)),
+                            None => self.bound_to_rust(a),
+                        })
+                        .collect();
+                    return format!("{}<{}>", &bound[..open], args.join(", "));
+                }
+            }
+        }
         let tokens = crate::lexer::Lexer::new(bound).tokenize_with_locations();
         match crate::parser::Parser::new(tokens).parse_type() {
             Ok(ty) => self.type_to_rust(&ty),
             Err(_) => bound.to_string(),
         }
+    }
+
+    fn split_top_level_commas(s: &str) -> Vec<String> {
+        let (mut depth, mut cur, mut out) = (0i32, String::new(), Vec::new());
+        for c in s.chars() {
+            match c {
+                '<' | '(' | '[' => depth += 1,
+                '>' | ')' | ']' => depth -= 1,
+                ',' if depth == 0 => {
+                    out.push(cur.trim().to_string());
+                    cur.clear();
+                    continue;
+                }
+                _ => {}
+            }
+            cur.push(c);
+        }
+        out.push(cur.trim().to_string());
+        out
     }
 
     // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"

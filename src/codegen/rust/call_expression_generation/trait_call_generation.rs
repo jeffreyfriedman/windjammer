@@ -530,7 +530,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     let separator = match call_obj {
         Expression::Identifier { name, .. } => {
             if CodeGenerator::is_enum_variant_qualified_path(name)
-                || name.chars().next().is_some_and(|c| c.is_uppercase())
+                || (name.chars().next().is_some_and(|c| c.is_uppercase()) && !gen.identifier_names_constant(name))
                 || runtime_module.is_some()
             {
                 "::"

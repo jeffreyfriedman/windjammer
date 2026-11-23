@@ -308,6 +308,20 @@ pub trait Integer<T> {
     fn to_string(self) -> String;
 }
 
+// Methods whose result type depends on the float's width (`f32::to_bits` is a `u32`, `f64::to_bits` a `u64`): one
+// trait per width, consulted before `Float<T>`.
+pub trait F32 {
+    fn to_bits(self) -> u32;
+    fn to_le_bytes(self) -> Vec<u8>;
+    fn to_be_bytes(self) -> Vec<u8>;
+}
+
+pub trait F64 {
+    fn to_bits(self) -> u64;
+    fn to_le_bytes(self) -> Vec<u8>;
+    fn to_be_bytes(self) -> Vec<u8>;
+}
+
 // Float methods, for `T` = `f32` or `f64` (`float`): an argument and the result of type `T` have the receiver's
 // width (`x.min(1.0)` on an `f32` takes an `f32`); `powi` takes an `i32`.
 pub trait Float<T> {

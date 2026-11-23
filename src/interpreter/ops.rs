@@ -90,6 +90,9 @@ pub fn int_binary(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> R {
 
 pub fn float_binary(op: BinaryOp, a: f64, at: FloatTy, b: f64, bt: FloatTy) -> R {
     let ty = if at == FloatTy::Lit { bt } else { at };
+    // An `f32` operation is an f32 operation on both sides: an untyped literal takes the f32 width (rustc types
+    // `v == 0.1` with `v: f32` as `0.1_f32`), so it is rounded to f32 before comparing or computing.
+    let (a, b) = if ty == FloatTy::F32 { (a as f32 as f64, b as f32 as f64) } else { (a, b) };
     let fin = |r: f64| -> Value {
         Value::Float(if ty == FloatTy::F32 { r as f32 as f64 } else { r }, ty)
     };
@@ -177,7 +180,8 @@ impl Interpreter {
             (Value::Struct(_), _) | (Value::Enum(_), _) if overload_name(op).is_some() => {
                 let tn = l.type_name();
                 let name = overload_name(op).unwrap();
-                if let Some(f) = self.methods.get(&(tn.clone(), name.to_string())).cloned() {
+                let picked = self.op_impl_for(&tn, name, &r);
+                if let Some(f) = picked.or_else(|| self.methods.get(&(tn.clone(), name.to_string())).cloned()) {
                     return self.call_func(&f, vec![r], Some(l));
                 }
                 self.compare_or_fail(op, &l, &r)

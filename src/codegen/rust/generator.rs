@@ -356,6 +356,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) module_alias_map: std::collections::HashMap<String, String>,
     /// Function import alias → fully qualified path (`use dep::fn as alias`).
     pub(crate) import_fn_alias_map: std::collections::HashMap<String, String>,
+    /// Names `use` brings in as constants (`use std::f32::consts::PI`): a receiver of this name is a value, not a type.
+    pub(crate) imported_const_names: std::collections::HashSet<String>,
     pub(crate) imported_fn_names: std::collections::HashMap<String, String>, // `use crate::ops::double`: bare name -> the path it names
     /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
     /// Used to emit `module::fn` instead of `module.fn` for free functions.
@@ -562,32 +564,6 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Identifier should use `::` for associated/static calls (`tokio::spawn`, `Vec::new`).
     /// Import- and declaration-driven — not a crate/method name list.
-    pub(in crate::codegen::rust) fn identifier_is_static_call_root(&self, name: &str) -> bool {
-        if self.identifier_is_local_binding(name) {
-            return false;
-        }
-        if name == "std" || name == "Self" || name.contains('.') {
-            return true;
-        }
-        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
-            return true;
-        }
-        self.is_imported_runtime_std_module(name)
-            || self.imported_path_roots.contains(name)
-            || self.inline_module_names.contains(name)
-            || self.module_alias_map.contains_key(name)
-            || self.ffi_module_aliases.contains(name)
-    }
-
-    /// Single-file inline `mod gpu { … }` callees (`gpu::load_shader`) — registry cannot
-    /// prove module origin, so string literal coercion stays conservative (no `.to_string()`).
-    pub(in crate::codegen::rust) fn inline_module_qualified_call(&self, func_name: &str) -> bool {
-        func_name
-            .split("::")
-            .next()
-            .is_some_and(|module| self.inline_module_names.contains(module))
-    }
-
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
         let extern_fn_names = registry.collect_all_extern_names();
         CodeGenerator {
@@ -749,6 +725,7 @@ impl<'ast> CodeGenerator<'ast> {
             import_aliases: std::collections::HashSet::new(),
             module_alias_map: std::collections::HashMap::new(),
             import_fn_alias_map: std::collections::HashMap::new(),
+            imported_const_names: Default::default(),
             imported_fn_names: Default::default(),
             runtime_std_module_imports: std::collections::HashSet::new(),
             imported_path_roots: std::collections::HashSet::new(),

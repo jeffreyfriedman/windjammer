@@ -1,0 +1,12 @@
+// `let a: P<f32> = P::new(3.0)`: the declared type argument fixes the constructor's generic, so the literal is f32.
+// expect: 3
+struct P<T> { v: T }
+
+impl<T> P<T> {
+    fn new(v: T) -> P<T> { P { v: v } }
+}
+
+fn main() {
+    let a: P<f32> = P::new(3.0)
+    println("${a.v}")
+}

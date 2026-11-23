@@ -562,6 +562,16 @@ pub fn is_consuming_operator_trait(name: &str) -> bool {
     )
 }
 
+/// Every `std::ops` operator trait: the consuming operators plus their compound-assignment forms.
+/// A bound, supertrait or impl naming one needs `use std::ops::<Trait>;` in generated Rust.
+pub fn is_std_ops_trait(name: &str) -> bool {
+    let base = name.rsplit("::").next().unwrap_or(name);
+    is_consuming_operator_trait(base)
+        || base
+            .strip_suffix("Assign")
+            .is_some_and(is_consuming_operator_trait)
+}
+
 /// Conversion traits that consume `self` (owned receiver).
 pub fn is_consuming_conversion_trait(name: &str) -> bool {
     let base = name.rsplit("::").next().unwrap_or(name);

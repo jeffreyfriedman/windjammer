@@ -984,7 +984,17 @@ fn test_crate_import_dependency_lines(
     module_names: &[String],
     lib_dir: Option<&Path>,
     lib_crate: Option<&str>,
+    project_root: Option<&Path>,
 ) -> Vec<String> {
+    // `[dev-dependencies]` of the project under test: visible to the tests (this harness crate) and nowhere else.
+    let dev_deps: Vec<(String, crate::config::DependencySpec)> = project_root
+        .and_then(|root| {
+            ["wj.toml", "windjammer.toml"]
+                .iter()
+                .find_map(|n| crate::config::WjConfig::load_from_file(&root.join(n)).ok())
+        })
+        .map(|c| c.dev_dependencies.into_iter().collect())
+        .unwrap_or_default();
     let mut roots = std::collections::BTreeSet::new();
     for module in module_names {
         let Ok(code) = std::fs::read_to_string(output_dir.join(format!("{module}.rs"))) else {
@@ -1012,6 +1022,10 @@ fn test_crate_import_dependency_lines(
         }
         if root == "serde" {
             lines.push("serde = { version = \"1\", features = [\"derive\"] }".to_string());
+            continue;
+        }
+        if let Some((name, spec)) = dev_deps.iter().find(|(k, _)| k.replace('-', "_") == root) {
+            lines.push(crate::cargo_toml::dependency_management::dep_spec_to_cargo_line_with_base(name, spec, project_root));
             continue;
         }
         if let (Some(deps), Some(dir)) = (&lib_deps, lib_dir) {
@@ -1154,7 +1168,7 @@ path = "lib.rs"
     let mut cargo_toml = cargo_toml;
     let lib_dir = library_dependency.as_ref().map(|(_, _, p, _)| p.as_path());
     let lib_crate = library_dependency.as_ref().map(|(n, _, _, _)| n.as_str());
-    for dep_line in test_crate_import_dependency_lines(output_dir, &module_names, lib_dir, lib_crate) {
+    for dep_line in test_crate_import_dependency_lines(output_dir, &module_names, lib_dir, lib_crate, Some(project_root)) {
         insert_dependency_line(&mut cargo_toml, &dep_line);
     }
 
@@ -1222,7 +1236,7 @@ mod test_crate_dependency_tests {
     fn serde_import_adds_serde_with_derive() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(dir.path().join("a_test.rs"), "use serde::{Serialize, Deserialize};\nuse std::fs;\n").unwrap();
-        let lines = test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], None, None);
+        let lines = test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], None, None, None);
         assert_eq!(lines, vec!["serde = { version = \"1\", features = [\"derive\"] }".to_string()]);
     }
 
@@ -1233,15 +1247,31 @@ mod test_crate_dependency_tests {
         std::fs::create_dir_all(&lib).unwrap();
         std::fs::write(lib.join("Cargo.toml"), "[package]\nname=\"app\"\n[dependencies]\nwj_regex = { path = \"../dep\" }\n").unwrap();
         std::fs::write(dir.path().join("a_test.rs"), "use wj_regex::compile;\nuse app::run;\nuse windjammer_runtime::test;\n").unwrap();
-        let lines = test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], Some(&lib), Some("app"));
+        let lines = test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], Some(&lib), Some("app"), None);
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert!(lines[0].starts_with("wj_regex = { path = \"") && lines[0].contains("/dep\""), "{lines:?}");
+    }
+
+    #[test]
+    fn dev_dependency_of_the_project_is_declared_for_the_tests() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let project = dir.path().join("app");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("wj.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dev-dependencies]\nwj_prop = { path = \"../wj-prop/build\" }\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("a_test.rs"), "use wj_prop::rng::new_rng;\n").unwrap();
+        let lines = test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], None, None, Some(&project));
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].starts_with("wj_prop = { path = \"") && lines[0].contains("wj-prop/build"), "{lines:?}");
     }
 
     #[test]
     fn std_and_harness_crates_add_nothing() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(dir.path().join("a_test.rs"), "use std::collections::HashMap;\nuse crate::x;\nuse smallvec::SmallVec;\n").unwrap();
-        assert!(test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], None, None).is_empty());
+        assert!(test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], None, None, None).is_empty());
     }
 }

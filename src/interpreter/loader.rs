@@ -101,14 +101,14 @@ impl Interpreter {
     /// Names are bound by the compiler's resolver either way (`project.rs`).
     pub fn load_program_at(&mut self, entry: &Path) -> Result<(), RuntimeError> {
         let files = program_files(entry)?;
-        let deps = super::deps::dependency_sources(entry)?;
+        let deps = super::deps::dependency_sources(entry, false)?;
         self.load_sources(files, deps.windjammer, deps.rust)
     }
 
     /// Load the program a test file runs in (see [`test_program_files`]); returns the file's module path.
     pub fn load_test_program(&mut self, file: &Path) -> Result<Vec<String>, RuntimeError> {
         let (files, module_path, entry) = test_program_files(file)?;
-        let deps = super::deps::dependency_sources(&entry)?;
+        let deps = super::deps::dependency_sources(&entry, true)?;
         self.load_sources(files, deps.windjammer, deps.rust)?;
         Ok(module_path)
     }
