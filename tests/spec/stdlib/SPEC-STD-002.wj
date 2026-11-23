@@ -1,4 +1,5 @@
 // spec: SPEC-STD-002
+// oracle: check
 // expect: 2 a 20 false
 // expect: 1 1
 // expect: 2 true false
@@ -12,8 +13,10 @@ fn main() {
     let mut keys = m.keys().collect::<Vec<string>>()
     keys.sort()
     println("${keys.len()} ${keys[0]} ${m.get("b").unwrap()} ${m.contains_key("z")}")
+//~@52+6 ERROR W0002 explicit
     let old = m.remove("a")
     println("${old.unwrap()} ${m.len()}")
+//~@20+6 ERROR W0002 explicit
     let mut s = HashSet::new()
     s.insert(1)
     s.insert(1)

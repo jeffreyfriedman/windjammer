@@ -349,7 +349,6 @@ tests/spec/pipe/SPEC-PIPE-006.wj W0002
 tests/spec/pipe/SPEC-PIPE-007.wj parse
 tests/spec/statements/SPEC-STMT-005.wj W0003
 tests/spec/stdlib/SPEC-STD-001.wj W0002
-tests/spec/stdlib/SPEC-STD-002.wj W0002,parse-warning
 tests/spec/stdlib/SPEC-STD-003.wj W0003
 tests/spec/trailing-blocks/SPEC-BLOCK-004.wj parse
 tests/spec/types/SPEC-TYP-003.wj W0013

@@ -42,11 +42,29 @@ impl ImplicitReexport {
     }
     /// `serve` is not re-exported by `adapters`; it is declared in `adapters::http`.
     pub fn message(&self, r: &ResolvedProgram<'_>) -> String {
-        let d = r.defs();
-        let m = &d.get(self.reexporter).path;
-        let m = if m.is_empty() { "the crate root" } else { m.as_str() };
-        format!("`{}` is not re-exported by `{m}`; it is declared in `{}`", self.name, d.get(self.child).path)
+        self.message_in(r, &[])
     }
+    /// `message` with module paths named relative to the crate the use lives in: `crate_root` is the module path of
+    /// the crate's entry file (empty for a crate rooted at the program's root), stripped from every path printed, so
+    /// a diagnostic never carries the checked file's location.
+    pub fn message_in(&self, r: &ResolvedProgram<'_>, crate_root: &[String]) -> String {
+        let d = r.defs();
+        let m = relative_path(&d.get(self.reexporter).path, crate_root);
+        let m = if m.is_empty() { "the crate root".to_string() } else { m };
+        format!("`{}` is not re-exported by `{m}`; it is declared in `{}`", self.name, relative_path(&d.get(self.child).path, crate_root))
+    }
+}
+
+/// `path` (`a::b::c`) without the leading module path `crate_root` (`["a", "b"]`): `c`.
+pub fn relative_path(path: &str, crate_root: &[String]) -> String {
+    if crate_root.is_empty() {
+        return path.to_string();
+    }
+    let prefix = crate_root.join("::");
+    if path == prefix {
+        return String::new();
+    }
+    path.strip_prefix(&format!("{prefix}::")).unwrap_or(path).to_string()
 }
 
 impl Collected<'_> {

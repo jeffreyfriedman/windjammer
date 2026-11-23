@@ -15,7 +15,7 @@ pub use collect::{Collected, ModuleScope};
 pub use uses::{same_crate_callee_key, Binding, UseDecl};
 pub use def::{Def, DefId, DefKind, DefTable};
 pub use lookup::{Found, Ns};
-pub use reexports::{implicit_reexports, ImplicitReexport};
+pub use reexports::{implicit_reexports, relative_path, ImplicitReexport};
 pub use visibility::{noun, private_uses, pub_declaration, PrivateUse, PrivateUseKind};
 pub use res::{
     CallKind, CallResolution, Diagnostic, DiagnosticKind, ExprKey, FnRef, Reason, Res, ResolveReport,

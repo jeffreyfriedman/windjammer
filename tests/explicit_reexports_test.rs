@@ -166,3 +166,19 @@ fn a_name_that_is_a_module_and_a_function_is_explicit_as_the_module() {
     assert!(ok && !text.contains("WJ0194"), "{text}");
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn wj0194_module_paths_never_carry_the_checked_files_location() {
+    // the same file checked as `wj check x.wj` and from a directory root (the file nested below it) names modules the same way
+    let tmp = scratch("relative");
+    std::fs::create_dir_all(tmp.join("deep/er")).unwrap();
+    let src = "mod adapters {\n    pub mod http {\n        pub fn serve() -> int {\n            1\n        }\n    }\n}\n\nfn main() {\n    println(\"${adapters::serve()}\")\n}\n";
+    std::fs::write(tmp.join("deep/er/prog.wj"), src).unwrap();
+    let want = "`serve` is not re-exported by `adapters`; it is declared in `adapters::http`";
+    for (label, dir, args) in [("file", tmp.join("deep/er"), vec!["check", "prog.wj"]), ("dir root", tmp.clone(), vec!["check", "."])] {
+        let (ok, text) = run(&dir, &args);
+        assert!(!ok && text.contains(want), "[{label}] module path must be relative to the crate:\n{text}");
+        assert!(!text.contains("prog::") && !text.contains("deep::"), "[{label}] checked file's path leaked:\n{text}");
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}

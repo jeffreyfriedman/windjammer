@@ -138,6 +138,11 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
 
 /// Name resolution of every file, module paths relative to the package's source root: `src/shapes.wj` is module
 /// `shapes` whether the check starts at the package root or at `src`.
+/// A lone script (no wj.toml above it) is its own crate root.
+fn is_lone_root(root: &Path, path: &Path) -> bool {
+    root.is_file() && path == root && !root.ancestors().any(|d| d.join(crate::module_system::project::MANIFEST).is_file())
+}
+
 fn resolve_files<'a>(root: &Path, parsed: &[&'a Parsed]) -> (resolve::ResolvedProgram<'a>, std::path::PathBuf) {
     let package_src = root.join("src");
     let base = if root.is_file() {
@@ -152,7 +157,7 @@ fn resolve_files<'a>(root: &Path, parsed: &[&'a Parsed]) -> (resolve::ResolvedPr
         .map(|p| {
             let path = Path::new(&p.file);
             // A lone script (no wj.toml above it) is its own crate root: its `mod dep` declares `dep` (dep.wj beside it).
-            let lone_root = root.is_file() && path == root && !root.ancestors().any(|d| d.join(crate::module_system::project::MANIFEST).is_file());
+            let lone_root = is_lone_root(root, path);
             let module = if lone_root { Vec::new() } else { resolve::module_path_from_file(base, path) };
             ParsedFile::new(module, path.to_path_buf(), &p.program)
         })
@@ -356,7 +361,7 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
         }
         out.push(d.with_help(pu.help(&r)));
     }
-    implicit_reexport_diagnostics(&r, &base, parsed, by_file, out);
+    implicit_reexport_diagnostics(&r, root, &base, parsed, by_file, out);
     for rd in &r.report.diagnostics {
         if rd.kind == DiagnosticKind::BadImport {
             let word = rd.message.rsplit("::").next().unwrap_or("").trim_matches('`').to_string();
@@ -459,18 +464,24 @@ fn reexport_insertion_offset(text: &str) -> usize {
 
 /// WJ0194 (ADR-0040): a use that depends on a module re-exporting its child's item without a `pub use`. One
 /// diagnostic per (re-exporting module, item), at the first use; its fix inserts the `pub use` line in the module file.
-fn implicit_reexport_diagnostics(r: &resolve::ResolvedProgram<'_>, base: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
+fn implicit_reexport_diagnostics(r: &resolve::ResolvedProgram<'_>, root: &Path, base: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
     let module_files: HashMap<String, &Parsed> = parsed
         .iter()
         .map(|p| (resolve::module_path_from_file(base, Path::new(&p.file)).join("::"), *p))
         .collect();
+    // A lone source is its own crate: module paths in the message start at its tree, never at where it was found.
+    let crate_root: Vec<String> = match parsed {
+        [only] if is_lone_root(root, Path::new(&only.file)) => Vec::new(),
+        [only] => resolve::module_path_from_file(base, Path::new(&only.file)),
+        _ => Vec::new(),
+    };
     let mut seen: Vec<(resolve::DefId, resolve::DefId)> = Vec::new();
     for ir in resolve::implicit_reexports(r) {
         if seen.contains(&(ir.reexporter, ir.def)) {
             continue;
         }
         seen.push((ir.reexporter, ir.def));
-        let mut d = Diagnostic::error("WJ0194", ir.message(r));
+        let mut d = Diagnostic::error("WJ0194", ir.message_in(r, &crate_root));
         let last = ir.written.rsplit("::").next().unwrap_or(&ir.written).to_string();
         if let Some(l) = &ir.location {
             if let Some(p) = by_file.get(l.file.to_string_lossy().as_ref()) {
@@ -482,7 +493,7 @@ fn implicit_reexport_diagnostics(r: &resolve::ResolvedProgram<'_>, base: &Path, 
             }
         }
         let line = ir.line(r);
-        let def_path = &r.defs().get(ir.def).path;
+        let def_path = resolve::relative_path(&r.defs().get(ir.def).path, &crate_root);
         d = d.with_help(format!("add `{line}` to {}, or name the item `{def_path}`", match module_files.get(&r.defs().get(ir.reexporter).path) {
             Some(p) => p.file.clone(),
             None => "the module".to_string(),
