@@ -281,6 +281,38 @@ fn register_int(r: &mut Registry) {
         }
         Ok(Value::Int(t.wrap(out as i128), t))
     });
+    int_pure!(r, "reverse_bits", |_, v, _| {
+        let (n, t) = int_of(v);
+        let bits = t.bits();
+        let u = (n & mask(t)) as u128;
+        let mut out: u128 = 0;
+        for i in 0..bits {
+            out |= ((u >> i) & 1) << (bits - 1 - i);
+        }
+        Ok(Value::Int(t.wrap(out as i128), t))
+    });
+    int_pure!(r, "checked_shl", |_, v, a| {
+        let (n, t) = int_of(v);
+        let s = arg_int(&a, 0, "checked_shl")?;
+        Ok(if s < 0 || s >= t.bits() as i128 { Value::none() } else { Value::some(Value::Int(t.wrap(n << s), t)) })
+    });
+    int_pure!(r, "checked_shr", |_, v, a| {
+        let (n, t) = int_of(v);
+        let s = arg_int(&a, 0, "checked_shr")?;
+        Ok(if s < 0 || s >= t.bits() as i128 { Value::none() } else { Value::some(Value::Int(t.wrap(n >> s), t)) })
+    });
+    int_pure!(r, "saturating_pow", |_, v, a| {
+        let (n, t) = int_of(v);
+        let e = arg_int(&a, 0, "saturating_pow")?;
+        let mut acc: i128 = 1;
+        for _ in 0..e {
+            match acc.checked_mul(n) {
+                Some(x) if t.fits(x) => acc = x,
+                _ => return Ok(Value::Int(if n < 0 && e % 2 == 1 { t.min() } else { t.max() }, t)),
+            }
+        }
+        Ok(Value::Int(acc, t))
+    });
     int_pure!(r, "is_power_of_two", |_, v, _| {
         let n = int_of(v).0;
         Ok(Value::Bool(n > 0 && (n & (n - 1)) == 0))

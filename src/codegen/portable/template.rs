@@ -13,7 +13,36 @@
 //! for a string interpolation. Anything a template cannot say is a runtime helper the template calls by name.
 
 use super::ir::PResult;
-use crate::stdlib_surface::lowering::{Fact, Modifier};
+use super::ty::{IntKind, Ty};
+use crate::stdlib_surface::lowering::{Fact, Guard, Modifier};
+
+/// The guards that are about the receiver's own type (`when = "t_wide"`), answered from its type; the guards about the
+/// receiver's element are the emitter's (they need its notion of a primitive).
+pub fn receiver_guard(guard: Guard, recv: &Ty) -> bool {
+    match (guard, recv) {
+        (Guard::RecvWide, Ty::Int(k)) => k.is_wide(),
+        (Guard::RecvI32, Ty::Int(k)) => *k == IntKind::I32,
+        (Guard::RecvU32, Ty::Int(k)) => *k == IntKind::U32,
+        _ => false,
+    }
+}
+
+/// The integer type a fact is asked about: the receiver's or the result's, when it is an integer.
+pub fn int_kind_of<'a>(of: TypeRef, receiver: &'a Ty, result: &'a Ty) -> Option<IntKind> {
+    match if of == TypeRef::Receiver { receiver } else { result } {
+        Ty::Int(k) => Some(*k),
+        _ => None,
+    }
+}
+
+/// The facts every target answers the same way.
+pub fn common_int_fact(k: IntKind, fact: Fact) -> Option<String> {
+    match fact {
+        Fact::Bits => Some(k.bits().to_string()),
+        Fact::Signed => Some(k.signed().to_string()),
+        _ => None,
+    }
+}
 
 /// Which type a fact is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -231,6 +260,25 @@ mod tests {
         for bad in ["${x}", "{self", "x}", "{}", "{1a}", "{a:nope}", "{X.max}", "{T.nope}", "{T.max:f64}", "{a b}"] {
             assert!(Template::parse(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn receiver_guards_read_the_receivers_type() {
+        assert!(receiver_guard(Guard::RecvWide, &Ty::Int(IntKind::Usize)));
+        assert!(!receiver_guard(Guard::RecvWide, &Ty::Int(IntKind::U32)));
+        assert!(receiver_guard(Guard::RecvI32, &Ty::Int(IntKind::I32)));
+        assert!(!receiver_guard(Guard::RecvI32, &Ty::Int(IntKind::U32)));
+        assert!(receiver_guard(Guard::RecvU32, &Ty::Int(IntKind::U32)));
+        assert!(!receiver_guard(Guard::RecvU32, &Ty::F32));
+        assert!(!receiver_guard(Guard::ElemPrim, &Ty::Int(IntKind::I32)));
+    }
+
+    #[test]
+    fn common_facts_are_the_kinds_bits_and_signedness() {
+        assert_eq!(common_int_fact(IntKind::U16, Fact::Bits).as_deref(), Some("16"));
+        assert_eq!(common_int_fact(IntKind::I8, Fact::Signed).as_deref(), Some("true"));
+        assert_eq!(common_int_fact(IntKind::U8, Fact::Signed).as_deref(), Some("false"));
+        assert_eq!(common_int_fact(IntKind::U8, Fact::Max), None);
     }
 
     #[test]

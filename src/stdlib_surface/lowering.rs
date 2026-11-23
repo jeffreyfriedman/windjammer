@@ -36,15 +36,17 @@ impl Target {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CoreType {
     Float,
+    Integer,
 }
 
 impl CoreType {
-    pub const ALL: [CoreType; 1] = [CoreType::Float];
+    pub const ALL: [CoreType; 2] = [CoreType::Float, CoreType::Integer];
 
     /// The trait of `std/rust_core.wji` that declares this type's methods.
     pub fn trait_name(self) -> &'static str {
         match self {
             CoreType::Float => "Float",
+            CoreType::Integer => "Integer",
         }
     }
 
@@ -52,6 +54,7 @@ impl CoreType {
     pub fn noun(self) -> &'static str {
         match self {
             CoreType::Float => "float",
+            CoreType::Integer => "integer",
         }
     }
 
@@ -67,15 +70,24 @@ pub enum Guard {
     ElemPrim,
     /// ... and not `bool`.
     ElemPrimNotBool,
+    /// The receiver is a 64-bit integer (a BigInt in JavaScript).
+    RecvWide,
+    /// The receiver is an `i32`.
+    RecvI32,
+    /// The receiver is a `u32`.
+    RecvU32,
 }
 
 impl Guard {
-    pub const ALL: [Guard; 2] = [Guard::ElemPrim, Guard::ElemPrimNotBool];
+    pub const ALL: [Guard; 5] = [Guard::ElemPrim, Guard::ElemPrimNotBool, Guard::RecvWide, Guard::RecvI32, Guard::RecvU32];
 
     pub fn name(self) -> &'static str {
         match self {
             Guard::ElemPrim => "elem_prim",
             Guard::ElemPrimNotBool => "elem_prim_not_bool",
+            Guard::RecvWide => "t_wide",
+            Guard::RecvI32 => "t_i32",
+            Guard::RecvU32 => "t_u32",
         }
     }
 }
@@ -126,10 +138,14 @@ pub enum Fact {
     One,
     Chk,
     Go,
+    /// The text that opens a wrap of an expression into `T`'s range (two's complement); `WrapClose` closes it.
+    WrapOpen,
+    WrapClose,
 }
 
 impl Fact {
-    pub const ALL: [Fact; 9] = [Fact::Bits, Fact::Signed, Fact::Wide, Fact::Min, Fact::Max, Fact::Zero, Fact::One, Fact::Chk, Fact::Go];
+    pub const ALL: [Fact; 11] =
+        [Fact::Bits, Fact::Signed, Fact::Wide, Fact::Min, Fact::Max, Fact::Zero, Fact::One, Fact::Chk, Fact::Go, Fact::WrapOpen, Fact::WrapClose];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -142,6 +158,8 @@ impl Fact {
             Fact::One => "one",
             Fact::Chk => "chk",
             Fact::Go => "go",
+            Fact::WrapOpen => "wrap_open",
+            Fact::WrapClose => "wrap_close",
         }
     }
 }
@@ -164,9 +182,12 @@ pub enum Rule {
     Unsupported(String),
 }
 
-/// `@example(src = "<expression>", expect = "<printed result>")`: the program the per-row conformance runner builds.
+/// `@example(src = "<expression>", expect = "<printed result>")` (with an optional `given = "<statements>"`): the program the per-row conformance runner builds.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Example {
+    /// Statements the example needs before its expression (`let x: u8 = 250`; `;` separates several), when a bare
+    /// literal would not carry the type the row is about.
+    pub given: Option<String>,
     pub src: String,
     pub expect: String,
 }
@@ -305,7 +326,7 @@ fn row_of(trait_name: &str, m: &RawMethod) -> Result<Row, String> {
             let (Some(src), Some(expect)) = (d.arg("src"), d.arg("expect")) else {
                 return Err(at("`@example` takes `src = \"...\", expect = \"...\"`"));
             };
-            if example.replace(Example { src: src.to_string(), expect: expect.to_string() }).is_some() {
+            if example.replace(Example { given: d.arg("given").map(str::to_string), src: src.to_string(), expect: expect.to_string() }).is_some() {
                 return Err(at("more than one `@example`"));
             }
         } else if d.name == "internal" {
@@ -380,7 +401,7 @@ mod tests {
         assert_eq!(row.select(Target::Js, |_| true), Some(&Rule::Emit { template: "a".into(), when: vec![Guard::ElemPrim, Guard::ElemPrimNotBool] }));
         assert_eq!(row.select(Target::Js, |_| false), Some(&Rule::Emit { template: "b".into(), when: vec![] }));
         assert_eq!(row.select(Target::Go, |_| false), Some(&Rule::Hook(Hook::Display)));
-        assert_eq!(row.example, Some(Example { src: "1.0".into(), expect: "1".into() }));
+        assert_eq!(row.example, Some(Example { given: None, src: "1.0".into(), expect: "1".into() }));
         assert_eq!(table.widen(CoreType::Float, Target::Go), Some(Widen::F64));
         assert_eq!(table.widen(CoreType::Float, Target::Js), None);
     }

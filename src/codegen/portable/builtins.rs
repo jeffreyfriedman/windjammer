@@ -142,8 +142,7 @@ pub fn ret_ty(surface: &StdSurface, recv: &Ty, name: &str, args: &[PExpr], want:
         Ty::Set(t) => set_ret(t, name),
         Ty::Option(t) => option_ret(t, name, args),
         Ty::Result(t, e) => result_ret(t, e, name, args),
-        Ty::Int(_) => int_ret(recv, name),
-        Ty::F64 | Ty::F32 => surface.declared_ret(recv, name),
+        Ty::Int(_) | Ty::F64 | Ty::F32 => surface.declared_ret(recv, name),
         Ty::Char => char_ret(name),
         Ty::Bool | Ty::Tuple(_) | Ty::Adt(..) | Ty::Param(_) => None,
         _ => None,
@@ -287,16 +286,6 @@ fn result_ret(t: &Ty, e: &Ty, name: &str, args: &[PExpr]) -> Option<Ty> {
         "and_then" => closure_ret()?,
         "ok" => Ty::Option(b(t.clone())),
         "err" => Ty::Option(b(e.clone())),
-        _ => return None,
-    })
-}
-
-fn int_ret(recv: &Ty, name: &str) -> Option<Ty> {
-    Some(match name {
-        "abs" | "pow" | "min" | "max" | "signum" | "wrapping_add" | "wrapping_sub" | "wrapping_mul" | "wrapping_neg" | "saturating_add" | "saturating_sub" | "saturating_mul" | "rem_euclid" | "div_euclid" | "rotate_left" | "rotate_right" | "clamp" | "swap_bytes" | "abs_diff" | "isqrt" | "wrapping_shl" | "wrapping_shr" => recv.clone(),
-        "checked_add" | "checked_sub" | "checked_mul" | "checked_div" | "checked_rem" => Ty::Option(b(recv.clone())),
-        "count_ones" | "count_zeros" | "leading_zeros" | "trailing_zeros" => Ty::Int(IntKind::U32),
-        "is_positive" | "is_negative" | "is_power_of_two" => Ty::Bool,
         _ => return None,
     })
 }

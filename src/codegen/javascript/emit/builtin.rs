@@ -2,8 +2,8 @@
 
 use super::num;
 use super::Js;
-use crate::codegen::portable::template::{self, TextOperands};
-use crate::stdlib_surface::lowering::{CoreType, Guard, Hook, Rule, Target};
+use crate::codegen::portable::template::{self, Operands, TypeRef};
+use crate::stdlib_surface::lowering::{CoreType, Fact, Guard, Hook, Modifier, Rule, Target};
 use crate::codegen::portable::ir::*;
 use crate::codegen::portable::ty::{IntKind, Ty};
 
@@ -50,8 +50,8 @@ impl<'m> Js<'m> {
             Ty::Iter(t) | Ty::Range(t) => self.iter_method(t, name, &r, &a, args, ty),
             Ty::Str => self.str_method(recv, name, &r, &a, ty),
             Ty::Char => self.char_method(name, &r, &a),
-            Ty::Int(k) => self.int_method(*k, name, &r, &a),
-            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &r, &a),
+            Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &r, &a, ty),
+            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &r, &a, ty),
             Ty::Option(_) => self.option_method(name, &r, &a),
             Ty::Result(_, e) => self.result_method(name, &r, &a, e),
             Ty::Map(k, v) => self.map_method(k, v, name, &r, &a),
@@ -243,66 +243,23 @@ impl<'m> Js<'m> {
         })
     }
 
-    fn int_method(&mut self, k: IntKind, name: &str, r: &str, a: &[String]) -> PResult<String> {
-        let (lo, hi) = range_of(k);
-        let (lo_s, hi_s) = (num::lit_int(lo, k), num::lit_int(hi, k));
-        let wide = num::is_wide(k);
-        let conv = |x: &str| if wide { format!("BigInt({x})") } else { x.to_string() };
-        Ok(match name {
-            "abs" => format!("({r} < {} ? {}(-{r}) : {r})", num::zero(k), num::chk(k)),
-            "pow" => format!("{}({r} ** {})", num::chk(k), conv(&a[0])),
-            "min" => format!("$min2({r}, {})", a[0]),
-            "max" => format!("$max2({r}, {})", a[0]),
-            "clamp" => format!("$min2($max2({r}, {}), {})", a[0], a[1]),
-            "signum" => format!("({r} > {z} ? {o} : {r} < {z} ? -{o} : {z})", z = num::zero(k), o = num::one(k)),
-            "wrapping_add" => num::wrap_expr(k, &format!("{r} + {}", a[0])),
-            "wrapping_sub" => num::wrap_expr(k, &format!("{r} - {}", a[0])),
-            "wrapping_mul" => match (k, wide) {
-                (IntKind::I32, _) => format!("Math.imul({r}, {})", a[0]),
-                (IntKind::U32, _) => format!("(Math.imul({r}, {}) >>> 0)", a[0]),
-                _ => num::wrap_expr(k, &format!("{r} * {}", a[0])),
-            },
-            "wrapping_neg" => num::wrap_expr(k, &format!("-{r}")),
-            "wrapping_shl" => num::wrap_expr(k, &format!("{r} << {}", conv(&format!("(Number({}) % {})", a[0], k.bits())))),
-            "wrapping_shr" => format!("({r} >> {})", conv(&format!("(Number({}) % {})", a[0], k.bits()))),
-            "saturating_add" => format!("$sat({lo_s}, {hi_s}, {r} + {})", a[0]),
-            "saturating_sub" => format!("$sat({lo_s}, {hi_s}, {r} - {})", a[0]),
-            "saturating_mul" => format!("$sat({lo_s}, {hi_s}, {r} * {})", a[0]),
-            "checked_add" => format!("$chkd({lo_s}, {hi_s}, {r} + {})", a[0]),
-            "checked_sub" => format!("$chkd({lo_s}, {hi_s}, {r} - {})", a[0]),
-            "checked_mul" => format!("$chkd({lo_s}, {hi_s}, {r} * {})", a[0]),
-            "checked_div" => format!("({} === {z} ? null : $chkd({lo_s}, {hi_s}, {}))", a[0], if wide { format!("{r} / {}", a[0]) } else { format!("Math.trunc({r} / {})", a[0]) }, z = num::zero(k)),
-            "checked_rem" => format!("({} === {z} ? null : {{ v: {r} % {} }})", a[0], a[0], z = num::zero(k)),
-            "rem_euclid" => format!("$remEuclid({r}, {})", a[0]),
-            "div_euclid" => format!("$divEuclid({r}, {})", a[0]),
-            "abs_diff" => format!("({r} > {} ? {r} - {} : {} - {r})", a[0], a[0], a[0]),
-            "count_ones" => format!("$popcnt({r}, {})", k.bits()),
-            "leading_zeros" => format!("$clz({r}, {})", k.bits()),
-            "trailing_zeros" => format!("$ctz({r}, {})", k.bits()),
-            "rotate_left" => format!("$rotl({r}, {}, {}, {})", a[0], k.bits(), k.signed()),
-            "rotate_right" => format!("$rotr({r}, {}, {}, {})", a[0], k.bits(), k.signed()),
-            "is_positive" => format!("({r} > {})", num::zero(k)),
-            "is_negative" => format!("({r} < {})", num::zero(k)),
-            "is_power_of_two" => format!("($popcnt({r}, {}) === 1)", k.bits()),
-            _ => return self.unsupported(format!("integer method `{name}`")),
-        })
-    }
-
-    /// A call of a std method of a migrated type: print the receiver's row for JavaScript (`std/rust_core.wji`).
-    fn lowered(&mut self, ty: CoreType, recv: &PExpr, name: &str, r: &str, a: &[String]) -> PResult<String> {
+    /// A call of a std method of a migrated type: print the receiver's row for JavaScript (`std/rust_core.wji`); `ty` is
+    /// the call's result type (`{R.chk}`).
+    fn lowered(&mut self, ct: CoreType, recv: &PExpr, name: &str, r: &str, a: &[String], ty: &Ty) -> PResult<String> {
         let m = self.m;
-        let Some(row) = m.lowering.row(ty, name) else { return self.unsupported(format!("{} method `{name}`", ty.noun())) };
+        let Some(row) = m.lowering.row(ct, name) else { return self.unsupported(format!("{} method `{name}`", ct.noun())) };
         let elem = recv.ty.elem().unwrap_or(Ty::Unknown);
         let prim = self.is_prim(&elem);
         let guard = |g: Guard| match g {
             Guard::ElemPrim => prim,
             Guard::ElemPrimNotBool => prim && elem != Ty::Bool,
+            g => template::receiver_guard(g, &recv.ty),
         };
         match row.select(Target::Js, guard) {
-            Some(Rule::Emit { template, .. }) => template::render_emit(template, &row.params, &mut TextOperands { receiver: r, args: a }),
+            Some(Rule::Emit { template, .. }) => template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty }),
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
-            Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ty.noun())),
-            None => self.unsupported(format!("{} method `{name}` has no JavaScript rule", ty.noun())),
+            Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
+            None => self.unsupported(format!("{} method `{name}` has no JavaScript rule", ct.noun())),
         }
     }
 
@@ -414,6 +371,92 @@ impl<'m> Js<'m> {
             ("f64", "from") => Ok(num::cast(&args[0].ty, &Ty::F64, a)),
             ("char", "from_u32") => Ok(format!("$charFromU32({a})")),
             _ => self.unsupported(format!("`{owner}::{name}`")),
+        }
+    }
+}
+
+/// The operands of a JavaScript template: the receiver and arguments as printed, and the facts of an integer type.
+struct JsOperands<'a> {
+    receiver: &'a str,
+    args: &'a [String],
+    recv: &'a Ty,
+    result: &'a Ty,
+}
+
+impl Operands for JsOperands<'_> {
+    fn receiver(&mut self, place: bool, modifier: Option<Modifier>) -> PResult<String> {
+        if place || modifier.is_some() {
+            return unsupported("this target has no receiver place or modifier for the template");
+        }
+        Ok(self.receiver.to_string())
+    }
+
+    fn arg(&mut self, index: usize, modifier: Option<Modifier>) -> PResult<String> {
+        if modifier.is_some() {
+            return unsupported("this target has no operand modifier for the template");
+        }
+        match self.args.get(index) {
+            Some(a) => Ok(a.clone()),
+            None => unsupported(format!("the call has no argument {index}")),
+        }
+    }
+
+    fn fact(&mut self, of: TypeRef, fact: Fact) -> PResult<String> {
+        match template::int_kind_of(of, self.recv, self.result).and_then(|k| int_fact(k, fact)) {
+            Some(text) => Ok(text),
+            None => unsupported(format!("the type fact `{}` is not available for this type in JavaScript", fact.name())),
+        }
+    }
+}
+
+/// A fact about an integer type, from the numeric helpers (`num`): the range-check wrapper, the literals of the type,
+/// the text that wraps an expression into its range. `None`: JavaScript has no such fact (`{T.go}`).
+fn int_fact(k: IntKind, fact: Fact) -> Option<String> {
+    let (lo, hi) = range_of(k);
+    match fact {
+        Fact::Wide => Some(num::is_wide(k).to_string()),
+        Fact::Min => Some(num::lit_int(lo, k)),
+        Fact::Max => Some(num::lit_int(hi, k)),
+        Fact::Zero => Some(num::zero(k)),
+        Fact::One => Some(num::one(k)),
+        Fact::Chk => Some(num::chk(k).to_string()),
+        Fact::WrapOpen | Fact::WrapClose => {
+            // `wrap_expr` brackets the expression: cut its output at a marker
+            let wrapped = num::wrap_expr(k, "\u{1}");
+            let (open, close) = wrapped.split_once('\u{1}')?;
+            Some(if fact == Fact::WrapOpen { open } else { close }.to_string())
+        }
+        Fact::Go => None,
+        _ => template::common_int_fact(k, fact),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integer_facts_are_the_numeric_helpers_text() {
+        let f = |k, fact| int_fact(k, fact).unwrap();
+        assert_eq!(f(IntKind::I8, Fact::Min), "(-128)");
+        assert_eq!(f(IntKind::U8, Fact::Max), "255");
+        assert_eq!(f(IntKind::I64, Fact::Min), "(-9223372036854775808n)");
+        assert_eq!(f(IntKind::U64, Fact::Zero), "0n");
+        assert_eq!(f(IntKind::U16, Fact::One), "1");
+        assert_eq!(f(IntKind::I32, Fact::Chk), "$i32");
+        assert_eq!(f(IntKind::Usize, Fact::Chk), "$u64");
+        assert_eq!(f(IntKind::U64, Fact::Wide), "true");
+        assert_eq!(f(IntKind::U32, Fact::Wide), "false");
+        assert_eq!(f(IntKind::I16, Fact::Bits), "16");
+        assert_eq!(f(IntKind::U32, Fact::Signed), "false");
+        assert_eq!(int_fact(IntKind::I32, Fact::Go), None);
+    }
+
+    #[test]
+    fn a_wrap_is_what_wrap_expr_prints_around_the_expression() {
+        for k in [IntKind::I8, IntKind::U8, IntKind::I16, IntKind::U16, IntKind::I32, IntKind::U32, IntKind::I64, IntKind::U64, IntKind::Isize, IntKind::Usize] {
+            let wrapped = format!("{}x + y{}", int_fact(k, Fact::WrapOpen).unwrap(), int_fact(k, Fact::WrapClose).unwrap());
+            assert_eq!(wrapped, num::wrap_expr(k, "x + y"), "{k:?}");
         }
     }
 }

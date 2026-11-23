@@ -49,16 +49,17 @@ impl StdSurface {
         StdSurface { core: crate::ir::stdlib_tables::shared_core_surface(), lowering: crate::ir::stdlib_tables::shared_lowering() }
     }
 
-    /// The result type the declaration in `std/rust_core.wji` gives `recv.name(..)` for a float receiver, `T` being
-    /// the receiver's own type; `None` when the surface declares no such method.
+    /// The result type the declaration in `std/rust_core.wji` gives `recv.name(..)` for a float or integer receiver, `T`
+    /// being the receiver's own type; `None` when the surface declares no such method.
     pub fn declared_ret(&self, recv: &Ty, name: &str) -> Option<Ty> {
-        let receiver = match recv {
-            Ty::F64 => crate::parser::Type::Custom("f64".to_string()),
-            Ty::F32 => crate::parser::Type::Custom("f32".to_string()),
+        let (receiver, core_type) = match recv {
+            Ty::F64 => (crate::parser::Type::Custom("f64".to_string()), CoreType::Float),
+            Ty::F32 => (crate::parser::Type::Custom("f32".to_string()), CoreType::Float),
+            Ty::Int(k) => (crate::parser::Type::Custom(k.name().to_string()), CoreType::Integer),
             _ => return None,
         };
         // Only a method with a row: the width traits (`f32::to_bits`) are declared too, but have no lowering yet.
-        self.lowering.row(CoreType::Float, name)?;
+        self.lowering.row(core_type, name)?;
         let ret = self.core.method_signature(&receiver, name, &[])?.ret?;
         Some(from_ast(&ret, &[], &Aliases::default()))
     }

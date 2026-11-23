@@ -103,8 +103,12 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         // `Integer<T>` and `Float<T>` are the numeric types themselves (checked on `i64` and `f64`).
         // An `Iterator<T>` is checked on a concrete iterator (over references for `cloned` / `copied`).
         let iterator = ty == "Iterator";
+        // `@rustc(on = "u64")`: the integer type an entry that Rust declares only on some integer types is checked on
+        // (`is_power_of_two` exists on unsigned types, `abs_diff` returns `T` there)
+        let checked_on: Option<String> = surface.decorators(ty, method).iter().find(|d| d.name == "rustc").and_then(|d| d.args.iter().find(|(k, _)| k == "on")).map(|(_, v)| v.clone());
+        assert!(checked_on.is_none() || ty == "Integer", "`@rustc(on = ..)` on {ty}::{method}: only `Integer` entries are checked on more than one type");
         let recv = match ty.as_str() {
-            "Integer" => "i64".to_string(),
+            "Integer" => checked_on.clone().unwrap_or_else(|| "i64".to_string()),
             "Float" => "f64".to_string(),
             // the width traits (`F32::to_bits`) are checked on the type they are named after
             "F32" => "f32".to_string(),
@@ -135,11 +139,23 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         } else {
             format!("fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}){tail}; }}\n", args.join(", "))
         };
-        src.push_str(&if ty == "Float" { line.replace("i64", "f64") } else { line.clone() });
+        // the entry's own type stands for the checked type: `T` and the element of the generic instantiation are `i64` above
+        let numeric = match (ty.as_str(), &checked_on) {
+            ("Float", _) => Some("f64".to_string()),
+            ("Integer", Some(on)) => Some(on.clone()),
+            _ => None,
+        };
+        src.push_str(&match &numeric {
+            Some(n) => line.replace("i64", n),
+            None => line.clone(),
+        });
         // ADR-0002: the receiver mode. The same call on an immutable binding (`r`, not `mut r`) compiles exactly
         // when the entry is not declared `&mut self`.
         let immutable = line.replacen("(mut r:", "(r:", 1).replacen(&format!("fn e{i}("), &format!("fn m{i}("), 1);
-        let immutable = if ty == "Float" { immutable.replace("i64", "f64") } else { immutable };
+        let immutable = match &numeric {
+            Some(n) => immutable.replace("i64", n),
+            None => immutable,
+        };
         let as_type = match ty.as_str() {
             "Integer" => Type::Int,
             "Float" | "F32" | "F64" => Type::Float,

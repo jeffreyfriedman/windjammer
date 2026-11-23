@@ -24,7 +24,7 @@ use windjammer::typing::core_surface::CoreSurface;
 
 /// The types whose methods are migrated: every declaration of these traits needs a rule per target. A stage adds its
 /// types here (and to `CoreType`); the list never shrinks.
-const MIGRATED: &[CoreType] = &[CoreType::Float];
+const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer];
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -149,55 +149,81 @@ fn the_row_checker_sees_a_planted_mistake() {
     let interpolated = std::panic::catch_unwind(|| plant("Math.cbrt({self})", "Math.cbrt(${self})"));
     assert!(interpolated.is_err(), "a `${{` template must not load");
     assert!(plant("@example(src = \"(16.0).sqrt()\", expect = \"4\")", "").iter().any(|p| p.contains("no `@example`")));
+    // the Integer rows are held to the same rules
+    assert!(plant("@go(emit = \"wjAbs({self})\")", "").iter().any(|p| p.contains("Integer::abs") && p.contains("no `@go` rule")));
+    assert!(plant("$min2({self}, {other})", "$min2({self}, {othr})").iter().any(|p| p.contains("{othr}")));
+    assert!(plant("@js(emit = \"$max2({self}, {other})\")", "@js(emit = \"$max2({self}, {other})\", when = \"t_wide\")").iter().any(|p| p.contains("Integer::max") && p.contains("guarded")));
+    assert!(plant("@js(emit = \"$sat({T.min}, {T.max}, {self} + {rhs})\")", "@js(unsupported = \"\")").iter().any(|p| p.contains("empty `unsupported` reason")));
+    assert!(plant("{T.chk}({self} ** {exp})", "{T.chk}({self} ** {exp}){T.nope}").iter().any(|p| p.contains("unknown fact")));
 }
 
 // ---------------------------------------------------------------------------------------------
-// G4: interpreter parity (Float)
+// G4: interpreter parity (Float, Integer)
 // ---------------------------------------------------------------------------------------------
 
-/// Methods the interpreter registers for floats that `trait Float` does not declare yet. The list may only shrink:
-/// declare the method (with rules) and delete the entry. `to_bits`, `to_le_bytes` and `to_be_bytes` are declared on
-/// the width traits `F32` / `F64`, whose rows come with the integer stage; `total_cmp` needs `Ordering`.
-const FLOAT_REGISTERED_WITHOUT_ROW: &[&str] =
-    &["copysign", "cosh", "exp2", "log", "recip", "rem_euclid", "sinh", "tanh", "to_be_bytes", "to_bits", "to_le_bytes", "total_cmp"];
+/// The interpreter's receiver kind of a migrated type.
+fn kind_of(ty: CoreType) -> Kind {
+    match ty {
+        CoreType::Float => Kind::Float,
+        CoreType::Integer => Kind::Int,
+    }
+}
+
+/// Methods the interpreter registers for a type that its trait does not declare yet. Each list may only shrink: declare
+/// the method (with rules) and delete the entry. Float: `to_bits`, `to_le_bytes` and `to_be_bytes` are declared on the
+/// width traits `F32` / `F64`, whose rows are not written yet; `total_cmp` needs `Ordering`. Integer: the byte
+/// conversions are the width traits' too, `overflowing_*` return tuples and `next_power_of_two` needs the unsigned
+/// types alone, and the ASCII methods of a `u8` belong with the char stage.
+const REGISTERED_WITHOUT_ROW: &[(CoreType, &[&str])] = &[
+    (CoreType::Float, &["copysign", "cosh", "exp2", "log", "recip", "rem_euclid", "sinh", "tanh", "to_be_bytes", "to_bits", "to_le_bytes", "total_cmp"]),
+    (
+        CoreType::Integer,
+        &["is_ascii_alphabetic", "is_ascii_digit", "is_ascii_whitespace", "next_power_of_two", "overflowing_add", "overflowing_mul", "to_ascii_lowercase", "to_ascii_uppercase", "to_be_bytes", "to_le_bytes"],
+    ),
+];
 
 #[test]
-fn every_float_row_is_registered_in_the_interpreter_with_the_same_mutability() {
+fn every_row_is_registered_in_the_interpreter_with_the_same_mutability() {
     let core = surface();
     let table = table_of(&core);
-    let registered = Registry::standard().methods_of(Kind::Float);
     let mut bad = Vec::new();
-    for (ty, row) in table.rows().filter(|(t, _)| *t == CoreType::Float) {
-        let _ = ty;
-        match registered.iter().find(|(n, _)| *n == row.name) {
-            None => bad.push(format!("Float::{}: declared, but the interpreter registers no float method of that name", row.name)),
-            Some((_, mutating)) if *mutating != row.changes_receiver => {
-                bad.push(format!("Float::{}: declared {}, registered {}", row.name, if row.changes_receiver { "`&mut self`" } else { "`self`" }, if *mutating { "mutating" } else { "pure" }))
+    for ty in MIGRATED {
+        let registered = Registry::standard().methods_of(kind_of(*ty));
+        for (_, row) in table.rows().filter(|(t, _)| t == ty) {
+            let id = format!("{}::{}", ty.trait_name(), row.name);
+            match registered.iter().find(|(n, _)| *n == row.name) {
+                None => bad.push(format!("{id}: declared, but the interpreter registers no {} method of that name", ty.noun())),
+                Some((_, mutating)) if *mutating != row.changes_receiver => {
+                    bad.push(format!("{id}: declared {}, registered {}", if row.changes_receiver { "`&mut self`" } else { "`self`" }, if *mutating { "mutating" } else { "pure" }))
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
     assert!(bad.is_empty(), "rows against the interpreter registry:\n{}", bad.join("\n"));
 }
 
 #[test]
-fn every_registered_float_method_is_a_row_or_on_the_shrinking_list() {
+fn every_registered_method_is_a_row_or_on_the_shrinking_list() {
     let table = table();
-    let registered = Registry::standard().methods_of(Kind::Float);
     let mut bad = Vec::new();
-    for (name, _) in &registered {
-        let is_row = table.row(CoreType::Float, name).is_some();
-        let listed = FLOAT_REGISTERED_WITHOUT_ROW.contains(name);
-        if !is_row && !listed {
-            bad.push(format!("the interpreter registers the float method `{name}`, which `trait Float` does not declare (declare it with rules, or mark it `@internal`)"));
+    for ty in MIGRATED {
+        let registered = Registry::standard().methods_of(kind_of(*ty));
+        let listed_for: &[&str] = REGISTERED_WITHOUT_ROW.iter().find(|(t, _)| t == ty).map_or(&[], |(_, l)| l);
+        for (name, _) in &registered {
+            let is_row = table.row(*ty, name).is_some();
+            let listed = listed_for.contains(name);
+            if !is_row && !listed {
+                bad.push(format!("the interpreter registers the {} method `{name}`, which `trait {}` does not declare (declare it with rules, or mark it `@internal`)", ty.noun(), ty.trait_name()));
+            }
+            if is_row && listed {
+                bad.push(format!("`{name}` is a row now: delete it from REGISTERED_WITHOUT_ROW ({})", ty.trait_name()));
+            }
         }
-        if is_row && listed {
-            bad.push(format!("`{name}` is a row now: delete it from FLOAT_REGISTERED_WITHOUT_ROW"));
-        }
-    }
-    for name in FLOAT_REGISTERED_WITHOUT_ROW {
-        if !registered.iter().any(|(n, _)| n == name) {
-            bad.push(format!("`{name}` is on FLOAT_REGISTERED_WITHOUT_ROW but the interpreter no longer registers it: delete it"));
+        for name in listed_for {
+            if !registered.iter().any(|(n, _)| n == name) {
+                bad.push(format!("`{name}` is on the {} list of REGISTERED_WITHOUT_ROW but the interpreter no longer registers it: delete it", ty.trait_name()));
+            }
         }
     }
     assert!(bad.is_empty(), "interpreter registry against the rows:\n{}", bad.join("\n"));
@@ -371,13 +397,13 @@ fn variants(source: &str, name: &str) -> Vec<String> {
 /// A new variant of one of these needs this test edited with the reason: the vocabulary names type shapes and
 /// emitter capabilities, never std methods (section 2.3 of the design).
 const VOCABULARY: &[(&str, usize, &str)] = &[
-    ("Guard", 2, "elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort)"),
+    ("Guard", 5, "elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it"),
     ("Hook", 1, "display: the type-directed `to_string` emitter; `clone` joins with the Vec stage"),
     ("Modifier", 1, "f64: Go's operand widening for Float<T>; `str` and `num` join with the String / Integer stages"),
-    ("Fact", 9, "bits signed wide min max zero one chk go: the numeric helpers' facts, used by the Integer stage"),
+    ("Fact", 11, "bits signed wide min max zero one chk go: the numeric helpers' facts of the Integer rows; wrap_open, wrap_close: the text that brackets an expression wrapped into T's range (asIntN(64, ..), `(.. | 0)`, `((.. << 24) >> 24)`: a template is linear, so the bracket is two facts)"),
     ("Rule", 3, "Emit, Hook, Unsupported; `Assign` joins with the String stage"),
     ("Target", 2, "Js, Go; TypeScript uses the JavaScript rules; `Rust` joins when the Rust backend reads the table"),
-    ("CoreType", 1, "one per migrated std type (a stage adds its types)"),
+    ("CoreType", 2, "one per migrated std type (a stage adds its types): Float, Integer"),
     ("Widen", 1, "F64"),
 ];
 
@@ -506,9 +532,14 @@ fn the_removed_spelling_check_sees_a_planted_declaration() {
     assert!(found.contains("String::to_owned"), "a `to_owned` declaration without @internal must be seen: {found:?}");
 }
 
-/// The canonical `float` rows of docs/std_surface.toml that do not resolve to exactly one declaration of `trait
-/// Float`: the row's `lower` spelling or its name. Shrink-only; stage 1 measured them.
-const FLOAT_ROWS_WITHOUT_ONE_DECLARATION: &[&str] = &["cmp", "log", "pow", "rem_euclid", "copysign", "to_bits", "to_be_bytes", "to_le_bytes"];
+/// The canonical rows of docs/std_surface.toml, per migrated type (`type = "float"`), that do not resolve to exactly one
+/// declaration of the type's trait: the row's `lower` spelling or its name. Shrink-only; each stage measured its own.
+/// Integer: `cmp` needs `Ordering`; the byte conversions are the width traits'; the byte (`u8`) predicates and case
+/// conversions are the char stage's.
+const ROWS_WITHOUT_ONE_DECLARATION: &[(CoreType, &str, &[&str])] = &[
+    (CoreType::Float, "float", &["cmp", "log", "pow", "rem_euclid", "copysign", "to_bits", "to_be_bytes", "to_le_bytes"]),
+    (CoreType::Integer, "int", &["cmp", "to_be_bytes", "to_le_bytes", "is_digit", "is_alphabetic", "is_whitespace", "to_uppercase", "to_lowercase"]),
+];
 
 #[derive(serde::Deserialize)]
 struct MethodRow {
@@ -525,27 +556,30 @@ struct MethodsToml {
 }
 
 #[test]
-fn every_canonical_float_row_resolves_to_one_declaration() {
+fn every_canonical_row_resolves_to_one_declaration() {
     let parsed: MethodsToml = toml::from_str(&read("docs/std_surface.toml")).expect("docs/std_surface.toml parses");
     let core = surface();
-    let declared: BTreeSet<String> = declared(&core, CoreType::Float).into_iter().collect();
-    let allowed: BTreeSet<&str> = FLOAT_ROWS_WITHOUT_ONE_DECLARATION.iter().copied().collect();
     let mut bad = Vec::new();
-    let mut unresolved = BTreeSet::new();
-    for r in parsed.methods.iter().filter(|r| r.ty == "float") {
-        let target = r.lower.as_deref().filter(|l| l.chars().all(|c| c.is_alphanumeric() || c == '_')).unwrap_or(&r.name);
-        if !declared.contains(target) {
-            unresolved.insert(r.name.as_str());
+    for ty in MIGRATED {
+        let (_, toml_type, allowed) = ROWS_WITHOUT_ONE_DECLARATION.iter().find(|(t, _, _)| t == ty).unwrap_or_else(|| panic!("{}: no entry in ROWS_WITHOUT_ONE_DECLARATION", ty.trait_name()));
+        let declared: BTreeSet<String> = declared(&core, *ty).into_iter().collect();
+        let allowed: BTreeSet<&str> = allowed.iter().copied().collect();
+        let mut unresolved = BTreeSet::new();
+        for r in parsed.methods.iter().filter(|r| r.ty == *toml_type) {
+            let target = r.lower.as_deref().filter(|l| l.chars().all(|c| c.is_alphanumeric() || c == '_')).unwrap_or(&r.name);
+            if !declared.contains(target) {
+                unresolved.insert(r.name.as_str());
+            }
         }
-    }
-    for name in &unresolved {
-        if !allowed.contains(name) {
-            bad.push(format!("float row `{name}` of docs/std_surface.toml resolves to no declaration of `trait Float`"));
+        for name in &unresolved {
+            if !allowed.contains(name) {
+                bad.push(format!("{toml_type} row `{name}` of docs/std_surface.toml resolves to no declaration of `trait {}`", ty.trait_name()));
+            }
         }
-    }
-    for name in &allowed {
-        if !unresolved.contains(name) {
-            bad.push(format!("`{name}` resolves now: delete it from FLOAT_ROWS_WITHOUT_ONE_DECLARATION"));
+        for name in &allowed {
+            if !unresolved.contains(name) {
+                bad.push(format!("`{name}` resolves now: delete it from ROWS_WITHOUT_ONE_DECLARATION ({})", ty.trait_name()));
+            }
         }
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));

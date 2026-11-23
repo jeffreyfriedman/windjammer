@@ -265,46 +265,190 @@ pub trait Instant {
 // Integer methods, for every integer type `T` (`int`, `i32`, `u8`, `usize`, ...): `T` is the receiver's type, so
 // an argument or result of type `T` has the receiver's width (`10.min(3)`: one class); exponents, rotations and
 // shift amounts are `u32` and bit counts are `u32`, as in Rust. Signed-only methods (`abs`, `signum`) are checked
-// against rustc on `i64`.
+// against rustc on `i64`; `@rustc(on = "u64")` names the type a method that exists only on unsigned integers (or whose
+// result is the unsigned type, `abs_diff`) is checked on instead.
+//
+// Lowering rows, as for `Float<T>` below. Facts about the receiver's type `T` (`{T.bits}`, `{T.min}`, `{T.chk}`, ...) are
+// computed by each emitter's numeric helpers, so one row covers every width; `{T.wrap_open}` / `{T.wrap_close}` bracket an
+// expression that is wrapped into `T`'s range (two's complement). `when = "t_wide"` is a 64-bit receiver (a BigInt in
+// JavaScript), `t_i32` / `t_u32` the 32-bit ones `Math.imul` multiplies. A method with `unsupported` has no lowering on that
+// target yet; the reason is the diagnostic. An `@example` may declare the typed local it uses with `given = "let x: u8 = 250"`.
 pub trait Integer<T> {
+    @js(emit = "({self} < {T.zero} ? {T.chk}(-{self}) : {self})")
+    @go(emit = "wjAbs({self})")
+    @example(given = "let x: i32 = -7", src = "x.abs()", expect = "7")
     fn abs(self) -> T;
+    @js(emit = "({self} > {T.zero} ? {T.one} : {self} < {T.zero} ? -{T.one} : {T.zero})")
+    @go(emit = "wjSignum({self})")
+    @example(given = "let x: i64 = -9", src = "x.signum()", expect = "-1")
     fn signum(self) -> T;
+    @js(emit = "{T.chk}({self} ** BigInt({exp}))", when = "t_wide")
+    @js(emit = "{T.chk}({self} ** {exp})")
+    @go(emit = "wjPow({self}, {exp})")
+    @example(given = "let x: i32 = 3", src = "x.pow(4)", expect = "81")
     fn pow(self, exp: u32) -> T;
+    @js(emit = "$min2({self}, {other})")
+    @go(emit = "wjMin2({self}, {other})")
+    @example(given = "let x: i32 = 4", src = "x.min(9)", expect = "4")
     fn min(self, other: T) -> T;
+    @js(emit = "$max2({self}, {other})")
+    @go(emit = "wjMax2({self}, {other})")
+    @example(given = "let x: i32 = 4", src = "x.max(9)", expect = "9")
     fn max(self, other: T) -> T;
+    @js(emit = "$min2($max2({self}, {min}), {max})")
+    @go(emit = "wjMin2(wjMax2({self}, {min}), {max})")
+    @example(given = "let x: i32 = 15", src = "x.clamp(1, 10)", expect = "10")
     fn clamp(self, min: T, max: T) -> T;
+    @js(emit = "$divEuclid({self}, {rhs})")
+    @go(emit = "wjDivEuclid({self}, {rhs})")
+    @example(given = "let x: i32 = -7", src = "x.div_euclid(2)", expect = "-4")
     fn div_euclid(self, rhs: T) -> T;
+    @js(emit = "$remEuclid({self}, {rhs})")
+    @go(emit = "wjRemEuclid({self}, {rhs})")
+    @example(given = "let x: i32 = -7", src = "x.rem_euclid(2)", expect = "1")
     fn rem_euclid(self, rhs: T) -> T;
+    @js(emit = "$rotl({self}, {n}, {T.bits}, {T.signed})")
+    @go(emit = "wjRotl({self}, {n})")
+    @example(given = "let x: u32 = 2147483649", src = "x.rotate_left(1)", expect = "3")
     fn rotate_left(self, n: u32) -> T;
+    @js(emit = "$rotr({self}, {n}, {T.bits}, {T.signed})")
+    @go(emit = "wjRotr({self}, {n})")
+    @example(given = "let x: u32 = 3", src = "x.rotate_right(1)", expect = "2147483649")
     fn rotate_right(self, n: u32) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u16 = 1", src = "x.swap_bytes()", expect = "256")
     fn swap_bytes(self) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 1", src = "x.reverse_bits()", expect = "128")
     fn reverse_bits(self) -> T;
+    @js(emit = "$popcnt({self}, {T.bits})")
+    @go(emit = "wjPopcnt({self})")
+    @example(given = "let x: u8 = 255", src = "x.count_ones()", expect = "8")
     fn count_ones(self) -> u32;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 255", src = "x.count_zeros()", expect = "0")
     fn count_zeros(self) -> u32;
+    @js(emit = "$clz({self}, {T.bits})")
+    @go(emit = "wjClz({self})")
+    @example(given = "let x: u32 = 1", src = "x.leading_zeros()", expect = "31")
     fn leading_zeros(self) -> u32;
+    @js(emit = "$ctz({self}, {T.bits})")
+    @go(emit = "wjCtz({self})")
+    @example(given = "let x: u32 = 8", src = "x.trailing_zeros()", expect = "3")
     fn trailing_zeros(self) -> u32;
+    @js(emit = "$chkd({T.min}, {T.max}, {self} + {rhs})")
+    @go(emit = "wjCheckedAdd({self}, {rhs})")
+    @example(given = "let x: u8 = 250", src = "x.checked_add(10).is_none()", expect = "true")
     fn checked_add(self, rhs: T) -> Option<T>;
+    @js(emit = "$chkd({T.min}, {T.max}, {self} - {rhs})")
+    @go(emit = "wjCheckedSub({self}, {rhs})")
+    @example(given = "let x: u8 = 5", src = "x.checked_sub(3) ?? 99", expect = "2")
     fn checked_sub(self, rhs: T) -> Option<T>;
+    @js(emit = "$chkd({T.min}, {T.max}, {self} * {rhs})")
+    @go(emit = "wjCheckedMul({self}, {rhs})")
+    @example(given = "let x: u8 = 100", src = "x.checked_mul(3).is_none()", expect = "true")
     fn checked_mul(self, rhs: T) -> Option<T>;
+    @js(emit = "({rhs} === {T.zero} ? null : $chkd({T.min}, {T.max}, {self} / {rhs}))", when = "t_wide")
+    @js(emit = "({rhs} === {T.zero} ? null : $chkd({T.min}, {T.max}, Math.trunc({self} / {rhs})))")
+    @go(emit = "wjCheckedDiv({self}, {rhs})")
+    @example(given = "let x: i32 = 7", src = "x.checked_div(0).is_none()", expect = "true")
     fn checked_div(self, rhs: T) -> Option<T>;
+    @js(emit = "({rhs} === {T.zero} ? null : {{ v: {self} % {rhs} }})")
+    @go(emit = "wjCheckedRem({self}, {rhs})")
+    @example(given = "let x: i32 = 7", src = "x.checked_rem(4) ?? 99", expect = "3")
     fn checked_rem(self, rhs: T) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: i32 = 5", src = "x.checked_neg() ?? 99", expect = "-5")
     fn checked_neg(self) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 2", src = "x.checked_pow(9).is_none()", expect = "true")
     fn checked_pow(self, exp: u32) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 1", src = "x.checked_shl(9).is_none()", expect = "true")
     fn checked_shl(self, rhs: u32) -> Option<T>;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 128", src = "x.checked_shr(7) ?? 99", expect = "1")
     fn checked_shr(self, rhs: u32) -> Option<T>;
+    @js(emit = "{T.wrap_open}{self} + {rhs}{T.wrap_close}")
+    @go(emit = "wjWAdd({self}, {rhs})")
+    @example(given = "let x: u8 = 250", src = "x.wrapping_add(10)", expect = "4")
     fn wrapping_add(self, rhs: T) -> T;
+    @js(emit = "{T.wrap_open}{self} - {rhs}{T.wrap_close}")
+    @go(emit = "wjWSub({self}, {rhs})")
+    @example(given = "let x: u8 = 3", src = "x.wrapping_sub(5)", expect = "254")
     fn wrapping_sub(self, rhs: T) -> T;
+    @js(emit = "Math.imul({self}, {rhs})", when = "t_i32")
+    @js(emit = "(Math.imul({self}, {rhs}) >>> 0)", when = "t_u32")
+    @js(emit = "{T.wrap_open}{self} * {rhs}{T.wrap_close}")
+    @go(emit = "wjWMul({self}, {rhs})")
+    @example(given = "let x: u8 = 200", src = "x.wrapping_mul(2)", expect = "144")
     fn wrapping_mul(self, rhs: T) -> T;
+    @js(emit = "{T.wrap_open}-{self}{T.wrap_close}")
+    @go(emit = "wjWNeg({self})")
+    @example(given = "let x: u8 = 5", src = "x.wrapping_neg()", expect = "251")
     fn wrapping_neg(self) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 3", src = "x.wrapping_pow(6)", expect = "217")
     fn wrapping_pow(self, exp: u32) -> T;
+    @js(emit = "{T.wrap_open}{self} << BigInt((Number({rhs}) % {T.bits})){T.wrap_close}", when = "t_wide")
+    @js(emit = "{T.wrap_open}{self} << (Number({rhs}) % {T.bits}){T.wrap_close}")
+    @go(emit = "({self} << (uint({rhs}) % {T.bits}))")
+    @example(given = "let x: u8 = 129", src = "x.wrapping_shl(9)", expect = "2")
     fn wrapping_shl(self, rhs: u32) -> T;
+    @js(emit = "({self} >> BigInt((Number({rhs}) % {T.bits})))", when = "t_wide")
+    @js(emit = "({self} >> (Number({rhs}) % {T.bits}))")
+    @go(emit = "({self} >> (uint({rhs}) % {T.bits}))")
+    @example(given = "let x: u8 = 128", src = "x.wrapping_shr(9)", expect = "64")
     fn wrapping_shr(self, rhs: u32) -> T;
+    @js(emit = "$sat({T.min}, {T.max}, {self} + {rhs})")
+    @go(emit = "wjSatAdd({self}, {rhs})")
+    @example(given = "let x: u8 = 250", src = "x.saturating_add(10)", expect = "255")
     fn saturating_add(self, rhs: T) -> T;
+    @js(emit = "$sat({T.min}, {T.max}, {self} - {rhs})")
+    @go(emit = "wjSatSub({self}, {rhs})")
+    @example(given = "let x: u8 = 5", src = "x.saturating_sub(10)", expect = "0")
     fn saturating_sub(self, rhs: T) -> T;
+    @js(emit = "$sat({T.min}, {T.max}, {self} * {rhs})")
+    @go(emit = "wjSatMul({self}, {rhs})")
+    @example(given = "let x: i8 = 100", src = "x.saturating_mul(2)", expect = "127")
     fn saturating_mul(self, rhs: T) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet")
+    @example(given = "let x: u8 = 2", src = "x.saturating_pow(9)", expect = "255")
     fn saturating_pow(self, exp: u32) -> T;
+    @js(emit = "({self} > {T.zero})")
+    @go(emit = "({self} > 0)")
+    @example(given = "let x: i32 = 5", src = "x.is_positive()", expect = "true")
     fn is_positive(self) -> bool;
+    @js(emit = "({self} < {T.zero})")
+    @go(emit = "({self} < 0)")
+    @example(given = "let x: i32 = 5", src = "x.is_negative()", expect = "false")
     fn is_negative(self) -> bool;
+    @js(emit = "({self} > {other} ? {self} - {other} : {other} - {self})")
+    @go(emit = "wjAbsDiff({self}, {other})")
+    @example(given = "let x: u32 = 3", src = "x.abs_diff(10)", expect = "7")
+    @rustc(on = "u64")
+    fn abs_diff(self, other: T) -> T;
+    @js(unsupported = "the JavaScript backend has no integer lowering for this method yet (it needs a runtime helper, which changes every emitted program)")
+    @go(unsupported = "the Go backend has no integer lowering for this method yet (it needs a runtime helper, which changes every emitted program)")
+    @example(given = "let x: i32 = 99", src = "x.isqrt()", expect = "9")
+    fn isqrt(self) -> T;
+    @js(emit = "($popcnt({self}, {T.bits}) === 1)")
+    @go(emit = "(wjPopcnt({self}) == 1)")
+    @example(given = "let x: u32 = 64", src = "x.is_power_of_two()", expect = "true")
+    @rustc(on = "u64")
+    fn is_power_of_two(self) -> bool;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(given = "let x: i32 = 42", src = "x.to_string()", expect = "42")
     fn to_string(self) -> String;
 }
 

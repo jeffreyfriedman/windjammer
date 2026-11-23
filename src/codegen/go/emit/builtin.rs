@@ -37,8 +37,8 @@ impl<'m> Go<'m> {
             Ty::Vec(_) | Ty::Iter(_) | Ty::Range(_) => self.vec_method(recv, name, &a, args, ty),
             Ty::Str => self.str_method(recv, name, &a, args, ty),
             Ty::Char => self.char_method(recv, name, &a),
-            Ty::Int(k) => self.int_method(recv, *k, name, &a),
-            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a),
+            Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &a, ty),
+            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a, ty),
             Ty::Option(_) => self.opt_method(recv, name, &a),
             Ty::Result(..) => self.res_method(recv, name, &a),
             Ty::Map(..) => self.map_method(recv, name, &a),
@@ -215,70 +215,27 @@ impl<'m> Go<'m> {
         })
     }
 
-    fn int_method(&mut self, recv: &PExpr, k: IntKind, name: &str, a: &[String]) -> PResult<String> {
-        let r = self.rv(recv)?;
-        let (lo, hi) = num::range_of(k);
-        let (lo_s, hi_s) = (num::lit_int(lo, k), num::lit_int(hi, k));
-        Ok(match name {
-            "abs" => format!("wjAbs({r})"),
-            "pow" => format!("wjPow({r}, {})", a[0]),
-            "min" => format!("wjMin2({r}, {})", a[0]),
-            "max" => format!("wjMax2({r}, {})", a[0]),
-            "clamp" => format!("wjMin2(wjMax2({r}, {}), {})", a[0], a[1]),
-            "signum" => format!("wjSignum({r})"),
-            "wrapping_add" => format!("wjWAdd({r}, {})", a[0]),
-            "wrapping_sub" => format!("wjWSub({r}, {})", a[0]),
-            "wrapping_mul" => format!("wjWMul({r}, {})", a[0]),
-            "wrapping_neg" => format!("wjWNeg({r})"),
-            "wrapping_shl" => format!("({r} << (uint({}) % {}))", a[0], k.bits()),
-            "wrapping_shr" => format!("({r} >> (uint({}) % {}))", a[0], k.bits()),
-            "saturating_add" => format!("wjSatAdd({r}, {})", a[0]),
-            "saturating_sub" => format!("wjSatSub({r}, {})", a[0]),
-            "saturating_mul" => format!("wjSatMul({r}, {})", a[0]),
-            "checked_add" => format!("wjCheckedAdd({r}, {})", a[0]),
-            "checked_sub" => format!("wjCheckedSub({r}, {})", a[0]),
-            "checked_mul" => format!("wjCheckedMul({r}, {})", a[0]),
-            "checked_div" => format!("wjCheckedDiv({r}, {})", a[0]),
-            "checked_rem" => format!("wjCheckedRem({r}, {})", a[0]),
-            "rem_euclid" => format!("wjRemEuclid({r}, {})", a[0]),
-            "div_euclid" => format!("wjDivEuclid({r}, {})", a[0]),
-            "abs_diff" => format!("wjAbsDiff({r}, {})", a[0]),
-            "count_ones" => format!("wjPopcnt({r})"),
-            "leading_zeros" => format!("wjClz({r})"),
-            "trailing_zeros" => format!("wjCtz({r})"),
-            "rotate_left" => format!("wjRotl({r}, {})", a[0]),
-            "rotate_right" => format!("wjRotr({r}, {})", a[0]),
-            "is_positive" => format!("({r} > 0)"),
-            "is_negative" => format!("({r} < 0)"),
-            "is_power_of_two" => format!("(wjPopcnt({r}) == 1)"),
-            _ => {
-                let _ = (lo_s, hi_s);
-                return self.unsupported(format!("integer method `{name}`"));
-            }
-        })
-    }
-
-    /// A call of a std method of a migrated type: print the receiver's row for Go (`std/rust_core.wji`).
-    fn lowered(&mut self, ty: CoreType, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
+    fn lowered(&mut self, ct: CoreType, recv: &PExpr, name: &str, a: &[String], ty: &Ty) -> PResult<String> {
         let r = self.rv(recv)?;
         let m = self.m;
-        let Some(row) = m.lowering.row(ty, name) else { return self.unsupported(format!("{} method `{name}`", ty.noun())) };
+        let Some(row) = m.lowering.row(ct, name) else { return self.unsupported(format!("{} method `{name}`", ct.noun())) };
         let elem = recv.ty.elem().unwrap_or(Ty::Unknown);
         let prim = self.is_prim(&elem);
         let guard = |g: Guard| match g {
             Guard::ElemPrim => prim,
             Guard::ElemPrimNotBool => prim && elem != Ty::Bool,
+            g => template::receiver_guard(g, &recv.ty),
         };
         // `widen`: the trait computes in `float64`; an `f32` receiver is converted in and the result converted back.
-        let widen = m.lowering.widen(ty, Target::Go).filter(|_| recv.ty == Ty::F32);
+        let widen = m.lowering.widen(ct, Target::Go).filter(|_| recv.ty == Ty::F32);
         match row.select(Target::Go, guard) {
             Some(Rule::Emit { template, .. }) => {
-                let out = template::render_emit(template, &row.params, &mut GoOperands { receiver: &r, args: a, widen })?;
+                let out = template::render_emit(template, &row.params, &mut GoOperands { receiver: &r, args: a, widen, recv: &recv.ty, result: ty })?;
                 Ok(if widen.is_some() && row.returns_receiver { format!("float32({out})") } else { out })
             }
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
-            Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ty.noun())),
-            None => self.unsupported(format!("{} method `{name}` has no Go rule", ty.noun())),
+            Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
+            None => self.unsupported(format!("{} method `{name}` has no Go rule", ct.noun())),
         }
     }
 
@@ -390,6 +347,8 @@ struct GoOperands<'a> {
     args: &'a [String],
     /// `Some` when the receiver is narrower than the trait's compute type.
     widen: Option<Widen>,
+    recv: &'a Ty,
+    result: &'a Ty,
 }
 
 impl GoOperands<'_> {
@@ -416,7 +375,47 @@ impl Operands for GoOperands<'_> {
         }
     }
 
-    fn fact(&mut self, _of: TypeRef, fact: Fact) -> PResult<String> {
-        unsupported(format!("the type fact `{}` is not available for this receiver", fact.name()))
+    fn fact(&mut self, of: TypeRef, fact: Fact) -> PResult<String> {
+        match template::int_kind_of(of, self.recv, self.result).and_then(|k| int_fact(k, fact)) {
+            Some(text) => Ok(text),
+            None => unsupported(format!("the type fact `{}` is not available for this type in Go", fact.name())),
+        }
+    }
+}
+
+/// A fact about an integer type: its Go type name and range literals. `None`: Go has no such fact (`{T.chk}`, the wrap
+/// text: the runtime helpers check and wrap).
+fn int_fact(k: IntKind, fact: Fact) -> Option<String> {
+    let (lo, hi) = num::range_of(k);
+    match fact {
+        Fact::Wide => Some((k.bits() == 64).to_string()),
+        Fact::Min => Some(num::lit_int(lo, k)),
+        Fact::Max => Some(num::lit_int(hi, k)),
+        Fact::Zero => Some("0".to_string()),
+        Fact::One => Some("1".to_string()),
+        Fact::Go => Some(super::types::int_name(k).to_string()),
+        Fact::Chk | Fact::WrapOpen | Fact::WrapClose => None,
+        _ => template::common_int_fact(k, fact),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integer_facts_are_the_go_type_and_its_literals() {
+        let f = |k, fact| int_fact(k, fact).unwrap();
+        assert_eq!(f(IntKind::I8, Fact::Go), "int8");
+        assert_eq!(f(IntKind::Usize, Fact::Go), "uint");
+        assert_eq!(f(IntKind::U8, Fact::Max), "uint8(255)");
+        assert_eq!(f(IntKind::I8, Fact::Min), "int8(-128)");
+        assert_eq!(f(IntKind::U32, Fact::Zero), "0");
+        assert_eq!(f(IntKind::U32, Fact::One), "1");
+        assert_eq!(f(IntKind::I64, Fact::Wide), "true");
+        assert_eq!(f(IntKind::I16, Fact::Bits), "16");
+        assert_eq!(f(IntKind::I16, Fact::Signed), "true");
+        assert_eq!(int_fact(IntKind::I32, Fact::Chk), None);
+        assert_eq!(int_fact(IntKind::I32, Fact::WrapOpen), None);
     }
 }

@@ -4,10 +4,10 @@ last_verified: 8a9941cacf68
 ---
 # Table-driven std surface: one declaration per std function, backends as interpreters
 
-> **Stage 1 of 9 is implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
-> rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
+> **Stages 1 and 2 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
+> and `Integer` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
 > `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, `WJ0195` and the
-> module-function rows are stages 2-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
+> module-function rows are stages 3-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
 > (`tests/common/heuristic_scan.rs`, run standalone over each file).
 >
 > What stage 1 settled that the text below leaves open: the signature stays in `CoreSurface` (the `support`-layer
@@ -19,6 +19,20 @@ last_verified: 8a9941cacf68
 > shared by the solver, the Rust backend, the check pass and the portable backends, which makes the decorators' extra
 > parse cost (+370 us) a net saving; the lowered module carries its table (`PModule::lowering`); the gates read `std/rust_core.wji` from disk so a
 > planted mistake fails without rebuilding the compiler.
+>
+> What stage 2 settled: the facts of section 2.3 are real (`{T.bits}`, `{T.signed}`, `{T.wide}`, `{T.min}`, `{T.max}`,
+> `{T.zero}`, `{T.one}`, `{T.chk}`, `{T.go}`, `{R.go}`), answered by an `Operands` per emitter over its own numeric helpers
+> (JavaScript `num::*`, Go `types::int_name`); a fact a target does not have is a refusal, not a guess. Two facts were
+> added, `{T.wrap_open}` / `{T.wrap_close}`, because a template is linear and the JavaScript wrap of an expression into
+> `T`'s range brackets it (`BigInt.asIntN(64, ..)`, `((..) | 0)`, `(((..) << 24) >> 24)`). The `wrapping_mul` guards are
+> `t_i32` and `t_u32` (the `Math.imul` forms) and `t_wide` (a 64-bit receiver, a BigInt) replaces `if wide` in the
+> JavaScript text; they read the receiver's own type, which both emitters answer through `template::receiver_guard`.
+> `lowered()` is the one row interpreter for `Float` and `Integer`. A method the emitters never handled
+> (`swap_bytes`, `count_zeros`, `checked_neg`, `checked_pow`, `checked_shl`, `checked_shr`, `wrapping_pow`,
+> `saturating_pow`, `reverse_bits`, and `isqrt`, whose runtime helper would change every emitted program: the shims are part of the emitted output that G2 hashes) is declared with `@js(unsupported = ..)` / `@go(unsupported = ..)`; G3 pins that list
+> (shrink-only), and builds each unsupported row to see the emitter refuse it with the row's reason. `@example(given = "let x: u8 = 250", ..)` declares the typed local an example needs
+> (a literal receiver is folded by Go's compiler and takes its type from inference); `@rustc(on = "u64")` names the type
+> an entry is checked against rustc on when it exists only on some integer types (`is_power_of_two`, `abs_diff`).
 
 ## 1. Problem, in numbers
 
