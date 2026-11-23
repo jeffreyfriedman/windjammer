@@ -687,6 +687,29 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Every declaration of `member` of a user type when several impls define it with different formals
+    /// (`impl Mul<f32> for V` and `impl Mul<V> for V`); empty otherwise.
+    pub(super) fn resolve_type_member_overloads(&self, type_name: &str, member: &str) -> Vec<FunctionSignature> {
+        let Some(registry) = self.registry else { return Vec::new() };
+        let base = type_name.split('<').next().unwrap_or(type_name);
+        let base = base.strip_prefix("crate::").unwrap_or(base);
+        let leaf = base.rsplit("::").next().unwrap_or(base);
+        let path = if base.contains("::") {
+            Some(base.to_string())
+        } else {
+            self.analyzed.imported_paths.get(leaf).cloned().or_else(|| {
+                (!self.analyzed.module_path.is_empty()).then(|| format!("{}::{leaf}", self.analyzed.module_path.join("::")))
+            })
+        };
+        path.into_iter()
+            .map(|p| format!("{p}::{member}"))
+            .chain([format!("{leaf}::{member}")])
+            .map(|k| registry.overloads_at(&k))
+            .find(|o| !o.is_empty())
+            .map(<[_]>::to_vec)
+            .unwrap_or_default()
+    }
+
     /// The declared return type of method `method` of a user type (a homonym with no unique signature: `None`).
     pub(super) fn user_method_return(&self, receiver: &Type, method: &str, arg_count: usize) -> Option<Type> {
         let base = crate::ir::receiver_type::type_to_struct_base(receiver)?;

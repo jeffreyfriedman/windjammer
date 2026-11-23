@@ -1,0 +1,16 @@
+// Literals in shifts and masks take the integer width of `to_bits()` (u32 for an f32), not the i64 default.
+// expect: 0 160
+
+fn low_byte(v: f32) -> u8 {
+    let bits = v.to_bits()
+    ((bits >> 8) & 255) as u8
+}
+
+fn high_byte(v: f32) -> u8 {
+    let bits = v.to_bits()
+    ((bits >> 16) & 255) as u8
+}
+
+fn main() {
+    println("${low_byte(1.25)} ${high_byte(1.25)}")
+}

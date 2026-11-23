@@ -109,6 +109,20 @@ impl Parser {
             self.advance();
             let mut args = Vec::new();
             loop {
+                // Associated-type binding: `Add<Output = T>` / `Iterator<Item = T>`.
+                if let (Token::Ident(assoc), Some(Token::Assign)) =
+                    (self.current_token().clone(), self.peek(1).cloned())
+                {
+                    self.advance();
+                    self.advance();
+                    let ty = self.parse_type()?;
+                    args.push(format!("{} = {}", assoc, self.type_to_string(&ty)));
+                    if self.current_token() == &Token::Comma {
+                        self.advance();
+                        continue;
+                    }
+                    break;
+                }
                 let ty = self.parse_type()?;
                 args.push(self.type_to_string(&ty));
                 if self.current_token() == &Token::Comma {

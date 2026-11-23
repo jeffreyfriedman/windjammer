@@ -356,6 +356,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) module_alias_map: std::collections::HashMap<String, String>,
     /// Function import alias → fully qualified path (`use dep::fn as alias`).
     pub(crate) import_fn_alias_map: std::collections::HashMap<String, String>,
+    /// Names `use` brings in as constants (`use std::f32::consts::PI`): a receiver of this name is a value, not a type.
+    pub(crate) imported_const_names: std::collections::HashSet<String>,
     pub(crate) imported_fn_names: std::collections::HashMap<String, String>, // `use crate::ops::double`: bare name -> the path it names
     /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
     /// Used to emit `module::fn` instead of `module.fn` for free functions.
@@ -562,8 +564,14 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Identifier should use `::` for associated/static calls (`tokio::spawn`, `Vec::new`).
     /// Import- and declaration-driven — not a crate/method name list.
+    /// A constant in scope (a module `const`, or one `use` imported such as `std::f32::consts::PI`): a value, so a
+    /// method on it is an instance call (`PI.to_degrees()`), never a path on a type.
+    pub(in crate::codegen::rust) fn identifier_names_constant(&self, name: &str) -> bool {
+        self.imported_const_names.contains(name) || self.module_const_types.contains_key(name)
+    }
+
     pub(in crate::codegen::rust) fn identifier_is_static_call_root(&self, name: &str) -> bool {
-        if self.identifier_is_local_binding(name) {
+        if self.identifier_is_local_binding(name) || self.identifier_names_constant(name) {
             return false;
         }
         if name == "std" || name == "Self" || name.contains('.') {
@@ -749,6 +757,7 @@ impl<'ast> CodeGenerator<'ast> {
             import_aliases: std::collections::HashSet::new(),
             module_alias_map: std::collections::HashMap::new(),
             import_fn_alias_map: std::collections::HashMap::new(),
+            imported_const_names: Default::default(),
             imported_fn_names: Default::default(),
             runtime_std_module_imports: std::collections::HashSet::new(),
             imported_path_roots: std::collections::HashSet::new(),

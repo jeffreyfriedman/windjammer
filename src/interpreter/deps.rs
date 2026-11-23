@@ -16,7 +16,8 @@ pub struct Dependencies {
     pub rust: Vec<String>,
 }
 
-pub fn dependency_sources(entry: &Path) -> Result<Dependencies, RuntimeError> {
+/// `with_dev`: the entry is a test, which also sees the project's `[dev-dependencies]` (not a dependency's).
+pub fn dependency_sources(entry: &Path, with_dev: bool) -> Result<Dependencies, RuntimeError> {
     let Some(root) = crate::module_system::project::find_manifest_dir(entry) else {
         return Ok(Dependencies::default());
     };
@@ -26,7 +27,8 @@ pub fn dependency_sources(entry: &Path) -> Result<Dependencies, RuntimeError> {
     let mut pending = vec![root.clone()];
     let mut seen_roots: Vec<std::path::PathBuf> = vec![root];
     while let Some(project) = pending.pop() {
-        let nodes = graph::resolve(&project).map_err(|e| RuntimeError::new(ErrorKind::Semantic, e))?;
+        let nodes = if with_dev && seen_roots.len() == 1 { graph::resolve_with_dev(&project) } else { graph::resolve(&project) }
+            .map_err(|e| RuntimeError::new(ErrorKind::Semantic, e))?;
         for n in nodes.iter().filter(|n| n.kind == DepKind::Rust) {
             if !rust.contains(&n.crate_name()) {
                 rust.push(n.crate_name());
@@ -79,7 +81,7 @@ mod tests {
         write(r, "a/build/Cargo.toml", "[package]\nname = \"a\"\n");
         write(r, "b/wj.toml", "[package]\nname = \"b\"\n\n[lib]\n");
         write(r, "b/src/lib.wj", "pub fn g() -> int { 1 }\n");
-        let deps = dependency_sources(&r.join("app/src/main.wj")).unwrap();
+        let deps = dependency_sources(&r.join("app/src/main.wj"), false).unwrap();
         let mut names: Vec<&str> = deps.windjammer.iter().map(|(n, _)| n.as_str()).collect();
         names.sort();
         assert_eq!(names, ["wj_a", "wj_b"]);

@@ -1,0 +1,10 @@
+// In `v == 0.1` with `v: f32` the literal is an f32 (as rustc types it), so both modes agree.
+// expect: true
+// expect: true
+fn main() {
+    let d: f64 = 0.1
+    let v = d as f32
+    println("${v == 0.1}")
+    let a: f32 = 0.1
+    println("${a == 0.1}")
+}

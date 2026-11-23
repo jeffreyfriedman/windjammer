@@ -361,6 +361,15 @@ fn mask(t: IntTy) -> i128 {
     }
 }
 
+/// The IEEE-754 bytes of a float as a `Vec<u8>`: 4 for `f32`, 8 for `f64`.
+fn float_bytes((x, t): (f64, FloatTy), big_endian: bool) -> Value {
+    let mut bytes = if t == FloatTy::F32 { (x as f32).to_le_bytes().to_vec() } else { x.to_le_bytes().to_vec() };
+    if big_endian {
+        bytes.reverse();
+    }
+    Value::vec(bytes.into_iter().map(|b| Value::Int(b as i128, IntTy::U8)).collect())
+}
+
 fn register_float(r: &mut Registry) {
     float_fn!(r, "sqrt", |x| x.sqrt());
     float_fn!(r, "cbrt", |x| x.cbrt());
@@ -444,6 +453,8 @@ fn register_float(r: &mut Registry) {
             Value::Int(x.to_bits() as i128, IntTy::U64)
         })
     });
+    r.pure(Kind::Float, "to_le_bytes", |_, v, _| Ok(float_bytes(float_of(v), false)));
+    r.pure(Kind::Float, "to_be_bytes", |_, v, _| Ok(float_bytes(float_of(v), true)));
     r.pure(Kind::Float, "to_string", |it, v, _| Ok(Value::str(it.display_string(v)?)));
     r.pure(Kind::Float, "total_cmp", |_, v, a| {
         let (x, _) = float_of(v);

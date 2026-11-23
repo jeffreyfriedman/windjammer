@@ -151,6 +151,10 @@ pub struct SignatureRegistry {
     /// Write-back restores trait AST `string` onto these without touching
     /// inherent homonyms (`DbReportReader::report_lines`).
     trait_impl_method_keys: HashSet<String>,
+    /// Every declaration of a key two impls of one type share with different formals (`impl Mul<f32> for V` and
+    /// `impl Mul<V> for V` both define `V::mul`): `signatures` holds the last, this holds all, so a call is resolved
+    /// by its arguments' types. Not part of the metadata snapshot: a dependency's overloads fall back to the last.
+    overloads: HashMap<String, Vec<FunctionSignature>>,
     impl_method_traits: HashMap<String, String>, // `Type::method` of `impl Trait for Type` -> the declared `Trait`
     /// Types declared by dependencies, with whether their crate derives `Serialize` for them.
     dependency_type_serde: std::collections::BTreeMap<String, bool>,
@@ -239,6 +243,7 @@ impl SignatureRegistry {
             trait_method_keys: TraitKeySet::default(),
             trait_impl_method_keys: HashSet::new(),
             impl_method_traits: HashMap::new(),
+            overloads: HashMap::new(),
             dependency_type_serde: std::collections::BTreeMap::new(),
             inherent_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
@@ -775,6 +780,13 @@ impl SignatureRegistry {
                         .all(|(a, b)| param_types_are_ownership_refinement(a, b));
                 if !stub_like && !ownership_refinement {
                     self.type_collision_keys.insert(name.clone());
+                    if existing.has_self_receiver && sig.has_self_receiver {
+                        let existing = existing.clone();
+                        let all = self.overloads.entry(name.clone()).or_default();
+                        if all.is_empty() {
+                            all.push(existing);
+                        }
+                    }
                 } else if ownership_refinement {
                     // Prior Owned→Reference refresh may have flagged this key; clear it.
                     self.type_collision_keys.remove(&name);
@@ -804,8 +816,20 @@ impl SignatureRegistry {
                 }
             }
         }
+        if let Some(all) = self.overloads.get_mut(&name) {
+            match all.iter_mut().find(|o| o.declares_same_function(&sig)) {
+                Some(slot) => *slot = sig.clone(),
+                None => all.push(sig.clone()),
+            }
+        }
         self.index_method_key(&name);
         self.signatures.insert(name, sig);
+    }
+
+    /// Every declaration of method key `key` when several impls of one type define it with different formals
+    /// (this layer, then the layers below); empty when the key has one declaration.
+    pub fn overloads_at(&self, key: &str) -> &[FunctionSignature] {
+        self.layers().find_map(|reg| reg.overloads.get(key)).map_or(&[], Vec::as_slice)
     }
 
     /// Index `Type::method` under `method`; buckets stay sorted so "first homonym" is deterministic.
@@ -1885,6 +1909,7 @@ impl SignatureRegistry {
         self.trait_method_keys.extend(other.trait_method_keys.iter().cloned());
         self.trait_impl_method_keys.extend(other.trait_impl_method_keys.iter().cloned());
         self.impl_method_traits.extend(other.impl_method_traits.iter().map(|(k, v)| (k.clone(), v.clone())));
+        self.overloads.extend(other.overloads.iter().map(|(k, v)| (k.clone(), v.clone())));
         self.dependency_type_serde
             .extend(other.dependency_type_serde.iter().map(|(k, v)| (k.clone(), *v)));
         self.inherent_method_keys.extend(other.inherent_method_keys.iter().cloned());

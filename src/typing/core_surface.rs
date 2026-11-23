@@ -201,6 +201,11 @@ impl CoreSurface {
     /// The signature of `receiver.method::<turbofish>(..)`, instantiated, or `None` when the receiver is not a
     /// surface type or the method is not declared for it. Generics left unfixed come back as `Type::Generic`.
     pub fn method_signature(&self, receiver: &Type, method: &str, turbofish: &[Type]) -> Option<MethodSig> {
+        if let Some(width_trait) = float_width_trait(receiver) {
+            if let Some((_, _, params, ret)) = self.declared(width_trait, method) {
+                return Some(MethodSig { params, ret });
+            }
+        }
         let (name, type_args) = head(receiver)?;
         let (type_generics, method_generics, params, ret) = self.declared(name, method)?;
         // An iterator adapter called directly on a sequence iterates it by reference (`v.filter(f)` is
@@ -295,6 +300,17 @@ fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
         // Rust's own `std::sync::mpsc` ends are not the ADR-0004 channel ends (their `send` returns a `Result`)
         Type::Parameterized(n, _) if crate::type_classification::is_rust_channel_path(n) => None,
         Type::Parameterized(n, args) => known(n).map(|k| (k, args.clone())),
+        _ => None,
+    }
+}
+
+/// The surface trait declaring the width-dependent methods of a float receiver (`f32` -> `F32`).
+pub fn float_width_trait(receiver: &Type) -> Option<&'static str> {
+    match receiver {
+        Type::Reference(t) | Type::MutableReference(t) => float_width_trait(t),
+        Type::Float => Some("F64"),
+        Type::Custom(n) if n == "f64" || n == "float" => Some("F64"),
+        Type::Custom(n) if n == "f32" => Some("F32"),
         _ => None,
     }
 }

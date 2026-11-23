@@ -185,6 +185,14 @@ impl Interpreter {
                         {
                             self.from_impls.entry(ty.clone()).or_default().push((src.clone(), f.clone()));
                         }
+                        if block.trait_name.as_deref().is_some_and(crate::type_classification::is_consuming_operator_trait) {
+                            let rhs = block
+                                .trait_type_args
+                                .as_deref()
+                                .and_then(|a| a.first().cloned())
+                                .unwrap_or_else(|| Type::Custom(block.type_name.clone()));
+                            self.op_impls.entry((ty.clone(), func.name.clone())).or_default().push((rhs, f.clone()));
+                        }
                         if let Some(tr) = &block.trait_name {
                             // trait-qualified key disambiguates e.g. Display::fmt vs Debug::fmt
                             self.methods.insert((ty.clone(), format!("{}::{}", base_type_name(tr), func.name)), f.clone());

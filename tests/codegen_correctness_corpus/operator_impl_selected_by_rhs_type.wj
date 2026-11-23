@@ -1,0 +1,21 @@
+// Two impls of one operator (`Mul<f32>` and `Mul<V>`) are chosen by the right operand's declared type; an unsuffixed
+// float literal takes the width of the float impl's parameter (f32), never the f64 default.
+// expect: 2
+// expect: 1
+struct V { x: f32 }
+
+impl Mul<f32> for V {
+    type Output = V
+    fn mul(self, k: f32) -> V { V { x: self.x * k } }
+}
+
+impl Mul<V> for V {
+    type Output = V
+    fn mul(self, o: V) -> V { V { x: self.x * o.x } }
+}
+
+fn main() {
+    let a = V { x: 1.0 }
+    println("${(a * 2.0).x}")
+    println("${(a * a).x}")
+}

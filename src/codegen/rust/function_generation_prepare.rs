@@ -12704,7 +12704,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.idiom.return_position_list_literals = match func.return_type.as_ref() {
             Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && Self::holds_list(t) =>
             {
-                Self::collect_return_position_lists(&func.body)
+                Self::collect_return_position_lists(&func.body, t)
             }
             _ => Default::default(),
         };

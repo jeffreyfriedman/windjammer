@@ -271,6 +271,8 @@ methods = [
   { type = "float", name = "is_infinite", sig = "x.is_infinite() -> bool", summary = "infinity test" },
   { type = "float", name = "to_string", sig = "x.to_string() -> string", summary = "decimal text (in a string: \"${x:.2}\")" },
   { type = "float", name = "to_bits", sig = "x.to_bits() -> u64", summary = "IEEE-754 bit pattern" },
+  { type = "float", name = "to_be_bytes", sig = "x.to_be_bytes() -> Vec<u8>", summary = "big-endian IEEE-754 bytes (4 for f32, 8 for f64)" },
+  { type = "float", name = "to_le_bytes", sig = "x.to_le_bytes() -> Vec<u8>", summary = "little-endian IEEE-754 bytes (4 for f32, 8 for f64)" },
 
   # ---- Option (written T?) ----
   { type = "Option", name = "is_some", sig = "o.is_some() -> bool", summary = "true for Some" },

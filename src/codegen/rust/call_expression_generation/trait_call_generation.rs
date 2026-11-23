@@ -529,8 +529,9 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     // identifier is an imported/scanned module (signature `{module}::{method}`).
     let separator = match call_obj {
         Expression::Identifier { name, .. } => {
+            let names_value = gen.identifier_names_constant(name);
             if CodeGenerator::is_enum_variant_qualified_path(name)
-                || name.chars().next().is_some_and(|c| c.is_uppercase())
+                || (name.chars().next().is_some_and(|c| c.is_uppercase()) && !names_value)
                 || runtime_module.is_some()
             {
                 "::"

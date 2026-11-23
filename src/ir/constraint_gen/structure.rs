@@ -474,6 +474,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let Some(receiver) = self.surface_shape(object) else { return false };
         let Some(surface) = self.core_surface else { return false };
         let Some(type_name) = crate::typing::core_surface::surface_type_name(&receiver) else { return false };
+        // A float method whose result depends on the width (`to_bits`: u32 or u64) is declared per width.
+        let width_trait = crate::typing::core_surface::float_width_trait(&receiver).filter(|t| surface.declared(t, method).is_some());
+        let type_name = width_trait.unwrap_or(type_name);
         let Some((type_generics, method_generics, params, ret)) = surface.declared(type_name, method) else { return false };
         if params.len() != arguments.len() {
             return false;
@@ -481,7 +484,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let at = expr.location();
         let mut g = SurfaceGenerics::new(type_generics.iter().chain(&method_generics));
         let self_ty = crate::typing::core_surface::self_type(type_name, &type_generics);
-        self.bind_surface_type(&self_ty, obj_var, &mut g, &at);
+        if width_trait.is_none() {
+            self.bind_surface_type(&self_ty, obj_var, &mut g, &at);
+        }
         // A receiver whose static type is known fixes the generics it names (`v: Vec<u8>`).
         self.bind_surface_type(&receiver, obj_var, &mut SurfaceGenerics::new(&[]), &at);
         let turbofish = type_args.as_deref().unwrap_or(&[]);
@@ -562,10 +567,44 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// `p * 0.5` where `p` is a user type with `impl Mul<f32> for P`: the operator is that impl's method (`mul`), so
     /// the right operand has the method's declared parameter type and the result its return type. Returns whether
     /// the left operand is such a type (then the operands are not unified with each other).
-    pub(super) fn emit_operator_impl(&mut self, op: &BinaryOp, left: &Expression<'ast>, r: ConstraintVar, result: ConstraintVar) -> bool {
+    pub(super) fn emit_operator_impl(
+        &mut self,
+        op: &BinaryOp,
+        left: &Expression<'ast>,
+        right: &Expression<'ast>,
+        r: ConstraintVar,
+        result: ConstraintVar,
+    ) -> bool {
         let Some(method) = operator_method(op) else { return false };
         let Some(Type::Custom(type_name)) = self.static_type(left) else { return false };
-        let Some(sig) = self.resolve_type_member(&type_name, method, 1).cloned() else { return false };
+        let Some(mut sig) = self.resolve_type_member(&type_name, method, 1).cloned() else { return false };
+        // A type with several impls of one operator (`Mul<f32>` and `Mul<V>`): the right operand's declared type
+        // (or, for a literal, its class) selects the impl whose parameter types it.
+        let overloads = self.resolve_type_member_overloads(&type_name, method);
+        if overloads.len() > 1 {
+            let rhs_of = |s: &crate::analyzer::FunctionSignature| s.formal_param_type(s.arg_param_index(0)).or_else(|| s.param_types.get(s.arg_param_index(0))).cloned();
+            let operand = self.static_type(right).map(|t| strip_refs_owned(&t));
+            let literal = match right {
+                Expression::Literal { value: Literal::Float(_), .. } => Some(true),
+                Expression::Literal { value: Literal::Int(_), .. } => Some(false),
+                _ => None,
+            };
+            let fits = |s: &crate::analyzer::FunctionSignature| -> bool {
+                let Some(rhs) = rhs_of(s).map(|t| strip_refs_owned(&t)) else { return false };
+                match (&operand, literal) {
+                    (Some(t), _) => *t == rhs,
+                    (None, Some(float)) => {
+                        let b = parser_type_to_base_type(&rhs);
+                        if float { matches!(b, BaseType::F32 | BaseType::F64) } else { crate::ir::solver::is_integer_type(&b) }
+                    }
+                    (None, None) => false,
+                }
+            };
+            let matching: Vec<_> = overloads.iter().filter(|s| fits(s)).collect();
+            if let [only] = matching.as_slice() {
+                sig = (*only).clone();
+            }
+        }
         let Some(rhs) = sig.formal_param_type(sig.arg_param_index(0)).or_else(|| sig.param_types.get(sig.arg_param_index(0))).cloned() else {
             return false;
         };
@@ -779,5 +818,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         if let Some(key) = arg_expr.and_then(crate::ir::numeric_facts::conversion_key) {
             self.index_use_keys.push((key, arg));
         }
+    }
+}
+
+fn strip_refs_owned(t: &Type) -> Type {
+    match t {
+        Type::Reference(i) | Type::MutableReference(i) => strip_refs_owned(i),
+        other => other.clone(),
     }
 }

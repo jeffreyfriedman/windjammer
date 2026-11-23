@@ -163,6 +163,8 @@ struct AstConstraintWalker<'a, 'ast> {
     closure_param_types: HashMap<(usize, usize), Type>,
     /// The value variable of each enclosing `loop` (innermost last): a `break v` is that loop's value.
     loop_values: Vec<ConstraintVar>,
+    /// The declared type of the `let` whose initializer is the call being walked (`let a: P<f32> = P::new(3.0)`).
+    expected_call_type: Option<Type>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -366,6 +368,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             surface_typed: Default::default(),
             closure_param_types: HashMap::new(),
             loop_values: Vec::new(),
+            expected_call_type: None,
         }
     }
 
@@ -487,12 +490,20 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// Unify call-site argument vars with callee formal expectations.
     fn emit_call_site_constraints(&mut self, sig: &FunctionSignature, arg_vars: &[ConstraintVar], arguments: &[(Option<String>, &'ast Expression<'ast>)]) {
+        self.emit_call_site_constraints_declared(sig, arg_vars, arguments, None);
+    }
+
+    /// `declared`: the type the call's result is declared to have (`let a: P<f32> = P::new(..)`), which fixes the
+    /// callee's generics.
+    fn emit_call_site_constraints_declared(&mut self, sig: &FunctionSignature, arg_vars: &[ConstraintVar], arguments: &[(Option<String>, &'ast Expression<'ast>)], declared: Option<&Type>) {
         for (arg_index, &arg_var) in arg_vars.iter().enumerate() {
             let param_idx = sig.arg_param_index(arg_index);
             let expected_var = self.cs.fresh_var();
+            let fixed = declared.and_then(|d| Self::declared_formal_type(sig, d, param_idx));
 
-            if let Some(ty) = sig
-                .formal_param_type(param_idx)
+            if let Some(ty) = fixed
+                .as_ref()
+                .or_else(|| sig.formal_param_type(param_idx))
                 .or_else(|| sig.param_types.get(param_idx))
             {
                 let base = parser_type_to_base_type(&structure::expand_aliases(ty, &self.analyzed.type_aliases));
@@ -532,6 +543,23 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ),
             );
         }
+    }
+
+    /// `let a: P<f32> = P::new(3.0)`: the declared type arguments fix the callee's generics (its result is `P<T>`),
+    /// so a formal of type `T` is the declared type (here `f32`) instead of the generic, and an argument at it takes
+    /// that width rather than the default.
+    fn declared_formal_type(sig: &FunctionSignature, expected: &Type, param_idx: usize) -> Option<Type> {
+        let (Some(Type::Parameterized(ret_name, ret_args)), Type::Parameterized(exp_name, exp_args)) = (sig.return_type.as_ref(), expected) else {
+            return None;
+        };
+        if ret_name != exp_name || ret_args.len() != exp_args.len() {
+            return None;
+        }
+        let Some(Type::Generic(g) | Type::Custom(g)) = sig.formal_param_type(param_idx).or_else(|| sig.param_types.get(param_idx)) else {
+            return None;
+        };
+        let pos = ret_args.iter().position(|a| matches!(a, Type::Generic(n) | Type::Custom(n) if n == g))?;
+        Some(exp_args[pos].clone())
     }
 
     /// Write callee return type (and language-level `.to_string()` / `.string()`) onto
@@ -756,7 +784,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 else_block,
                 ..
             } => {
+                self.expected_call_type = type_.clone().filter(|_| matches!(&**value, Expression::Call { .. }));
                 let val_var = self.walk_expression(value);
+                self.expected_call_type = None;
                 self.emit_owned_for_mut_local_of_param(*mutable, pattern, value);
                 if let (Pattern::Identifier(n) | Pattern::MutBinding(n), Expression::Identifier { .. }) = (pattern, &**value) {
                     self.let_aliases.insert(n.clone());
@@ -999,7 +1029,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     }
                 }
 
-                if self.emit_operator_impl(op, left, r, result) {
+                if self.emit_operator_impl(op, left, right, r, result) {
                     // A user type's operator: its declared `impl` types the right operand and the result.
                 } else if is_comparison_op(op) {
                     // Comparisons: operands should be same type, result is bool
@@ -1062,6 +1092,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 arguments,
                 ..
             } => {
+                let expected_type = self.expected_call_type.take();
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     let arg_in_payload =
                         self.call_arg_is_owned_payload_store(function, i, arguments.len());
@@ -1086,7 +1117,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         .resolve_free_callee_signature(&callee_name, arguments.len())
                         .cloned()
                     {
-                        self.emit_call_site_constraints(&sig, &arg_vars, arguments);
+                        self.emit_call_site_constraints_declared(&sig, &arg_vars, arguments, expected_type.as_ref());
                         self.emit_call_result_type_constraints(result, Some(&sig), None);
                     } else if !self.call_is_modelled(&callee_name) {
                         self.numeric_unmodelled.opaque.extend(arg_vars.iter().copied().chain([result]));

@@ -157,6 +157,8 @@ pub struct Interpreter {
     pub(crate) dup_types: HashSet<String>,
     pub(crate) dup_decls: HashSet<String>,
     pub(crate) from_impls: HashMap<String, Vec<(Type, Rc<FuncDef>)>>,
+    /// `impl Mul<R> for T`: every impl of one operator method of a type with its declared right-hand type.
+    pub(crate) op_impls: HashMap<(String, String), Vec<(Type, Rc<FuncDef>)>>,
     pub(crate) user_mutating: HashSet<String>,
     pub(crate) type_aliases: HashMap<String, Type>,
     pub(crate) globals: HashMap<(usize, String), Slot>,
@@ -315,6 +317,7 @@ impl Interpreter {
             trait_impls: Vec::new(),
             methods: HashMap::new(),
             from_impls: HashMap::new(),
+            op_impls: HashMap::new(),
             dup_types: HashSet::new(),
             dup_decls: HashSet::new(),
             user_mutating: HashSet::new(),

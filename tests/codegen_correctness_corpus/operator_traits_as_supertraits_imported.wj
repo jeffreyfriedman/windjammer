@@ -1,0 +1,13 @@
+// Operator traits named only as supertraits are imported in the generated Rust (`use std::ops::{Add, Sub, Mul}`).
+// expect: 0
+trait Scalar: Add + Sub + Mul + Copy {
+    fn zero() -> Self
+}
+
+impl Scalar for f64 {
+    fn zero() -> f64 { 0.0 }
+}
+
+fn main() {
+    println("${f64::zero()}")
+}

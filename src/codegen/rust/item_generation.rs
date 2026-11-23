@@ -899,6 +899,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Generate impl with type parameters
+        let header_start = output.len();
         output.push_str("impl");
         if !impl_block.type_params.is_empty() {
             output.push('<');
@@ -954,7 +955,23 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if !impl_block.associated_types.is_empty() {
+        // An operator impl (`impl Add for V`) that omits `type Output` takes the declared return type of its one
+        // operator method: the trait declares `Output` as that method's result, so the signature is the declaration.
+        let inferred_output = impl_block
+            .trait_name
+            .as_deref()
+            .filter(|t| crate::type_classification::is_consuming_operator_trait(t))
+            .filter(|_| !impl_block.associated_types.iter().any(|a| a.name == "Output"))
+            .and_then(|_| match impl_block.functions.as_slice() {
+                [only] => only.return_type.as_ref(),
+                _ => None,
+            });
+        if let Some(ret) = inferred_output {
+            output.push_str(&self.indent());
+            output.push_str(&format!("type Output = {};\n", self.type_to_rust(ret)));
+        }
+
+        if !impl_block.associated_types.is_empty() || inferred_output.is_some() {
             output.push('\n');
         }
 
@@ -1265,6 +1282,21 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.indent_level -= 1;
         output.push('}');
+        // `self.clone()` (written, or inserted where `self` is reused) clones `Self<T>`, whose derived `Clone` needs
+        // `T: Clone`: an impl whose parameters do not state it gets it, so the Rust output type-checks.
+        if !impl_block.type_params.is_empty() && output.contains("self.clone()") {
+            let missing = |p: &crate::parser::TypeParam| !p.bounds.iter().any(|b| b == "Clone");
+            if impl_block.type_params.iter().any(missing) {
+                let mut with_clone = impl_block.type_params.clone();
+                for p in with_clone.iter_mut().filter(|p| missing(p)) {
+                    p.bounds.push("Clone".to_string());
+                }
+                let (old_tp, new_tp) = (self.format_type_params(&impl_block.type_params), self.format_type_params(&with_clone));
+                let header_end = output[header_start..].find(" {\n").map_or(header_start, |i| header_start + i);
+                let header = output[header_start..header_end].replacen(&old_tp, &new_tp, 1);
+                output.replace_range(header_start..header_end, &header);
+            }
+        }
         output
     }
 

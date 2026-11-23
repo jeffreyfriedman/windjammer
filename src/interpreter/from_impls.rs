@@ -9,7 +9,7 @@ use crate::parser::Type;
 use std::rc::Rc;
 
 /// 0 = the value cannot be a `t`, 1 = it might be (unsuffixed literal, unknown shape), 2 = it is.
-fn fit(v: &Value, t: &Type) -> u8 {
+pub(super) fn fit(v: &Value, t: &Type) -> u8 {
     if let Type::Reference(i) | Type::MutableReference(i) = t {
         return fit(v, i);
     }
@@ -21,6 +21,7 @@ fn fit(v: &Value, t: &Type) -> u8 {
             None => u8::from(matches!(t, Type::Generic(_) | Type::Infer)),
         },
         Value::Float(_, ft) => match type_is_float(t) {
+            Some(_) if *ft == FloatTy::Lit => 1,
             Some(tt) => 2 * u8::from(tt == *ft),
             None => u8::from(matches!(t, Type::Generic(_) | Type::Infer)),
         },
@@ -52,6 +53,23 @@ impl Interpreter {
         let mut best: Option<(u8, &Rc<FuncDef>)> = None;
         for (src, f) in impls {
             let score = fit(&arg, src);
+            if score > 0 && best.is_none_or(|(b, _)| score > b) {
+                best = Some((score, f));
+            }
+        }
+        best.map(|(_, f)| f.clone())
+    }
+
+    /// The operator impl of `ty` (`impl Mul<f32> for V`, `impl Mul<V> for V`) whose declared right-hand type fits
+    /// `rhs` best; `None` when the type has fewer than two impls of that operator (the plain method applies).
+    pub(crate) fn op_impl_for(&self, ty: &str, method: &str, rhs: &Value) -> Option<Rc<FuncDef>> {
+        let impls = self.op_impls.get(&(ty.to_string(), method.to_string()))?;
+        if impls.len() < 2 {
+            return None;
+        }
+        let mut best: Option<(u8, &Rc<FuncDef>)> = None;
+        for (decl, f) in impls {
+            let score = fit(rhs, decl);
             if score > 0 && best.is_none_or(|(b, _)| score > b) {
                 best = Some((score, f));
             }
