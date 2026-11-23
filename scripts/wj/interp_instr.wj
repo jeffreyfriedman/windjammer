@@ -14,6 +14,12 @@
 // Every run must exit 0 and print the kernel's recorded output (bench/interp/expected/<kernel>.out), so a faster
 // interpreter that prints something else fails here before any count is compared. A count is the smallest of
 // --runs N runs (default 3; startup N + 2): the counter's noise only ever adds. Run from the repository root.
+//
+// Two tables per counter. The ratchet rows (`<counter>`) are COLD: every run starts from a fresh cache root holding
+// only the scanned stdlib layer (`WJ_CARGO_TARGET_ROOT`, seeded once), so the stored check of a program
+// (`check/run_cache.rs`) never answers and an interpreter regression cannot hide behind a cache hit. The WARM rows
+// (`<counter>:warm`) are the repeat run of the unchanged program: the same root after one uncounted run, so the
+// check and the solver's literal widths come from the store. Both tables have their own ratchet.
 use std::env
 use std::fs
 use std::process
@@ -82,10 +88,11 @@ const MARK: string = "\n@@wj-interp-instr counter@@\n"
 // The instruction count of one run of `cmd` (a shell command line), with its stdout and exit status. The counter
 // writes to stderr; the shell keeps that in a file of the system temp dir (`mktemp`) that it deletes itself, so
 // nothing outlives the run, and appends it to stdout after `MARK`.
-fn count_once(c: string, cmd: string) -> Count {
+fn count_once(c: string, cmd: string, root: string) -> Count {
     let counter = if c == "callgrind" { "valgrind --tool=callgrind --callgrind-out-file=/dev/null" } else { "/usr/bin/time -l" }
     // the staleness warnings are off: inside the checkout they cost a `stat` per compiler source, which is not the interpreter
-    let line = "export WJ_NO_STALE_WARN=1; f=$(mktemp) || exit 99; trap 'rm -f \"$f\"' EXIT; ${counter} ${cmd} 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
+    let (setup, cleanup, envp) = root_env(root)
+    let line = "export WJ_NO_STALE_WARN=1; f=$(mktemp) || exit 99; ${setup}trap 'rm -f \"$f\"${cleanup}' EXIT; ${envp}${counter} ${cmd} 2>\"$f\"; s=$?; printf '%s' " + quote(MARK) + "; cat \"$f\"; exit $s"
     let out = match sh(line) {
         Ok(o) => o,
         Err(e) => {
@@ -109,6 +116,19 @@ fn count_once(c: string, cmd: string) -> Count {
     Count { instr: instr, stdout: stdout, status: out.status }
 }
 
+// The shell setup, trap cleanup and environment prefix of a run in `root`: "" (the caller's cache root),
+// "cold:SEED" (a fresh copy of the seeded root per run) or "warm:DIR" (that root, already holding the program's entry).
+fn root_env(root: string) -> (string, string, string) {
+    if root.starts_with("cold:") {
+        let seed = quote(root[5..].to_string())
+        return ("r=$(mktemp -d) || exit 99; cp -R ${seed}/. \"$r\"/; ", "; rm -rf \"$r\"", "WJ_CARGO_TARGET_ROOT=\"$r\" ")
+    }
+    if root.starts_with("warm:") {
+        return ("", "", "WJ_CARGO_TARGET_ROOT=" + quote(root[5..].to_string()) + " ")
+    }
+    ("", "", "")
+}
+
 fn min_int(xs: Vec<int>) -> int {
     let mut best = 0
     for x in xs {
@@ -120,11 +140,11 @@ fn min_int(xs: Vec<int>) -> int {
 }
 
 // Smallest count of `runs` runs; exits when a run fails or prints other than `expected` ("" = not checked).
-fn measure(c: string, cmd: string, runs: int, expected: string, what: string) -> int {
+fn measure(c: string, cmd: string, runs: int, expected: string, what: string, root: string) -> int {
     let mut xs: Vec<int> = Vec::new()
     let mut i = 0
     while i < runs {
-        let r = count_once(c, cmd)
+        let r = count_once(c, cmd, root)
         if r.status != 0 {
             eprintln("${what}: exit ${r.status}")
             process.exit(1)
@@ -141,6 +161,34 @@ fn measure(c: string, cmd: string, runs: int, expected: string, what: string) ->
         i += 1
     }
     min_int(xs)
+}
+
+fn sh_out(line: string) -> string {
+    match sh(line) {
+        Ok(o) => strings.trim(o.stdout),
+        Err(e) => {
+            eprintln("cannot run ${line}: ${e}")
+            process.exit(1)
+        },
+    }
+}
+
+// A cache root holding only what a first run of `prog` leaves that is not about `prog` itself: the scanned stdlib
+// layer and the stdlib tables (the stored checks are removed), so every cold run starts as a new program would.
+fn seed_root(wj: string, prog: string) -> string {
+    let d = sh_out("mktemp -d")
+    sh_out("WJ_CARGO_TARGET_ROOT=" + quote(d) + " " + quote(wj) + " run --no-lint " + quote(prog) + " >/dev/null 2>&1; rm -rf " + quote(d + "/runs"))
+    d
+}
+
+// The cold count of `cmd` (a fresh copy of `seed` per run) and the warm one (one root after one uncounted run).
+fn cold_warm(c: string, cmd: string, runs: int, expected: string, what: string, seed: string) -> (int, int) {
+    let cold = measure(c, cmd, runs, expected, what, "cold:" + seed)
+    let w = sh_out("mktemp -d")
+    sh_out("cp -R " + quote(seed) + "/. " + quote(w) + "/; WJ_CARGO_TARGET_ROOT=" + quote(w) + " " + cmd + " >/dev/null 2>&1; true")
+    let warm = measure(c, cmd, runs, expected, what + " (warm)", "warm:" + w)
+    sh_out("rm -rf " + quote(w))
+    (cold, warm)
 }
 
 fn kernels() -> Vec<string> {
@@ -191,20 +239,24 @@ fn main() {
     let key = platform_key(c)
     let cwd = env.current_dir() ?? "."
     let mut counts = object()
+    let mut warm = object()
+    let seed = seed_root(wj, cwd + "/" + STARTUP)
     // startup: the smallest program through the default `wj run` path
-    let hello = measure(c, quote(wj) + " run --no-lint " + quote(cwd + "/" + STARTUP), runs + 2, "hello\n", "startup")
+    let (hello, hello_warm) = cold_warm(c, quote(wj) + " run --no-lint " + quote(cwd + "/" + STARTUP), runs + 2, "hello\n", "startup", seed)
     counts = with(counts, "startup", from_int(hello as i64))
+    warm = with(warm, "startup", from_int(hello_warm as i64))
     // the agent loop (ADR-0038 ladder 3): a typical 200-line program, check and run, as an agent runs it after an edit
     let agent_expected = fs::read_to_string("${BENCH}/expected/agent_loop.out") ?? ""
-    let agent = measure(c, quote(wj) + " run " + quote(cwd + "/" + AGENT_LOOP), runs, agent_expected, "agent_loop")
+    let (agent, agent_warm) = cold_warm(c, quote(wj) + " run " + quote(cwd + "/" + AGENT_LOOP), runs, agent_expected, "agent_loop", seed)
     counts = with(counts, "agent_loop", from_int(agent as i64))
+    warm = with(warm, "agent_loop", from_int(agent_warm as i64))
     let mut refs = object()
     // each reference tool's own startup (bench/interp/startup/hello.*), subtracted for the net ratios
     let mut ref_start: Vec<(string, string, int)> = Vec::new()
     if args.contains("--refs") {
         for (tool, ext) in [("qjs", "mjs"), ("node", "mjs"), ("python3", "py"), ("lua", "lua")] {
             if has(tool) {
-                ref_start.push((tool, ext, measure(c, tool + " " + quote(cwd + "/bench/interp/startup/hello." + ext), runs, "hello\n", "startup (${tool})")))
+                ref_start.push((tool, ext, measure(c, tool + " " + quote(cwd + "/bench/interp/startup/hello." + ext), runs, "hello\n", "startup (${tool})", "")))
             }
         }
         let mut row = with(object(), "wj", from_float(millions(hello)))
@@ -219,14 +271,15 @@ fn main() {
             eprintln("${k}: no recorded output ${BENCH}/expected/${k}.out")
             process.exit(1)
         }
-        let n = measure(c, quote(wj) + " run --no-lint " + quote("${cwd}/${BENCH}/${k}.wj"), runs, expected, k)
+        let (n, nw) = cold_warm(c, quote(wj) + " run --no-lint " + quote("${cwd}/${BENCH}/${k}.wj"), runs, expected, k, seed)
         counts = with(counts, k, from_int(n as i64))
+        warm = with(warm, k, from_int(nw as i64))
         if args.contains("--refs") {
             let mut row = with(object(), "wj", from_float(millions(n)))
             for (tool, ext, start) in ref_start {
                 let twin = "${BENCH}/twins/${k}.${ext}"
                 if fs.exists(twin) {
-                    let t = measure(c, tool + " " + quote(cwd + "/" + twin), runs, expected, "${k} (${tool})")
+                    let t = measure(c, tool + " " + quote(cwd + "/" + twin), runs, expected, "${k} (${tool})", "")
                     row = with(row, tool, from_float(millions(t)))
                     // net of each side's startup: the kernel's own work
                     let net = ((n - hello) as f64) / (((t - start) as f64).max(1.0))
@@ -236,58 +289,73 @@ fn main() {
             refs = with(refs, k, row)
         }
     }
-    let mut res = with(with(object(), "counter", from_str(key)), "instructions", counts)
+    sh_out("rm -rf " + quote(seed))
+    let claim = "repeat run of an unchanged program costs ${millions(hello_warm)}M instructions (startup; cold ${millions(hello)}M)"
+    let mut res = with(with(with(object(), "counter", from_str(key)), "instructions", counts), "warm", warm)
+    res = with(res, "claim", from_str(claim))
     if args.contains("--refs") {
         res = with(res, "references_millions", refs)
     }
     println(dumps(res, 1, true))
-
-    let base_doc = parse(fs::read_to_string(BASELINE) ?? "{}") ?? object()
-    let base = get(base_doc, key) ?? object()
-    if args.contains("--check") {
-        let mut bad: Vec<string> = Vec::new()
-        let mut tighter: Vec<string> = Vec::new()
-        let mut seen = 0
-        for m in members(base) {
-            let was = as_i64(m.value) ?? 0
-            match get(counts, m.key) {
-                Some(v) => {
-                    seen += 1
-                    let now = as_i64(v) ?? 0
-                    if now * 100 > was * (100 + SLACK_PCT) {
-                        bad.push("${m.key}: ${now} > ${was} + ${SLACK_PCT}%")
-                    } else if now * 100 < was * (100 - SLACK_PCT) {
-                        tighter.push("${m.key}: ${now} < ${was} - ${SLACK_PCT}% (record it with --write)")
-                    }
-                },
-                None => bad.push("${m.key}: in the baseline but not measured"),
-            }
-        }
-        if seen == 0 {
-            eprintln("no baseline for counter ${key} in ${BASELINE}: nothing to compare (record one with --write)")
-        }
-        for t in tighter {
-            eprintln("improved: " + t)
-        }
-        if bad.len() > 0 {
-            eprintln("instruction counts regressed:\n" + bad.join("\n"))
-            process.exit(1)
-        }
-    }
+    let mut doc = parse(fs::read_to_string(BASELINE) ?? "{}") ?? object()
+    let bad_cold = ratchet(args, doc, key, counts)
+    let bad_warm = ratchet(args, doc, key + ":warm", warm)
     if args.contains("--write") {
-        let mut next = object()
-        let raise: Vec<string> = arg_value(args, "--raise", "").split(",").collect()
-        for m in members(counts) {
-            let now = as_i64(m.value) ?? 0
-            let was = as_i64(get(base, m.key) ?? Json::Null) ?? 0
-            let may_raise = args.contains("--allow-raise") || raise.contains(m.key)
-            if was > 0 && now > was && !may_raise {
-                eprintln("${m.key}: ${now} > recorded ${was}; keeping the recorded count (--allow-raise to raise it)")
-                next = with(next, m.key, from_int(was as i64))
-            } else {
-                next = with(next, m.key, from_int(now as i64))
-            }
-        }
-        let _ = fs.write(BASELINE, dumps(with(base_doc, key, next), 1, true) + "\n")
+        doc = with(doc, key, written(args, get(doc, key) ?? object(), counts))
+        doc = with(doc, key + ":warm", written(args, get(doc, key + ":warm") ?? object(), warm))
+        let _ = fs.write(BASELINE, dumps(doc, 1, true) + "\n")
     }
+    if bad_cold || bad_warm {
+        process.exit(1)
+    }
+}
+
+// `--check` of `counts` against the table `key` of `doc`; true when a row regressed.
+fn ratchet(args: Vec<string>, doc: Json, key: string, counts: Json) -> bool {
+    if !args.contains("--check") {
+        return false
+    }
+    let base = get(doc, key) ?? object()
+    let mut bad: Vec<string> = Vec::new()
+    let mut seen = 0
+    for m in members(base) {
+        let was = as_i64(m.value) ?? 0
+        match get(counts, m.key) {
+            Some(v) => {
+                seen += 1
+                let now = as_i64(v) ?? 0
+                if now * 100 > was * (100 + SLACK_PCT) {
+                    bad.push("${key} ${m.key}: ${now} > ${was} + ${SLACK_PCT}%")
+                } else if now * 100 < was * (100 - SLACK_PCT) {
+                    eprintln("improved: ${key} ${m.key}: ${now} < ${was} - ${SLACK_PCT}% (record it with --write)")
+                }
+            },
+            None => bad.push("${key} ${m.key}: in the baseline but not measured"),
+        }
+    }
+    if seen == 0 {
+        eprintln("no baseline for ${key} in ${BASELINE}: nothing to compare (record one with --write)")
+    }
+    if bad.len() > 0 {
+        eprintln("instruction counts regressed:\n" + bad.join("\n"))
+    }
+    bad.len() > 0
+}
+
+// The table `--write` records: the new counts, lower only unless `--allow-raise` / `--raise K1,K2`.
+fn written(args: Vec<string>, base: Json, counts: Json) -> Json {
+    let mut next = object()
+    let raise: Vec<string> = arg_value(args, "--raise", "").split(",").collect()
+    for m in members(counts) {
+        let now = as_i64(m.value) ?? 0
+        let was = as_i64(get(base, m.key) ?? Json::Null) ?? 0
+        let may_raise = args.contains("--allow-raise") || raise.contains(m.key)
+        if was > 0 && now > was && !may_raise {
+            eprintln("${m.key}: ${now} > recorded ${was}; keeping the recorded count (--allow-raise to raise it)")
+            next = with(next, m.key, from_int(was as i64))
+        } else {
+            next = with(next, m.key, from_int(now as i64))
+        }
+    }
+    next
 }

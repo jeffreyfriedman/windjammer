@@ -35,6 +35,7 @@ pub fn parse_source_renaming(
     // `std::arena` (ADR-0025): same feature gate and escape check as the compiler.
     crate::analyzer::arena_escape::gate(&program)?;
     crate::analyzer::task_structure::gate(&program)?;
+    super::compiled_facts::note_parsed(file, source, renames);
     Ok(program)
 }
 

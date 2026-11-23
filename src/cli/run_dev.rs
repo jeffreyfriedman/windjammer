@@ -93,6 +93,7 @@ fn execute_path(opts: &RunOptions) -> i32 {
                 return 1;
             }
             crate::debug_env::phase("check");
+            crate::cli::check::share_run_facts();
             let auto = opts.mode == Mode::Auto;
             let host = match host_bridge(&target) {
                 Ok(h) => h,

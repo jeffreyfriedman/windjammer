@@ -53,6 +53,28 @@ fn share_registry_layer() {
     });
 }
 
+/// Facts the interpreter computes about one file with the compiler's analysis (literal widths), kept next to the
+/// cached checks (`<cache root>/runs`, `check/run_cache.rs`).
+pub fn share_run_facts() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| crate::interpreter::compiled_facts::install_fact_store(std::sync::Arc::new(RunFacts)));
+}
+
+struct RunFacts;
+
+impl crate::interpreter::compiled_facts::FactStore for RunFacts {
+    fn get(&self, key: &str, _program: &crate::parser::Program<'static>) -> Option<String> {
+        let text = crate::cargo_cache::entries::read(&crate::cargo_cache::entries::runs_dir(), &check::run_cache::fact_key(key)?)?;
+        check::run_cache::decode(&text)
+    }
+    fn put(&self, key: &str, program: &crate::parser::Program<'static>, text: &str) {
+        let (Some(key), Some(entry)) = (check::run_cache::fact_key(key), check::run_cache::encode_fact(program, text)) else { return };
+        let runs = crate::cargo_cache::entries::runs_dir();
+        let _ = std::fs::create_dir_all(&runs);
+        crate::cargo_cache::entries::write(&runs, &key, &entry, crate::cargo_cache::entries::RUNS_MAX_ENTRIES);
+    }
+}
+
 struct RegistryDir(crate::cargo_cache::entries::RegistryStore);
 
 impl crate::analyzer::LayerStore for RegistryDir {
@@ -164,11 +186,19 @@ pub fn fix_in_place(path: &Path) -> Result<usize> {
 /// Runs the same front-end checks as `wj check`; on any error-level diagnostic prints them and
 /// returns `Err` so the caller refuses to execute the program. Warnings do not block.
 pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> Result<()> {
+    // installed even on a hit: the interpreter's own analyses read the stored stdlib tables through it
+    share_registry_layer();
+    // a program that passed this check before, with every input unchanged, is not checked again (`check/run_cache.rs`)
+    let run_key = check::run_cache::key(path, lints_block, &format!("{format:?}"));
+    let runs = crate::cargo_cache::entries::runs_dir();
+    if let Some(stderr) = run_key.as_deref().and_then(|k| crate::cargo_cache::entries::read(&runs, k)).as_deref().and_then(check::run_cache::decode) {
+        eprint!("{stderr}");
+        return Ok(());
+    }
     // Cached only inside a project (`wj.toml`): results go to its `.wj-cache/`, the build's cache directory; a
     // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
     // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
     let use_cache = check::effects::manifest_path(path).is_some();
-    share_registry_layer();
     if use_cache {
         share_analysis();
     }
@@ -199,13 +229,25 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
         // ADR-0033: integer widths the compiled build would mix are a backend defect, not a language error. `wj check`
         // reports them as errors; an interpreted run warns before the program's output and runs it (scripts that
         // are only ever interpreted keep working)
-        for mut d in super::widths_gate::predicted_widths(path) {
+        let (found, built) = super::widths_gate::predicted_widths_via(path, false);
+        let mut stderr = String::new();
+        for mut d in found {
             d.severity = crate::diagnostics::Severity::Warning;
             d.message = d.message.replacen("the compiled build would reject this", "this runs interpreted, but the compiled build would reject it", 1);
             for sp in d.primary_span.iter_mut() {
                 sp.file = short(&sp.file);
             }
-            eprintln!("{}", render::render_as(&d, &source_of, format));
+            stderr.push_str(&render::render_as(&d, &source_of, format));
+            stderr.push('\n');
+        }
+        eprint!("{stderr}");
+        // stored only when the prediction read nothing but the sources (no build of the program ran)
+        if let (Some(key), None) = (run_key, built) {
+            let sources: Vec<(String, String)> = checked.sources.iter().map(|(f, t)| (f.clone(), t.clone())).collect();
+            if let Some(text) = check::run_cache::encode(&sources, &stderr) {
+                let _ = std::fs::create_dir_all(&runs);
+                crate::cargo_cache::entries::write(&runs, &key, &text, crate::cargo_cache::entries::RUNS_MAX_ENTRIES);
+            }
         }
         return Ok(());
     }
