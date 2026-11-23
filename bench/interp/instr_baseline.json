@@ -1,28 +1,33 @@
 {
  "callgrind:Linux-x86_64": {
-  "closures": 806952083,
-  "fib30": 178112559,
-  "hashmap": 267837897,
-  "loop5m": 296469544,
-  "nbody": 638215202,
-  "sieve": 587395260,
-  "startup": 42196493,
-  "strings": 402091122,
-  "structs": 135319393
+  "agent_loop": 563520600,
+  "closures": 805624836,
+  "fib30": 166803782,
+  "hashmap": 206101414,
+  "loop5m": 284649559,
+  "nbody": 642790675,
+  "sieve": 578331695,
+  "startup": 36391406,
+  "strings": 392746400,
+  "structs": 130244502
+ },
+ "callgrind:Linux-x86_64:warm": {
+  "agent_loop": 31970080,
+  "closures": 703648302,
+  "fib30": 102485289,
+  "hashmap": 103169389,
+  "loop5m": 221856617,
+  "nbody": 444587883,
+  "sieve": 490547405,
+  "startup": 4917590,
+  "strings": 307506889,
+  "structs": 38019438
  },
  "notes": {
   "callgrind:Linux-x86_64": {
    "nbody": {
-    "lower_when": "interp-cache is merged (src/check/run_cache.rs): re-run interp_instr --write and remove this note",
-    "raised_by": "ADR-0038 C6b: the solver's literal widths, solved once per width-sensitive program at run time (+~20M at startup)"
-   },
-   "sieve": {
-    "lower_when": "interp-cache is merged (src/check/run_cache.rs): re-run interp_instr --write and remove this note",
-    "raised_by": "ADR-0038 C6b: the solver's literal widths, solved once per width-sensitive program at run time (+~20M at startup)"
-   },
-   "strings": {
-    "lower_when": "interp-cache is merged (src/check/run_cache.rs): re-run interp_instr --write and remove this note",
-    "raised_by": "ADR-0038 C6b: the solver's literal widths, solved once per width-sensitive program at run time (+~20M at startup)"
+    "raised_by": "interpreter changes since the recording (not the f32 operand rounding), +0.8% (643541127 vs 638215202 on b11; reverting the f32 rounding hunk saves only 0.2%)",
+    "lower_when": "nbody is re-investigated: profile the f64 kernel between a8851e10c and b11 (gaps-math / interpreter changes)"
    }
   }
  },
