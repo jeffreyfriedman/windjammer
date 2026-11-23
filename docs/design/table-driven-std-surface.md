@@ -4,8 +4,8 @@ last_verified: 8a9941cacf68
 ---
 # Table-driven std surface: one declaration per std function, backends as interpreters
 
-> **Stages 1, 2, 3 and 4 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
-> `Integer`, `Char`, `String`, `Option` and `Result` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
+> **Stages 1, 2, 3, 4 and 5 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
+> `Integer`, `Char`, `String`, `Option`, `Result`, `HashMap` and `HashSet` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
 > `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, the portability diagnostic and the
 > module-function rows are stages 5-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
 > (`tests/common/heuristic_scan.rs`, run standalone over each file).
@@ -64,6 +64,22 @@ last_verified: 8a9941cacf68
 > declaration (a portable backend refuses them as an unknown method; the corpus never reached them), `unwrap_or_default`,
 > `cloned`, `copied` and `take` stay declared for the Rust side and are `unsupported` on both portable targets. Their JavaScript and
 > Go helpers (`$optMapOr`, `wjOptMapOr`, `wjOptIsSomeAnd`) are dead and listed in the dead-helper lists with the char ones.
+>
+> What stage 5 settled: `CoreType::Map` and `CoreType::Set` (traits `HashMap`, `HashSet`; `Ty::Map` and `Ty::Set` are also the ordered
+> `BTreeMap` and `BTreeSet`, so those traits carry only their associated functions). An associated function or constant is a row
+> of its trait with no receiver (`LoweringTable::statics`, a row on any trait that has rules: `Vec` is not migrated yet but its
+> `new`, `with_capacity` and `from` are rows). `@owner(names = "i8, ..")` on a trait names the type spellings its functions are called
+> on (`Integer` for the ten integer types, `F32`, `F64`, `Char`, `String` for `string`); a constant is a function without parameters
+> marked `@constant` (the rustc gate writes `i64::MAX`, not a call). `StdSurface::declared_static_ret` types a call from the
+> declaration: the trait's generics from the owner when it is a primitive (`Integer<T>` of `i64`), else from the expected type
+> (`HashMap<K, V>` against `Map<string, i32>`), unknown when nothing says; `declared_static_arg` wants a parameter's declared type
+> (`String::from` a string, `from_str_radix` a `u32`: its literal radix is a `u32` now, not the `i64` default). New vocabulary (G6
+> pins it): `Guard::KeyPrim` with the trait-level `@js(requires = "key_prim", reason = "..{K}..")` (a JavaScript `Map` compares only
+> integer, string, char and bool keys by value; replaces `key_ok`), `Hook::Cast` (`i64::from(x)`, `f64::from(x)`: `num::cast` from
+> the argument's type to the call's), and `{R.go}` of a non-integer result is the Go spelling of the type (`map[string]int64{}`).
+> The spellings ADR-0039 removed (R010 `iter`, `iter_mut`, `into_iter`; R091 `into_keys`, `into_values`, `values_mut`; R030 `capacity`)
+> have no declaration (`HashMap::capacity` and `HashSet::capacity` declarations are deleted, so `REMOVED_SPELLED_WITHOUT_INTERNAL` shrank
+> by two); `contains_key` stays (the corpus writes it and `m.entry(k).or_insert(v)` lowers to it). Go's `wjEntries` is dead and listed.
 
 ## 1. Problem, in numbers
 
@@ -258,7 +274,7 @@ section 1). Stage 7 is the only one allowed to change the ledger, and only by re
 | 2 | **Integer** rows (wrapping/checked/saturating via `{T.*}` facts; `wrapping_mul` guards `T = i32 / u32`); add `abs_diff`, `isqrt`, `is_power_of_two` declarations | -34 | -31 | -31 | | **1,542** |
 | 3 | **char** (new `trait Char` in `rust_core.wji`) and **String**; `parse` via `ok =` guards; removed aliases dropped | -53 | -50 | -48 | | **1,391** |
 | 4 | **Option**, **Result**; `@internal` rows for `??` | -27 | -22 | -22 | | **1,320** |
-| 5 | **HashMap**, **HashSet**, statics (`Vec::new`, `i64::MAX`, `f64::EPSILON`, `char::from_u32`) as static declarations and `const` items | -33 | -37 | -34 | | **1,216** |
+| 5 (done) | **HashMap**, **HashSet**, statics (`Vec::new`, `i64::MAX`, `f64::EPSILON`, `char::from_u32`) as static declarations and `const` items | -33 | -37 | -34 | | **1,216** |
 | 6 | **Vec**, **Iterator** (`@adapts`), `collect`/`sum` by want, the `len` narrowing rule, `to_string` hook, `ret_ty` residue | -79 | -72 | -69 | | **996** (amber) |
 | 7 | module functions: `fs`, `time` rows on `std/fs.wj`, `std/time.wj`; `math` / `strings` free functions deleted (ADR-0039 R058/R070, after `wj fix` migrates the conformance programs that use them); **json wired** to the existing shims; the portability diagnostic | | | | stdlib.rs -68, lower/call.rs -2 | **926** |
 | 8 | enumerable and ordering families from `std/enumerable.wj` (`src/stdlib_surface/enumerable.rs` generated) | | | | -93 | **833** |
