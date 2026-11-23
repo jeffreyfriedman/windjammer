@@ -19,7 +19,7 @@ In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` met
   crate root of that build; it also generates the modules it declares (`mod dep` -> `dep.wj` / `dep/mod.wj`), as a
   project build does, `mod.rs` files with the `pub use self::child::*` re-exports. The entry's `use crate::name::...` paths
   also name sibling modules (`name.wj` / `name/mod.wj` beside the entry): they are generated and declared in `main.rs`;
-  one that exists nowhere is an error naming both candidate files.
+  a name with no such file keeps its path as written (no error).
 - `value_formal_fixed_point.rs` makes callers and callees agree on value-formal modes (convergence O4): after each IR
   lowering round the solved modes are published to the registry and lowering repeats until none changes. Single-file
   builds run the same rounds over their one program (`attach_ir_module_if_missing`).

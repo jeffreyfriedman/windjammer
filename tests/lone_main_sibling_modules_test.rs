@@ -13,7 +13,7 @@
 //! A project's `src/main.wj` built alone (`wj build src/main.wj --no-cargo -o out`) with `use crate::adapters::...` /
 //! `use crate::domain::...` paths into sibling directories (`adapters/mod.wj`, `domain/mod.wj`, no `mod` line in
 //! main.wj): the modules those paths name are generated next to `main.rs` and declared there (`mod adapters;`), so the
-//! output compiles. A named module that exists nowhere is a diagnostic naming both candidate files, not silence.
+//! output compiles. A `use crate::name` with no such file keeps its path as written, without an error.
 
 use std::path::Path;
 use std::process::{Command, Output};
@@ -72,14 +72,15 @@ fn entry_built_alone_generates_and_declares_the_sibling_modules_its_use_paths_na
 }
 
 #[test]
-fn a_used_crate_module_that_exists_nowhere_is_a_diagnostic() {
+fn a_used_crate_name_with_no_file_keeps_its_path_and_gives_no_error() {
     let d = tempfile::tempdir().unwrap();
-    write(d.path(), "src/main.wj", "use crate::ghost::boo\n\nfn main() {\n    boo()\n}\n");
+    write(d.path(), "src/main.wj", "use crate::ghost::boo\n\nfn main() {\n    println(\"hi\")\n}\n");
     write(d.path(), "wj.toml", "[package]\nname = \"ghosty\"\nversion = \"0.1.0\"\nedition = \"2025\"\n");
     let b = build(d.path());
     let t = text(&b);
-    assert!(!b.status.success(), "a missing module built silently:\n{t}");
-    assert!(t.contains("ghost.wj") && t.contains("ghost/mod.wj"), "the diagnostic does not name both candidates:\n{t}");
+    assert!(b.status.success(), "a name with no file must not be an error:\n{t}");
+    let main = std::fs::read_to_string(d.path().join("out/main.rs")).unwrap();
+    assert!(main.contains("use crate::ghost::boo;") && !main.contains("mod ghost;"), "path not preserved as written:\n{main}");
 }
 
 /// In a test file `use crate::name` names an item of the LIBRARY under test (here a function), never a sibling
