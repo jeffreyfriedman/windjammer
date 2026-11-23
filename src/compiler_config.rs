@@ -84,6 +84,9 @@ pub struct CompilerConfig {
     /// `wj build <entry.wj>`: the entry's `use crate::name` paths name sibling modules (`name.wj`, `name/mod.wj`) that
     /// the build generates and declares. Off for every other compile (`wj test` files, where `crate::` is the library).
     pub entry_use_paths_name_sibling_modules: bool,
+    /// `wj build <entry.wj> --metadata name=file`: a `use crate::name` path no sibling file supplies may name a module of
+    /// a dependency the metadata describes (it is not an error).
+    pub entry_use_paths_may_name_metadata_modules: bool,
     /// Write `<out>/<file>.rs.map` (the `.wj` -> `.rs` line map) next to each generated Rust file
     /// (`--source-maps`; `--check` turns it on because rustc error translation reads it).
     pub emit_source_maps: bool,
@@ -130,6 +133,7 @@ impl Default for CompilerConfig {
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
             entry_use_paths_name_sibling_modules: false,
+            entry_use_paths_may_name_metadata_modules: false,
             emit_source_maps: false,
             stdlib_path: None,
             runtime_path: None,
@@ -189,6 +193,7 @@ impl CompilerConfig {
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
             entry_use_paths_name_sibling_modules: false,
+            entry_use_paths_may_name_metadata_modules: false,
             emit_source_maps: false,
             stdlib_path: path("WINDJAMMER_STDLIB"),
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
@@ -243,6 +248,11 @@ impl CompilerConfig {
 
     pub fn with_capability_install(mut self, install: Option<String>) -> Self {
         self.capability_install = install;
+        self
+    }
+
+    pub fn with_entry_use_paths_may_name_metadata_modules(mut self, on: bool) -> Self {
+        self.entry_use_paths_may_name_metadata_modules = on;
         self
     }
 

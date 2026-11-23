@@ -1,0 +1,12 @@
+// A text formal that is read and stored (`out.room = room`) sits beside a value formal the solver publishes
+// (`me: Conn`). The callee is declared after its caller. The published signature must not claim `room` is owned:
+// the backend emits `room: &str`, and the caller passes `&room`. Expected by hand: "lobby 3".
+// expect: lobby 3
+mod hub
+
+fn main() {
+    let h = hub::Hub { names: ["lobby"] }
+    let me = hub::Conn { id: 3, user: "u", rooms: ["lobby"] }
+    let f = h.receive(me, "history", "lobby")
+    println("${f.room} ${f.n}")
+}

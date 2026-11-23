@@ -14,7 +14,7 @@ pub(super) fn lone_script_files(path: &Path, wj_files: &[PathBuf], library: bool
     }
     let mut modules = Vec::new();
     let root = path.parent().unwrap_or(Path::new("."));
-    collect_declared_modules(path, path, root, config.entry_use_paths_name_sibling_modules, &mut modules)?;
+    collect_declared_modules(path, path, root, config, &mut modules)?;
     modules.retain(|m| !wj_files.contains(m));
     modules.extend(wj_files.iter().cloned());
     Ok(modules)
@@ -51,9 +51,13 @@ fn crate_root_modules_used(program: &crate::parser::Program<'_>) -> Vec<String> 
 
 /// The entry file's `mod name` declarations for the sibling modules its `use crate::name::...` paths reach, added
 /// to `program` so the generated `main.rs` declares them (`mod adapters;`), as a project build's crate root does.
-pub(super) fn declare_used_crate_modules(program: &mut crate::parser::Program<'static>) {
+pub(super) fn declare_used_crate_modules(program: &mut crate::parser::Program<'static>, root: &Path, config: &crate::compiler_config::CompilerConfig) {
     let used = crate_root_modules_used(program);
     for name in used {
+        // With dependency metadata, a module no sibling file supplies belongs to the dependency: nothing to declare.
+        if config.entry_use_paths_may_name_metadata_modules && !root.join(format!("{name}.wj")).is_file() && !root.join(&name).join("mod.wj").is_file() {
+            continue;
+        }
         let already = program.items.iter().any(|i| matches!(i, crate::parser::Item::Mod { name: n, .. } if *n == name));
         if !already {
             let location = program.items.iter().find_map(|i| match i {
@@ -90,7 +94,7 @@ pub(super) fn declared_module_output(
 /// The module files `file` declares by `mod name` without a body, and theirs, depth first.
 /// `root` is the entry's directory, the crate root that `use crate::name` paths resolve against. A module named by
 /// a `use crate::name` path (or `mod name`) that is neither `name.wj` nor `name/mod.wj` is an error naming both.
-fn collect_declared_modules(entry: &Path, file: &Path, root: &Path, use_paths: bool, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
+fn collect_declared_modules(entry: &Path, file: &Path, root: &Path, config: &crate::compiler_config::CompilerConfig, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
     let Ok(source) = std::fs::read_to_string(file) else { return Ok(()) };
     let Ok((_parser, program)) = super::parse_wj_source(file, &source) else { return Ok(()) };
     let entry_program_used = crate_root_modules_used(&program);
@@ -114,23 +118,25 @@ fn collect_declared_modules(entry: &Path, file: &Path, root: &Path, use_paths: b
             .into_iter()
             .find(|p| p.is_file() && p != file);
         if let Some(module) = found.filter(|m| !out.contains(m)) {
-            collect_declared_modules(entry, &module, root, use_paths, out)?;
+            collect_declared_modules(entry, &module, root, config, out)?;
             out.push(module);
         }
     }
-    for name in entry_program_used.into_iter().filter(|_| use_paths) {
+    for name in entry_program_used.into_iter().filter(|_| config.entry_use_paths_name_sibling_modules) {
         if out.iter().any(|m| crate_module_name(root, m).as_deref() == Some(name.as_str())) {
             continue;
         }
         let candidates = [root.join(format!("{name}.wj")), root.join(&name).join("mod.wj")];
         match candidates.iter().find(|p| p.is_file() && p.as_path() != file) {
             Some(module) => {
-                collect_declared_modules(entry, module, root, use_paths, out)?;
+                collect_declared_modules(entry, module, root, config, out)?;
                 if !out.contains(module) {
                     out.push(module.clone());
                 }
             }
-            None if file == entry => {
+            // A module no sibling file supplies is an error unless the build was given dependency metadata: a
+            // `use crate::rendering::gpu::Renderer` then names a module of the library the metadata describes.
+            None if file == entry && !config.entry_use_paths_may_name_metadata_modules => {
                 anyhow::bail!(
                     "{}: `use crate::{name}` names module `{name}`, but neither {} nor {} exists",
                     file.display(),
@@ -178,7 +184,7 @@ pub(crate) fn parse_lone_script(
 ) -> anyhow::Result<(crate::parser::Parser, crate::parser::Program<'static>)> {
     let (parser, mut program) = super::parse_wj_source(file, source)?;
     if config.entry_use_paths_name_sibling_modules && !library && path.is_file() && wj_files.iter().any(|f| f == file) {
-        declare_used_crate_modules(&mut program);
+        declare_used_crate_modules(&mut program, path.parent().unwrap_or(Path::new(".")), config);
     }
     Ok((parser, program))
 }

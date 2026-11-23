@@ -180,6 +180,7 @@ pub fn execute(
         .with_shadow_validate_strict(ir_shadow_validate)
         .with_skip_cargo_toml_generation(no_generate_cargo_toml)
         .with_entry_use_paths_name_sibling_modules(path.is_file() && !library)
+        .with_entry_use_paths_may_name_metadata_modules(!metadata.is_empty())
         .with_unchecked_arithmetic(options.unchecked_arithmetic)
         .with_emit_source_maps(options.source_maps || check)
         .with_mem_report(options.mem_report);
