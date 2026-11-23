@@ -6,6 +6,7 @@ use super::Go;
 use crate::codegen::portable::template::{self, Operands, TypeRef};
 use crate::stdlib_surface::lowering::{CoreType, Fact, Guard, Hook, Modifier, Rule, Target, Widen};
 use crate::codegen::portable::ir::*;
+use crate::codegen::portable::env::core_type;
 use crate::codegen::portable::ty::{IntKind, Ty};
 
 impl<'m> Go<'m> {
@@ -13,16 +14,13 @@ impl<'m> Go<'m> {
         if let Resolution::User { owner } = res {
             return self.user_method(recv, owner, name, args);
         }
-        if name == "to_string" {
-            return self.display(recv, &FmtSpec::default());
-        }
-        // A length typed `int` (SPEC-NUM-014) converts the `uint` length.
-        if matches!(name, "len" | "count" | "capacity") {
-            if let Ty::Int(k) = ty {
-                if *k != IntKind::Usize {
-                    let n = self.method(recv, name, args, res, &Ty::usize())?;
-                    return Ok(format!("{}({n})", super::types::int_name(*k)));
-                }
+        let m = self.m;
+        let found = m.lowering.lookup(core_type(&recv.ty), name);
+        // A length typed `int` (SPEC-NUM-014) converts the `uint` length: any method declared to give a `usize`.
+        if let (Some((_, row)), Ty::Int(k)) = (found, ty) {
+            if row.returns_usize && *k != IntKind::Usize {
+                let n = self.method(recv, name, args, res, &Ty::usize())?;
+                return Ok(format!("{}({n})", super::types::int_name(*k)));
             }
         }
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
@@ -33,17 +31,10 @@ impl<'m> Go<'m> {
         if let Some(s) = self.ordering_method(recv, name, &r, &a) {
             return Ok(s);
         }
-        match &recv.ty {
-            Ty::Vec(_) | Ty::Iter(_) | Ty::Range(_) => self.vec_method(recv, name, &a, args, ty),
-            Ty::Str => self.lowered(CoreType::String, recv, name, &a, args, ty),
-            Ty::Char => self.lowered(CoreType::Char, recv, name, &a, args, ty),
-            Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &a, args, ty),
-            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a, args, ty),
-            Ty::Option(_) => self.lowered(CoreType::Option, recv, name, &a, args, ty),
-            Ty::Result(..) => self.lowered(CoreType::Result, recv, name, &a, args, ty),
-            Ty::Map(..) => self.lowered(CoreType::Map, recv, name, &a, args, ty),
-            Ty::Set(_) => self.lowered(CoreType::Set, recv, name, &a, args, ty),
-            other => self.unsupported(format!("method `{name}` on `{}`", other.describe())),
+        match (found, core_type(&recv.ty)) {
+            (Some((owner, _)), _) => self.lowered(owner, recv, name, &a, args, ty),
+            (None, Some(ct)) => self.unsupported(format!("{} method `{name}`", ct.noun())),
+            (None, None) => self.unsupported(format!("method `{name}` on `{}`", recv.ty.describe())),
         }
     }
 
@@ -62,88 +53,6 @@ impl<'m> Go<'m> {
 
     fn rv(&mut self, recv: &PExpr) -> PResult<String> {
         self.expr(recv)
-    }
-
-    fn vec_method(&mut self, recv: &PExpr, name: &str, a: &[String], args: &[PExpr], ty: &Ty) -> PResult<String> {
-        let r = self.rv(recv)?;
-        let elem = recv.ty.elem().unwrap_or(Ty::Unknown);
-        let mutating = matches!(name, "push" | "push_back" | "pop" | "pop_back" | "insert" | "remove" | "swap_remove" | "clear" | "dedup" | "extend" | "append" | "extend_from_slice" | "truncate" | "retain" | "drain" | "split_off" | "pop_front" | "push_front");
-        let p = if mutating { self.addr(recv)? } else { String::new() };
-        Ok(match name {
-            "len" | "capacity" | "count" => format!("uint(len({r}))"),
-            "is_empty" => format!("(len({r}) == 0)"),
-            "push" | "push_back" => format!("wjPush({p}, {})", a[0]),
-            "push_front" => format!("wjPushFront({p}, {})", a[0]),
-            "pop" | "pop_back" => format!("wjPop({p})"),
-            "pop_front" => format!("wjPopFront({p})"),
-            "get" => format!("wjGet({r}, {})", a[0]),
-            "first" => format!("wjFirst({r})"),
-            "last" => format!("wjLast({r})"),
-            "contains" => if self.is_prim(&elem) { format!("wjContains({r}, {})", a[0]) } else { format!("wjContainsEq({r}, {})", a[0]) },
-            "insert" => format!("wjInsert({p}, {}, {})", a[0], a[1]),
-            "remove" => format!("wjRemove({p}, {})", a[0]),
-            "swap_remove" => format!("wjSwapRemove({p}, {})", a[0]),
-            "clear" => format!("wjClear({p})"),
-            "sort" | "sort_unstable" if self.is_prim(&elem) && elem != Ty::Bool => format!("wjSort({r})"),
-            "sort" | "sort_unstable" => format!("wjSortAny({r})"),
-            "reverse" => format!("wjReverseInPlace({r})"),
-            "dedup" => format!("wjDedup({p})"),
-            "extend" | "append" | "extend_from_slice" => format!("wjExtend({p}, {})", a[0]),
-            "truncate" => format!("wjTruncate({p}, {})", a[0]),
-            "swap" => format!("wjSwap({r}, {}, {})", a[0], a[1]),
-            "iter" | "iter_mut" | "into_iter" | "peekable" => r,
-            "drain" => format!("wjDrain({p})"),
-            "windows" => format!("wjWindows({r}, {})", a[0]),
-            "chunks" => format!("wjChunks({r}, {})", a[0]),
-            "to_vec" | "cloned" | "copied" => format!("wjClone({r})"),
-            "join" => format!("wjJoin({r}, {})", a[0]),
-            "binary_search" => format!("wjBsearch({r}, {})", a[0]),
-            "retain" => format!("wjRetain({p}, {})", a[0]),
-            "split_off" => format!("wjSplitOff({p}, {})", a[0]),
-            "split_at" => format!("wjSplitAt({r}, {})", a[0]),
-            "fill" => format!("wjFill({r}, {})", a[0]),
-            "map" => format!("wjMap({r}, {})", a[0]),
-            "filter" => format!("wjFilter({r}, {})", a[0]),
-            "for_each" => format!("wjForEach({r}, {})", a[0]),
-            "filter_map" => format!("wjFilterMap({r}, {})", a[0]),
-            "flat_map" => format!("wjFlatMap({r}, {})", a[0]),
-            "enumerate" => format!("wjEnumerate({r})"),
-            "zip" => format!("wjZip({r}, {})", a[0]),
-            "rev" => format!("wjRev({r})"),
-            "take" => format!("wjTake({r}, {})", a[0]),
-            "skip" => format!("wjSkip({r}, {})", a[0]),
-            "step_by" => format!("wjStepBy({r}, {})", a[0]),
-            "take_while" => format!("wjTakeWhile({r}, {})", a[0]),
-            "skip_while" => format!("wjSkipWhile({r}, {})", a[0]),
-            "chain" => format!("wjChain({r}, {})", a[0]),
-            "collect" => self.collect(&r, ty)?,
-            "sum" => format!("wjSum({r})"),
-            "product" => format!("wjProduct({r})"),
-            "fold" => format!("wjFold({r}, {}, {})", a[0], a[1]),
-            "any" => format!("wjAny({r}, {})", a[0]),
-            "all" => format!("wjAll({r}, {})", a[0]),
-            "min" => format!("wjMinOf({r})"),
-            "max" => format!("wjMaxOf({r})"),
-            "find" => format!("wjFind({r}, {})", a[0]),
-            "position" => format!("wjPosition({r}, {})", a[0]),
-            "next" => format!("wjFirst({r})"),
-            "nth" => format!("wjGet({r}, {})", a[0]),
-            _ => {
-                let _ = args;
-                return self.unsupported(format!("Vec/iterator method `{name}`"));
-            }
-        })
-    }
-
-    fn collect(&self, r: &str, ty: &Ty) -> PResult<String> {
-        Ok(match ty {
-            Ty::Set(_) => format!("wjToSet({r})"),
-            Ty::Map(..) => format!("wjToMap({r})"),
-            Ty::Str => format!("wjCollectStr({r})"),
-            Ty::Result(..) => format!("wjCollectResult({r})"),
-            Ty::Option(_) => format!("wjCollectOption({r})"),
-            _ => format!("wjClone({r})"),
-        })
     }
 
     /// A call of a std method of a migrated type: print the receiver's row for Go (`std/rust_core.wji`). `args` are the call's
@@ -171,6 +80,7 @@ impl<'m> Go<'m> {
             }
             Some(Rule::Assign(_)) => self.unsupported(format!("{} method `{name}`: `assign` is a JavaScript place update", ct.noun())),
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
+            Some(Rule::Hook(Hook::Clone)) => self.unsupported(format!("{} method `{name}`: `clone` is a JavaScript hook", ct.noun())),
             Some(Rule::Hook(Hook::Cast)) => self.unsupported(format!("{} method `{name}`: `cast` is the hook of an associated function", ct.noun())),
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no Go rule", ct.noun())),

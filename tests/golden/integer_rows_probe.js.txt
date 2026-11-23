@@ -271,9 +271,9 @@ export function probe_i64(x, y, z, n) {
   $print(("" + String((x > 3n ? x - 3n : 3n - x))) + "\n");
   $print(("" + String(($i64(x + z) > y ? $i64(x + z) - y : y - $i64(x + z)))) + "\n");
   $print(("" + String(BigInt.asIntN(64, x << BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String(BigInt.asIntN(64, x << BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String(BigInt.asIntN(64, x << BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String((x >> BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String((x >> BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String((x >> BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String($rotl(x, n, 64, true))) + "\n");
   $print(("" + String($rotl(x, 3, 64, true))) + "\n");
   $print(("" + String($rotr(x, n, 64, true))) + "\n");
@@ -342,9 +342,9 @@ export function probe_isize(x, y, z, n) {
   $print(("" + String((x > 3n ? x - 3n : 3n - x))) + "\n");
   $print(("" + String(($i64(x + z) > y ? $i64(x + z) - y : y - $i64(x + z)))) + "\n");
   $print(("" + String(BigInt.asIntN(64, x << BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String(BigInt.asIntN(64, x << BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String(BigInt.asIntN(64, x << BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String((x >> BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String((x >> BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String((x >> BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String($rotl(x, n, 64, true))) + "\n");
   $print(("" + String($rotl(x, 3, 64, true))) + "\n");
   $print(("" + String($rotr(x, n, 64, true))) + "\n");
@@ -610,9 +610,9 @@ export function probe_u64(x, y, z, n) {
   $print(("" + String((x > 3n ? x - 3n : 3n - x))) + "\n");
   $print(("" + String(($u64(x + z) > y ? $u64(x + z) - y : y - $u64(x + z)))) + "\n");
   $print(("" + String(BigInt.asUintN(64, x << BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String(BigInt.asUintN(64, x << BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String(BigInt.asUintN(64, x << BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String((x >> BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String((x >> BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String((x >> BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String($rotl(x, n, 64, false))) + "\n");
   $print(("" + String($rotl(x, 3, 64, false))) + "\n");
   $print(("" + String($rotr(x, n, 64, false))) + "\n");
@@ -677,9 +677,9 @@ export function probe_usize(x, y, z, n) {
   $print(("" + String((x > 3n ? x - 3n : 3n - x))) + "\n");
   $print(("" + String(($u64(x + z) > y ? $u64(x + z) - y : y - $u64(x + z)))) + "\n");
   $print(("" + String(BigInt.asUintN(64, x << BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String(BigInt.asUintN(64, x << BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String(BigInt.asUintN(64, x << BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String((x >> BigInt((Number(n) % 64))))) + "\n");
-  $print(("" + String((x >> BigInt((Number(3n) % 64))))) + "\n");
+  $print(("" + String((x >> BigInt((Number(3) % 64))))) + "\n");
   $print(("" + String($rotl(x, n, 64, false))) + "\n");
   $print(("" + String($rotl(x, 3, 64, false))) + "\n");
   $print(("" + String($rotr(x, n, 64, false))) + "\n");

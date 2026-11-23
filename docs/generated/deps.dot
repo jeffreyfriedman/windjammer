@@ -240,11 +240,11 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="429"];
+  "codegen" -> "ir" [label="430"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "module_system" [label="2"];
-  "codegen" -> "parser" [label="722"];
+  "codegen" -> "parser" [label="726"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="4"];
   "codegen" -> "source_map" [label="9"];

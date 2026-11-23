@@ -428,7 +428,7 @@ impl<'e> Lowerer<'e> {
             if let Some(w) = &w {
                 self.constrain(w, &v.ty);
             }
-            lowered.push(if builtins::stores_args(method) { self.own(v) } else { v });
+            lowered.push(if builtins::stores_arg(&self.env.surface, &recv.ty, method, i) { self.own(v) } else { v });
         }
         let ty = builtins::ret_ty(&self.env.surface, &recv.ty, method, &lowered, want_for_ret.as_ref());
         let Some(mut ty) = ty else { return self.err(format!("built-in method `{}::{method}` is not supported", recv.ty.describe())) };

@@ -6,7 +6,7 @@ use super::ty::{from_ast, Ty};
 use crate::analyzer::{OwnershipMode, SignatureRegistry};
 use crate::parser::{EnumVariantData, FunctionDecl, Item, Program};
 use crate::ir::stdlib_tables::CoreSurface;
-use crate::stdlib_surface::lowering::{CoreType, LoweringTable};
+use crate::stdlib_surface::lowering::{ContextKind, CoreType, LoweringTable};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -55,17 +55,15 @@ impl StdSurface {
     /// takes `U` from the closure's result type) and then from the expected result `want` (`parse<F>`: `Result<i32, string>`
     /// binds `F = i32`).
     pub fn declared_ret(&self, recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
-        let (receiver, core_type) = match recv {
-            Ty::F64 => (crate::parser::Type::Custom("f64".to_string()), CoreType::Float),
-            Ty::F32 => (crate::parser::Type::Custom("f32".to_string()), CoreType::Float),
-            Ty::Int(k) => (crate::parser::Type::Custom(k.name().to_string()), CoreType::Integer),
-            Ty::Char => return self.declared_on_trait(CoreType::Char, &[], name, args, want),
-            Ty::Str => return self.declared_on_trait(CoreType::String, &[], name, args, want),
-            Ty::Option(t) => return self.declared_on_trait(CoreType::Option, &[(**t).clone()], name, args, want),
-            Ty::Result(t, e) => return self.declared_on_trait(CoreType::Result, &[(**t).clone(), (**e).clone()], name, args, want),
-            Ty::Map(k, v) => return self.declared_on_trait(CoreType::Map, &[(**k).clone(), (**v).clone()], name, args, want),
-            Ty::Set(t) => return self.declared_on_trait(CoreType::Set, &[(**t).clone()], name, args, want),
-            _ => return None,
+        let (receiver, core_type) = match numeric_receiver(recv) {
+            Some(r) => r,
+            None => {
+                // the type's own rows, the types it adapts (a list has the iterator's), then what every value has
+                let (ct, recv_args) = core_receiver(recv);
+                let (owner, _) = self.lowering.lookup(ct, name)?;
+                let recv_args = if owner == CoreType::Any { Vec::new() } else { recv_args };
+                return self.declared_on_trait(owner, &recv_args, name, args, want);
+            }
         };
         // Only a method with a row: the width traits (`f32::to_bits`) are declared too, but have no lowering yet.
         self.lowering.row(core_type, name)?;
@@ -77,19 +75,28 @@ impl StdSurface {
     /// `&str`, `repeat` a `usize`; an `Option<T>`'s `map` takes a `fn(T) -> ?`, its `unwrap_or` a `T`); `None` when the
     /// receiver's type has no rows, the method no such parameter, or the parameter is a bare method generic.
     pub fn declared_arg(&self, recv: &Ty, name: &str, index: usize) -> Option<Ty> {
-        let (core_type, recv_args) = match recv {
-            Ty::Str => {
-                self.lowering.row(CoreType::String, name)?;
-                let (_, generics, params, _) = self.core.declared(CoreType::String.trait_name(), name)?;
-                return Some(from_ast(params.get(index)?, &generics, &Aliases::default()));
-            }
-            Ty::Option(t) => (CoreType::Option, vec![(**t).clone()]),
-            Ty::Result(t, e) => (CoreType::Result, vec![(**t).clone(), (**e).clone()]),
-            Ty::Map(k, v) => (CoreType::Map, vec![(**k).clone(), (**v).clone()]),
-            Ty::Set(t) => (CoreType::Set, vec![(**t).clone()]),
-            _ => return None,
-        };
-        self.lowering.row(core_type, name)?;
+        self.declared_arg_after(recv, name, index, &[])
+    }
+
+    /// [`Self::declared_arg`] with the arguments before `index` known: a method generic they fix (`fold<A>(init: A, f: fn(A, T) -> A)`:
+    /// `A` is the type of `init`) is fixed in the parameter's type too.
+    pub fn declared_arg_after(&self, recv: &Ty, name: &str, index: usize, prev: &[PExpr]) -> Option<Ty> {
+        if *recv == Ty::Str {
+            self.lowering.row(CoreType::String, name)?;
+            let (_, generics, params, _) = self.core.declared(CoreType::String.trait_name(), name)?;
+            return Some(from_ast(params.get(index)?, &generics, &Aliases::default()));
+        }
+        if let Some((receiver, core_type)) = numeric_receiver(recv) {
+            // a numeric method's parameter is the receiver's own type or the type it declares (`pow` takes a `u32`)
+            self.lowering.row(core_type, name)?;
+            let sig = self.core.method_signature(&receiver, name, &[])?;
+            return Some(from_ast(sig.params.get(index)?, &[], &Aliases::default()));
+        }
+        let (ct, recv_args) = core_receiver(recv);
+        let (core_type, _) = self.lowering.lookup(ct, name)?;
+        if matches!(core_type, CoreType::Char | CoreType::Any) {
+            return None;
+        }
         let (type_generics, method_generics, params, _) = self.core.declared(core_type.trait_name(), name)?;
         let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
         let want = from_ast(params.get(index)?, &generics, &Aliases::default());
@@ -97,10 +104,16 @@ impl StdSurface {
             return None;
         }
         // The receiver's generics are known. A method generic is not yet (it is the closure's result, which the closure's body
-        // decides): a closure type is wanted with what is known of it (`Result<?, E>`: the error type the body's `Ok(..)` needs),
-        // and with no result at all when nothing is (`Option<?>` is a shape with no information: it makes
-        // `if c { Some(x) } else { None }` an untypable body).
+        // decides) unless an earlier argument fixed it: a closure type is wanted with what is known of it (`Result<?, E>`: the
+        // error type the body's `Ok(..)` needs), and with no result at all when nothing is (`Option<?>` is a shape with no
+        // information: it makes `if c { Some(x) } else { None }` an untypable body).
+        let mut bound: Vec<Option<Ty>> = vec![None; generics.len()];
+        for (param, arg) in params.iter().zip(prev) {
+            bind_generics(&from_ast(param, &generics, &Aliases::default()), &arg.ty, &generics, &mut bound, true);
+        }
+        let fixed: Vec<(String, Ty)> = generics.iter().zip(bound).skip(type_generics.len()).filter_map(|(g, b)| Some((g.clone(), b.filter(informs)?))).collect();
         let ty = want.subst(&type_generics, &recv_args);
+        let ty = ty.subst(&fixed.iter().map(|(g, _)| g.clone()).collect::<Vec<_>>(), &fixed.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>());
         let open = |t: &Ty| {
             if !method_generics.iter().any(|g| mentions(t, g)) {
                 return t.clone();
@@ -111,8 +124,20 @@ impl StdSurface {
         };
         Some(match ty {
             Ty::Fn(params, ret) => Ty::Fn(params.iter().map(open).collect(), Box::new(open(&ret))),
-            other => other,
+            other => open(&other),
         })
+    }
+
+    /// Whether argument `index` of `recv.name(..)` is stored by the call (a value that outlives it: `push`, `insert`, `unwrap_or`), so a
+    /// place passed there is copied: the declared parameter is owned (`value: T`), not borrowed (`&T`) and not a closure.
+    pub fn stores_arg(&self, recv: &Ty, name: &str, index: usize) -> bool {
+        if numeric_receiver(recv).is_some() {
+            return false;
+        }
+        let (ct, _) = core_receiver(recv);
+        let Some((owner, _)) = self.lowering.lookup(ct, name) else { return false };
+        let Some((_, _, params, _)) = self.core.declared(owner.trait_name(), name) else { return false };
+        params.get(index).is_some_and(|p| !matches!(p, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_) | crate::parser::Type::FunctionPointer { .. }))
     }
 
     /// The result type of the associated function `owner::name(args)` (`Vec::new`, `HashMap::with_capacity`, `i64::MAX`,
@@ -155,7 +180,18 @@ impl StdSurface {
     /// the method's own) are instantiated: the receiver's, then the arguments' types (`map<U>(f: fn(T) -> U)` binds `U` to
     /// the closure's result), then the expected type.
     fn declared_on_trait(&self, core_type: CoreType, recv_args: &[Ty], name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
-        self.lowering.row(core_type, name)?;
+        let row = self.lowering.row(core_type, name)?;
+        // `@result_from_context`: the call is what it is expected to be when that has the declared kind of shape (`collect` into a
+        // set, `sum` into an `i64`)
+        if let (Some(kind), Some(want)) = (row.from_context, want) {
+            let accepted = match kind {
+                ContextKind::Collection => matches!(want, Ty::Vec(_) | Ty::Set(_) | Ty::Map(..) | Ty::Str | Ty::Result(..) | Ty::Option(_)),
+                ContextKind::Numeric => want.is_numeric(),
+            };
+            if accepted {
+                return Some(want.clone());
+            }
+        }
         let (type_generics, method_generics, params, ret) = self.core.declared(core_type.trait_name(), name)?;
         let Some(ret) = ret else { return Some(Ty::Unit) };
         let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
@@ -179,6 +215,46 @@ impl StdSurface {
         }
         let all: Option<Vec<Ty>> = bound.into_iter().collect();
         Some(ty.subst(&generics, &all?))
+    }
+}
+
+/// The surface type and trait of a float or integer receiver (`Float<T>` of `f64`, `Integer<T>` of an integer type).
+fn numeric_receiver(recv: &Ty) -> Option<(crate::parser::Type, CoreType)> {
+    Some(match recv {
+        Ty::F64 => (crate::parser::Type::Custom("f64".to_string()), CoreType::Float),
+        Ty::F32 => (crate::parser::Type::Custom("f32".to_string()), CoreType::Float),
+        Ty::Int(k) => (crate::parser::Type::Custom(k.name().to_string()), CoreType::Integer),
+        _ => return None,
+    })
+}
+
+/// The migrated type a receiver is a value of, with the type arguments of its trait (an `Option<T>`'s `T`, a `Result<T, E>`'s `T` and `E`).
+/// `None` for a receiver no trait is declared for (a bool, a tuple, a user type): only what every value has applies to it.
+pub fn core_receiver(recv: &Ty) -> (Option<CoreType>, Vec<Ty>) {
+    match recv {
+        Ty::Char => (Some(CoreType::Char), vec![]),
+        Ty::Str => (Some(CoreType::String), vec![]),
+        Ty::Option(t) => (Some(CoreType::Option), vec![(**t).clone()]),
+        Ty::Result(t, e) => (Some(CoreType::Result), vec![(**t).clone(), (**e).clone()]),
+        Ty::Map(k, v) => (Some(CoreType::Map), vec![(**k).clone(), (**v).clone()]),
+        Ty::Set(t) => (Some(CoreType::Set), vec![(**t).clone()]),
+        Ty::Vec(t) => (Some(CoreType::Vec), vec![(**t).clone()]),
+        Ty::Iter(t) | Ty::Range(t) => (Some(CoreType::Iter), vec![(**t).clone()]),
+        _ => (None, vec![]),
+    }
+}
+
+/// The migrated type whose rows a call on `recv` looks up first (`None`: only what every value has applies).
+pub fn core_type(recv: &Ty) -> Option<CoreType> {
+    numeric_receiver(recv).map(|(_, c)| c).or_else(|| core_receiver(recv).0)
+}
+
+/// What a value yields when it is iterated: a list, set, iterator or range its element, a map its `(key, value)` pairs, an `Option` its value.
+pub fn iterated(t: &Ty) -> Option<Ty> {
+    match t {
+        Ty::Vec(e) | Ty::Set(e) | Ty::Iter(e) | Ty::Range(e) | Ty::Option(e) => Some((**e).clone()),
+        Ty::Map(k, v) => Some(Ty::Tuple(vec![(**k).clone(), (**v).clone()])),
+        _ => None,
     }
 }
 
@@ -207,7 +283,19 @@ fn bind_generics(pattern: &Ty, found: &Ty, generics: &[String], bound: &mut [Opt
             bind_generics(a, wa, generics, bound, lenient);
             bind_generics(b, wb, generics, bound, lenient);
         }
-        (Ty::Option(a), Ty::Option(wa)) | (Ty::Vec(a), Ty::Vec(wa)) | (Ty::Iter(a), Ty::Iter(wa)) | (Ty::Set(a), Ty::Set(wa)) => bind_generics(a, wa, generics, bound, lenient),
+        (Ty::Option(a), Ty::Option(wa)) | (Ty::Vec(a), Ty::Vec(wa)) | (Ty::Set(a), Ty::Set(wa)) => bind_generics(a, wa, generics, bound, lenient),
+        // an iterator parameter takes anything iterable (`flat_map(|x| [x, x])`, `zip(other_list)`)
+        (Ty::Iter(a), w) => {
+            if let Some(e) = iterated(w) {
+                bind_generics(a, &e, generics, bound, lenient);
+            }
+        }
+        // the declaration spells it `Iterator<U>` inside a parameter's type
+        (Ty::Adt(n, a), w) if n == crate::ir::stdlib_tables::ITERATOR && a.len() == 1 => {
+            if let Some(e) = iterated(w) {
+                bind_generics(&a[0], &e, generics, bound, lenient);
+            }
+        }
         (Ty::Map(a, b), Ty::Map(wa, wb)) => {
             bind_generics(a, wa, generics, bound, lenient);
             bind_generics(b, wb, generics, bound, lenient);

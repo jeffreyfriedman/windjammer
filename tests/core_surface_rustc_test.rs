@@ -124,10 +124,12 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         // `@rustc(on = "u64")`: the integer type an entry that Rust declares only on some integer types is checked on
         // (`is_power_of_two` exists on unsigned types, `abs_diff` returns `T` there)
         let checked_on: Option<String> = surface.decorators(ty, method).iter().find(|d| d.name == "rustc").and_then(|d| d.args.iter().find(|(k, _)| k == "on")).map(|(_, v)| v.clone());
-        assert!(checked_on.is_none() || ty == "Integer", "`@rustc(on = ..)` on {ty}::{method}: only `Integer` entries are checked on more than one type");
+        assert!(checked_on.is_none() || ty == "Integer" || ty == "Vec", "`@rustc(on = ..)` on {ty}::{method}: only `Integer` (a type) and `Vec` (a receiver type) entries are checked on another type");
         let recv = match ty.as_str() {
             "Integer" => checked_on.clone().unwrap_or_else(|| "i64".to_string()),
+            "Vec" if checked_on.is_some() => checked_on.clone().unwrap_or_default(),
             "Float" => "f64".to_string(),
+            "Any" => "i64".to_string(),
             "Char" => "char".to_string(),
             // the width traits (`F32::to_bits`) are checked on the type they are named after
             "F32" => "f32".to_string(),
@@ -153,6 +155,8 @@ fn every_core_surface_entry_typechecks_in_rustc() {
             r => (r.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into()), ""),
         };
         let ret_ty = if method == "parse" { "Result<i64, _>".to_string() } else { ret_ty };
+        // `@rustc(ret = "..")`: the result as Rust spells it (`split_at` gives two slices)
+        let ret_ty = surface.decorators(ty, method).iter().find(|d| d.name == "rustc").and_then(|d| d.args.iter().find(|(k, _)| k == "ret")).map_or(ret_ty, |(_, v)| v.clone());
         // `@rustc(tail = ".collect::<String>()")`: the adapter that turns Rust's result into the declared one (a `char`'s
         // `to_uppercase` is an iterator of characters, lowered to the string they spell)
         let tail = match surface.decorators(ty, method).iter().find(|d| d.name == "rustc").and_then(|d| d.args.iter().find(|(k, _)| k == "tail")) {

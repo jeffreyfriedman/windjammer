@@ -24,7 +24,7 @@ use windjammer::typing::core_surface::CoreSurface;
 
 /// The types whose methods are migrated: every declaration of these traits needs a rule per target. A stage adds its
 /// types here (and to `CoreType`); the list never shrinks.
-const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result, CoreType::Map, CoreType::Set];
+const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result, CoreType::Map, CoreType::Set, CoreType::Vec, CoreType::Iter, CoreType::Any];
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -210,6 +210,9 @@ fn kind_of(ty: CoreType) -> Kind {
         CoreType::Result => Kind::Result,
         CoreType::Map => Kind::Map,
         CoreType::Set => Kind::Set,
+        CoreType::Vec => Kind::Vec,
+        CoreType::Iter => Kind::Iter,
+        CoreType::Any => Kind::Any,
     }
 }
 
@@ -338,7 +341,19 @@ const REGISTERED_WITHOUT_ROW: &[(CoreType, &[&str])] = &[
         CoreType::Set,
         &["difference", "extend", "first", "intersection", "into_iter", "is_disjoint", "is_subset", "is_superset", "iter", "last", "retain", "symmetric_difference", "take", "union"],
     ),
+    // Vec: the spellings ADR-0039 removed (push_back and its family, to_vec, append, sort_unstable*, fill), the VecDeque and slice methods, and the
+    // enumerable / ordering methods (sort_by*, concat, drain, rotate_*, resize, starts_with, ...) that stages 8's tables take over.
+    (CoreType::Vec, &["append", "as_slice", "back", "back_mut", "concat", "dedup_by_key", "drain", "ends_with", "fill", "first_mut", "front", "front_mut", "into_boxed_slice", "is_sorted", "last_mut", "pop_back", "pop_front", "push_back", "push_front", "repeat", "resize", "rotate_left", "rotate_right", "sort_by", "sort_by_cached_key", "sort_by_key", "sort_by_key_desc", "sort_unstable", "sort_unstable_by", "sort_unstable_by_key", "split_first", "split_last", "starts_with", "to_vec"]),
+    // Iterator: the interpreter registers every sequence method on `Kind::Iter` (lists, sets, maps and ranges share it): the enumerable family
+    // (stage 8), the ordering family, and the sequence methods a list or map has (`len`, `iter`, `contains`).
+    (CoreType::Iter, &["by_ref", "chunk_by", "clone", "cmp", "contains", "count_by", "cycle", "each_slice", "eq", "find_map", "flatten", "frequencies", "fuse", "group_by", "index_of", "inspect", "intersperse", "into_iter", "is_empty", "iter", "len", "max_by", "max_by_key", "min_by", "min_by_key", "next_back", "next_if", "partition", "partition_by", "peek", "reduce", "rposition", "scan", "sorted", "sorted_by_key", "sorted_by_key_desc", "sum_by", "tally", "to_list", "unique", "unique_by", "unzip", "zip_with"]),
+    // Any: the trait methods every value has in Rust (`clone`, `cmp`, `into`, ...); only `to_string` is a portable row.
+    (CoreType::Any, &["as_mut", "as_ref", "borrow", "borrow_mut", "clone", "cmp", "deref", "eq", "ge", "gt", "hash", "into", "le", "lt", "max", "min", "ne", "partial_cmp", "to_owned", "to_vec", "try_into"]),
+
 ];
+
+/// Iterator rows declared `&mut self` (Rust's `Iterator::next` takes one) that the interpreter registers pure. Shrink-only.
+const REGISTERED_PURE_ITERATOR_CONSUMERS: &[&str] = &["all", "any", "find", "next", "nth", "position"];
 
 #[test]
 fn every_row_is_registered_in_the_interpreter_with_the_same_mutability() {
@@ -353,6 +368,8 @@ fn every_row_is_registered_in_the_interpreter_with_the_same_mutability() {
                 // an `@internal` row is a form the compiler lowers itself (`clone` is a copy): nothing to register
                 None if row.internal.is_some() => {}
                 None => bad.push(format!("{id}: declared, but the interpreter registers no {} method of that name", ty.noun())),
+                // an iterator is a shared cell in the interpreter: its consumers are registered pure though Rust declares them `&mut self`
+                Some((_, false)) if *ty == CoreType::Iter && row.changes_receiver && REGISTERED_PURE_ITERATOR_CONSUMERS.contains(&row.name.as_str()) => {}
                 Some((_, mutating)) if *mutating != row.changes_receiver => {
                     bad.push(format!("{id}: declared {}, registered {}", if row.changes_receiver { "`&mut self`" } else { "`self`" }, if *mutating { "mutating" } else { "pure" }))
                 }
@@ -488,13 +505,13 @@ fn every_helper_a_template_calls_is_defined_in_the_shim() {
 ///
 /// Stage 4 dropped `map_or` and `is_some_and` (ADR-0039 R045, R046): `$optMapOr`, `wjOptMapOr` and `wjOptIsSomeAnd` are dead
 /// for the same reason and go with them.
-const DEAD_HELPERS_JS: &[&str] = &["$asciiLower", "$asciiUpper", "$optMapOr"];
+const DEAD_HELPERS_JS: &[&str] = &["$asciiLower", "$asciiUpper", "$drain", "$optMapOr", "$popFront"];
 /// Helpers the emitters name by building the text (`$std_<module>_<fn>`, `wjstd_<module>_<fn>` for the module
 /// functions of `portable/stdlib.rs`): no literal names them, so a text search cannot tell them dead. The module-function
 /// stage (7) turns them into rows and removes this exemption.
 const DYNAMIC_PREFIXES: &[&str] = &["$std_", "$caps_", "wjstd_", "wjcaps_"];
 /// Stage 5 dropped a map's `iter` (ADR-0039 R010): Go's `wjEntries` is dead for the same reason (`for (k, v) in m` is `$sortedEntries` in JavaScript, a range in Go).
-const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper", "wjEntries", "wjOptIsSomeAnd", "wjOptMapOr"];
+const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper", "wjDrain", "wjEntries", "wjFill", "wjOptIsSomeAnd", "wjOptMapOr", "wjPopFront", "wjPushFront"];
 
 #[test]
 fn no_shim_helper_is_dead() {
@@ -568,13 +585,13 @@ fn variants(source: &str, name: &str) -> Vec<String> {
 /// A new variant of one of these needs this test edited with the reason: the vocabulary names type shapes and
 /// emitter capabilities, never std methods (section 2.3 of the design).
 const VOCABULARY: &[(&str, usize, &str)] = &[
-    ("Guard", 10, "ok_int, ok_f32, ok_f64, ok_bool: the `Ok` type of a `Result` result (`parse::<i32>()` picks its parser by it); elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it; key_prim: a map key a JavaScript `Map` compares by value (the `requires` of the map traits)"),
-    ("Hook", 2, "display: the type-directed `to_string` emitter; cast: the numeric conversion `i64::from(x)` / `f64::from(x)` prints from the argument's and the result's types (`num::cast`); `clone` joins with the Vec stage"),
+    ("Guard", 17, "r_int, r_float, r_set, r_map, r_str, r_result, r_option: the shape of the call's result type (`collect` into a set, map, string, `Result` or `Option`; `sum` of an integer or a float: the result is the expected type); ok_int, ok_f32, ok_f64, ok_bool: the `Ok` type of a `Result` result (`parse::<i32>()` picks its parser by it); elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it; key_prim: a map key a JavaScript `Map` compares by value (the `requires` of the map traits)"),
+    ("Hook", 3, "display: the type-directed `to_string` emitter; cast: the numeric conversion `i64::from(x)` / `f64::from(x)` prints from the argument's and the result's types (`num::cast`); clone: JavaScript's `cloned` / `copied` copy the elements with the element type's own cloner (the stage 6 hook)"),
     ("Modifier", 3, "f64: Go's operand widening for Float<T>; str: a `char` operand where Go wants a string (`string(rune(c))`); num: an integer JavaScript wants as a Number (`Number(n)`, a BigInt is not a length)"),
     ("Fact", 14, "dbg: the target's debug formatter of a type, asked of a `Result`'s error type (`{E.dbg}`: `unwrap` and `expect` print the error with it; it needs the type, so a template cannot spell it, and Go's runtime formats errors itself); lo, hi: the bounds as BigInt literals (`-128n`: what `$parseInt` compares in, whatever the width); bits signed wide min max zero one chk go: the numeric helpers' facts of the Integer rows; wrap_open, wrap_close: the text that brackets an expression wrapped into T's range (asIntN(64, ..), `(.. | 0)`, `((.. << 24) >> 24)`: a template is linear, so the bracket is two facts)"),
     ("Rule", 4, "Emit, Assign, Hook, Unsupported; `Assign` is JavaScript's place update (`(s = s + c, undefined)` for a string's `push`)"),
     ("Target", 2, "Js, Go; TypeScript uses the JavaScript rules; `Rust` joins when the Rust backend reads the table"),
-    ("CoreType", 8, "one per migrated std type (a stage adds its types): Float, Integer, Char, String, Option, Result, Map (HashMap and BTreeMap), Set (HashSet and BTreeSet)"),
+    ("CoreType", 11, "one per migrated std type (a stage adds its types): Float, Integer, Char, String, Option, Result, Map (HashMap and BTreeMap), Set (HashSet and BTreeSet), Vec, Iter (Iterator, Range), Any (what every value has: to_string)"),
     ("Widen", 1, "F64"),
 ];
 
@@ -635,8 +652,6 @@ const REMOVED_SPELLED_WITHOUT_INTERNAL: &[&str] = &[
     "Result::unwrap_or_default",
     "String::capacity",
     "String::push_str",
-    "Vec::capacity",
-    "Vec::extend_from_slice",
     "Vec::into_iter",
     "Vec::iter",
     "Vec::iter_mut",
@@ -711,6 +726,13 @@ const ROWS_WITHOUT_ONE_DECLARATION: &[(CoreType, &str, &[&str])] = &[
     ),
     (CoreType::Option, "Option", &["flatten", "or", "replace", "zip"]),
     (CoreType::Result, "Result", &[]),
+    (
+        CoreType::Vec,
+        "Vec",
+        &["concat", "drain", "ends_with", "resize", "rotate_left", "rotate_right", "sort_by", "sort_by_key", "sort_by_key_desc", "starts_with", "with_capacity"],
+    ),
+    (CoreType::Iter, "Iter", &["cycle", "next_if", "peek"]),
+    (CoreType::Any, "any", &[]),
     // Map: `new` is an associated function (its row is a static); `entry` is lowered as a statement; the others have no lowering yet.
     (CoreType::Map, "HashMap", &["entry", "extend", "new", "retain"]),
     (

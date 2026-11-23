@@ -35,7 +35,7 @@ func probe_list_int(n int32) {
 	wjRetain(&xs, func(v int32) bool {
 		return (v > int32(7))
 	})
-	var tail []int32 = wjSplitOff(&xs, int64(1))
+	var tail []int32 = wjSplitOff(&xs, uint(1))
 	_ = tail
 	wjPrint(("" + wjItoa(uint(len(tail)))) + "\n")
 	var sorted []int32 = []int32{int32(1), int32(3), int32(5), int32(7)}

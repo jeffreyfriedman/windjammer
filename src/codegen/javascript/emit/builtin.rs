@@ -5,6 +5,7 @@ use super::Js;
 use crate::codegen::portable::template::{self, Operands, TypeRef};
 use crate::stdlib_surface::lowering::{CoreType, Fact, Guard, Hook, Modifier, Rule, Target};
 use crate::codegen::portable::ir::*;
+use crate::codegen::portable::env::{core_type, iterated};
 use crate::codegen::portable::ty::{IntKind, Ty};
 
 fn range_of(k: IntKind) -> (i128, i128) {
@@ -25,38 +26,27 @@ impl<'m> Js<'m> {
             let r = self.expr_recv(recv)?;
             return Ok(format!("{r}.{}({a})", self.method_name(name)));
         }
-        // A length typed as a narrow `int` (SPEC-NUM-014) is a Number, not a BigInt.
-        if matches!(name, "len" | "count" | "capacity") {
-            if let Ty::Int(k) = ty {
-                if !k.is_wide() {
-                    let n = self.method(recv, name, args, res, &Ty::usize())?;
-                    return Ok(format!("Number({n})"));
-                }
+        let m = self.m;
+        let found = m.lowering.lookup(core_type(&recv.ty), name);
+        // A length typed as a narrow `int` (SPEC-NUM-014) is a Number, not a BigInt: any method declared to give a `usize`.
+        if let (Some((_, row)), Ty::Int(k)) = (found, ty) {
+            if row.returns_usize && !k.is_wide() {
+                let n = self.method(recv, name, args, res, &Ty::usize())?;
+                return Ok(format!("Number({n})"));
             }
         }
         let r = self.expr(recv)?;
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
-        if name == "to_string" {
-            return self.display(recv, &FmtSpec::default());
-        }
         if let Some(js) = self.enumerable_method(recv, name, &r, &a, args)? {
             return Ok(js);
         }
         if let Some(s) = self.ordering_method(recv, name, &r, &a) {
             return Ok(s);
         }
-        match &recv.ty {
-            Ty::Vec(t) => self.vec_method(recv, t, name, &r, &a, args, ty),
-            Ty::Iter(t) | Ty::Range(t) => self.iter_method(t, name, &r, &a, args, ty),
-            Ty::Str => self.lowered(CoreType::String, recv, name, &r, &a, ty),
-            Ty::Char => self.lowered(CoreType::Char, recv, name, &r, &a, ty),
-            Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &r, &a, ty),
-            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &r, &a, ty),
-            Ty::Option(_) => self.lowered(CoreType::Option, recv, name, &r, &a, ty),
-            Ty::Result(..) => self.lowered(CoreType::Result, recv, name, &r, &a, ty),
-            Ty::Map(..) => self.lowered(CoreType::Map, recv, name, &r, &a, ty),
-            Ty::Set(_) => self.lowered(CoreType::Set, recv, name, &r, &a, ty),
-            other => self.unsupported(format!("method `{name}` on `{}`", other.describe())),
+        match (found, core_type(&recv.ty)) {
+            (Some((owner, _)), _) => self.lowered(owner, recv, name, &r, &a, ty),
+            (None, Some(ct)) => self.unsupported(format!("{} method `{name}`", ct.noun())),
+            (None, None) => self.unsupported(format!("method `{name}` on `{}`", recv.ty.describe())),
         }
     }
 
@@ -65,47 +55,8 @@ impl<'m> Js<'m> {
         Ok(if matches!(&*e.kind, PK::Local(_) | PK::Field(..) | PK::TupleIdx(..) | PK::Call { .. } | PK::Method { .. } | PK::Index(..) | PK::Copy(_)) { s } else { format!("({s})") })
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn vec_method(&mut self, recv: &PExpr, t: &Ty, name: &str, r: &str, a: &[String], args: &[PExpr], ty: &Ty) -> PResult<String> {
-        Ok(match name {
-            "len" => format!("BigInt({r}.length)"),
-            "capacity" => format!("BigInt({r}.length)"),
-            "is_empty" => format!("({r}.length === 0)"),
-            "push" | "push_back" => format!("{r}.push({})", a[0]),
-            "push_front" => format!("{r}.unshift({})", a[0]),
-            "pop" | "pop_back" => format!("$pop({r})"),
-            "pop_front" => format!("$popFront({r})"),
-            "get" => format!("$vget({r}, {})", a[0]),
-            "first" => format!("$vget({r}, 0n)"),
-            "last" => format!("$vlast({r})"),
-            "contains" => if self.is_prim(t) { format!("{r}.includes({})", a[0]) } else { format!("{r}.some((x) => $eq(x, {}))", a[0]) },
-            "insert" => format!("$vinsert({r}, {}, {})", a[0], a[1]),
-            "remove" => format!("$vremove({r}, {})", a[0]),
-            "swap_remove" => format!("$vswapRemove({r}, {})", a[0]),
-            "clear" => format!("({r}.length = 0)"),
-            "sort" | "sort_unstable" => format!("$sort({r})"),
-            "reverse" => format!("{r}.reverse()"),
-            "dedup" => format!("$dedup({r})"),
-            "extend" | "append" | "extend_from_slice" => format!("$extend({r}, {})", a[0]),
-            "truncate" => format!("$truncate({r}, {})", a[0]),
-            "swap" => format!("$swap({r}, {}, {})", a[0], a[1]),
-            "iter" | "iter_mut" | "into_iter" => r.to_string(),
-            "drain" => format!("$drain({r})"),
-            "windows" => format!("$windows({r}, {})", a[0]),
-            "chunks" => format!("$chunks({r}, {})", a[0]),
-            "to_vec" => self.clone_js(&recv.ty, r),
-            "join" => format!("{r}.join({})", a[0]),
-            "binary_search" => format!("$bsearch({r}, {})", a[0]),
-            "retain" => format!("$retain({r}, {})", a[0]),
-            "split_off" => format!("$splitOff({r}, {})", a[0]),
-            "split_at" => format!("$splitAt({r}, {})", a[0]),
-            "fill" => format!("{r}.fill({})", a[0]),
-            _ => return self.iter_method(t, name, r, a, args, ty),
-        })
-    }
-
-    pub(super) fn sum_op(&self, t: &Ty, name: &str) -> PResult<(String, String)> {
-        let mul = name == "product";
+    pub(super) fn sum_op(&self, t: &Ty, mul: bool) -> PResult<(String, String)> {
+        let name = if mul { "product" } else { "sum" };
         match t {
             Ty::Int(k) => {
                 let (z, o) = (num::zero(*k), num::one(*k));
@@ -113,60 +64,6 @@ impl<'m> Js<'m> {
             }
             Ty::F64 | Ty::F32 => Ok((format!("(a, x) => a {} x", if mul { "*" } else { "+" }), if mul { "1".into() } else { "0".into() })),
             other => self.unsupported(format!("{name}() over `{}`", other.describe())),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn iter_method(&mut self, t: &Ty, name: &str, r: &str, a: &[String], args: &[PExpr], ty: &Ty) -> PResult<String> {
-        Ok(match name {
-            "iter" | "iter_mut" | "into_iter" | "peekable" => r.to_string(),
-            "map" => format!("{r}.map((x) => ({})(x))", a[0]),
-            "filter" => format!("{r}.filter((x) => ({})(x))", a[0]),
-            "for_each" => format!("{r}.forEach((x) => ({})(x))", a[0]),
-            "inspect" => format!("{r}.map((x) => (({})(x), x))", a[0]),
-            "filter_map" => format!("$filterMap({r}, {})", a[0]),
-            "flat_map" => format!("{r}.flatMap((x) => ({})(x))", a[0]),
-            "enumerate" => format!("{r}.map((x, i) => [BigInt(i), x])"),
-            "zip" => format!("$zip({r}, {})", a[0]),
-            "rev" => format!("{r}.slice().reverse()"),
-            "take" => format!("{r}.slice(0, Number({}))", a[0]),
-            "skip" => format!("{r}.slice(Number({}))", a[0]),
-            "step_by" => format!("{r}.filter((_, i) => i % Number({}) === 0)", a[0]),
-            "take_while" => format!("$takeWhile({r}, {})", a[0]),
-            "skip_while" => format!("$skipWhile({r}, {})", a[0]),
-            "chain" => format!("{r}.concat({})", a[0]),
-            "cloned" | "copied" => match self.cloner(t) {
-                None => format!("{r}.slice()"),
-                Some(c) => format!("{r}.map({c})"),
-            },
-            "collect" => self.collect(r, ty),
-            "sum" | "product" => {
-                let (f, z) = self.sum_op(ty, name)?;
-                format!("{r}.reduce({f}, {z})")
-            }
-            "count" => format!("BigInt({r}.length)"),
-            "fold" => format!("{r}.reduce((acc, x) => ({})(acc, x), {})", a[1], a[0]),
-            "any" => format!("{r}.some((x) => ({})(x))", a[0]),
-            "all" => format!("{r}.every((x) => ({})(x))", a[0]),
-            "min" => format!("$minmax({r}, -1)"),
-            "max" => format!("$minmax({r}, 1)"),
-            "find" => format!("$find({r}, {})", a[0]),
-            "position" => format!("$position({r}, {})", a[0]),
-            "last" => format!("$vlast({r})"),
-            "next" => format!("$vget({r}, 0n)"),
-            "nth" => format!("$vget({r}, {})", a[0]),
-            _ => return self.unsupported(format!("iterator method `{name}` ({} args)", args.len())),
-        })
-    }
-
-    fn collect(&self, r: &str, ty: &Ty) -> String {
-        match ty {
-            Ty::Set(_) => format!("new Set({r})"),
-            Ty::Map(..) => format!("new Map({r})"),
-            Ty::Str => format!("{r}.join(\"\")"),
-            Ty::Result(..) => format!("$collectResult({r})"),
-            Ty::Option(_) => format!("$collectOption({r})"),
-            _ => format!("{r}.slice()"),
         }
     }
 
@@ -195,6 +92,11 @@ impl<'m> Js<'m> {
                 Ok(format!("({place} = {value}, undefined)"))
             }
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
+            // a copy of the elements by the element type's own cloner
+            Some(Rule::Hook(Hook::Clone)) => Ok(match self.cloner(&iterated(&recv.ty).unwrap_or(Ty::Unknown)) {
+                None => format!("{r}.slice()"),
+                Some(c) => format!("{r}.map({c})"),
+            }),
             Some(Rule::Hook(Hook::Cast)) => self.unsupported(format!("{} method `{name}`: `cast` is the hook of an associated function", ct.noun())),
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no JavaScript rule", ct.noun())),

@@ -40,6 +40,13 @@ pub fn type_guard(guard: Guard, recv: &Ty, result: &Ty) -> bool {
             };
             matches!(key(recv).or_else(|| key(result)), Some(Ty::Int(_) | Ty::Str | Ty::Char | Ty::Bool))
         }
+        (Guard::ResInt, _) => matches!(result, Ty::Int(_)),
+        (Guard::ResFloat, _) => matches!(result, Ty::F64 | Ty::F32),
+        (Guard::ResSet, _) => matches!(result, Ty::Set(_)),
+        (Guard::ResMap, _) => matches!(result, Ty::Map(..)),
+        (Guard::ResStr, _) => matches!(result, Ty::Str),
+        (Guard::ResResult, _) => matches!(result, Ty::Result(..)),
+        (Guard::ResOption, _) => matches!(result, Ty::Option(_)),
         _ => false,
     }
 }

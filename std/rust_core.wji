@@ -11,8 +11,11 @@
 // stage C1, docs/design/numeric-width-redesign.md section 7); every entry is checked against rustc by
 // `tests/core_surface_rustc_test.rs`. `slice(start, end)` is the parser's spelling of `x[start..end]` (checked as `&x[a..b]`).
 
-// `Vec`'s methods are not rows yet (stage 6); its associated functions are (a function without a receiver is a row of its
-// trait when it carries rules: `Vec::new()` is the empty list, `{R.go}` the Go type of the result).
+// `Vec<T>` is a list. A list also has every iterator row (`@adapts`: `xs.map(f)` is `xs.iter().map(f)`, W0003), so a lookup that finds no
+// row here falls to `trait Iterator`. A function without a receiver is a row of its trait when it carries rules (`Vec::new()` is the
+// empty list, `{R.go}` the Go type of the result). The spellings ADR-0039 removed (R080 `to_vec`, R081 `push_back` and its family, R082
+// `extend_from_slice` / `append`, R083 `sort_unstable`, R085 `capacity` / `fill`) have no rules; `drain` and `concat` are not portable.
+@adapts(to = "Iterator")
 pub trait Vec<T> {
     @js(emit = "[]")
     @go(emit = "{R.go}{{}}")
@@ -26,65 +29,288 @@ pub trait Vec<T> {
     @go(emit = "wjClone({items})")
     @example(given = "let a: Vec<i32> = [1, 2, 3]; let v: Vec<i32> = Vec::from(a)", src = "v.len()", expect = "3")
     fn from(items: Vec<T>) -> Vec<T>;
+    @js(emit = "BigInt({self}.length)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.len()", expect = "3")
     fn len(self) -> usize;
+    @internal(reason = "removed spelling (ADR-0039 R085, a storage detail): declared for the Rust backend")
     fn capacity(self) -> usize;
+    @js(emit = "({self}.length === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let v: Vec<i32> = []", src = "v.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "{self}.push({value})")
+    @go(emit = "wjPush({&self}, {value})")
+    @example(given = "let mut v: Vec<i32> = []; v.push(4)", src = "v.len()", expect = "1")
     fn push(&mut self, value: T);
+    @js(emit = "$extend({self}, {other})")
+    @go(emit = "wjExtend({&self}, {other})")
+    @example(given = "let mut v: Vec<i32> = [1]; let w: Vec<i32> = [2, 3]; v.extend(w)", src = "v.len()", expect = "3")
+    fn extend(&mut self, other: Vec<T>);
+    @internal(reason = "removed spelling (ADR-0039 R082: `extend`): declared for the Rust backend")
     fn extend_from_slice(&mut self, other: &[T]);
+    @js(emit = "$pop({self})")
+    @go(emit = "wjPop({&self})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]", src = "v.pop().unwrap_or(0)", expect = "2")
     fn pop(&mut self) -> Option<T>;
+    @js(emit = "$vget({self}, {index})")
+    @go(emit = "wjGet({self}, {index})")
+    @example(given = "let v: Vec<i32> = [5, 6]", src = "v.get(1).unwrap_or(0)", expect = "6")
     fn get(self, index: usize) -> Option<&T>;
+    @internal(reason = "a place: not a portable method yet")
     fn get_mut(&mut self, index: usize) -> Option<&mut T>;
+    @js(emit = "$vget({self}, 0n)")
+    @go(emit = "wjFirst({self})")
+    @example(given = "let v: Vec<i32> = [5, 6]", src = "v.first().unwrap_or(0)", expect = "5")
     fn first(self) -> Option<&T>;
+    @js(emit = "$vlast({self})")
+    @go(emit = "wjLast({self})")
+    @example(given = "let v: Vec<i32> = [5, 6]", src = "v.last().unwrap_or(0)", expect = "6")
     fn last(self) -> Option<&T>;
+    @js(emit = "$vinsert({self}, {index}, {value})")
+    @go(emit = "wjInsert({&self}, {index}, {value})")
+    @example(given = "let mut v: Vec<i32> = [1, 3]; v.insert(1, 2)", src = "v.get(1).unwrap_or(0)", expect = "2")
     fn insert(&mut self, index: usize, value: T);
+    @js(emit = "$vremove({self}, {index})")
+    @go(emit = "wjRemove({&self}, {index})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]", src = "v.remove(1)", expect = "2")
     fn remove(&mut self, index: usize) -> T;
+    @js(emit = "$vswapRemove({self}, {index})")
+    @go(emit = "wjSwapRemove({&self}, {index})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]", src = "v.swap_remove(0)", expect = "1")
     fn swap_remove(&mut self, index: usize) -> T;
+    @js(emit = "$swap({self}, {a}, {b})")
+    @go(emit = "wjSwap({self}, {a}, {b})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]; v.swap(0, 1)", src = "v.get(0).unwrap_or(0)", expect = "2")
     fn swap(&mut self, a: usize, b: usize);
+    @js(emit = "$truncate({self}, {len})")
+    @go(emit = "wjTruncate({&self}, {len})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]; v.truncate(1)", src = "v.len()", expect = "1")
     fn truncate(&mut self, len: usize);
+    @js(emit = "$splitOff({self}, {at})")
+    @go(emit = "wjSplitOff({&self}, {at})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]; let t = v.split_off(1)", src = "t.len()", expect = "2")
     fn split_off(&mut self, at: usize) -> Vec<T>;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> Vec<T>;
+    @internal(reason = "the parser's spelling of `xs[a..b]`, lowered to an index of a range")
     fn slice(self, start: usize, end: usize) -> Vec<T>;
+    @js(emit = "{self}.includes({value})", when = "elem_prim")
+    @js(emit = "{self}.some((x) => $eq(x, {value}))")
+    @go(emit = "wjContains({self}, {value})", when = "elem_prim")
+    @go(emit = "wjContainsEq({self}, {value})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.contains(2)", expect = "true")
     fn contains(self, value: &T) -> bool;
+    @js(emit = "({self}.length = 0)")
+    @go(emit = "wjClear({&self})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]; v.clear()", src = "v.len()", expect = "0")
     fn clear(&mut self);
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().count()", expect = "2")
     fn iter(self) -> Iterator<&T>;
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let mut v: Vec<i32> = [1, 2]", src = "v.iter_mut().count()", expect = "2")
     fn iter_mut(&mut self) -> Iterator<&mut T>;
+    @js(emit = "$sort({self})")
+    @go(emit = "wjSort({self})", when = "elem_prim_not_bool")
+    @go(emit = "wjSortAny({self})")
+    @example(given = "let mut v: Vec<i32> = [3, 1, 2]; v.sort()", src = "v.get(0).unwrap_or(0)", expect = "1")
     fn sort(&mut self);
+    @js(emit = "{self}.reverse()")
+    @go(emit = "wjReverseInPlace({self})")
+    @example(given = "let mut v: Vec<i32> = [1, 2]; v.reverse()", src = "v.get(0).unwrap_or(0)", expect = "2")
     fn reverse(&mut self);
+    @js(emit = "$dedup({self})")
+    @go(emit = "wjDedup({&self})")
+    @example(given = "let mut v: Vec<i32> = [1, 1, 2]; v.dedup()", src = "v.len()", expect = "2")
     fn dedup(&mut self);
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.into_iter().count()", expect = "2")
     fn into_iter(self) -> Iterator<T>;
+    @js(emit = "$windows({self}, {size})")
+    @go(emit = "wjWindows({self}, {size})")
+    @rustc(tail = ".map(|w| w.to_vec()).collect()")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.windows(2).count()", expect = "2")
+    fn windows(self, size: usize) -> Iterator<Vec<T>>;
+    @js(emit = "$chunks({self}, {size})")
+    @go(emit = "wjChunks({self}, {size})")
+    @rustc(tail = ".map(|w| w.to_vec()).collect()")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.chunks(2).count()", expect = "2")
+    fn chunks(self, size: usize) -> Iterator<Vec<T>>;
+    @js(emit = "{self}.join({sep})")
+    @go(emit = "wjJoin({self}, {sep})")
+    @rustc(on = "Vec<String>")
+    @example(given = "let v: Vec<string> = [\"a\", \"b\"]", src = "v.join(\"-\")", expect = "a-b")
+    fn join(self, sep: &str) -> String;
+    @js(emit = "$bsearch({self}, {value})")
+    @go(emit = "wjBsearch({self}, {value})")
+    @example(given = "let v: Vec<i32> = [1, 3, 5]", src = "v.binary_search(3).is_ok()", expect = "true")
+    fn binary_search(self, value: &T) -> Result<usize, usize>;
+    @js(emit = "$retain({self}, {f})")
+    @go(emit = "wjRetain({&self}, {f})")
+    @example(given = "let mut v: Vec<i32> = [1, 2, 3]; v.retain(|x| x > 1)", src = "v.len()", expect = "2")
+    fn retain(&mut self, f: fn(&T) -> bool);
+    @js(emit = "$splitAt({self}, {mid})")
+    @go(emit = "wjSplitAt({self}, {mid})")
+    @rustc(ret = "(&[i64], &[i64])")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]; let (a, b) = v.split_at(1)", src = "a.len() + b.len()", expect = "3")
+    fn split_at(self, mid: usize) -> (Vec<T>, Vec<T>);
+}
+
+// Every value has these: the last place a lookup falls to, whatever the receiver's type.
+pub trait Any {
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(src = "5.to_string()", expect = "5")
+    fn to_string(self) -> String;
 }
 
 // An iterator over `T`. A closure argument meets a `fn(..)` parameter: its parameters and result take these
-// types. `collect` and `sum` take their result type from a turbofish when one is written.
+// types. `collect`, `sum` and `product` take their result type from the expected type (a turbofish or an annotation).
 pub trait Iterator<T> {
+    @js(emit = "{self}.map((x) => ({f})(x))")
+    @go(emit = "wjMap({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().map(|x| x * 2).fold(0, |a, x| a + x)", expect = "12")
     fn map<U>(self, f: fn(T) -> U) -> Iterator<U>;
+    @js(emit = "{self}.filter((x) => ({f})(x))")
+    @go(emit = "wjFilter({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().filter(|x| x > 1).count()", expect = "2")
     fn filter(self, f: fn(&T) -> bool) -> Iterator<T>;
+    @js(emit = "$filterMap({self}, {f})")
+    @go(emit = "wjFilterMap({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().filter_map(|x| if x > 1 { Some(x) } else { None }).count()", expect = "2")
     fn filter_map<U>(self, f: fn(T) -> Option<U>) -> Iterator<U>;
+    @js(emit = "{self}.flatMap((x) => ({f})(x))")
+    @go(emit = "wjFlatMap({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().flat_map(|x| [x, x]).count()", expect = "4")
+    fn flat_map<U>(self, f: fn(T) -> Iterator<U>) -> Iterator<U>;
+    @js(emit = "{self}.reduce((acc, x) => ({f})(acc, x), {init})")
+    @go(emit = "wjFold({self}, {init}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().fold(10, |a, x| a + x)", expect = "16")
     fn fold<A>(self, init: A, f: fn(A, T) -> A) -> A;
+    @js(emit = "{self}.forEach((x) => ({f})(x))")
+    @go(emit = "wjForEach({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]; v.iter().for_each(|x| { let y = x + 1 })", src = "v.len()", expect = "2")
     fn for_each(self, f: fn(T));
+    @js(emit = "{self}.some((x) => ({f})(x))")
+    @go(emit = "wjAny({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().any(|x| x > 1)", expect = "true")
     fn any(&mut self, f: fn(T) -> bool) -> bool;
+    @js(emit = "{self}.every((x) => ({f})(x))")
+    @go(emit = "wjAll({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().all(|x| x > 1)", expect = "false")
     fn all(&mut self, f: fn(T) -> bool) -> bool;
+    @js(emit = "$find({self}, {f})")
+    @go(emit = "wjFind({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.into_iter().find(|x| x > 1).unwrap_or(0)", expect = "2")
     fn find(&mut self, f: fn(&T) -> bool) -> Option<T>;
+    @js(emit = "$position({self}, {f})")
+    @go(emit = "wjPosition({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.into_iter().position(|x| x > 1).unwrap_or(0)", expect = "1")
     fn position(&mut self, f: fn(T) -> bool) -> Option<usize>;
+    @js(emit = "$takeWhile({self}, {f})")
+    @go(emit = "wjTakeWhile({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().take_while(|x| x < 3).count()", expect = "2")
     fn take_while(self, f: fn(&T) -> bool) -> Iterator<T>;
+    @js(emit = "$skipWhile({self}, {f})")
+    @go(emit = "wjSkipWhile({self}, {f})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().skip_while(|x| x < 3).count()", expect = "1")
     fn skip_while(self, f: fn(&T) -> bool) -> Iterator<T>;
+    @js(emit = "{self}.slice().reverse()")
+    @go(emit = "wjRev({self})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.into_iter().rev().next().unwrap_or(0)", expect = "3")
     fn rev(self) -> Iterator<T>;
+    @js(emit = "{self}.slice(0, {n:num})")
+    @go(emit = "wjTake({self}, {n})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().take(2).count()", expect = "2")
     fn take(self, n: usize) -> Iterator<T>;
+    @js(emit = "{self}.slice({n:num})")
+    @go(emit = "wjSkip({self}, {n})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().skip(2).count()", expect = "1")
     fn skip(self, n: usize) -> Iterator<T>;
+    @js(emit = "{self}.filter((_, i) => i % {step:num} === 0)")
+    @go(emit = "wjStepBy({self}, {step})")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]", src = "v.iter().step_by(2).count()", expect = "2")
     fn step_by(self, step: usize) -> Iterator<T>;
-    fn chain(self, other: Iterator<T>) -> Iterator<T>;
+    @js(emit = "{self}.concat({other})")
+    @go(emit = "wjChain({self}, {other})")
+    @example(given = "let v: Vec<i32> = [1, 2]; let w: Vec<i32> = [3]", src = "v.iter().chain(w.iter()).count()", expect = "3")
+    fn chain<U>(self, other: Iterator<U>) -> Iterator<T>;
+    @js(emit = "$zip({self}, {other})")
+    @go(emit = "wjZip({self}, {other})")
+    @example(given = "let v: Vec<i32> = [1, 2]; let w: Vec<i32> = [3, 4]", src = "v.iter().zip(w.iter()).count()", expect = "2")
     fn zip<U>(self, other: Iterator<U>) -> Iterator<(T, U)>;
+    @js(emit = "{self}.map((x, i) => [BigInt(i), x])")
+    @go(emit = "wjEnumerate({self})")
+    @example(given = "let v: Vec<i32> = [7, 8]", src = "v.iter().enumerate().count()", expect = "2")
     fn enumerate(self) -> Iterator<(usize, T)>;
+    @js(hook = "clone")
+    @go(emit = "wjClone({self})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().cloned().count()", expect = "2")
     fn cloned(self) -> Iterator<T>;
+    @js(hook = "clone")
+    @go(emit = "wjClone({self})")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().copied().count()", expect = "2")
     fn copied(self) -> Iterator<T>;
+    @js(emit = "{self}")
+    @go(emit = "{self}")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().peekable().count()", expect = "2")
+    fn peekable(self) -> Iterator<T>;
+    @js(emit = "BigInt({self}.length)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let v: Vec<i32> = [1, 2]", src = "v.iter().count()", expect = "2")
     fn count(self) -> usize;
+    @js(emit = "{self}.reduce((a, x) => {R.chk}(a + x), {R.zero})", when = "r_int")
+    @js(emit = "{self}.reduce((a, x) => a + x, 0)", when = "r_float")
+    @js(unsupported = "`sum()` needs an integer or float result")
+    @go(emit = "wjSum({self})")
+    @result_from_context(kind = "numeric")
+    @example(given = "let v: Vec<i32> = [1, 2, 3]; let total: i32 = v.iter().sum()", src = "total", expect = "6")
     fn sum(self) -> T;
+    @js(emit = "{self}.reduce((a, x) => {R.chk}(a * x), {R.one})", when = "r_int")
+    @js(emit = "{self}.reduce((a, x) => a * x, 1)", when = "r_float")
+    @js(unsupported = "`product()` needs an integer or float result")
+    @go(emit = "wjProduct({self})")
+    @result_from_context(kind = "numeric")
+    @example(given = "let v: Vec<i32> = [2, 3]; let total: i32 = v.iter().product()", src = "total", expect = "6")
     fn product(self) -> T;
+    @js(emit = "$minmax({self}, -1)")
+    @go(emit = "wjMinOf({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]", src = "v.into_iter().min().unwrap_or(0)", expect = "1")
     fn min(self) -> Option<T>;
+    @js(emit = "$minmax({self}, 1)")
+    @go(emit = "wjMaxOf({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]", src = "v.into_iter().max().unwrap_or(0)", expect = "2")
     fn max(self) -> Option<T>;
+    @js(emit = "$vlast({self})")
+    @go(emit = "wjLast({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]", src = "v.iter().last().unwrap_or(0)", expect = "1")
     fn last(self) -> Option<T>;
+    @js(emit = "$vget({self}, 0n)")
+    @go(emit = "wjFirst({self})")
+    @example(given = "let v: Vec<i32> = [2, 1]; let mut it = v.into_iter()", src = "it.next().unwrap_or(0)", expect = "2")
     fn next(&mut self) -> Option<T>;
+    @js(emit = "$vget({self}, {n})")
+    @go(emit = "wjGet({self}, {n})")
+    @example(given = "let v: Vec<i32> = [2, 1]; let mut it = v.into_iter()", src = "it.nth(1).unwrap_or(0)", expect = "1")
     fn nth(&mut self, n: usize) -> Option<T>;
+    @js(emit = "new Set({self})", when = "r_set")
+    @js(emit = "new Map({self})", when = "r_map")
+    @js(emit = "{self}.join(\"\")", when = "r_str")
+    @js(emit = "$collectResult({self})", when = "r_result")
+    @js(emit = "$collectOption({self})", when = "r_option")
+    @js(emit = "{self}.slice()")
+    @go(emit = "wjToSet({self})", when = "r_set")
+    @go(emit = "wjToMap({self})", when = "r_map")
+    @go(emit = "wjCollectStr({self})", when = "r_str")
+    @go(emit = "wjCollectResult({self})", when = "r_result")
+    @go(emit = "wjCollectOption({self})", when = "r_option")
+    @go(emit = "wjClone({self})")
+    @result_from_context(kind = "collection")
+    @example(given = "let v: Vec<i32> = [1, 2, 2]; let s: HashSet<i32> = v.iter().cloned().collect()", src = "s.len()", expect = "2")
     fn collect(self) -> Vec<T>;
 }
 

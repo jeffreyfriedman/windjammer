@@ -32,11 +32,9 @@
 "src/analyzer/type_checking.rs" = 2
 "src/analyzer/usage_tracking/operation_tracking.rs" = 1
 "src/analyzer/usage_tracking/storage_tracking.rs" = 2
-"src/codegen/go/emit/builtin.rs" = 1
 "src/codegen/go/emit/items.rs" = 1
 "src/codegen/go/emit/names.rs" = 2
 "src/codegen/go/emit/stmt.rs" = 2
-"src/codegen/javascript/emit/builtin.rs" = 2
 "src/codegen/javascript/emit/fmt.rs" = 1
 "src/codegen/javascript/emit/items.rs" = 1
 "src/codegen/javascript/emit/names.rs" = 3
@@ -142,14 +140,11 @@
 "src/analyzer/optimization_detectors/const_smallvec_detection.rs" = 1
 "src/analyzer/parameter_analysis.rs" = 5
 "src/codegen/backend.rs" = 11
-"src/codegen/go/emit/builtin.rs" = 68
 "src/codegen/go/emit/enumerable.rs" = 22
 "src/codegen/go/emit/ordering.rs" = 16
-"src/codegen/javascript/emit/builtin.rs" = 70
 "src/codegen/javascript/emit/enumerable.rs" = 18
 "src/codegen/javascript/emit/ordering.rs" = 16
 "src/codegen/javascript/emit/refs.rs" = 2
-"src/codegen/portable/builtins.rs" = 79
 "src/codegen/portable/enumerable.rs" = 8
 "src/codegen/portable/lower/call.rs" = 3
 "src/codegen/portable/lower/fmt.rs" = 6

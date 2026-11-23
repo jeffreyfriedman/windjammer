@@ -110,6 +110,7 @@ impl CoreSurface {
                 returns_receiver: e.ret.as_ref().is_some_and(is_receiver_type),
                 changes_receiver: e.changes_receiver,
                 is_static: e.is_static,
+                returns_usize: matches!(&e.ret, Some(Type::Custom(n)) if n == "usize"),
                 decorators: e.decorators.clone(),
             });
         }

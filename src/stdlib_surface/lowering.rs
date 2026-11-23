@@ -45,11 +45,28 @@ pub enum CoreType {
     Map,
     /// `HashSet<T>` and `BTreeSet<T>`: one portable type (`Ty::Set`), declared by `trait HashSet`.
     Set,
+    /// `Vec<T>` (a list; `VecDeque` is not a portable type): `trait Vec` is `@adapts(to = "Iterator")`, so a list has every iterator row too.
+    Vec,
+    /// A lazy sequence (`Iter`, `Range`): `trait Iterator`.
+    Iter,
+    /// What every value has (`to_string`): the last place a lookup falls to, for any receiver type; `trait Any`.
+    Any,
 }
 
 impl CoreType {
-    pub const ALL: [CoreType; 8] =
-        [CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result, CoreType::Map, CoreType::Set];
+    pub const ALL: [CoreType; 11] = [
+        CoreType::Float,
+        CoreType::Integer,
+        CoreType::Char,
+        CoreType::String,
+        CoreType::Option,
+        CoreType::Result,
+        CoreType::Map,
+        CoreType::Set,
+        CoreType::Vec,
+        CoreType::Iter,
+        CoreType::Any,
+    ];
 
     /// The trait of `std/rust_core.wji` that declares this type's methods.
     pub fn trait_name(self) -> &'static str {
@@ -62,6 +79,9 @@ impl CoreType {
             CoreType::Result => "Result",
             CoreType::Map => "HashMap",
             CoreType::Set => "HashSet",
+            CoreType::Vec => "Vec",
+            CoreType::Iter => "Iterator",
+            CoreType::Any => "Any",
         }
     }
 
@@ -76,6 +96,9 @@ impl CoreType {
             CoreType::Result => "Result",
             CoreType::Map => "HashMap",
             CoreType::Set => "HashSet",
+            CoreType::Vec => "list",
+            CoreType::Iter => "iterator",
+            CoreType::Any => "value",
         }
     }
 
@@ -105,10 +128,19 @@ pub enum Guard {
     /// The map type of the call (the receiver, or the result of an associated function) has a key a JavaScript `Map`
     /// compares by value: an integer, string, char or bool.
     KeyPrim,
+    /// The call's result type has this shape (`collect` into a `HashSet`; `sum` of an integer or a float): a row that depends on
+    /// the type the call is expected to give.
+    ResInt,
+    ResFloat,
+    ResSet,
+    ResMap,
+    ResStr,
+    ResResult,
+    ResOption,
 }
 
 impl Guard {
-    pub const ALL: [Guard; 10] = [
+    pub const ALL: [Guard; 17] = [
         Guard::ElemPrim,
         Guard::ElemPrimNotBool,
         Guard::RecvWide,
@@ -119,6 +151,13 @@ impl Guard {
         Guard::OkF64,
         Guard::OkBool,
         Guard::KeyPrim,
+        Guard::ResInt,
+        Guard::ResFloat,
+        Guard::ResSet,
+        Guard::ResMap,
+        Guard::ResStr,
+        Guard::ResResult,
+        Guard::ResOption,
     ];
 
     pub fn name(self) -> &'static str {
@@ -133,6 +172,13 @@ impl Guard {
             Guard::OkF64 => "ok_f64",
             Guard::OkBool => "ok_bool",
             Guard::KeyPrim => "key_prim",
+            Guard::ResInt => "r_int",
+            Guard::ResFloat => "r_float",
+            Guard::ResSet => "r_set",
+            Guard::ResMap => "r_map",
+            Guard::ResStr => "r_str",
+            Guard::ResResult => "r_result",
+            Guard::ResOption => "r_option",
         }
     }
 }
@@ -144,15 +190,18 @@ pub enum Hook {
     Display,
     /// The target's numeric conversion from the first argument's type to the call's type (`i64::from(x)`, `f64::from(x)`).
     Cast,
+    /// A copy of the elements of the receiver by the element type's own cloner (JavaScript `cloned` / `copied`).
+    Clone,
 }
 
 impl Hook {
-    pub const ALL: [Hook; 2] = [Hook::Display, Hook::Cast];
+    pub const ALL: [Hook; 3] = [Hook::Display, Hook::Cast, Hook::Clone];
 
     pub fn name(self) -> &'static str {
         match self {
             Hook::Display => "display",
             Hook::Cast => "cast",
+            Hook::Clone => "clone",
         }
     }
 }
@@ -297,6 +346,8 @@ pub struct RawMethod {
     pub changes_receiver: bool,
     /// An associated function (`Vec::new`, `i64::MAX`): it has no receiver.
     pub is_static: bool,
+    /// The declared result is `usize` itself (an index slot, ADR-0028).
+    pub returns_usize: bool,
     pub decorators: Vec<RawDecorator>,
 }
 
@@ -308,6 +359,24 @@ pub struct RawTrait {
     pub methods: Vec<RawMethod>,
 }
 
+/// The shape of expected type a result taken from the context accepts (`@result_from_context(kind = "..")`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ContextKind {
+    /// A collection a sequence is gathered into: list, set, map, string, `Result`, `Option` (`collect`).
+    Collection,
+    /// A number (`sum`, `product`).
+    Numeric,
+}
+
+impl ContextKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            ContextKind::Collection => "collection",
+            ContextKind::Numeric => "numeric",
+        }
+    }
+}
+
 /// One std method: its declared shape and its rules per target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
@@ -316,6 +385,10 @@ pub struct Row {
     pub returns_receiver: bool,
     /// Declared `&mut self`: the method changes its receiver.
     pub changes_receiver: bool,
+    /// The declared result is `usize`: a call typed as a narrower integer converts it (the length narrowing, ADR-0028).
+    pub returns_usize: bool,
+    /// `@result_from_context(kind = "..")`: the call's type is the expected type when it has this shape.
+    pub from_context: Option<ContextKind>,
     pub rules: BTreeMap<Target, Vec<Rule>>,
     pub example: Option<Example>,
     /// `@internal(reason = "...")`: a lowering target the compiler produces itself (not a user-facing method).
@@ -355,6 +428,8 @@ pub struct LoweringTable {
     /// The trait that declares the associated functions of a type spelling (`i64` -> `Integer`, `BTreeMap` -> itself).
     owners: BTreeMap<String, String>,
     requires: BTreeMap<String, BTreeMap<Target, Requirement>>,
+    /// `@adapts(to = "Iterator")`: the types whose rows a lookup falls to when the type has none (a list has the iterator's).
+    adapts: BTreeMap<CoreType, Vec<CoreType>>,
 }
 
 impl LoweringTable {
@@ -371,6 +446,12 @@ impl LoweringTable {
                     for n in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
                         table.owners.insert(n.to_string(), t.name.clone());
                     }
+                    continue;
+                }
+                if d.name == "adapts" {
+                    let ty = ty.ok_or_else(|| format!("trait `{}`: `@adapts` on a trait that is not a migrated std type", t.name))?;
+                    let to = d.arg("to").and_then(CoreType::from_trait).ok_or_else(|| format!("trait `{}`: `@adapts` takes `to = \"<migrated trait>\"`", t.name))?;
+                    table.adapts.entry(ty).or_default().push(to);
                     continue;
                 }
                 let target = target_of(&d.name).ok_or_else(|| format!("trait `{}`: decorator `@{}` is not a lowering decorator", t.name, d.name))?;
@@ -434,6 +515,13 @@ impl LoweringTable {
         self.rows.get(&ty)?.get(name)
     }
 
+    /// The row a call of `name` on a value of `ty` is, with the type that declares it: the type's own, then the types it adapts
+    /// (a list has the iterator's), then what every value has (`Any`). `ty` is `None` for a receiver no trait is declared for.
+    pub fn lookup(&self, ty: Option<CoreType>, name: &str) -> Option<(CoreType, &Row)> {
+        let own = ty.into_iter().flat_map(|t| std::iter::once(t).chain(self.adapts.get(&t).into_iter().flatten().copied()));
+        own.chain(std::iter::once(CoreType::Any)).find_map(|t| Some((t, self.row(t, name)?)))
+    }
+
     /// Every row, in (type, name) order.
     pub fn rows(&self) -> impl Iterator<Item = (CoreType, &Row)> {
         self.rows.iter().flat_map(|(t, by_name)| by_name.values().map(move |r| (*t, r)))
@@ -445,7 +533,7 @@ impl LoweringTable {
 }
 
 fn is_lowering_decorator(name: &str) -> bool {
-    target_of(name).is_some() || name == "example" || name == "internal"
+    target_of(name).is_some() || name == "example" || name == "internal" || name == "result_from_context"
 }
 
 
@@ -458,6 +546,7 @@ fn row_of(trait_name: &str, m: &RawMethod) -> Result<Row, String> {
     let mut rules: BTreeMap<Target, Vec<Rule>> = BTreeMap::new();
     let mut example = None;
     let mut internal = None;
+    let mut from_context = None;
     for d in &m.decorators {
         if let Some(target) = target_of(&d.name) {
             rules.entry(target).or_default().push(rule_of(d).map_err(|e| at(&e))?);
@@ -468,11 +557,17 @@ fn row_of(trait_name: &str, m: &RawMethod) -> Result<Row, String> {
             if example.replace(Example { given: d.arg("given").map(str::to_string), src: src.to_string(), expect: expect.to_string() }).is_some() {
                 return Err(at("more than one `@example`"));
             }
+        } else if d.name == "result_from_context" {
+            from_context = Some(match d.arg("kind") {
+                Some("collection") => ContextKind::Collection,
+                Some("numeric") => ContextKind::Numeric,
+                _ => return Err(at("`@result_from_context` takes `kind = \"collection\"` or `kind = \"numeric\"`")),
+            });
         } else if d.name == "internal" {
             internal = Some(d.arg("reason").ok_or_else(|| at("`@internal` needs `reason = \"...\"`"))?.to_string());
         }
     }
-    Ok(Row { name: m.name.clone(), params: m.params.clone(), returns_receiver: m.returns_receiver, changes_receiver: m.changes_receiver, rules, example, internal })
+    Ok(Row { name: m.name.clone(), params: m.params.clone(), returns_receiver: m.returns_receiver, changes_receiver: m.changes_receiver, returns_usize: m.returns_usize, from_context, rules, example, internal })
 }
 
 fn rule_of(d: &RawDecorator) -> Result<Rule, String> {
@@ -523,7 +618,7 @@ mod tests {
     }
 
     fn method(name: &str, decorators: Vec<RawDecorator>) -> RawMethod {
-        RawMethod { name: name.into(), params: vec![], returns_receiver: true, changes_receiver: false, is_static: false, decorators }
+        RawMethod { name: name.into(), params: vec![], returns_receiver: true, changes_receiver: false, is_static: false, returns_usize: false, decorators }
     }
 
     #[test]
@@ -580,7 +675,7 @@ mod tests {
         assert!(bad(dec("js", &[("assign", "a"), ("when", "ok_int")])).is_err());
         assert!(bad(dec("js", &[("assign", "a"), ("emit", "b")])).is_err());
         assert!(bad(dec("example", &[("src", "1.0")])).is_err());
-        let off_type = RawTrait { name: "Vec".into(), decorators: vec![], methods: vec![method("push", vec![dec("js", &[("emit", "a")])])] };
+        let off_type = RawTrait { name: "Instant".into(), decorators: vec![], methods: vec![method("push", vec![dec("js", &[("emit", "a")])])] };
         assert!(LoweringTable::from_declarations(&[off_type]).is_err());
     }
 }

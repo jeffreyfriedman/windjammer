@@ -43,7 +43,7 @@ impl<'m> Js<'m> {
                     Some(Ty::Fn(_, r)) => (**r).clone(),
                     _ => return self.unsupported("sum_by with an untyped closure"),
                 };
-                let (f, z) = self.sum_op(&ret, "sum")?;
+                let (f, z) = self.sum_op(&ret, false)?;
                 format!("{seq}.map((x) => ({})(x)).reduce({f}, {z})", a[0])
             }
             "unique" => format!("$uniqueBy({seq}, (x) => x)"),

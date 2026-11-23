@@ -4,7 +4,7 @@ last_verified: 8a9941cacf68
 ---
 # Table-driven std surface: one declaration per std function, backends as interpreters
 
-> **Stages 1, 2, 3, 4 and 5 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
+> **Stages 1, 2, 3, 4, 5 and 6 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
 > `Integer`, `Char`, `String`, `Option`, `Result`, `HashMap` and `HashSet` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
 > `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, the portability diagnostic and the
 > module-function rows are stages 5-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
@@ -80,6 +80,16 @@ last_verified: 8a9941cacf68
 > The spellings ADR-0039 removed (R010 `iter`, `iter_mut`, `into_iter`; R091 `into_keys`, `into_values`, `values_mut`; R030 `capacity`)
 > have no declaration (`HashMap::capacity` and `HashSet::capacity` declarations are deleted, so `REMOVED_SPELLED_WITHOUT_INTERNAL` shrank
 > by two); `contains_key` stays (the corpus writes it and `m.entry(k).or_insert(v)` lowers to it). Go's `wjEntries` is dead and listed.
+
+What stage 6 settled: `trait Vec`, `trait Iterator` and `trait Any` carry the rows (`CoreType::{Vec, Iter, Any}`). `@adapts(to = "Iterator")` on `Vec` makes a lookup that finds
+no list row fall to the iterator's (`LoweringTable::lookup`: the type's own, the types it adapts, then `Any`, what every value has: `to_string`, the `display` hook). `collect`,
+`sum` and `product` are rows with `@result_from_context(kind = "collection" | "numeric")` (the call is the expected type when it has that shape, else the declared type) and rules
+guarded by the shape of the result (`r_set`, `r_map`, `r_str`, `r_result`, `r_option`; `r_int` with `{R.chk}` / `{R.zero}` / `{R.one}`, `r_float`). The length narrowing is one rule:
+a row declared `-> usize` called where an integer narrower than `usize` is wanted (`Row::returns_usize`), in both emitters. `stores_args` is the declaration (a parameter that is
+neither a reference nor a closure). Numeric method arguments take the declared parameter type (`shl` takes a `u32`; the old rule gave the receiver's). `Hook::Clone` is JavaScript's
+`cloned` / `copied` (the element type's own cloner). The spellings ADR-0039 removed have no rules (`to_vec`, `push_back` and its family, `append`, `extend_from_slice`,
+`sort_unstable`, `capacity`, `fill`, `inspect`; `drain` and `concat` were never portable): `capacity`, `extend_from_slice` and `get_mut` stay declared, `@internal`, for the Rust backend.
+The per-process parse leaves out the `@example` lines (step 0 of the stage: parse 1.19 -> 0.83 ms).
 
 ## 1. Problem, in numbers
 
@@ -275,7 +285,7 @@ section 1). Stage 7 is the only one allowed to change the ledger, and only by re
 | 3 | **char** (new `trait Char` in `rust_core.wji`) and **String**; `parse` via `ok =` guards; removed aliases dropped | -53 | -50 | -48 | | **1,391** |
 | 4 | **Option**, **Result**; `@internal` rows for `??` | -27 | -22 | -22 | | **1,320** |
 | 5 (done) | **HashMap**, **HashSet**, statics (`Vec::new`, `i64::MAX`, `f64::EPSILON`, `char::from_u32`) as static declarations and `const` items | -33 | -37 | -34 | | **1,216** |
-| 6 | **Vec**, **Iterator** (`@adapts`), `collect`/`sum` by want, the `len` narrowing rule, `to_string` hook, `ret_ty` residue | -79 | -72 | -69 | | **996** (amber) |
+| 6 (done) | **Vec**, **Iterator** (`@adapts`), `collect`/`sum` by want, the `len` narrowing rule, `to_string` hook, `ret_ty` residue | -79 | -72 | -69 | | **996** (amber) |
 | 7 | module functions: `fs`, `time` rows on `std/fs.wj`, `std/time.wj`; `math` / `strings` free functions deleted (ADR-0039 R058/R070, after `wj fix` migrates the conformance programs that use them); **json wired** to the existing shims; the portability diagnostic | | | | stdlib.rs -68, lower/call.rs -2 | **926** |
 | 8 | enumerable and ordering families from `std/enumerable.wj` (`src/stdlib_surface/enumerable.rs` generated) | | | | -93 | **833** |
 | 9 | scanner tightening: tuple-pattern literals and `matches!(x, "a" \| ..)` lists counted (report-only from stage 1, enforced now) | | | | measured at stage 1 | 833 + new baseline |
