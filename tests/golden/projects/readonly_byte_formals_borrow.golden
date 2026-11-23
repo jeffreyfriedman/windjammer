@@ -57,7 +57,7 @@ pub fn cmp_bytes(a: &Vec<u8>, b: &Vec<u8>) -> i32 {
         if a[i] > b[i] {
             return 1_i32;
         }
-        i += 1;
+        i = i.wrapping_add(1);
     }
     if a.len() < b.len() {
         return -1_i32;
@@ -85,7 +85,7 @@ pub fn cmp_keys(a: &Key, b: &Key) -> i32 {
         if a.bytes[i] > b.bytes[i] {
             return 1_i32;
         }
-        i += 1;
+        i = i.wrapping_add(1);
     }
     0_i32
 }

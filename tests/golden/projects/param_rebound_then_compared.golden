@@ -23,7 +23,7 @@ pub fn find_code(rows: &Vec<Row>, wanted: String) -> i64 {
         if rows[i].code == code {
             return i as i64;
         }
-        i += 1;
+        i = i.wrapping_add(1);
     }
     -1_i64
 }
