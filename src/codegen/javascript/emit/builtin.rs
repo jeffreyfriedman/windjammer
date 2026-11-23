@@ -2,6 +2,8 @@
 
 use super::num;
 use super::Js;
+use crate::codegen::portable::template::{self, TextOperands};
+use crate::stdlib_surface::lowering::{CoreType, Guard, Hook, Rule, Target};
 use crate::codegen::portable::ir::*;
 use crate::codegen::portable::ty::{IntKind, Ty};
 
@@ -49,7 +51,7 @@ impl<'m> Js<'m> {
             Ty::Str => self.str_method(recv, name, &r, &a, ty),
             Ty::Char => self.char_method(name, &r, &a),
             Ty::Int(k) => self.int_method(*k, name, &r, &a),
-            Ty::F64 | Ty::F32 => self.float_method(name, &r, &a),
+            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &r, &a),
             Ty::Option(_) => self.option_method(name, &r, &a),
             Ty::Result(_, e) => self.result_method(name, &r, &a, e),
             Ty::Map(k, v) => self.map_method(k, v, name, &r, &a),
@@ -286,37 +288,22 @@ impl<'m> Js<'m> {
         })
     }
 
-    fn float_method(&mut self, name: &str, r: &str, a: &[String]) -> PResult<String> {
-        Ok(match name {
-            "sqrt" => format!("Math.sqrt({r})"),
-            "abs" => format!("Math.abs({r})"),
-            "floor" => format!("Math.floor({r})"),
-            "ceil" => format!("Math.ceil({r})"),
-            "round" => format!("$round({r})"),
-            "trunc" => format!("Math.trunc({r})"),
-            "fract" => format!("({r} - Math.trunc({r}))"),
-            "powi" => format!("Math.pow({r}, Number({}))", a[0]),
-            "powf" => format!("Math.pow({r}, {})", a[0]),
-            "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "exp" | "cbrt" => format!("Math.{name}({r})"),
-            "ln" => format!("Math.log({r})"),
-            "log10" => format!("Math.log10({r})"),
-            "log2" => format!("Math.log2({r})"),
-            "min" => format!("$fmin({r}, {})", a[0]),
-            "max" => format!("$fmax({r}, {})", a[0]),
-            "clamp" => format!("$fmin($fmax({r}, {}), {})", a[0], a[1]),
-            "signum" => format!("$fsignum({r})"),
-            "atan2" => format!("Math.atan2({r}, {})", a[0]),
-            "hypot" => format!("Math.hypot({r}, {})", a[0]),
-            "is_nan" => format!("Number.isNaN({r})"),
-            "is_infinite" => format!("(Math.abs({r}) === Infinity)"),
-            "is_finite" => format!("Number.isFinite({r})"),
-            "is_sign_negative" => format!("$signNeg({r})"),
-            "is_sign_positive" => format!("(!$signNeg({r}))"),
-            "to_degrees" => format!("({r} * 180 / Math.PI)"),
-            "to_radians" => format!("({r} * Math.PI / 180)"),
-            "mul_add" => format!("({r} * {} + {})", a[0], a[1]),
-            _ => return self.unsupported(format!("float method `{name}`")),
-        })
+    /// A call of a std method of a migrated type: print the receiver's row for JavaScript (`std/rust_core.wji`).
+    fn lowered(&mut self, ty: CoreType, recv: &PExpr, name: &str, r: &str, a: &[String]) -> PResult<String> {
+        let m = self.m;
+        let Some(row) = m.lowering.row(ty, name) else { return self.unsupported(format!("{} method `{name}`", ty.noun())) };
+        let elem = recv.ty.elem().unwrap_or(Ty::Unknown);
+        let prim = self.is_prim(&elem);
+        let guard = |g: Guard| match g {
+            Guard::ElemPrim => prim,
+            Guard::ElemPrimNotBool => prim && elem != Ty::Bool,
+        };
+        match row.select(Target::Js, guard) {
+            Some(Rule::Emit { template, .. }) => template::render_emit(template, &row.params, &mut TextOperands { receiver: r, args: a }),
+            Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
+            Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ty.noun())),
+            None => self.unsupported(format!("{} method `{name}` has no JavaScript rule", ty.noun())),
+        }
     }
 
     fn option_method(&mut self, name: &str, r: &str, a: &[String]) -> PResult<String> {

@@ -407,3 +407,92 @@ fn fallback_legacy_tokens(code: &[char]) -> Vec<(usize, String)> {
     }
     out
 }
+
+// ---------------------------------------------------------------------------------------------
+// Forms the three counts do not see (docs/design/table-driven-std-surface.md, stage 9)
+// ---------------------------------------------------------------------------------------------
+
+/// Name guesses the ratchet does not count yet. Report-only: the std-surface migration measures them at stage 1 and
+/// stage 9 enforces them with that baseline.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct UncountedForms {
+    /// A name literal in a tuple pattern of a match arm: `("insert", 0) =>`, `(Ty::Vec(_), "len") if ..`.
+    pub tuple_pattern_names: u64,
+    /// A name literal in the pattern list of `matches!(x, "a" | "b")`.
+    pub matches_list_names: u64,
+}
+
+/// The index of the `)` that closes the `(` at `open` in stripped code.
+fn closing_paren(code: &[char], open: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    for (k, &c) in code.iter().enumerate().skip(open) {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(k);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The index of the innermost `(` that encloses `pos` and has no `{`/`}`/`;` between it and `pos`.
+fn enclosing_paren(code: &[char], pos: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut k = pos;
+    while k > 0 {
+        k -= 1;
+        match code[k] {
+            ')' => depth += 1,
+            '(' if depth == 0 => return Some(k),
+            '(' => depth -= 1,
+            '{' | '}' | ';' => return None,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Count the forms of [`UncountedForms`] in a file. A literal the three counts already include is not counted twice.
+pub fn uncounted_forms(raw: &str, code: &str, exempt: &Exempt) -> UncountedForms {
+    let raw: Vec<char> = raw.chars().collect();
+    let code: Vec<char> = code.chars().collect();
+    let skip = test_module_ranges(&code);
+    let in_test = |p: usize| skip.iter().any(|&(a, b)| p >= a && p <= b);
+    let lits = string_literals(&raw);
+    let mut out = UncountedForms::default();
+    for (idx, lit) in lits.iter().enumerate() {
+        if in_test(lit.start) || !spells_name(&lit.text) || exempt.covers(&lit.text) {
+            continue;
+        }
+        if is_match_arm_pattern(&code, &lits, idx) || is_name_comparison(&code, lit) {
+            continue; // counted already
+        }
+        let Some(open) = enclosing_paren(&code, lit.start) else { continue };
+        let Some(close) = closing_paren(&code, open) else { continue };
+        // `matches!(x, "a" | "b")`: the literal is after the macro's first top-level comma
+        if code_before(&code, open, 8).ends_with("matches!") {
+            let comma = (open + 1..close).find(|&k| code[k] == ',' && enclosing_paren(&code, k) == Some(open));
+            if comma.is_some_and(|c| lit.start > c) {
+                out.matches_list_names += 1;
+            }
+            continue;
+        }
+        // a tuple pattern: the parenthesised group is followed by `=>` or an `if` guard (or `|` of another pattern)
+        let mut j = close + 1;
+        while j < code.len() && code[j].is_whitespace() {
+            j += 1;
+        }
+        let rest: String = code[j..(j + 3).min(code.len())].iter().collect();
+        let arm = rest.starts_with("=>") || (rest.starts_with("if") && rest[2..].starts_with(|c: char| c.is_whitespace())) || (rest.starts_with('|') && !rest.starts_with("||"));
+        let tuple = (open + 1..lit.start).any(|k| code[k] == ',') || (lit.end..close).any(|k| code[k] == ',');
+        if arm && tuple {
+            out.tuple_pattern_names += 1;
+        }
+    }
+    out
+}

@@ -13,6 +13,7 @@ pub mod lower;
 pub mod ordering;
 pub mod prelude;
 pub mod stdlib;
+pub mod template;
 pub mod ty;
 pub mod visit;
 

@@ -27,7 +27,7 @@ pub struct Callable {
 
 #[derive(Default)]
 pub struct Facts {
-    pub core: Option<CoreSurface>,
+    pub core: Option<&'static CoreSurface>,
     /// `(type, method)` by the type's last path segment. `None`: two declarations disagree (not decided).
     methods: HashMap<(String, String), Option<Callable>>,
     /// Free functions by name (last path segment). `None`: ambiguous.
@@ -80,7 +80,7 @@ impl Facts {
     /// Facts for every file of one program: two analyzer passes (the second with the signatures of all files, as
     /// the build does), then the IR solver per file.
     pub fn build(files: &[(&str, &Program<'static>)], tables: Arc<StdlibTables>) -> Self {
-        let mut facts = Facts { core: Some(CoreSurface::parse()), ..Default::default() };
+        let mut facts = Facts { core: Some(crate::ir::stdlib_tables::shared_core_surface()), ..Default::default() };
         for (_, program) in files {
             facts.declarations(&program.items);
         }

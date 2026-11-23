@@ -3,6 +3,7 @@
 //! `arg_want` gives the expected type of argument `i` (so closures get typed parameters);
 //! `ret_ty` gives the result type. A `None` from `ret_ty` means "not a supported built-in".
 
+use super::env::StdSurface;
 use super::ir::PExpr;
 use super::ty::{IntKind, Ty};
 
@@ -121,7 +122,7 @@ fn numeric_arg_want(recv: &Ty, name: &str, i: usize) -> Option<Ty> {
     }
 }
 
-pub fn ret_ty(recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
+pub fn ret_ty(surface: &StdSurface, recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
     match name {
         "clone" | "to_owned" | "cloned" | "copied" if !matches!(recv, Ty::Iter(_)) => return Some(recv.clone()),
         "to_string" => return Some(Ty::Str),
@@ -142,7 +143,7 @@ pub fn ret_ty(recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Optio
         Ty::Option(t) => option_ret(t, name, args),
         Ty::Result(t, e) => result_ret(t, e, name, args),
         Ty::Int(_) => int_ret(recv, name),
-        Ty::F64 | Ty::F32 => float_ret(recv, name),
+        Ty::F64 | Ty::F32 => surface.declared_ret(recv, name),
         Ty::Char => char_ret(name),
         Ty::Bool | Ty::Tuple(_) | Ty::Adt(..) | Ty::Param(_) => None,
         _ => None,
@@ -296,14 +297,6 @@ fn int_ret(recv: &Ty, name: &str) -> Option<Ty> {
         "checked_add" | "checked_sub" | "checked_mul" | "checked_div" | "checked_rem" => Ty::Option(b(recv.clone())),
         "count_ones" | "count_zeros" | "leading_zeros" | "trailing_zeros" => Ty::Int(IntKind::U32),
         "is_positive" | "is_negative" | "is_power_of_two" => Ty::Bool,
-        _ => return None,
-    })
-}
-
-fn float_ret(recv: &Ty, name: &str) -> Option<Ty> {
-    Some(match name {
-        "sqrt" | "abs" | "floor" | "ceil" | "round" | "trunc" | "powi" | "powf" | "sin" | "cos" | "tan" | "ln" | "log10" | "log2" | "exp" | "min" | "max" | "signum" | "fract" | "atan2" | "atan" | "asin" | "acos" | "hypot" | "clamp" | "cbrt" | "to_degrees" | "to_radians" | "mul_add" => recv.clone(),
-        "is_nan" | "is_infinite" | "is_finite" | "is_sign_negative" | "is_sign_positive" => Ty::Bool,
         _ => return None,
     })
 }

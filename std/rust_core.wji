@@ -324,34 +324,153 @@ pub trait F64 {
 
 // Float methods, for `T` = `f32` or `f64` (`float`): an argument and the result of type `T` have the receiver's
 // width (`x.min(1.0)` on an `f32` takes an `f32`); `powi` takes an `i32`.
+//
+// Lowering rows (docs/design/table-driven-std-surface.md): `@js(emit = "...")` and `@go(emit = "...")` are the text the
+// JavaScript / TypeScript and Go backends print for a call, `{self}` being the receiver and `{name}` the argument of
+// that declared parameter; `@example(src, expect)` is the program the per-row conformance runner builds (`println` of
+// `src` prints `expect` on every backend). `@go(widen = "f64")` says Go computes in `float64`: `{x:f64}` converts an
+// operand of an `f32` receiver, and a result declared `T` is converted back. The rows copy what the emitters printed
+// before they were tables, byte for byte (tests/golden/float_rows_probe.*).
+@go(widen = "f64")
 pub trait Float<T> {
+    @js(emit = "Math.abs({self})")
+    @go(emit = "wjMath_abs({self:f64})")
+    @example(src = "(-2.5).abs()", expect = "2.5")
     fn abs(self) -> T;
+    @js(emit = "Math.sqrt({self})")
+    @go(emit = "wjMath_sqrt({self:f64})")
+    @example(src = "(16.0).sqrt()", expect = "4")
     fn sqrt(self) -> T;
+    @js(emit = "Math.cbrt({self})")
+    @go(emit = "wjMath_cbrt({self:f64})")
+    @example(src = "(27.0).cbrt()", expect = "3")
     fn cbrt(self) -> T;
+    @js(emit = "Math.exp({self})")
+    @go(emit = "wjMath_exp({self:f64})")
+    @example(src = "(((1.0).exp()) * 1000.0).round() / 1000.0", expect = "2.718")
     fn exp(self) -> T;
+    @js(emit = "Math.log({self})")
+    @go(emit = "wjMath_log({self:f64})")
+    @example(src = "(1.0).ln()", expect = "0")
     fn ln(self) -> T;
+    @js(emit = "Math.log10({self})")
+    @go(emit = "wjMath_log10({self:f64})")
+    @example(src = "(1000.0).log10()", expect = "3")
     fn log10(self) -> T;
+    @js(emit = "Math.log2({self})")
+    @go(emit = "wjMath_log2({self:f64})")
+    @example(src = "(8.0).log2()", expect = "3")
     fn log2(self) -> T;
+    @js(emit = "Math.sin({self})")
+    @go(emit = "wjMath_sin({self:f64})")
+    @example(src = "(0.0).sin()", expect = "0")
     fn sin(self) -> T;
+    @js(emit = "Math.cos({self})")
+    @go(emit = "wjMath_cos({self:f64})")
+    @example(src = "(0.0).cos()", expect = "1")
     fn cos(self) -> T;
+    @js(emit = "Math.tan({self})")
+    @go(emit = "wjMath_tan({self:f64})")
+    @example(src = "(0.0).tan()", expect = "0")
     fn tan(self) -> T;
+    @js(emit = "Math.asin({self})")
+    @go(emit = "wjMath_asin({self:f64})")
+    @example(src = "(0.0).asin()", expect = "0")
+    fn asin(self) -> T;
+    @js(emit = "Math.acos({self})")
+    @go(emit = "wjMath_acos({self:f64})")
+    @example(src = "(1.0).acos()", expect = "0")
+    fn acos(self) -> T;
+    @js(emit = "Math.atan({self})")
+    @go(emit = "wjMath_atan({self:f64})")
+    @example(src = "(((1.0).atan()) * 1000.0).round() / 1000.0", expect = "0.785")
+    fn atan(self) -> T;
+    @js(emit = "Math.atan2({self}, {other})")
+    @go(emit = "wjMath_atan2({self:f64}, {other:f64})")
+    @example(src = "(((1.0).atan2(1.0)) * 1000.0).round() / 1000.0", expect = "0.785")
     fn atan2(self, other: T) -> T;
+    @js(emit = "Math.hypot({self}, {other})")
+    @go(emit = "wjMath_hypot({self:f64}, {other:f64})")
+    @example(src = "(3.0).hypot(4.0)", expect = "5")
     fn hypot(self, other: T) -> T;
+    @js(emit = "Math.floor({self})")
+    @go(emit = "wjMath_floor({self:f64})")
+    @example(src = "(2.7).floor()", expect = "2")
     fn floor(self) -> T;
+    @js(emit = "Math.ceil({self})")
+    @go(emit = "wjMath_ceil({self:f64})")
+    @example(src = "(2.1).ceil()", expect = "3")
     fn ceil(self) -> T;
+    @js(emit = "$round({self})")
+    @go(emit = "wjRound({self:f64})")
+    @example(src = "(2.5).round()", expect = "3")
     fn round(self) -> T;
+    @js(emit = "Math.trunc({self})")
+    @go(emit = "wjMath_trunc({self:f64})")
+    @example(src = "(-2.7).trunc()", expect = "-2")
     fn trunc(self) -> T;
+    @js(emit = "({self} - Math.trunc({self}))")
+    @go(emit = "({self:f64} - wjMath_trunc({self:f64}))")
+    @example(src = "(2.75).fract()", expect = "0.75")
     fn fract(self) -> T;
+    @js(emit = "$fmin({self}, {other})")
+    @go(emit = "wjFmin({self:f64}, {other:f64})")
+    @example(src = "(1.5).min(2.5)", expect = "1.5")
     fn min(self, other: T) -> T;
+    @js(emit = "$fmax({self}, {other})")
+    @go(emit = "wjFmax({self:f64}, {other:f64})")
+    @example(src = "(1.5).max(2.5)", expect = "2.5")
     fn max(self, other: T) -> T;
+    @js(emit = "$fmin($fmax({self}, {min}), {max})")
+    @go(emit = "wjFmin(wjFmax({self:f64}, {min:f64}), {max:f64})")
+    @example(src = "(5.0).clamp(0.0, 3.0)", expect = "3")
     fn clamp(self, min: T, max: T) -> T;
+    @js(emit = "({self} * {a} + {b})")
+    @go(emit = "({self:f64} * {a:f64} + {b:f64})")
+    @example(src = "(2.0).mul_add(3.0, 1.0)", expect = "7")
     fn mul_add(self, a: T, b: T) -> T;
+    @js(emit = "Math.pow({self}, Number({n}))")
+    @go(emit = "wjMath_pow({self:f64}, float64({n}))")
+    @example(src = "(2.0).powi(10)", expect = "1024")
     fn powi(self, n: i32) -> T;
+    @js(emit = "Math.pow({self}, {n})")
+    @go(emit = "wjMath_pow({self:f64}, {n:f64})")
+    @example(src = "(9.0).powf(0.5)", expect = "3")
     fn powf(self, n: T) -> T;
+    @js(emit = "$fsignum({self})")
+    @go(emit = "wjFsignum({self:f64})")
+    @example(src = "(-2.0).signum()", expect = "-1")
     fn signum(self) -> T;
+    @js(emit = "({self} * Math.PI / 180)")
+    @go(emit = "({self:f64} * wjPi / 180)")
+    @example(src = "(((180.0).to_radians()) * 1000.0).round() / 1000.0", expect = "3.142")
     fn to_radians(self) -> T;
+    @js(emit = "({self} * 180 / Math.PI)")
+    @go(emit = "({self:f64} * 180 / wjPi)")
+    @example(src = "(((3.141592653589793).to_degrees()) * 1000.0).round() / 1000.0", expect = "180")
     fn to_degrees(self) -> T;
+    @js(emit = "Number.isNaN({self})")
+    @go(emit = "wjIsNaN({self:f64})")
+    @example(src = "(1.5).is_nan()", expect = "false")
     fn is_nan(self) -> bool;
+    @js(emit = "(Math.abs({self}) === Infinity)")
+    @go(emit = "wjIsInf({self:f64})")
+    @example(src = "(1.5).is_infinite()", expect = "false")
+    fn is_infinite(self) -> bool;
+    @js(emit = "Number.isFinite({self})")
+    @go(emit = "wjIsFinite({self:f64})")
+    @example(src = "(1.5).is_finite()", expect = "true")
     fn is_finite(self) -> bool;
+    @js(emit = "$signNeg({self})")
+    @go(emit = "wjSignNeg({self:f64})")
+    @example(src = "(-1.5).is_sign_negative()", expect = "true")
+    fn is_sign_negative(self) -> bool;
+    @js(emit = "(!$signNeg({self}))")
+    @go(emit = "(!wjSignNeg({self:f64}))")
+    @example(src = "(-1.5).is_sign_positive()", expect = "false")
+    fn is_sign_positive(self) -> bool;
+    @js(hook = "display")
+    @go(hook = "display")
+    @example(src = "(2.5).to_string()", expect = "2.5")
     fn to_string(self) -> String;
 }

@@ -143,14 +143,14 @@
 "src/analyzer/optimization_detectors/const_smallvec_detection.rs" = 1
 "src/analyzer/parameter_analysis.rs" = 5
 "src/codegen/backend.rs" = 11
-"src/codegen/go/emit/builtin.rs" = 237
+"src/codegen/go/emit/builtin.rs" = 203
 "src/codegen/go/emit/enumerable.rs" = 22
 "src/codegen/go/emit/ordering.rs" = 16
-"src/codegen/javascript/emit/builtin.rs" = 244
+"src/codegen/javascript/emit/builtin.rs" = 210
 "src/codegen/javascript/emit/enumerable.rs" = 18
 "src/codegen/javascript/emit/ordering.rs" = 16
 "src/codegen/javascript/emit/refs.rs" = 2
-"src/codegen/portable/builtins.rs" = 259
+"src/codegen/portable/builtins.rs" = 225
 "src/codegen/portable/enumerable.rs" = 8
 "src/codegen/portable/lower/call.rs" = 3
 "src/codegen/portable/lower/fmt.rs" = 6

@@ -4,9 +4,21 @@ last_verified: 8a9941cacf68
 ---
 # Table-driven std surface: one declaration per std function, backends as interpreters
 
-> **Proposal: not implemented.** The decorators, the `WJ0195` diagnostic, the gates and the files named under
-> "Work breakdown" do not exist yet. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
+> **Stage 1 of 9 is implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
+> rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
+> `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, `WJ0195` and the
+> module-function rows are stages 2-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
 > (`tests/common/heuristic_scan.rs`, run standalone over each file).
+>
+> What stage 1 settled that the text below leaves open: the signature stays in `CoreSurface` (the `support`-layer
+> table cannot import the parser's `Type`), so a `Row` holds the parameter names, whether the result is `T`, whether
+> the receiver is `&mut`, the rules and the example, and the typer reads the result type from `method_signature`;
+> `{x:f64}` converts an operand to the compute type the trait's `@go(widen = "f64")` names (a result declared `T` is
+> converted back), so the Go emitter spells no `f32` rule; `TypeScript` uses the JavaScript rules; the surface is parsed once per process
+> (`ir::stdlib_tables::shared_core_surface`, kept with the stdlib registry's derived tables, so no new static) and
+> shared by the solver, the Rust backend, the check pass and the portable backends, which makes the decorators' extra
+> parse cost (+370 us) a net saving; the lowered module carries its table (`PModule::lowering`); the gates read `std/rust_core.wji` from disk so a
+> planted mistake fails without rebuilding the compiler.
 
 ## 1. Problem, in numbers
 

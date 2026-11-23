@@ -3,6 +3,8 @@
 use super::names::{go_string, ident};
 use super::num;
 use super::Go;
+use crate::codegen::portable::template::{self, Operands, TypeRef};
+use crate::stdlib_surface::lowering::{CoreType, Fact, Guard, Hook, Modifier, Rule, Target, Widen};
 use crate::codegen::portable::ir::*;
 use crate::codegen::portable::ty::{IntKind, Ty};
 
@@ -36,7 +38,7 @@ impl<'m> Go<'m> {
             Ty::Str => self.str_method(recv, name, &a, args, ty),
             Ty::Char => self.char_method(recv, name, &a),
             Ty::Int(k) => self.int_method(recv, *k, name, &a),
-            Ty::F64 | Ty::F32 => self.float_method(recv, name, &a),
+            Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a),
             Ty::Option(_) => self.opt_method(recv, name, &a),
             Ty::Result(..) => self.res_method(recv, name, &a),
             Ty::Map(..) => self.map_method(recv, name, &a),
@@ -256,37 +258,28 @@ impl<'m> Go<'m> {
         })
     }
 
-    fn float_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
+    /// A call of a std method of a migrated type: print the receiver's row for Go (`std/rust_core.wji`).
+    fn lowered(&mut self, ty: CoreType, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
         let r = self.rv(recv)?;
-        let is32 = recv.ty == Ty::F32;
-        let w = |s: String| if is32 { format!("float32({s})") } else { s };
-        let f = |x: &str| if is32 { format!("float64({x})") } else { x.to_string() };
-        let rr = f(&r);
-        Ok(match name {
-            "sqrt" | "abs" | "floor" | "ceil" | "trunc" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "exp" | "cbrt" => w(format!("wjMath_{name}({rr})")),
-            "round" => w(format!("wjRound({rr})")),
-            "fract" => w(format!("({rr} - wjMath_trunc({rr}))")),
-            "powi" => w(format!("wjMath_pow({rr}, float64({}))", a[0])),
-            "powf" => w(format!("wjMath_pow({rr}, {})", f(&a[0]))),
-            "ln" => w(format!("wjMath_log({rr})")),
-            "log10" => w(format!("wjMath_log10({rr})")),
-            "log2" => w(format!("wjMath_log2({rr})")),
-            "min" => w(format!("wjFmin({rr}, {})", f(&a[0]))),
-            "max" => w(format!("wjFmax({rr}, {})", f(&a[0]))),
-            "clamp" => w(format!("wjFmin(wjFmax({rr}, {}), {})", f(&a[0]), f(&a[1]))),
-            "signum" => w(format!("wjFsignum({rr})")),
-            "atan2" => w(format!("wjMath_atan2({rr}, {})", f(&a[0]))),
-            "hypot" => w(format!("wjMath_hypot({rr}, {})", f(&a[0]))),
-            "is_nan" => format!("wjIsNaN({rr})"),
-            "is_infinite" => format!("wjIsInf({rr})"),
-            "is_finite" => format!("wjIsFinite({rr})"),
-            "is_sign_negative" => format!("wjSignNeg({rr})"),
-            "is_sign_positive" => format!("(!wjSignNeg({rr}))"),
-            "to_degrees" => w(format!("({rr} * 180 / wjPi)")),
-            "to_radians" => w(format!("({rr} * wjPi / 180)")),
-            "mul_add" => w(format!("({rr} * {} + {})", f(&a[0]), f(&a[1]))),
-            _ => return self.unsupported(format!("float method `{name}`")),
-        })
+        let m = self.m;
+        let Some(row) = m.lowering.row(ty, name) else { return self.unsupported(format!("{} method `{name}`", ty.noun())) };
+        let elem = recv.ty.elem().unwrap_or(Ty::Unknown);
+        let prim = self.is_prim(&elem);
+        let guard = |g: Guard| match g {
+            Guard::ElemPrim => prim,
+            Guard::ElemPrimNotBool => prim && elem != Ty::Bool,
+        };
+        // `widen`: the trait computes in `float64`; an `f32` receiver is converted in and the result converted back.
+        let widen = m.lowering.widen(ty, Target::Go).filter(|_| recv.ty == Ty::F32);
+        match row.select(Target::Go, guard) {
+            Some(Rule::Emit { template, .. }) => {
+                let out = template::render_emit(template, &row.params, &mut GoOperands { receiver: &r, args: a, widen })?;
+                Ok(if widen.is_some() && row.returns_receiver { format!("float32({out})") } else { out })
+            }
+            Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
+            Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ty.noun())),
+            None => self.unsupported(format!("{} method `{name}` has no Go rule", ty.noun())),
+        }
     }
 
     fn opt_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
@@ -387,5 +380,43 @@ impl<'m> Go<'m> {
                 self.unsupported(format!("`{owner}::{name}`"))
             }
         }
+    }
+}
+
+/// The operands of a Go template: the receiver and arguments as printed, converted to the compute type for `:f64`
+/// when the trait declares `widen` and the receiver is narrower (`float64(x)` for an `f32`).
+struct GoOperands<'a> {
+    receiver: &'a str,
+    args: &'a [String],
+    /// `Some` when the receiver is narrower than the trait's compute type.
+    widen: Option<Widen>,
+}
+
+impl GoOperands<'_> {
+    fn convert(&self, text: &str, modifier: Option<Modifier>) -> String {
+        match (modifier, self.widen) {
+            (Some(Modifier::F64), Some(Widen::F64)) => format!("float64({text})"),
+            _ => text.to_string(),
+        }
+    }
+}
+
+impl Operands for GoOperands<'_> {
+    fn receiver(&mut self, place: bool, modifier: Option<Modifier>) -> PResult<String> {
+        if place {
+            return unsupported("a receiver place in a Go template of this type");
+        }
+        Ok(self.convert(self.receiver, modifier))
+    }
+
+    fn arg(&mut self, index: usize, modifier: Option<Modifier>) -> PResult<String> {
+        match self.args.get(index) {
+            Some(a) => Ok(self.convert(a, modifier)),
+            None => unsupported(format!("the call has no argument {index}")),
+        }
+    }
+
+    fn fact(&mut self, _of: TypeRef, fact: Fact) -> PResult<String> {
+        unsupported(format!("the type fact `{}` is not available for this receiver", fact.name()))
     }
 }

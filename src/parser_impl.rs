@@ -693,6 +693,7 @@ impl Parser {
                 self.advance();
                 let mut trait_decl = self.parse_trait()?;
                 trait_decl.doc_comment = doc_comment;
+                trait_decl.decorators = decorators;
                 Ok(Item::Trait {
                     decl: trait_decl,
                     location: self.current_location(),

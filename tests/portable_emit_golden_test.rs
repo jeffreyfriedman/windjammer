@@ -216,3 +216,31 @@ fn every_program_emits_the_recorded_output() {
     }
     compare(&programs);
 }
+
+/// Every method of `trait Float<T>` on an `f64` and an `f32` receiver: the JavaScript and the Go text, compared
+/// whole (not by hash) with what the emitters printed before the Float rows moved into `std/rust_core.wji`. A
+/// difference names the first differing line, which is the row to look at (`f32` is the Go widening).
+#[test]
+fn float_rows_emit_what_the_emitters_printed_before_they_were_rows() {
+    let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
+    let work = Work::new();
+    std::fs::copy(root().join("tests/golden/float_rows_probe.wj"), work.path().join("float_rows_probe.wj")).unwrap();
+    let mut bad = Vec::new();
+    for (target, out_file, golden) in [("javascript", "main.mjs", "float_rows_probe.js.txt"), ("go", "main.go", "float_rows_probe.go.txt")] {
+        let out = work.path().join(format!("out_{target}"));
+        let run = Command::new(&wj)
+            .args(["build", "--no-lint", "float_rows_probe.wj", "-t", target, "-o"])
+            .arg(&out)
+            .current_dir(work.path())
+            .output()
+            .expect("wj runs");
+        assert!(run.status.success(), "{target}: {}", String::from_utf8_lossy(&run.stderr));
+        let got = std::fs::read_to_string(out.join(out_file)).unwrap();
+        let want = std::fs::read_to_string(root().join("tests/golden").join(golden)).unwrap();
+        if got != want {
+            let line = got.lines().zip(want.lines()).position(|(a, b)| a != b).map_or(got.lines().count().min(want.lines().count()), |i| i);
+            bad.push(format!("{target}: line {}: emitted `{}`, recorded `{}`", line + 1, got.lines().nth(line).unwrap_or(""), want.lines().nth(line).unwrap_or("")));
+        }
+    }
+    assert!(bad.is_empty(), "the Float rows changed the emitted program:\n{}", bad.join("\n"));
+}

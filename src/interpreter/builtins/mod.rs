@@ -300,6 +300,14 @@ impl Registry {
         v.dedup();
         v
     }
+    /// The methods registered for exactly this kind of receiver (not the ones it reaches through `Kind::Any` or the
+    /// iterator fall-through), sorted, with whether each changes its receiver. The std lowering table's interpreter
+    /// parity gate (`tests/std_lowering_table_test.rs`) holds them against the declarations.
+    pub fn methods_of(&self, k: Kind) -> Vec<(&'static str, bool)> {
+        let mut v: Vec<(&'static str, bool)> = self.methods.iter().filter(|((kind, _), _)| *kind == k).map(|((_, n), m)| (*n, !matches!(m, MethodImpl::Pure(_)))).collect();
+        v.sort_unstable();
+        v
+    }
     /// Every registered function path, sorted (audits: `caps.rs` requires each authority-module builtin to be classified).
     #[cfg(test)]
     pub fn function_paths(&self) -> Vec<&'static str> {

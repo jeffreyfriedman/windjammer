@@ -430,7 +430,7 @@ impl<'e> Lowerer<'e> {
             }
             lowered.push(if builtins::stores_args(method) { self.own(v) } else { v });
         }
-        let ty = builtins::ret_ty(&recv.ty, method, &lowered, want_for_ret.as_ref());
+        let ty = builtins::ret_ty(&self.env.surface, &recv.ty, method, &lowered, want_for_ret.as_ref());
         let Some(mut ty) = ty else { return self.err(format!("built-in method `{}::{method}` is not supported", recv.ty.describe())) };
         if method == "collect" && ty == Ty::Vec(Box::new(Ty::Unknown)) {
             ty = Ty::Vec(Box::new(recv.ty.elem().unwrap_or(Ty::Unknown)));

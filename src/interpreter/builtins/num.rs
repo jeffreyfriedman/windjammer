@@ -445,6 +445,7 @@ fn register_float(r: &mut Registry) {
     r.pure(Kind::Float, "is_infinite", |_, v, _| Ok(Value::Bool(float_of(v).0.is_infinite())));
     r.pure(Kind::Float, "is_finite", |_, v, _| Ok(Value::Bool(float_of(v).0.is_finite())));
     r.pure(Kind::Float, "is_sign_negative", |_, v, _| Ok(Value::Bool(float_of(v).0.is_sign_negative())));
+    r.pure(Kind::Float, "is_sign_positive", |_, v, _| Ok(Value::Bool(float_of(v).0.is_sign_positive())));
     r.pure(Kind::Float, "to_bits", |_, v, _| {
         let (x, t) = float_of(v);
         Ok(if t == FloatTy::F32 {

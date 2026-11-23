@@ -5,6 +5,8 @@ use super::ir::ParamMode;
 use super::ty::{from_ast, Ty};
 use crate::analyzer::{OwnershipMode, SignatureRegistry};
 use crate::parser::{EnumVariantData, FunctionDecl, Item, Program};
+use crate::ir::stdlib_tables::CoreSurface;
+use crate::stdlib_surface::lowering::{CoreType, LoweringTable};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -35,8 +37,37 @@ pub struct EnumInfo {
     pub variants: Vec<VariantInfo>,
 }
 
-#[derive(Debug, Default)]
+/// The typed std surface (`std/rust_core.wji`) and its lowering table: one parse per process, shared.
+#[derive(Debug, Clone, Copy)]
+pub struct StdSurface {
+    pub core: &'static CoreSurface,
+    pub lowering: &'static LoweringTable,
+}
+
+impl StdSurface {
+    pub fn shared() -> StdSurface {
+        StdSurface { core: crate::ir::stdlib_tables::shared_core_surface(), lowering: crate::ir::stdlib_tables::shared_lowering() }
+    }
+
+    /// The result type the declaration in `std/rust_core.wji` gives `recv.name(..)` for a float receiver, `T` being
+    /// the receiver's own type; `None` when the surface declares no such method.
+    pub fn declared_ret(&self, recv: &Ty, name: &str) -> Option<Ty> {
+        let receiver = match recv {
+            Ty::F64 => crate::parser::Type::Custom("f64".to_string()),
+            Ty::F32 => crate::parser::Type::Custom("f32".to_string()),
+            _ => return None,
+        };
+        // Only a method with a row: the width traits (`f32::to_bits`) are declared too, but have no lowering yet.
+        self.lowering.row(CoreType::Float, name)?;
+        let ret = self.core.method_signature(&receiver, name, &[])?.ret?;
+        Some(from_ast(&ret, &[], &Aliases::default()))
+    }
+}
+
+#[derive(Debug)]
 pub struct ItemEnv {
+    /// The std methods' types and lowering rules (`builtins::ret_ty` reads signatures, the emitters read the rules).
+    pub surface: StdSurface,
     pub structs: HashMap<String, StructInfo>,
     pub enums: HashMap<String, EnumInfo>,
     pub fns: HashMap<String, FnSig>,
@@ -133,7 +164,24 @@ fn sig_of(decl: &FunctionDecl, key: &str, reg: Option<&SignatureRegistry>, outer
 
 impl ItemEnv {
     pub fn build(program: &Program, reg: Option<&SignatureRegistry>) -> ItemEnv {
-        let mut env = ItemEnv { aliases: Aliases::from_program(program), ..ItemEnv::default() };
+        Self::build_with(program, reg, StdSurface::shared())
+    }
+
+    pub fn build_with(program: &Program, reg: Option<&SignatureRegistry>, surface: StdSurface) -> ItemEnv {
+        let mut env = ItemEnv {
+            surface,
+            structs: HashMap::new(),
+            enums: HashMap::new(),
+            fns: HashMap::new(),
+            methods: HashMap::new(),
+            trait_methods: HashMap::new(),
+            impl_traits: HashMap::new(),
+            consts: HashMap::new(),
+            trait_defaults: HashMap::new(),
+            without_facts: false,
+            trait_impls: HashMap::new(),
+            aliases: Aliases::from_program(program),
+        };
         // Traits first so impls can inherit default-method signatures regardless of source order.
         for item in &program.items {
             if matches!(item, Item::Trait { .. }) {

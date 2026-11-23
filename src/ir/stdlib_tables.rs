@@ -7,6 +7,20 @@ use super::effects::{stdlib_effect_declarations, EffectConstraint};
 use super::taint::{stdlib_sinks, stdlib_taint_sources, TaintConstraint};
 pub use crate::typing::core_surface::{surface_type_name, CoreSurface, ITERATOR};
 
+/// `std/rust_core.wji` parsed once per process (kept with the stdlib registry, like the other derived tables): the
+/// numeric solver's session copy, the portable backends and the Rust backend read the same parse.
+pub fn shared_core_surface() -> &'static CoreSurface {
+    struct Core(CoreSurface);
+    &crate::analyzer::SignatureRegistry::stdlib().derived().get_or_build(|| Core(CoreSurface::parse())).0
+}
+
+/// The lowering table of [`shared_core_surface`] (the `@js` / `@go` rules the portable emitters interpret).
+pub fn shared_lowering() -> &'static crate::stdlib_surface::lowering::LoweringTable {
+    struct Lowering(crate::stdlib_surface::lowering::LoweringTable);
+    let core = shared_core_surface(); // before the closure: the derived tables are built under a lock
+    &crate::analyzer::SignatureRegistry::stdlib().derived().get_or_build(|| Lowering(core.lowering())).0
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StdlibTables {
     pub effect_declarations: Vec<EffectConstraint>,
@@ -38,7 +52,7 @@ impl StdlibTables {
             effect_declarations: stdlib_effect_declarations(),
             taint_sources: stdlib_taint_sources(),
             taint_sinks: stdlib_sinks(),
-            core_surface: CoreSurface::parse(),
+            core_surface: shared_core_surface().clone(),
         }
     }
 }

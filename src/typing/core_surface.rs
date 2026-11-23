@@ -10,6 +10,7 @@
 
 use crate::parser::ast::core::Item;
 use crate::parser::Type;
+use crate::stdlib_surface::lowering::{LoweringTable, RawDecorator, RawMethod, RawTrait};
 use std::collections::BTreeMap;
 
 const SURFACE: &str = include_str!("../../std/rust_core.wji");
@@ -26,6 +27,12 @@ struct Entry {
     is_static: bool,
     /// Declared `&mut self`: the method changes its receiver (`push`, `insert`, `next`).
     changes_receiver: bool,
+    /// The parameter names, without `self` (the names a lowering template's `{name}` refers to).
+    #[serde(default)]
+    param_names: Vec<String>,
+    /// The attributes on the declaration (`@js(..)`, `@go(..)`, `@example(..)`, ...), as text.
+    #[serde(default)]
+    decorators: Vec<RawDecorator>,
 }
 
 /// An instantiated signature. A type the receiver or the turbofish does not fix stays `Type::Generic`.
@@ -43,6 +50,8 @@ pub struct CoreSurface {
     table: BTreeMap<(String, String), Entry>,
     /// The enumerable methods every sequence has (`std/enumerable.wj`, trait `Enumerable<T>`), by method name.
     enumerable: BTreeMap<String, Entry>,
+    /// The attributes on each declared trait (`@go(widen = "f64")` on `Float<T>`).
+    trait_decorators: BTreeMap<String, Vec<RawDecorator>>,
 }
 
 /// The stored form of a [`CoreSurface`]: JSON keys are strings, so the (type, method) table is a list of pairs.
@@ -50,29 +59,67 @@ pub struct CoreSurface {
 struct SurfaceRepr {
     table: Vec<((String, String), Entry)>,
     enumerable: BTreeMap<String, Entry>,
+    #[serde(default)]
+    trait_decorators: BTreeMap<String, Vec<RawDecorator>>,
 }
 
 impl From<CoreSurface> for SurfaceRepr {
     fn from(s: CoreSurface) -> Self {
-        SurfaceRepr { table: s.table.into_iter().collect(), enumerable: s.enumerable }
+        SurfaceRepr { table: s.table.into_iter().collect(), enumerable: s.enumerable, trait_decorators: s.trait_decorators }
     }
 }
 
 impl From<SurfaceRepr> for CoreSurface {
     fn from(r: SurfaceRepr) -> Self {
-        CoreSurface { table: r.table.into_iter().collect(), enumerable: r.enumerable }
+        CoreSurface { table: r.table.into_iter().collect(), enumerable: r.enumerable, trait_decorators: r.trait_decorators }
     }
 }
 
 impl CoreSurface {
     /// Parse `std/rust_core.wji` (embedded in the compiler).
     pub fn parse() -> Self {
+        Self::parse_source(SURFACE)
+    }
+
+    /// [`Self::parse`] over the text of a `std/rust_core.wji` (the gates parse the file on disk, so a planted
+    /// mistake in the file is seen without rebuilding the compiler).
+    pub fn parse_source(surface: &str) -> Self {
         let mut table = BTreeMap::new();
-        collect_entries(SURFACE, "std/rust_core.wji", &mut table);
+        let mut trait_decorators = BTreeMap::new();
+        collect_entries(surface, "std/rust_core.wji", &mut table, &mut trait_decorators);
         let mut enumerable_table = BTreeMap::new();
-        collect_entries(ENUMERABLE, "std/enumerable.wj", &mut enumerable_table);
+        collect_entries(ENUMERABLE, "std/enumerable.wj", &mut enumerable_table, &mut BTreeMap::new());
         let enumerable = enumerable_table.into_iter().map(|((_, m), e)| (m, e)).collect();
-        Self { table, enumerable }
+        Self { table, enumerable, trait_decorators }
+    }
+
+    /// The lowering table (`@js` / `@go` / `@example` on the declarations of `std/rust_core.wji`). A malformed
+    /// decorator in the embedded surface is a bug in the compiler's own source, so it fails like a parse error does.
+    pub fn lowering(&self) -> LoweringTable {
+        LoweringTable::from_declarations(&self.declared_traits()).unwrap_or_else(|e| panic!("std/rust_core.wji lowering decorators: {e}"))
+    }
+
+    /// Every declared trait with its decorators and methods, in name order (the input of [`LoweringTable`]).
+    pub fn declared_traits(&self) -> Vec<RawTrait> {
+        let mut by_trait: BTreeMap<&str, Vec<RawMethod>> = BTreeMap::new();
+        for ((t, m), e) in &self.table {
+            by_trait.entry(t).or_default().push(RawMethod {
+                name: m.clone(),
+                params: e.param_names.clone(),
+                returns_receiver: e.ret.as_ref().is_some_and(is_receiver_type),
+                changes_receiver: e.changes_receiver,
+                decorators: e.decorators.clone(),
+            });
+        }
+        by_trait
+            .into_iter()
+            .map(|(name, methods)| RawTrait { name: name.to_string(), decorators: self.trait_decorators.get(name).cloned().unwrap_or_default(), methods })
+            .collect()
+    }
+
+    /// The attributes written on `type_name::method`'s declaration.
+    pub fn decorators(&self, type_name: &str, method: &str) -> &[RawDecorator] {
+        self.table.get(&(type_name.to_string(), method.to_string())).map_or(&[], |e| e.decorators.as_slice())
     }
 
     /// The item type of the iterator a method is declared to return, when every type that declares the method
@@ -104,11 +151,14 @@ impl CoreSurface {
 }
 
 /// The trait methods declared in a surface file, keyed by (trait, method).
-fn collect_entries(source: &str, path: &str, table: &mut BTreeMap<(String, String), Entry>) {
+fn collect_entries(source: &str, path: &str, table: &mut BTreeMap<(String, String), Entry>, trait_decorators: &mut BTreeMap<String, Vec<RawDecorator>>) {
     let tokens = crate::lexer::Lexer::new(source).tokenize_with_locations();
     let program = crate::parser_impl::Parser::new(tokens).parse().unwrap_or_else(|e| panic!("{path} parses: {e}"));
     for item in &program.items {
         if let Item::Trait { decl, .. } = item {
+            if !decl.decorators.is_empty() {
+                trait_decorators.insert(decl.name.clone(), decl.decorators.iter().map(|d| raw_decorator(path, &decl.name, d)).collect());
+            }
             for m in &decl.methods {
                 let entry = Entry {
                     type_generics: decl.generics.clone(),
@@ -120,11 +170,28 @@ fn collect_entries(source: &str, path: &str, table: &mut BTreeMap<(String, Strin
                         .parameters
                         .iter()
                         .any(|p| p.name == "self" && p.ownership == crate::parser::ast::ownership::OwnershipHint::Mut),
+                    param_names: m.parameters.iter().filter(|p| p.name != "self").map(|p| p.name.clone()).collect(),
+                    decorators: m.decorators.iter().map(|d| raw_decorator(path, &format!("{}::{}", decl.name, m.name), d)).collect(),
                 };
                 table.insert((decl.name.clone(), m.name.clone()), entry);
             }
         }
     }
+}
+
+/// A decorator with its arguments as text. The surface files only use string literals; anything else is a bug in them.
+fn raw_decorator(path: &str, owner: &str, d: &crate::parser::ast::core::Decorator) -> RawDecorator {
+    use crate::parser::ast::literals::Literal;
+    use crate::parser::Expression;
+    let args = d
+        .arguments
+        .iter()
+        .map(|(k, e)| match e {
+            Expression::Literal { value: Literal::String(s), .. } => (k.clone(), s.clone()),
+            other => panic!("{path}: `{owner}`: `@{}` argument `{k}` must be a string literal, got {other:?}", d.name),
+        })
+        .collect();
+    RawDecorator { name: d.name.clone(), args }
 }
 
 impl CoreSurface {

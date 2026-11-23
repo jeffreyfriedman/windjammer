@@ -23,7 +23,7 @@ pub fn lower_program_without_facts(program: &Program, reg: Option<&SignatureRegi
 }
 
 fn lower_with_env(program: &Program, env: ItemEnv) -> PResult<PModule> {
-    let mut m = PModule { structs: vec![], enums: vec![], traits: vec![], fns: vec![], consts: vec![] };
+    let mut m = PModule { structs: vec![], enums: vec![], traits: vec![], fns: vec![], consts: vec![], lowering: env.surface.lowering };
     let mut items: Vec<&Item> = Vec::new();
     flatten(&program.items, &mut items);
     let defaults = trait_defaults(&items);
