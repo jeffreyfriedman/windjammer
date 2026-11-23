@@ -61,7 +61,7 @@ fn probe_result(a: Result<i32, string>, b: Result<string, i32>, c: Result<i32, V
     println("${a.unwrap_or(d)}")
     println("${a.unwrap_or(9)}")
     println("${b.unwrap_or(s)}")
-    println("${a.unwrap_or_else(|m| m.len())}")
+    println("${a.unwrap_or_else(|m| d)}")
     println("${b.unwrap_or_else(|n| s)}")
     println("${a.map(|x| x * 2).unwrap_or(0)}")
     println("${b.map(|t| t.len()).unwrap_or(0)}")

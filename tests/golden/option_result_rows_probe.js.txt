@@ -92,7 +92,7 @@ export function probe_result(a, b, c, e, d, s) {
   $print(("" + String((a.ok ? a.v : 9))) + "\n");
   $print(("" + (b.ok ? b.v : s)) + "\n");
   $print(("" + String($resOrElse(a, ((m) => {
-  return BigInt($strlen(m));
+  return d;
   })))) + "\n");
   $print(("" + $resOrElse(b, ((n) => {
   return s;

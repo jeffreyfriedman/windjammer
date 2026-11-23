@@ -94,8 +94,8 @@ func probe_result(a Result[int32, string], b Result[string, int32], c Result[int
 	wjPrint(("" + wjItoa(wjResUnwrapOr(a, d))) + "\n")
 	wjPrint(("" + wjItoa(wjResUnwrapOr(a, int32(9)))) + "\n")
 	wjPrint(("" + wjResUnwrapOr(b, s)) + "\n")
-	wjPrint(("" + wjItoa(wjResOrElse(a, func(m string) uint {
-		return uint(len(m))
+	wjPrint(("" + wjItoa(wjResOrElse(a, func(m string) int32 {
+		return d
 	}))) + "\n")
 	wjPrint(("" + wjResOrElse(b, func(n int32) string {
 		return s
