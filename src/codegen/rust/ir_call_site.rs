@@ -6711,6 +6711,14 @@ impl<'ast> CodeGenerator<'ast> {
             .len()
             .saturating_sub(usize::from(sig.has_self_receiver_slot()));
         let inferred_recv = receiver.and_then(|r| self.infer_expression_type(r));
+        // An integer receiver's method is declared by the core surface (`Integer<T>`: `rotate_left(n: u32)`): its
+        // parameter widths come from that declaration, not from a same-named method of another type (`Vec`'s
+        // `rotate_left(usize)` in the fallback registry).
+        if inferred_recv.as_ref().is_some_and(crate::codegen::rust::type_classification_utilities::is_integer_type)
+            && self.core_surface().numeric_method(false, simple).is_some()
+        {
+            return;
+        }
         let mut cast_sig = receiver_type_name
             .and_then(|rt| {
                 self.resolve_method_function_signature_specialized(
