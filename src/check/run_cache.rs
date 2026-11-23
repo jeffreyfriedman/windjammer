@@ -62,11 +62,7 @@ fn context(kind: &str) -> Option<Sha256> {
     part(&mut h, compiler.as_bytes());
     part(&mut h, crate::embedded_assets::scan_inputs_fingerprint().as_bytes());
     part(&mut h, cwd.to_string_lossy().as_bytes());
-    let mut env: Vec<(String, String)> = std::env::vars_os()
-        .map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned()))
-        .filter(|(k, _)| k.starts_with("WJ_") || k.starts_with("WINDJAMMER_"))
-        .collect();
-    env.sort();
+    let env = crate::debug_env::snapshot_with_prefixes(&["WJ_", "WINDJAMMER_"]);
     part(&mut h, &(env.len() as u64).to_le_bytes());
     for (k, v) in &env {
         part(&mut h, k.as_bytes());

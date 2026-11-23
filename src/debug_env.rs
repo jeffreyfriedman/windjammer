@@ -29,9 +29,23 @@ pub fn enabled(name: &str) -> bool {
     read(name).is_some()
 }
 
-/// The one read of the environment in this module.
+/// The one read of the environment in this module (a name lookup and the prefix snapshot below both go through it).
+fn all() -> impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)> {
+    std::env::vars_os()
+}
+
 fn read(name: &str) -> Option<std::ffi::OsString> {
-    std::env::var_os(name)
+    all().find(|(k, _)| k == name).map(|(_, v)| v)
+}
+
+/// Every variable whose name starts with one of `prefixes`, sorted: what a cache key hashes besides its inputs.
+pub fn snapshot_with_prefixes(prefixes: &[&str]) -> Vec<(String, String)> {
+    let mut env: Vec<(String, String)> = all()
+        .map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned()))
+        .filter(|(k, _)| prefixes.iter().any(|p| k.starts_with(p)))
+        .collect();
+    env.sort();
+    env
 }
 
 /// True when the variable is set to exactly `value`.
