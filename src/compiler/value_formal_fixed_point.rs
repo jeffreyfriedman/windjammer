@@ -86,6 +86,28 @@ impl FormalScope {
         changed
     }
 
+    /// Record in `sig.emitted_rust_ref_params` that formal `idx` is (not) a shared reference. A signature
+    /// that has no flags yet gets them from what it already says: a declared reference, or a text formal
+    /// the prediction borrows. True when the vector changed.
+    fn publish_emitted_flag(sig: &mut crate::analyzer::FunctionSignature, idx: usize, mode: OwnershipMode) -> bool {
+        let before = sig.emitted_rust_ref_params.clone();
+        if sig.emitted_rust_ref_params.is_none() {
+            let flags = (0..sig.param_ownership.len())
+                .map(|i| {
+                    let declared_ref = sig.formal_param_types.get(i).is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+                    let text_borrowed = sig.param_ownership[i] == OwnershipMode::Borrowed
+                        && sig.formal_param_types.get(i).is_some_and(crate::ir::formal_predicates::is_windjammer_text_type);
+                    declared_ref || text_borrowed
+                })
+                .collect();
+            sig.emitted_rust_ref_params = Some(flags);
+        }
+        if let Some(flag) = sig.emitted_rust_ref_params.as_mut().and_then(|f| f.get_mut(idx)) {
+            *flag = mode == OwnershipMode::Borrowed;
+        }
+        sig.emitted_rust_ref_params != before
+    }
+
     /// The registry keys one function's solved modes are published under (none for a trait impl method).
     pub(crate) fn publish_keys(&self, file_stem: Option<&str>, ir_fn: &IrFunction, af: &AnalyzedFunction) -> Vec<String> {
         if ir_fn.name.contains("::") {
@@ -117,7 +139,10 @@ impl FormalScope {
         for (idx, param) in af.decl.parameters.iter().enumerate() {
             // Receivers outside trait impls are spelled from the IR mode too (`self_receiver`).
             let receiver = param.name == "self";
-            if !receiver && !self.spelled(param) {
+            // An unused text formal of an API is owned by the solver's rule (OWN-PUB-TEXT-UNUSED,
+            // OWN-TEXT-API-UNUSED) and emitted as such: callers generated first read that mode too.
+            let text_api = crate::ir::constraint_gen::text_formals::unused_text_api_formal(&af.decl, param).is_some();
+            if !receiver && !text_api && !self.spelled(param) {
                 continue;
             }
             let Some(solved) = ir_fn.param_types.get(&param.name).map(|t| &t.ownership) else {
@@ -128,6 +153,13 @@ impl FormalScope {
                 OwnedType::Inferred => continue,
                 other => crate::ir::signature_bridge::owned_type_to_ownership_mode(other),
             };
+            // The backend spells this formal from the solved mode, so the published signature says so
+            // before the callee's file is generated: a caller generated first (a split `impl` in a file
+            // the caller does not import) otherwise reads no emitted flag and takes a bare declared formal
+            // for an owned one (`upload(p: Palette)` emitted `&Palette`, the call passed `p.clone()`).
+            if !receiver {
+                touched |= Self::publish_emitted_flag(&mut sig, idx, mode);
+            }
             if sig.param_ownership[idx] == mode {
                 continue;
             }
@@ -139,9 +171,6 @@ impl FormalScope {
                     OwnershipMode::MutBorrowed => Type::MutableReference(Box::new(bare)),
                     OwnershipMode::Owned => bare,
                 };
-            }
-            if let Some(flag) = sig.emitted_rust_ref_params.as_mut().and_then(|f| f.get_mut(idx)).filter(|_| !receiver) {
-                *flag = mode == OwnershipMode::Borrowed;
             }
             touched = true;
         }

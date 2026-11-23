@@ -1216,10 +1216,9 @@ impl<'ast> CodeGenerator<'ast> {
                                         && self.is_type_copy(inner)
                                 }
                             });
-                            // Copy payloads bind by value on owned scrutinees (BatchHandle).
-                            // P3.583: `match self` with `&self` still binds Copy as `&i32`
-                            // (Rust match ergonomics) — keep borrowed so comparisons emit `*`.
-                            if is_copy_payload && !match_self_ref {
+                            // Copy payloads bind by value on owned scrutinees (BatchHandle); `match self` with `&self` and
+                            // a scrutinee emitted `&place` bind `&T` (match ergonomics): kept borrowed, comparisons emit `*`.
+                            if is_copy_payload && !match_self_ref && !value_str.starts_with('&') {
                                 return false;
                             }
                             if struct_enum_fields {
@@ -1309,8 +1308,8 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 for entry in &mut match_bound_type_entries {
                     if !matches!(entry.1, Type::Reference(_) | Type::MutableReference(_)) {
-                        // Copy payloads bind by value even when the scrutinee is `&T`.
-                        if self.is_type_copy(&entry.1) {
+                        // Copy payloads bind by value, unless the emitted scrutinee is `&place` (`x: &f32`).
+                        if self.is_type_copy(&entry.1) && !value_str.starts_with('&') {
                             continue;
                         }
                         entry.1 = Type::Reference(Box::new(entry.1.clone()));

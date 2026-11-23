@@ -1,0 +1,20 @@
+// expect: len=40000
+// Public issue #189: bin = append(bin, i) moves the vector (no clone per iteration; asserted in issue_189_reassigned_vector_is_not_cloned).
+fn append_u32_le(buf: Vec<int>, val: int) -> Vec<int> {
+    let mut out = buf
+    out.push(val & 255)
+    out.push((val >> 8) & 255)
+    out.push((val >> 16) & 255)
+    out.push((val >> 24) & 255)
+    out
+}
+
+fn main() {
+    let mut bin: Vec<int> = []
+    let mut i = 0
+    while i < 10000 {
+        bin = append_u32_le(bin, i)
+        i += 1
+    }
+    println("len=${bin.len()}")
+}
