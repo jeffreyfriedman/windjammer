@@ -168,6 +168,8 @@ tests/diagnostics/cases/non_exhaustive_match.wj	51f9ad0f0768afa0	ok	fail
 tests/diagnostics/cases/numeric_mix.wj	a29ed271c8373bda	ok	fail
 tests/diagnostics/cases/numeric_string_to_int.wj	f762bfe8aa9fbdb5	ok	fail
 tests/diagnostics/cases/private_item.wj	8f77b2f29bdfa47c	ok	fail
+tests/diagnostics/cases/private_reexport.wj	9a4a15b4663bbf75	fail	skip
+tests/diagnostics/cases/public_reexport.wj	657192b4ccb5387d	ok	ok
 tests/diagnostics/cases/reassign_different_type.wj	04be836a860beb2a	ok	fail
 tests/diagnostics/cases/return_local_ref.wj	f7e29833d51753c6	fail	skip
 tests/diagnostics/cases/return_type_mismatch_call.wj	ad5e37e54c908d46	ok	fail

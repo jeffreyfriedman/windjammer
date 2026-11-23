@@ -2239,6 +2239,9 @@ impl<'ast> CodeGenerator<'ast> {
                 out.push('\n');
                 out
             }
+            // `pub use` inside an inline module: the re-export of `mod render { pub use super::mesh::generate }`.
+            // Plain `use` lines inside inline modules are still derived, never emitted.
+            Item::Use { path, alias, is_pub: true, .. } => self.generate_use(path, alias.as_deref(), true),
             _ => String::new(), // Ignore other items for now
         }
     }
