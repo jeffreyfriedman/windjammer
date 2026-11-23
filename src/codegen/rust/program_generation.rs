@@ -1542,7 +1542,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// `use std::f32::consts::PI`: the module `consts` declares constants, so the leaf is a value.
     fn note_imported_constant(&mut self, path: &[String]) {
         if let [.., module, leaf] = path {
-            if module == "consts" {
+            if crate::type_classification::is_std_constants_module(module) {
                 self.imported_const_names.insert(leaf.clone());
             }
         }

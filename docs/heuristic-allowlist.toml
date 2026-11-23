@@ -170,7 +170,7 @@
 "src/codegen/rust/macro_conversion.rs" = 4
 "src/codegen/rust/method_call_expression_generation/idiom_lowering.rs" = 4
 "src/codegen/rust/method_call_expression_generation/receiver.rs" = 1
-"src/codegen/rust/program_generation.rs" = 32
+"src/codegen/rust/program_generation.rs" = 10
 "src/codegen/rust/recursive_struct_layout.rs" = 1
 "src/codegen/rust/return_statement_generation.rs" = 1
 "src/codegen/rust/statement_generation.rs" = 5

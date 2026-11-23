@@ -1578,7 +1578,7 @@ impl<'ast> CodeGenerator<'ast> {
             .trait_name
             .as_deref()
             .filter(|t| crate::type_classification::is_consuming_operator_trait(t))
-            .filter(|_| !impl_block.associated_types.iter().any(|a| a.name == "Output"))
+            .filter(|_| !impl_block.associated_types.iter().any(|a| crate::type_classification::is_operator_output_type(&a.name)))
             .and_then(|_| match impl_block.functions.as_slice() {
                 [only] => only.return_type.as_ref(),
                 _ => None,
@@ -1589,7 +1589,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// `T: Clone`: an impl whose parameters do not state it gets it, so the Rust output type-checks.
     fn add_clone_bound_for_self_clones(&self, output: &mut String, impl_block: &ImplBlock<'ast>, header_start: usize) {
         if !impl_block.type_params.is_empty() && output.contains("self.clone()") {
-            let missing = |p: &crate::parser::TypeParam| !p.bounds.iter().any(|b| b == "Clone");
+            let missing = |p: &crate::parser::TypeParam| !p.bounds.iter().any(|b| crate::type_classification::is_clone_bound(b));
             if impl_block.type_params.iter().any(missing) {
                 let mut with_clone = impl_block.type_params.clone();
                 for p in with_clone.iter_mut().filter(|p| missing(p)) {

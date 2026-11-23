@@ -484,7 +484,7 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::MethodCall { object, method, arguments, .. } = expr else {
             return false;
         };
-        method == "position"
+        crate::type_classification::is_iterator_position_adapter(method)
             && arguments.len() == 1
             && !self.receiver_defines_method(self.infer_type_name(object).as_deref(), method)
     }

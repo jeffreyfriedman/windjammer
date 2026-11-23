@@ -874,3 +874,23 @@ pub fn is_primitive_type_name(name: &str) -> bool {
             | "usize" | "f32" | "f64" | "char" | "bool" | "str"
     )
 }
+
+/// The associated type an operator trait declares as its result (`type Output = ..;`).
+pub fn is_operator_output_type(name: &str) -> bool {
+    name == "Output"
+}
+
+/// A generic bound that is the `Clone` trait (`T: Clone`).
+pub fn is_clone_bound(bound: &str) -> bool {
+    bound == "Clone"
+}
+
+/// The `consts` module of `std::f32` / `std::f64`: it declares constants, so an import from it names a value.
+pub fn is_std_constants_module(module: &str) -> bool {
+    module == "consts"
+}
+
+/// The iterator adapter `position`, which yields `Option<usize>`.
+pub fn is_iterator_position_adapter(method: &str) -> bool {
+    method == "position"
+}
