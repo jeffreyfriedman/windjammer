@@ -6,7 +6,7 @@ last_verified: 8a9941cacf68
 
 > **Stages 1 and 2 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
 > and `Integer` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
-> `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, `WJ0195` and the
+> `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, the portability diagnostic and the
 > module-function rows are stages 3-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
 > (`tests/common/heuristic_scan.rs`, run standalone over each file).
 >
@@ -172,10 +172,10 @@ desugaring), with the desugaring named. Dropping an alias is proven safe by the 
 program reaches it, the output is byte-identical. Decision B (type of `len`) is untouched: the narrowing rule reads the
 declared `usize`, whatever the surface spelling becomes.
 
-**ADR-0040 (explicit re-exports).** A module function is keyed by the module that declares it. A function a module
+**The explicit re-exports ADR (not yet written).** A module function is keyed by the module that declares it. A function a module
 offers through `pub use child::name` or `pub use child::*` (`std/time.wj` re-exports `calendar`) is looked up through the
 resolver's explicit re-export, never by searching children. The table gate (G1) resolves every `std::<module>::<fn>` the
-corpus calls through the same resolver, so an implicit child lookup fails the gate exactly like WJ0194 fails a program.
+corpus calls through the same resolver, so an implicit child lookup fails the gate exactly like an unresolved name fails a program.
 
 **Interpreter.** The interpreter keeps native Rust implementations (it cannot run JS or Go templates), registered by
 `(Kind, name)` in `src/interpreter/builtins/*.rs`. It reads the table for everything that is not the implementation:
@@ -184,7 +184,7 @@ and Windjammer default bodies (run from source, so a body-defined row needs no n
 row to have a registration or `@interp(unsupported = reason)`, and every registration to be a row or `@internal`;
 this replaces the parity claim in the `std_surface.toml` header, which no test enforces at this head.
 
-**Check-time portability diagnostic (JS json).** `wj check --target js|ts|go` (and `wj build` for those targets,
+**Check-time portability diagnostic (JS json).** `wj check` with a JS, TS or Go target (and `wj build` for those targets,
 before emitting) resolves each std call to its row and reports `unsupported` rules at check time:
 
 ```
@@ -205,7 +205,7 @@ mode, which warns rather than refuses.
 |---|---|---|
 | G1 | tests/std_lowering_table_test.rs: every declaration in `rust_core.wji`, `std/*.wj`, `enumerable.wj` has, per target, a rule or `unsupported` with a non-empty reason; every template parses; every `{name}` is a declared parameter; every `when` list ends unguarded; no `${` (string interpolation) in a template | delete one `@go` from a row; write `{indx}`; empty a reason |
 | G2 | tests/golden/portable_emit_hashes.tsv: JS, TS and Go output hash of every conformance program and spec run case; must be byte-identical across every migration stage (re-record only per `golden-rerecord-by-cause`) | change `$sort(` to `$sort2(` in one row |
-| G3 | per-row conformance corpus, generated from each row's `@example(src = "...", expect = "...")`: run interpreted, Rust, JS, TS, Go; output equals `expect`; on an `unsupported` target the program must fail at check time with WJ0195 carrying the reason | swap a template's operands (`{a}`, `{b}`); mark a working row unsupported |
+| G3 | per-row conformance corpus, generated from each row's `@example(src = "...", expect = "...")`: run interpreted, Rust, JS, TS, Go; output equals `expect`; on an `unsupported` target the program must fail at check time with the portability diagnostic carrying the reason | swap a template's operands (`{a}`, `{b}`); mark a working row unsupported |
 | G4 | interpreter parity: rows vs registry, both directions; `&mut self` vs `mutating` registration agree | register a method with no row; flip a row to `&mut self` |
 | G5 | helper existence: every `$name` / `wjName` a template uses is defined in `wj_core.{mjs,go}` / `wj_std.*`; a helper no row uses fails (shrink-only) | rename one helper in the shim |
 | G6 | vocabulary cap: variant counts of `Guard`, `Hook`, `Modifier`, `Fact` are pinned in the test; a new one needs the test edited with a reason | add a `Guard::NameIs(String)` variant |
@@ -229,7 +229,7 @@ section 1). Stage 7 is the only one allowed to change the ledger, and only by re
 | 4 | **Option**, **Result**; `@internal` rows for `??` | -27 | -22 | -22 | | **1,320** |
 | 5 | **HashMap**, **HashSet**, statics (`Vec::new`, `i64::MAX`, `f64::EPSILON`, `char::from_u32`) as static declarations and `const` items | -33 | -37 | -34 | | **1,216** |
 | 6 | **Vec**, **Iterator** (`@adapts`), `collect`/`sum` by want, the `len` narrowing rule, `to_string` hook, `ret_ty` residue | -79 | -72 | -69 | | **996** (amber) |
-| 7 | module functions: `fs`, `time` rows on `std/fs.wj`, `std/time.wj`; `math` / `strings` free functions deleted (ADR-0039 R058/R070, after `wj fix` migrates the conformance programs that use them); **json wired** to the existing shims; WJ0195 | | | | stdlib.rs -68, lower/call.rs -2 | **926** |
+| 7 | module functions: `fs`, `time` rows on `std/fs.wj`, `std/time.wj`; `math` / `strings` free functions deleted (ADR-0039 R058/R070, after `wj fix` migrates the conformance programs that use them); **json wired** to the existing shims; the portability diagnostic | | | | stdlib.rs -68, lower/call.rs -2 | **926** |
 | 8 | enumerable and ordering families from `std/enumerable.wj` (`src/stdlib_surface/enumerable.rs` generated) | | | | -93 | **833** |
 | 9 | scanner tightening: tuple-pattern literals and `matches!(x, "a" \| ..)` lists counted (report-only from stage 1, enforced now) | | | | measured at stage 1 | 833 + new baseline |
 
@@ -299,7 +299,7 @@ aliases deleted (G2 proves unreachable; else `@internal`). Target `builtins.rs` 
 (owned params), both `vec_method` / `iter_method`, `sum_op`, `collect`, Go `mutating`, the `len` narrowing and
 `to_string` dispatch. Target: the three files absent from `[match_arm_names]` and `[name_matches]`; total **996**.
 
-**Stage 7:** module functions + json + WJ0195. Files: decorators on `std/fs.wj`, `std/time.wj`, `std/json.wj`
+**Stage 7:** module functions + json + the portability diagnostic. Files: decorators on `std/fs.wj`, `std/time.wj`, `std/json.wj`
 (wire `wj_json.mjs` / `wj_json.go`), file-level `unsupported` on the Rust-only modules; delete `stdlib.rs`;
 `lower/call.rs` path calls read the table; `src/check/` portability pass and `docs/DIAGNOSTICS.md` row; migrate the
 conformance programs off `math::` / `strings::` free functions with `wj fix` first. Ledger: `json_operations` leaves
