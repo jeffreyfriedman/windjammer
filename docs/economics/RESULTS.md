@@ -11,8 +11,8 @@ Every number below is labelled **measured** (a command in this repository produc
 
 ## Conditions (read before quoting)
 
-- Run: `bench/economics/results/mac-20261116.json` (tables: `mac-20261116.md`), 78 programs, 75 clean (3 listed under
-  "Problems"). Compiler: installed `wj` commit 37d50458ec6a (2026-11-11; the integration head is newer, a head run is
+- Run: `bench/economics/results/mac-20261116.json` (tables: `mac-20261116.md`), all suite programs, the problem programs listed under
+  "Problems". Compiler: installed `wj` commit 37d50458ec6a (2026-11-11; the integration head is newer, a head run is
   PLAN.md step 1); rustc 1.100.0-nightly; macOS arm64, 8 cores; load average 47 to 13 during the run (above the core
   count most of the time).
 - Under that load wall-clock is noise. Counters: **cycles** and **instructions retired** of the measured process
@@ -46,7 +46,7 @@ Every number below is labelled **measured** (a command in this repository produc
 | D7 | lexical tokens | 1.08 | 0.99 | 1.00 | win <= 0.85 | loss on the verbose reference set; 0.88 on pilot-6 agent programs |
 | D1 | agent USD per passing trial (pilot 6) | 1.17 / 1.21 | | | win <= 0.90 | loss (CI includes parity) |
 
-Two measured advantages today: **the interpreted verify loop on agent-sized programs** (D2, 0.24x CPU, 58 of 58
+Two measured advantages today: **the interpreted verify loop on agent-sized programs** (D2, 0.24x CPU, every clean one
 programs cheaper) and **less ownership ceremony in the source** (D7, 0.45x). Both have gates (PLAN.md). The interpreter
 loses on compute kernels (6x CPU on `parity`: those are the programs to compile, which `wj run --verify` does).
 
@@ -77,7 +77,7 @@ loses on compute kernels (6x CPU on `parity`: those are the programs to compile,
 
 ## D2 ratchet and C1 (measured)
 
-`economics.wj --d2` measures the verify loop on a fixed set of 12 agent-sized programs: `wj run --interpret` against
+`economics.wj --d2` measures the verify loop on a fixed set of agent-sized programs: `wj run --interpret` against
 `rustc` debug + run of the Rust twin, cycles of the process (CPU seconds where the meter has no cycles), best of 3,
 geometric mean. With the integration-head interpreter (wt-int-b + C1): **0.368** (every one of the 12 cheaper; from
 0.17x for word_freq to 0.65x for bank_ledger). Recorded in `bench/economics/d2_baseline.json` per meter and machine;
@@ -119,7 +119,7 @@ empty target directory, `/usr/bin/time -l`:
 | `interp/fib30` (std only) | 3 / 32.2 s / 463 MB / 61 / 191 MB | **0 / 0.19 s / 94 MB / 0 / 1.1 MB** |
 | `dx/t001_gcd_lcm` (reads stdin through the runtime's `io`) | 3 / 28.4 s / 459 MB / 61 / 193 MB | 1 / 29.2 s / 456 MB / 61 / 193 MB |
 
-18 of the 78 suite programs never name the runtime and now build like their Rust twin (about 170x less CPU on the
+the suite programs that never name the runtime and now build like their Rust twin (about 170x less CPU on the
 first build). The other 60 still pay the runtime's dependency tree: C2 step 5 (runtime dependencies behind features)
 is what removes that. Gate: `cargo test --release --test lean_manifest` (a std-only program has no dependencies; a
 runtime-using one has exactly the runtime); mutation check: always adding the runtime fails the first test.
@@ -239,7 +239,7 @@ without checks on both sides; "shipped" rows are Windjammer with checks against 
 
 ### LTO on programs that use the runtime (measured)
 
-`economics.wj --lto-study` (`bench/economics/results/mac-20261116-lto.json`): 11 programs (9 `dx` programs that use the
+`economics.wj --lto-study` (`bench/economics/results/mac-20261116-lto.json`): a small program set (the `dx` programs that use the
 runtime crate, 2 std-only kernels) built `cargo build --release` with the generated profile (overflow checks on) with
 LTO on and off, each into its own empty target directory. Geometric means, LTO on / off:
 

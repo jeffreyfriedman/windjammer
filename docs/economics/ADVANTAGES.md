@@ -23,7 +23,7 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 
 | # | Candidate | Dimension | Today (RESULTS.md) | Expected after | Effort | Verdict |
 |---|---|---|---|---|---|---|
-| C1 | Interpreter-first verify loop as the default agent loop | D2, D1 | **measured win: 0.24x CPU (0.62x cycles) on 58/58 `dx` programs**; 6x loss on compute kernels | keep <= 0.5x on `dx`; agents actually use it (pilot tool-wait) | 1-2 agent-days (L5 of ADR-0037 + default) | **Top 3** |
+| C1 | Interpreter-first verify loop as the default agent loop | D2, D1 | **measured win: 0.24x CPU (0.62x cycles) on every clean `dx` program**; 6x loss on compute kernels | keep <= 0.5x on `dx`; agents actually use it (pilot tool-wait) | 1-2 agent-days (the interpreter step of ADR-0037 + default) | **Top 3** |
 | C2 | Pay-for-what-you-use runtime (no dependency build unless used) | D3, D4, D6 | **measured loss**: cold build 30.8 s CPU / 450 MB / 59 crates before the first program (twin: none); dx binaries 1.19x; dx compile 1.36x cycles (runtime under LTO) | 0 crates for 18/78 programs, at most 2 for the rest; dx size and compile to parity | 2-3 agent-days | **Top 3** (removes the largest loss) |
 | C3 | Solver-decided borrow of read-only aggregate parameters + last-use move | D5, D4 | 156 `.clone()` in the generated `dx` code vs 12 in the twins | at most 20 | 3-5 agent-days (ADR-0001 solver work) | **Top 3** (closes the run-time gap) |
 | C4 | Release profile chosen by the compiler | D3, D5, D6 | **measured** (RESULTS C4): the current fat-LTO default costs 14x compile CPU vs cargo's default for 0.88x size and no speed on std-only kernels; overflow checks cost 1.12x run (up to 1.77x) | LTO only for cross-crate builds: shipped compile CPU from about 14x to about 1.05x of the twin; overflow checks stay on with the explicit opt-out | 0.5 agent-day + owner decision | **measured, proposal pending** |
@@ -41,7 +41,7 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 - **Expected win:** the D2 ratio. An agent's iteration is "edit, verify, read the result". Rust has to compile
   (`rustc` debug: hundreds of millions of instructions even for a 30-line program); `wj run --interpret` parses,
   checks and runs (interpreter startup is 69M instructions on macOS, `bench/interp/instr_baseline.json`).
-- **Evidence:** RESULTS.md D2: `wj run --interpret` costs 0.24x the CPU of `rustc` debug + run on the 58 clean `dx` programs (0.62x in cycles of the process alone; every one of the 58 is cheaper); on the compute kernels it costs 6x, and those are the programs a final compiled build is for. Pilot 6 shows the other side: tool-wait was 2.1 s for Rust and
+- **Evidence:** RESULTS.md D2: `wj run --interpret` costs 0.24x the CPU of `rustc` debug + run on the clean `dx` programs (0.62x in cycles of the process alone; every one is cheaper); on the compute kernels it costs 6x, and those are the programs a final compiled build is for. Pilot 6 shows the other side: tool-wait was 2.1 s for Rust and
   11.3 / 17.4 s for the Windjammer arms, because agents ran compiled builds (`wj run --verify`) on every call
   (ADR-0037 table, "the interpreted-first arm never used the interpreter").
 - **Pass/feature:** ADR-0037 L5: one command that is the whole loop and is cheap: `wj run --verify` interprets first,
@@ -58,7 +58,7 @@ programmer has to decide by hand (and often decides expensively), or where it ca
   `Cargo.toml` always depends on `windjammer-runtime` (plus `serde` with derive and `smallvec`), and the runtime's
   non-optional dependencies (serde_json, url with the ICU stack, uuid, rand, mime_guess, anyhow, thiserror, async-trait,
   base64, hex, dirs, bumpalo, ...) compile 69 crates. Measured: RESULTS.md "cold dependency build".
-- **Evidence (this survey, 78 generated programs):** 18 never reference `windjammer_runtime`; the other 60 reference
+- **Evidence (this survey of the generated suite):** 18 never reference `windjammer_runtime`; the other 60 reference
   only `io`, `fs`, `env`, `process`, `thread`, `sync`, whose sources import nothing but `std`; none uses `serde` or
   `smallvec`. The twin pays nothing.
 - **Pass/feature:** (a) emit the runtime/serde/smallvec dependency lines only when the generated code references them
@@ -76,7 +76,7 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 
 - **Expected win:** allocation and copy work the twin does not do. The generated `dx` code has 156 `.clone()` against 12
   in the twins.
-- **Evidence:** `wj explain-ownership` over the 78 programs: 298 parameters, 150 emitted owned; 40 owned non-Copy
+- **Evidence:** `wj explain-ownership` over the suite: 298 parameters, 150 emitted owned; 40 owned non-Copy
   parameters have no consuming use (not stored, returned or mutated), each tagged `OWN-ANALYZER-SEED` ("analyzer
   pre-decided ... ADR-0001 says the solver should decide"). Examples: `fn skip_level(people: HashMap<string, Person>, ..)`
   is called as `skip_level(people.clone(), ..)` (a whole map copied per query, t033); `fn less(a: Entry, b: Entry)` is
@@ -117,7 +117,7 @@ programmer has to decide by hand (and often decides expensively), or where it ca
 ## C6 Ceremony-free source
 
 - **Measured:** ceremony (`&`, lifetimes, clone, to_string, unwrap, as, iter) is **0.46x** the twins (geometric mean,
-  68 programs where both are non-zero): a win under DEFINITION.md's threshold. Tokens are 1.06x on the reference set,
+  the programs where both are non-zero): a win under DEFINITION.md's threshold. Tokens are 1.06x on the reference set,
   whose Windjammer programs are written in an older, workaround-heavy style (index loops, hand insertion sorts,
   explicit `.clone()` in the source); on programs agents actually wrote in pilot 6 the ratio is 0.88x
   (`cost.write.pilot6_token_ratio_wj_over_rust`).

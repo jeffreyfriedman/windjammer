@@ -1,3 +1,7 @@
+---
+status: accepted
+last_verified: 7b2696853fd6
+---
 # Should `split` return a list?
 
 Status: settled by the owner (2026-11-16), recorded in [ADR-0039](../adr/0039-stdlib-one-way.md) decision A: option A, keep the

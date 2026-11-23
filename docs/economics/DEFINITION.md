@@ -49,7 +49,7 @@ times. Users weigh the dimensions for their workload; the report gives every dim
 | `parity` | 10 | `benchmarks/rust_parity/wj/*.wj` | `benchmarks/rust_parity/rust/*.rs` (idiomatic, ADR-0006 work) | none (compute kernels) |
 | `interp` | 8 | `bench/interp/*.wj` | `bench/economics/twins/*.rs` (written for this suite, idiomatic: iterators, `entry()`, `write!`, `&mut [T]`) | none |
 
-78 programs. Twins were written only where none existed (the 8 `interp` kernels). A twin is honest when it is what a
+the suite programs. Twins were written only where none existed (the 8 `interp` kernels). A twin is honest when it is what a
 competent Rust programmer writes first: idiomatic std, no unsafe, no micro-optimisation the Windjammer program does not
 also get, the same algorithm. A twin that loses on purpose (strawman) or wins with tricks the Windjammer side cannot
 express (hand SIMD) is a defect: file it and fix the twin.

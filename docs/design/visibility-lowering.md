@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 7b2696853fd6
+---
 # Visibility in emitted Rust
 
 Rule: an item is `pub` in the Rust output only when the Windjammer source writes `pub`.

@@ -29,3 +29,18 @@ polarity = "negative"
 args = ["economics", "{w}/missing.wj"]
 exit = 1
 output_has = ["reading"]
+
+[[case]]
+name = "economics --twin of a missing Rust twin reports the read error"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["economics", "{w}/m.wj", "--twin", "{w}/missing.rs"]
+exit = 1
+output_has = ["reading", "missing.rs"]
+
+[[case]]
+name = "economics --json of a missing file reports the read error, not a JSON report"
+polarity = "negative"
+args = ["economics", "{w}/missing.wj", "--json"]
+exit = 1
+output_has = ["reading", "missing.wj"]

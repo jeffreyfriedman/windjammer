@@ -586,3 +586,10 @@ files = { "m.wj" = "fn main() {\n    let parts = \"a b c\".split(\" \")\n    pri
 args = ["run", "--interpret", "{w}/m.wj"]
 exit = 1
 output_has = ["WJ0035", "collect"]
+
+[[case]]
+name = "run --fix of a missing file names the file and exits 1"
+polarity = "negative"
+args = ["run", "--interpret", "--fix", "{w}/missing.wj"]
+exit = 1
+output_has = ["no such file or directory"]

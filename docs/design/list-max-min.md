@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 7b2696853fd6
+---
 # List `max()` / `min()`: std API review
 
 `std/rust_core.wji` declares `Iterator<T>::max(self) -> Option<T>` and `min`, so `nums.max()` type-checks in Windjammer

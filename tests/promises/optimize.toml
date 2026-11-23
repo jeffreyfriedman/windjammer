@@ -51,3 +51,17 @@ polarity = "positive"
 args = ["optimize", "--list", "--json"]
 json = true
 stdout_has = ["\"name\": \"dead_helpers\"", "\"default_on\": false"]
+
+[[case]]
+name = "optimize --list rejects an unknown flag"
+polarity = "negative"
+args = ["optimize", "--list", "--bogus"]
+exit = 2
+output_has = ["unexpected argument '--bogus'"]
+
+[[case]]
+name = "optimize --json of a missing file says it does not compile"
+polarity = "negative"
+args = ["optimize", "--json", "{w}/missing.wj"]
+exit = 1
+output_has = ["does not compile"]

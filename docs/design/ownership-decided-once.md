@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 7b2696853fd6
+---
 # Ownership decided once
 
 ## PC verification commands (wt-ownership-16 b9fbeb2c2, then wt-ownership-17)
