@@ -78,7 +78,7 @@ impl From<SurfaceRepr> for CoreSurface {
 impl CoreSurface {
     /// Parse `std/rust_core.wji` (embedded in the compiler).
     pub fn parse() -> Self {
-        Self::parse_source(SURFACE)
+        Self::parse_source(&without_examples(SURFACE))
     }
 
     /// [`Self::parse`] over the text of a `std/rust_core.wji` (the gates parse the file on disk, so a planted
@@ -179,6 +179,19 @@ fn collect_entries(source: &str, path: &str, table: &mut BTreeMap<(String, Strin
             }
         }
     }
+}
+
+/// The surface text without its `@example(..)` lines. An example is the program a gate builds for a row (it is never read by a
+/// compilation): leaving it out of the per-process parse keeps the cost of the table independent of how many rows have examples.
+/// The gates parse the text on disk with [`CoreSurface::parse_source`], examples included.
+fn without_examples(source: &str) -> String {
+    let mut out = String::with_capacity(source.len());
+    for line in source.split_inclusive('\n') {
+        if !line.trim_start().starts_with("@example(") {
+            out.push_str(line);
+        }
+    }
+    out
 }
 
 /// A decorator with its arguments as text. The surface files only use string literals; anything else is a bug in them.
@@ -475,6 +488,16 @@ mod tests {
         time("from_str", &mut || {
             std::hint::black_box(serde_json::from_str::<CoreSurface>(&json).unwrap());
         });
+    }
+
+    #[test]
+    fn the_per_process_parse_leaves_out_the_examples_and_nothing_else() {
+        let (embedded, full) = (CoreSurface::parse(), CoreSurface::parse_source(SURFACE));
+        let declared = |s: &CoreSurface| s.declared_traits().into_iter().map(|t| (t.name, t.methods.into_iter().map(|m| (m.name, m.params)).collect::<Vec<_>>())).collect::<Vec<_>>();
+        assert_eq!(declared(&embedded), declared(&full), "the same traits, methods and parameters");
+        let examples = |s: &CoreSurface| s.declared_traits().iter().flat_map(|t| &t.methods).flat_map(|m| &m.decorators).filter(|d| d.name == "example").count();
+        assert_eq!(examples(&embedded), 0);
+        assert!(examples(&full) > 100, "the file on disk keeps them: {}", examples(&full));
     }
 
     #[test]
