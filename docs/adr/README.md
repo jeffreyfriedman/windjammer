@@ -49,6 +49,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0037](0037-agent-cost-levers.md) | Agent-cost levers, measured offline | Proposed |
 | [0038](0038-interpreter-world-class.md) | A world-class interpreter, as a ladder of measured rungs | Proposed |
 | [0039](0039-stdlib-one-way.md) | One correct way: the standard library surface | Proposed |
+| [0040](0040-explicit-module-reexports.md) | A module re-exports a name only through an explicit `pub use` | Accepted |
 <!-- wj:end -->
 
 ## Template
