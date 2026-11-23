@@ -227,8 +227,14 @@ reality (lower it with `cargo test --test all heuristic_surface_test::regenerate
 mutation check adds one guess of each kind to a real file and requires all three sections to fail. The gate also
 fails when the line below does not match the allow-list.
 
-Current totals (2026-11-16, after the width-13 candidate took the callee-identity stack (sig-keys 2-9): imported, own-file and method callees are resolved by declaration; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
+Current totals (2026-11-23, after stage 1 of the table-driven std surface ([docs/design/table-driven-std-surface.md](../design/table-driven-std-surface.md)) moved the `Float` family out of the portable typer and the JS and Go emitters into rows of `std/rust_core.wji`: 1740 -> 1638, `portable/builtins.rs` 259 -> 225, `javascript/emit/builtin.rs` 244 -> 210, `go/emit/builtin.rs` 237 -> 203; before that the width-13 candidate took the callee-identity stack (sig-keys 2-9): imported, own-file and method callees are resolved by declaration; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
 `H-NAME-MATCHES` 511, `H-MATCH-ARM-NAMES` 1001, `H-FALLBACK-LEGACY` 126 (total 1638)
+
+Forms the three counts do not see (report-only; stage 9 of the std-surface plan enforces them): a name literal in a tuple
+pattern of a match arm (`("insert", 0) =>`) and a name literal in a `matches!(x, "a" | "b")` list. Measured 2026-11-23 over
+the same files by `cargo test --test all heuristic_surface_test::report_uncounted_name_forms -- --nocapture`:
+`tuple_pattern_names` 172, `matches_list_names` 452 (sum 624). Of these, `portable/builtins.rs` holds 108 + 12,
+`go/emit/builtin.rs` 10 + 21, `javascript/emit/builtin.rs` 10 + 3 and `portable/ordering.rs` 16 + 3: the families the plan retires.
 
 Breakdown at seeding (2026-11-04):
 

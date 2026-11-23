@@ -429,10 +429,12 @@ pub trait Float<T> {
     @go(emit = "({self:f64} * {a:f64} + {b:f64})")
     @example(src = "(2.0).mul_add(3.0, 1.0)", expect = "7")
     fn mul_add(self, a: T, b: T) -> T;
+    @internal(reason = "R071: the removed spelling of `pow`; kept as the rust lowering target (`pow` lowers to powi / powf by the exponent) and until G2 shows no accepted program reaches it")
     @js(emit = "Math.pow({self}, Number({n}))")
     @go(emit = "wjMath_pow({self:f64}, float64({n}))")
     @example(src = "(2.0).powi(10)", expect = "1024")
     fn powi(self, n: i32) -> T;
+    @internal(reason = "R071: the removed spelling of `pow`; kept as the rust lowering target (`pow` lowers to powi / powf by the exponent) and until G2 shows no accepted program reaches it")
     @js(emit = "Math.pow({self}, {n})")
     @go(emit = "wjMath_pow({self:f64}, {n:f64})")
     @example(src = "(9.0).powf(0.5)", expect = "3")
@@ -461,10 +463,12 @@ pub trait Float<T> {
     @go(emit = "wjIsFinite({self:f64})")
     @example(src = "(1.5).is_finite()", expect = "true")
     fn is_finite(self) -> bool;
+    @internal(reason = "R074: a removed spelling (`x < 0.0` is the canonical form); kept until G2 shows no accepted program reaches it")
     @js(emit = "$signNeg({self})")
     @go(emit = "wjSignNeg({self:f64})")
     @example(src = "(-1.5).is_sign_negative()", expect = "true")
     fn is_sign_negative(self) -> bool;
+    @internal(reason = "R074: a removed spelling (`x < 0.0` is the canonical form); kept until G2 shows no accepted program reaches it")
     @js(emit = "(!$signNeg({self}))")
     @go(emit = "(!wjSignNeg({self:f64}))")
     @example(src = "(-1.5).is_sign_positive()", expect = "false")

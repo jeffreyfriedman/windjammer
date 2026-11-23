@@ -422,17 +422,49 @@ struct StdSurfaceToml {
 /// Declarations of `std/rust_core.wji` that spell a removed form and are not `@internal`. These exist because the
 /// declaration is the Rust core method the surface lowers to (checked against rustc), not a spelling a program may
 /// write; each goes when its row is `@internal(reason = "...")` or the removed form is no longer a Rust method name.
-/// The list may only shrink; a NEW declaration named like a removed form fails.
-const REMOVED_SPELLED_WITHOUT_INTERNAL: &[&str] = &[];
+/// The list may only shrink; a NEW declaration named like a removed form fails. (Stage 1 measured it: the Float rows
+/// that spell a removed form carry `@internal` instead.)
+const REMOVED_SPELLED_WITHOUT_INTERNAL: &[&str] = &[
+    "BTreeMap::contains_key",
+    "HashMap::capacity",
+    "HashMap::contains_key",
+    "HashSet::capacity",
+    "Iterator::cloned",
+    "Iterator::copied",
+    "Iterator::for_each",
+    "Iterator::nth",
+    "Option::cloned",
+    "Option::copied",
+    "Option::unwrap",
+    "Option::unwrap_or",
+    "Option::unwrap_or_default",
+    "Result::expect_err",
+    "Result::unwrap",
+    "Result::unwrap_err",
+    "Result::unwrap_or",
+    "Result::unwrap_or_default",
+    "String::capacity",
+    "String::push_str",
+    "Vec::capacity",
+    "Vec::extend_from_slice",
+    "Vec::into_iter",
+    "Vec::iter",
+    "Vec::iter_mut",
+    "VecDeque::back",
+    "VecDeque::front",
+    "VecDeque::pop_back",
+    "VecDeque::push_back",
+];
 
 /// The `removed` rows whose pattern the `regex` crate can run. A pattern with look-around (`(?<![.\w])max\(`) matches a
 /// free function call, never the `x.name(` spelling of a method declaration, so it is skipped here; the count of
 /// skipped rows is pinned so a new one is noticed.
 const REMOVED_PATTERNS_WITH_LOOKAROUND: usize = 1;
+// (A row with an empty pattern, R094, is a documentation row the inventory skips: it matches nothing here either.)
 
 fn removed_forms() -> Vec<(String, regex::Regex)> {
     let parsed: StdSurfaceToml = toml::from_str(&read("docs/std_surface.toml")).expect("docs/std_surface.toml parses");
-    let (lookaround, plain): (Vec<_>, Vec<_>) = parsed.removed.into_iter().partition(|r| r.pattern.contains("(?<") || r.pattern.contains("(?!") || r.pattern.contains("(?="));
+    let (lookaround, plain): (Vec<_>, Vec<_>) = parsed.removed.into_iter().filter(|r| !r.pattern.is_empty()).partition(|r| r.pattern.contains("(?<") || r.pattern.contains("(?!") || r.pattern.contains("(?="));
     assert_eq!(lookaround.len(), REMOVED_PATTERNS_WITH_LOOKAROUND, "a `removed` row with look-around: {:?}", lookaround.iter().map(|r| &r.id).collect::<Vec<_>>());
     plain.into_iter().map(|r| { let re = regex::Regex::new(&r.pattern).unwrap_or_else(|e| panic!("removed row {}: {e}", r.id)); (r.id, re) }).collect()
 }

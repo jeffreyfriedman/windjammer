@@ -106,6 +106,9 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         let recv = match ty.as_str() {
             "Integer" => "i64".to_string(),
             "Float" => "f64".to_string(),
+            // the width traits (`F32::to_bits`) are checked on the type they are named after
+            "F32" => "f32".to_string(),
+            "F64" => "f64".to_string(),
             "Iterator" if matches!(method.as_str(), "cloned" | "copied") => "std::slice::Iter<'static, i64>".to_string(),
             "Iterator" => "std::vec::IntoIter<i64>".to_string(),
             _ => receiver(ty, &generics, by_ref),
@@ -121,6 +124,8 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         // result is collected into a `Vec` of its element.
         let (ret_ty, tail) = match ret {
             Some(Type::Parameterized(n, xs)) if n == "Iterator" => (format!("Vec<{}>", rust(&xs[0], false)), ".collect()"),
+            // the width traits declare `Vec<u8>`; Rust's `f32::to_le_bytes` is a `[u8; 4]` the lowering turns into a list
+            Some(Type::Vec(x)) if ty == "F32" || ty == "F64" => (format!("Vec<{}>", rust(&x, false)), ".to_vec()"),
             r => (r.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into()), ""),
         };
         let ret_ty = if method == "parse" { "Result<i64, _>".to_string() } else { ret_ty };
@@ -137,7 +142,7 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         let immutable = if ty == "Float" { immutable.replace("i64", "f64") } else { immutable };
         let as_type = match ty.as_str() {
             "Integer" => Type::Int,
-            "Float" => Type::Float,
+            "Float" | "F32" | "F64" => Type::Float,
             _ => Type::Parameterized(ty.clone(), generics.iter().map(|g| Type::Generic(g.clone())).collect()),
         };
         if surface.changes_receiver(&as_type, method) == Some(true) {
