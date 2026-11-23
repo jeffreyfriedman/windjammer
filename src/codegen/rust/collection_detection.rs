@@ -633,6 +633,11 @@ impl CodeGenerator<'_> {
         object: &Expression,
         method: &str,
     ) -> bool {
+        // A receiver that is already an iterator (`v.into_iter()`, `v.iter()`, an adapter) is not "a collection lowered through
+        // `.iter()`": its item type decides (`find_needs_cloned_for_owned_return`), and `into_iter().find(..)` yields `Option<T>`.
+        if Self::expr_is_iterator_adapter_chain(object) {
+            return false;
+        }
         let Some(Type::Option(inner)) = self.current_function_return_type.as_ref() else {
             return false;
         };

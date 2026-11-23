@@ -18,7 +18,7 @@ fn shared_target() -> PathBuf {
 
 #[test]
 fn duration_program_is_the_same_interpreted_and_compiled() {
-    same_interpreted_and_compiled("duration_surface.wj");
+    same_interpreted_and_compiled("duration_surface.wj", true);
 }
 
 /// `time.parse_duration_ms(text)` with an owned `string`: the runtime declares it in `time/calendar.rs`, which `time.rs`
@@ -26,10 +26,11 @@ fn duration_program_is_the_same_interpreted_and_compiled() {
 /// argument is borrowed (rustc E0308 expected `&str`, found `String`).
 #[test]
 fn parse_duration_of_an_owned_string_is_the_same_interpreted_and_compiled() {
-    same_interpreted_and_compiled("parse_duration_owned_text.wj");
+    // `parse_duration_ms` is declared in the runtime's calendar module (feature `datetime`), so this program honestly enables it
+    same_interpreted_and_compiled("parse_duration_owned_text.wj", false);
 }
 
-fn same_interpreted_and_compiled(program: &str) {
+fn same_interpreted_and_compiled(program: &str, no_calendar: bool) {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/std_time_programs").join(program);
     let want = expected(&std::fs::read_to_string(&p).unwrap());
     let wj = env!("CARGO_BIN_EXE_wj");
@@ -47,7 +48,7 @@ fn same_interpreted_and_compiled(program: &str) {
         .unwrap();
     assert!(st.status.success(), "wj build failed: {}", String::from_utf8_lossy(&st.stderr));
     let manifest = std::fs::read_to_string(out.join("Cargo.toml")).unwrap();
-    assert!(!manifest.contains("datetime") && !manifest.contains("chrono"), "no calendar dependency for durations:\n{manifest}");
+    assert!(!no_calendar || !manifest.contains("datetime") && !manifest.contains("chrono"), "no calendar dependency for durations:\n{manifest}");
     let run = Command::new("cargo").args(["run", "-q"]).current_dir(&out).env("CARGO_TARGET_DIR", shared_target()).output().unwrap();
     assert!(run.status.success(), "generated program failed: {}", String::from_utf8_lossy(&run.stderr));
     assert_eq!(String::from_utf8_lossy(&run.stdout), want, "compiled");

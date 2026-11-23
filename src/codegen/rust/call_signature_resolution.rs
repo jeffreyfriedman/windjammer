@@ -2257,7 +2257,7 @@ mod tests {
         };
         registry.add_function("SeedReader::report_lines".into(), borrowed_slug.clone());
         registry.add_function("DbReportReader::report_lines".into(), borrowed_slug);
-        registry.record_trait_impl_method_key("SeedReader::report_lines".into(), Some("SeedReader"));
+        registry.record_trait_impl_method_key("SeedReader::report_lines".into(), Some("ReportReader"));
 
         write_back_trait_owned_string_to_impls(&mut registry);
 
