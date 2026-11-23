@@ -3,7 +3,7 @@
 ## Purpose
 Declarative tables of the built-in standard-library surface (ADR-0018). Today: the known-method name table (`known_methods.rs`, shared by `wj check` WJ0015 and the interpreter parity gate), the enumerable collection methods
 (`group_by`, `count_by`, `unique`, ...) with argument kinds, result shapes and the Rust runtime name, and the lowering table (`lowering.rs`): one row per std method with a rule per portable target, read from the `@js` /
-`@go` / `@example` decorators on `std/rust_core.wji` (docs/design/table-driven-std-surface.md). The Go and JavaScript emitters print a migrated method by interpreting its row.
+`@go` / `@example` decorators on `std/rust_core.wji` (docs/design/table-driven-std-surface.md). The Go and JavaScript emitters print a migrated method (`Float`, `Integer`, `Char`, `String`) by interpreting its row; the portable typer reads the row's declared result type.
 
 ## Inputs/Outputs
 In: a method name and argument count. Out: a `Method` descriptor. For the lowering table: the declared traits with their decorators as text (`RawTrait`, handed over by `typing::core_surface`). Out: `LoweringTable { rows: (CoreType, method) -> Row }`.

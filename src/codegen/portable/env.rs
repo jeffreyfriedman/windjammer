@@ -86,7 +86,7 @@ impl StdSurface {
         let Some(ret) = ret else { return Some(Ty::Unit) };
         let ty = match from_ast(&ret, &generics, &Aliases::default()) {
             // `Iterator<T>` is the portable type of a lazy sequence
-            Ty::Adt(n, mut args) if n == crate::typing::core_surface::ITERATOR && args.len() == 1 => Ty::Iter(Box::new(args.remove(0))),
+            Ty::Adt(n, mut args) if n == crate::ir::stdlib_tables::ITERATOR && args.len() == 1 => Ty::Iter(Box::new(args.remove(0))),
             other => other,
         };
         if generics.is_empty() {
@@ -371,5 +371,60 @@ fn trait_sig(m: &crate::parser::TraitMethod, trait_name: &str, al: &Aliases) -> 
         recv: if has_self { Some(mode(&m.parameters[0])) } else { None },
         params: m.parameters.iter().filter(|p| p.name != "self").map(|p| (p.name.clone(), fix_self(from_ast(&p.type_, &[], al), Some(&self_ty)), ParamMode::Value)).collect(),
         ret: m.return_type.as_ref().map(|t| fix_self(from_ast(t, &[], al), Some(&self_ty))).unwrap_or(Ty::Unit),
+    }
+}
+
+#[cfg(test)]
+mod surface_tests {
+    use super::*;
+    use crate::codegen::portable::ty::IntKind;
+
+    fn parsed(ok: Ty) -> Ty {
+        Ty::Result(Box::new(ok), Box::new(Ty::Str))
+    }
+
+    #[test]
+    fn a_string_or_char_method_has_the_type_its_declaration_gives() {
+        let s = StdSurface::shared();
+        assert_eq!(s.declared_ret(&Ty::Str, "len", None), Some(Ty::usize()));
+        assert_eq!(s.declared_ret(&Ty::Str, "trim", None), Some(Ty::Str));
+        assert_eq!(s.declared_ret(&Ty::Str, "chars", None), Some(Ty::Iter(Box::new(Ty::Char))));
+        assert_eq!(s.declared_ret(&Ty::Str, "char_indices", None), Some(Ty::Iter(Box::new(Ty::Tuple(vec![Ty::usize(), Ty::Char])))));
+        assert_eq!(s.declared_ret(&Ty::Str, "find", None), Some(Ty::Option(Box::new(Ty::usize()))));
+        assert_eq!(s.declared_ret(&Ty::Str, "push", None), Some(Ty::Unit), "no declared result is a unit");
+        assert_eq!(s.declared_ret(&Ty::Char, "to_digit", None), Some(Ty::Option(Box::new(Ty::Int(IntKind::U32)))));
+        assert_eq!(s.declared_ret(&Ty::Char, "to_uppercase", None), Some(Ty::Str));
+        assert_eq!(s.declared_ret(&Ty::Char, "is_alphabetic", None), Some(Ty::Bool));
+    }
+
+    #[test]
+    fn a_removed_spelling_or_an_undeclared_method_has_no_type() {
+        let s = StdSurface::shared();
+        for name in ["as_str", "into_string", "substring", "to_ascii_uppercase", "as_bytes"] {
+            assert_eq!(s.declared_ret(&Ty::Str, name, None), None, "{name}");
+        }
+        for name in ["is_ascii_digit", "is_numeric", "len_utf8", "to_ascii_lowercase"] {
+            assert_eq!(s.declared_ret(&Ty::Char, name, None), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_method_generic_takes_its_type_from_the_expected_result() {
+        let s = StdSurface::shared();
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", Some(&parsed(Ty::Int(IntKind::U8)))), Some(parsed(Ty::Int(IntKind::U8))));
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", Some(&parsed(Ty::F32))), Some(parsed(Ty::F32)));
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", None), None, "no expected type, no target");
+        assert_eq!(s.declared_ret(&Ty::Str, "parse", Some(&Ty::Bool)), None);
+    }
+
+    #[test]
+    fn a_string_argument_has_the_type_its_parameter_declares() {
+        let s = StdSurface::shared();
+        assert_eq!(s.declared_arg(&Ty::Str, "contains", 0), Some(Ty::Str));
+        assert_eq!(s.declared_arg(&Ty::Str, "replace", 1), Some(Ty::Str));
+        assert_eq!(s.declared_arg(&Ty::Str, "repeat", 0), Some(Ty::usize()));
+        assert_eq!(s.declared_arg(&Ty::Str, "push", 0), Some(Ty::Char));
+        assert_eq!(s.declared_arg(&Ty::Str, "len", 0), None);
+        assert_eq!(s.declared_arg(&Ty::Char, "to_digit", 0), None, "a char argument keeps the numeric rule");
     }
 }
