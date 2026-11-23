@@ -149,6 +149,7 @@ corpus_tests!(
     trait_param_mutated_by_impl,
     char_closures_take_the_declared_item,
     borrowed_copy_key_into_map_lookup,
+    enum_payload_copy_some_from_borrowed_scrutinee,
     borrowed_key_by_operand_type,
     field_passed_to_owned_formal_keeps_borrowed_receiver,
     builder_reads_fields_after_storing_one,

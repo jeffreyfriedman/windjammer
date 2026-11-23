@@ -1219,7 +1219,10 @@ impl<'ast> CodeGenerator<'ast> {
                             // Copy payloads bind by value on owned scrutinees (BatchHandle).
                             // P3.583: `match self` with `&self` still binds Copy as `&i32`
                             // (Rust match ergonomics) — keep borrowed so comparisons emit `*`.
-                            if is_copy_payload && !match_self_ref {
+                            // A scrutinee emitted as `&place` / `&mut place` binds every payload
+                            // by reference, Copy or not (`match &self.v { V::F(x) => Some(x) }`:
+                            // `x: &f32`), so the Copy exemption holds only without that prefix.
+                            if is_copy_payload && !match_self_ref && !value_str.starts_with('&') {
                                 return false;
                             }
                             if struct_enum_fields {
@@ -1309,8 +1312,9 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 for entry in &mut match_bound_type_entries {
                     if !matches!(entry.1, Type::Reference(_) | Type::MutableReference(_)) {
-                        // Copy payloads bind by value even when the scrutinee is `&T`.
-                        if self.is_type_copy(&entry.1) {
+                        // A Copy payload binds by value unless the emitted scrutinee is
+                        // itself `&place` (`match &self.v { V::F(x) => .. }`: `x: &f32`).
+                        if self.is_type_copy(&entry.1) && !value_str.starts_with('&') {
                             continue;
                         }
                         entry.1 = Type::Reference(Box::new(entry.1.clone()));

@@ -1,0 +1,56 @@
+// expect: Some(2.5) Some(true) None
+// A Copy payload of an enum variant, bound from a scrutinee the generated Rust borrows (`match &self.entries[i].value`),
+// is `&f32` / `&bool`; wrapping it in `Some(..)` for an `Option<f32>` return needs the deref (rustc E0308
+// `expected f32, found &f32`).
+pub enum Value {
+    Float(f32),
+    Flag(bool),
+    Text(string),
+}
+
+pub struct Entry {
+    pub key: string,
+    pub value: Value,
+}
+
+pub struct Board {
+    pub entries: Vec<Entry>,
+}
+
+impl Board {
+    pub fn find_index(self, key: string) -> int {
+        let mut i = 0
+        while i < self.entries.len() {
+            if self.entries[i].key == key { return i as int }
+            i += 1
+        }
+        -1
+    }
+
+    pub fn get_f32(self, key: string) -> Option<f32> {
+        let idx = self.find_index(key)
+        if idx < 0 {
+            return None
+        }
+        match self.entries[idx as usize].value {
+            Value::Float(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn get_bool(self, key: string) -> Option<bool> {
+        let idx = self.find_index(key)
+        if idx < 0 {
+            return None
+        }
+        match self.entries[idx as usize].value {
+            Value::Flag(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+fn main() {
+    let b = Board { entries: [Entry { key: "speed", value: Value::Float(2.5) }, Entry { key: "on", value: Value::Flag(true) }] }
+    println("${b.get_f32("speed"):?} ${b.get_bool("on"):?} ${b.get_f32("on"):?}")
+}
