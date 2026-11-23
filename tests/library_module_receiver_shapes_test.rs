@@ -125,3 +125,34 @@ fn an_unused_pub_text_formal_is_owned_for_every_caller() {
     assert!(api.contains("pub fn label(name: String)") || api.contains("pub fn label(_name: String)"), "{api}");
     test.cargo_check().expect("cargo-check");
 }
+
+/// A split `impl` in a file the caller does not import (generated after the caller): the caller reads the callee's
+/// formals before the callee's file is emitted. A struct formal the solver borrows is borrowed at the call
+/// (`upload_palette(&p)`, not `p.clone()`: rustc E0308 expected `&Palette`), and an unused text formal of a text-returning
+/// method has one mode in the solver and in the emitted formal (`get_variable(&self, key: String)` on both sides).
+#[test]
+fn a_caller_generated_before_a_split_impl_reads_the_formals_the_impl_emits() {
+    let mut test = MultiFileTest::new();
+    test.add_file("model/mod.wj", "pub mod world\n");
+    test.add_file(
+        "model/world.wj",
+        "pub struct World {\n    pub n: int,\n}\n\npub struct Palette {\n    pub items: Vec<f32>,\n}\n",
+    );
+    test.add_file("scene/mod.wj", "pub mod chat\n");
+    test.add_file(
+        "scene/chat.wj",
+        "use crate::model::world::{World, Palette}\n\npub enum Cond {\n    VariableCheck { key: string, value: string },\n    Always,\n}\n\nimpl Cond {\n    pub fn evaluate(self, world: World) -> bool {\n        match self {\n            Cond::VariableCheck { key, value } => {\n                let var_value = world.get_variable(key)\n                var_value == value\n            },\n            Cond::Always => true,\n        }\n    }\n}\n\npub struct Scene {\n    pub palette: Palette,\n}\n\nimpl Scene {\n    pub fn init(self, world: World) {\n        world.upload_palette(self.palette)\n    }\n}\n",
+    );
+    test.add_file("zext/mod.wj", "pub mod world_ext\n");
+    test.add_file(
+        "zext/world_ext.wj",
+        "use crate::model::world::{World, Palette}\n\nimpl World {\n    pub fn get_variable(self, key: string) -> string {\n        \"\"\n    }\n\n    pub fn upload_palette(self, palette: Palette) {\n        let data = palette.items.clone()\n        println(\"${data.len()}\")\n    }\n}\n",
+    );
+    let map = test.compile().expect("compile");
+    let chat = map.get("scene/chat.rs").expect("scene/chat.rs");
+    let ext = map.get("zext/world_ext.rs").expect("zext/world_ext.rs");
+    assert!(ext.contains("upload_palette(&self, palette: &Palette)"), "{ext}");
+    assert!(chat.contains("upload_palette(&self.palette)"), "the call borrows what the formal borrows:\n{chat}");
+    assert!(ext.contains("get_variable(&self, key: String)"), "an unused text formal is decided once, by the solver:\n{ext}");
+    test.cargo_check().expect("cargo-check");
+}

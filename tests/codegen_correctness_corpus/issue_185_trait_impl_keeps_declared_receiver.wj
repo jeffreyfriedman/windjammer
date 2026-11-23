@@ -1,0 +1,21 @@
+// expect: 1
+// Public issue #185: the impl keeps the receiver the trait declares (a warning W0016 is reported; asserted in issue_185_reports_w0016_and_keeps_the_receiver).
+trait CounterPort {
+    fn inc(self) -> int
+}
+
+struct Counter {
+    val: int,
+}
+
+impl CounterPort for Counter {
+    fn inc(self) -> int {
+        self.val += 1
+        self.val
+    }
+}
+
+fn main() {
+    let mut c = Counter { val: 0 }
+    println("${c.inc()}")
+}

@@ -20,7 +20,7 @@ mod loop_writes;
 mod stored;
 mod opaque_receiver;
 mod structure;
-mod text_formals;
+pub(crate) mod text_formals;
 use numeric::{emit_numeric_class_constraint, is_int_literal_tree, literal_rule, literal_to_base_type};
 
 use crate::ir::constraints::{Constraint, ConstraintOrigin, ConstraintSet, ConstraintVar};

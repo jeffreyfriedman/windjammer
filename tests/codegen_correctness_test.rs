@@ -150,6 +150,13 @@ corpus_tests!(
     char_closures_take_the_declared_item,
     borrowed_copy_key_into_map_lookup,
     enum_payload_copy_some_from_borrowed_scrutinee,
+    issue_183_float_arg_arithmetic,
+    issue_184_contains_key_borrowed_key,
+    issue_185_trait_impl_keeps_declared_receiver,
+    issue_186_while_move_of_text_argument,
+    issue_187_vec_literal_tail_of_function,
+    issue_188_indexed_row_binding_agrees_with_initializer,
+    issue_189_reassigned_vector_is_moved,
     borrowed_key_by_operand_type,
     field_passed_to_owned_formal_keeps_borrowed_receiver,
     builder_reads_fields_after_storing_one,
@@ -509,4 +516,32 @@ fn main() {
     assert!(rs.contains("rx: Receiver<i64>") && !rs.contains("&Receiver"), "Receiver moved into a thread must be owned:\n{rs}");
     assert!(rs.contains("apply(\"a\", rx)"), "call must move the receiver:\n{rs}");
     assert!(!rs.contains("(3_i32 as i32)") && rs.contains("while i < 2_i64"), "annotated counter width:\n{rs}");
+}
+
+/// `wj build` of `src`: the generated Rust and the compiler's stderr.
+fn build_rust(src: &str) -> (String, String) {
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("test.wj");
+    fs::write(&f, src).unwrap();
+    fs::create_dir_all(dir.path().join("build")).unwrap();
+    let out = Command::new(WJ).args(["build", "--target", "rust", "--no-cargo"]).arg(&f).current_dir(dir.path()).output().unwrap();
+    let rs = fs::read_to_string(dir.path().join("build/test.rs")).unwrap_or_default();
+    (rs, String::from_utf8_lossy(&out.stderr).to_string() + &String::from_utf8_lossy(&out.stdout))
+}
+
+#[test]
+fn issue_185_reports_w0016_and_keeps_the_receiver() {
+    let src = fs::read_to_string(corpus_dir().join("issue_185_trait_impl_keeps_declared_receiver.wj")).unwrap();
+    let (_, diag) = build_rust(&src);
+    let out = Command::new(WJ).args(["check"]).arg(corpus_dir().join("issue_185_trait_impl_keeps_declared_receiver.wj")).output().unwrap();
+    let all = diag + &String::from_utf8_lossy(&out.stderr) + &String::from_utf8_lossy(&out.stdout);
+    assert!(all.contains("W0016"), "the undeclared trait receiver is reported:\n{all}");
+}
+
+#[test]
+fn issue_189_reassigned_vector_is_not_cloned() {
+    let src = fs::read_to_string(corpus_dir().join("issue_189_reassigned_vector_is_moved.wj")).unwrap();
+    let (rs, _) = build_rust(&src);
+    assert!(rs.contains("append_u32_le"), "{rs}");
+    assert!(!rs.contains(".clone()"), "`bin = append_u32_le(bin, i)` moves the vector:\n{rs}");
 }

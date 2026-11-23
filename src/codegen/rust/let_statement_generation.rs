@@ -733,7 +733,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && self.collection_ascription_is_valid(ty)
                         })
                     });
-                if needs_collection_ascription_sv {
+                let ascription_start = output.len(); if needs_collection_ascription_sv {
                     let vn = var_name.unwrap();
                     let ty = self.local_var_types.get(vn).unwrap().clone();
                     output.push_str(": ");
@@ -1068,7 +1068,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
                     self.sync_i32_coord_binding_after_let(vn, &value_str);
                 }
-                output.push_str(&value_str);
+                Self::push_let_value(&mut output, ascription_start, needs_collection_ascription_sv && !needs_mut_ref, value, &value_str);
 
                 // Restore expression context
                 self.in_expression_context = old_ctx;
@@ -1153,7 +1153,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && self.collection_ascription_is_valid(ty)
                     })
                 });
-                if needs_collection_ascription {
+                let ascription_start = output.len(); if needs_collection_ascription {
                     let vn = var_name.unwrap();
                     let ty = self.local_var_types.get(vn).unwrap().clone();
                     output.push_str(": ");
@@ -1249,7 +1249,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 self.note_owned_local_after_ref_clone(var_name, value, &value_str);
 
-                output.push_str(&value_str);
+                Self::push_let_value(&mut output, ascription_start, needs_collection_ascription && !needs_mut_ref, value, &value_str);
 
                 // Restore expression context
                 self.in_expression_context = old_ctx;

@@ -1,0 +1,19 @@
+// expect: true
+// Public issue #184: a borrowed key written by the program (&name) is kept for contains_key.
+use std::collections::HashMap
+
+struct Store {
+    map: HashMap<string, int>,
+}
+
+impl Store {
+    fn has(self, name: string) -> bool {
+        self.map.contains_key(&name)
+    }
+}
+
+fn main() {
+    let mut s = Store { map: HashMap::new() }
+    s.map.insert("a", 1)
+    println("${s.has("a")}")
+}

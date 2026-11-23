@@ -1,0 +1,7 @@
+// expect: 2
+// Public issue #188: an element of a Vec<Vec<int>> bound to a local that is only read borrows the slot, and the local's type agrees with the initializer (no `Vec<i64>` ascription on `&grid[0]`: WJ0003/E0308).
+fn main() {
+    let grid: Vec<Vec<int>> = [[1, 2], [3, 4]]
+    let row = grid[0]
+    println("${row.len()}")
+}

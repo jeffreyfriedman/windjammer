@@ -1,0 +1,19 @@
+// expect: 3 1
+// Public issue #183: float arithmetic as call arguments keeps the declared float width.
+struct Vec2 {
+    x: float,
+    y: float,
+}
+
+impl Vec2 {
+    fn new(x: float, y: float) -> Vec2 {
+        Vec2 { x: x, y: y }
+    }
+}
+
+fn main() {
+    let a = 1.0
+    let b = 2.0
+    let v = Vec2::new(a + b, b - a)
+    println("${v.x} ${v.y}")
+}

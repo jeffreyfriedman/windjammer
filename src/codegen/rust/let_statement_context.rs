@@ -116,4 +116,16 @@ impl<'ast> CodeGenerator<'ast> {
         self.idiom.binding_value_depth -= 1;
         out
     }
+
+    /// The initializer and the local's type are decided together: a read-only element binding
+    /// (`let row = grid[0]` used for reads) borrows the slot (`&grid[0]`), so the local is a reference and the
+    /// value-type ascription inferred for it (`: Vec<i64>`) is dropped (WJ0003 / E0308 expected `Vec<i64>`, found
+    /// `&Vec<i64>`). `ascribed`: an inferred ascription was written at `ascription_start`. Pushes the value.
+    pub(in crate::codegen::rust) fn push_let_value(output: &mut String, ascription_start: usize, ascribed: bool, value: &Expression<'ast>, value_str: &str) {
+        if ascribed && matches!(value, Expression::Index { .. }) && value_str.starts_with('&') && !value_str.starts_with("&mut ") {
+            output.truncate(ascription_start);
+            output.push_str(" = ");
+        }
+        output.push_str(value_str);
+    }
 }

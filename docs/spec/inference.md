@@ -104,6 +104,13 @@ API, and the solver decides it, so callers in other files read the same formal t
 **Example.** `pub fn label(name: string) -> int { 3 }` emits `name: String`; a caller passes `"x".to_string()`.
 **Status.** Draft (docs/design/ownership-decided-once.md, stage 1 class 1).
 
+### OWN-TEXT-API-UNUSED
+**Rule.** A `string` parameter that the body never reads, of a function or method (a split `impl` included) that returns
+text, is owned. The solver decides it, so a caller generated before the callee's file reads the formal the callee emits.
+**Example.** `impl World { pub fn get_variable(self, key: string) -> string { "" } }` emits `key: String`; a caller passes
+an owned `String`.
+**Status.** Conforms.
+
 ### OWN-MUT-PARAM-COPY
 **Rule.** A parameter declared `mut` (`fn f(mut s: S)`) is owned: the callee changes its own copy and the caller's
 value is unchanged (SPEC-OWN-008). The caller moves its value at its last use and passes a copy otherwise.

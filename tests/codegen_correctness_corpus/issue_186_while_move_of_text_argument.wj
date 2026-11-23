@@ -1,0 +1,22 @@
+// expect: 3
+// Public issue #186: a text value passed to an owned formal in a loop is copied per iteration, not moved.
+struct Bucket {
+    items: Vec<string>,
+}
+
+impl Bucket {
+    fn push_item(self, s: string) {
+        self.items.push(s)
+    }
+}
+
+fn main() {
+    let mut b = Bucket { items: [] }
+    let label = "hello"
+    let mut i = 0
+    while i < 3 {
+        b.push_item(label)
+        i += 1
+    }
+    println("${b.items.len()}")
+}

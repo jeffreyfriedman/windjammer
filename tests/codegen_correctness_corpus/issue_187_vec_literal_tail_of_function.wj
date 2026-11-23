@@ -1,0 +1,10 @@
+// expect: 3
+// Public issue #187: an array literal as a function's tail value is a Vec.
+fn make_triple(a: int, b: int, c: int) -> Vec<int> {
+    [a, b, c]
+}
+
+fn main() {
+    let v = make_triple(1, 2, 3)
+    println("${v.len()}")
+}
