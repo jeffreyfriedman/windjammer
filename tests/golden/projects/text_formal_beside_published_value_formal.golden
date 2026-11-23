@@ -1,0 +1,74 @@
+// ==== hub.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Conn {
+    pub id: i64,
+    pub user: String,
+    pub rooms: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Frame {
+    pub room: String,
+    pub n: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Hub {
+    pub names: Vec<String>,
+}
+
+impl Hub {
+#[inline]
+pub fn replay(&self, me: Conn, room: &str) -> Frame {
+        if !me.rooms.iter().any(|m| *m == *room) {
+            return Frame { room: String::new(), n: 0_i64 };
+        }
+        let mut out = Frame { room: String::new(), n: me.id };
+        out.room = room.to_string();
+        out
+}
+#[inline]
+pub fn receive(&self, conn: &Conn, kind: &str, raw: String) -> Frame {
+        let mut me = conn.clone();
+        me.id += 0;
+        if me.user == "" {
+            return Frame { room: String::new(), n: -1_i64 };
+        }
+        let room = raw.clone();
+        if kind == "history" {
+            return self.replay(me, &room);
+        }
+        Frame { room: me.user.clone(), n: 0_i64 }
+}
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod hub;
+
+// Re-export public items
+pub use hub::*;
+// ==== main.rs ====
+mod hub;
+fn main() {
+    let h = hub::Hub { names: vec!["lobby".to_string()] };
+    let me = hub::Conn { id: 3_i64, user: String::from("u"), rooms: vec!["lobby".to_string()] };
+    let f = h.receive(&me, "history", String::from("lobby"));
+    println!("{} {}", f.room, f.n);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod hub;
+
+// Re-export public items
+pub use hub::*;
