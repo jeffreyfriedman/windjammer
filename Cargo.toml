@@ -478,6 +478,12 @@ name = "book"
 path = "tests/book_test.rs"
 required-features = ["cli"]
 
+# A project's src/main.wj built alone generates and declares the sibling modules its `use crate::` paths name: cargo test --test lone_main_sibling_modules
+[[test]]
+name = "lone_main_sibling_modules"
+path = "tests/lone_main_sibling_modules_test.rs"
+required-features = ["cli"]
+
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
 name = "docs_truth"

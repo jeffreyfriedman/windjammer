@@ -165,9 +165,12 @@ pub fn build_project_with_config(
     }
 
     let mut deferred_lint_errors: Vec<String> = Vec::new();
-    for file in &super::lone_script_modules::lone_script_files(path, &wj_files, library) {
+    for file in &super::lone_script_modules::lone_script_files(path, &wj_files, library)? {
         let source = std::fs::read_to_string(file)?;
-        let (_parser, program) = super::parse_wj_source(file, &source)?;
+        let (_parser, mut program) = super::parse_wj_source(file, &source)?;
+        if !library && path.is_file() && wj_files.contains(file) {
+            super::lone_script_modules::declare_used_crate_modules(&mut program);
+        }
         if let Err(e) = super::emit_parser_warnings(&_parser) {
             deferred_lint_errors.push(format!("{}", e));
         }
