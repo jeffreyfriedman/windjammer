@@ -124,16 +124,16 @@ fn project(with_manifest: bool) -> tempfile::TempDir {
     d
 }
 
-/// rustc (`--emit metadata`) on a crate made of the emitted `main.rs` (as module `app`) and util.wj's clean `util.rs`.
+/// rustc (`--emit metadata`) on the emitted `main.rs` as the crate root: a lone entry file declares its sibling
+/// `mod util;` itself, so util.wj's clean `util.rs` sits beside it.
 fn rustc_accepts_main_with_util(main_rs: &str) -> Result<(), String> {
     let d = tempfile::tempdir().unwrap();
-    std::fs::write(d.path().join("lib.rs"), "mod util;\nmod app;\n").unwrap();
-    std::fs::write(d.path().join("app.rs"), main_rs).unwrap();
+    std::fs::write(d.path().join("main.rs"), main_rs).unwrap();
     std::fs::write(d.path().join("util.rs"), "pub fn label(s: &str) -> i64 {\n    s.len() as i64\n}\n").unwrap();
     let o = Command::new("rustc")
         .args(["--crate-type", "lib", "--edition", "2021", "--emit", "metadata", "-A", "warnings", "-o"])
         .arg(d.path().join("out.rmeta"))
-        .arg(d.path().join("lib.rs"))
+        .arg(d.path().join("main.rs"))
         .output()
         .unwrap();
     if o.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&o.stderr).to_string()) }
