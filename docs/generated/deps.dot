@@ -250,7 +250,7 @@ digraph deps {
   "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
-  "codegen" -> "type_classification" [label="250"];
+  "codegen" -> "type_classification" [label="254"];
   "codegen" -> "type_inference" [label="63"];
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
@@ -276,7 +276,7 @@ digraph deps {
   "compiler" -> "module_system" [label="3"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
-  "compiler" -> "parser" [label="105"];
+  "compiler" -> "parser" [label="113"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
