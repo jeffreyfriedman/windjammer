@@ -217,7 +217,8 @@ fn every_program_emits_the_recorded_output() {
     compare(&programs);
 }
 
-/// Every method of `trait Float<T>` (on `f64` and `f32`) and of `trait Integer<T>` (on every integer type): the JavaScript
+/// Every method of `trait Float<T>` (on `f64` and `f32`), of `trait Integer<T>` (on every integer type) and of `trait Char` /
+/// `trait String`: the JavaScript
 /// and the Go text, compared whole (not by hash) with what the emitters printed before those rows moved into
 /// `std/rust_core.wji`. A difference names the first differing line, which is the row to look at (`f32` is the Go widening,
 /// the kind is the integer function).
@@ -226,7 +227,7 @@ fn rows_emit_what_the_emitters_printed_before_they_were_rows() {
     let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let work = Work::new();
     let mut bad = Vec::new();
-    for probe in ["float_rows_probe", "integer_rows_probe"] {
+    for probe in ["float_rows_probe", "integer_rows_probe", "char_string_rows_probe"] {
         std::fs::copy(root().join(format!("tests/golden/{probe}.wj")), work.path().join(format!("{probe}.wj"))).unwrap();
         for (target, out_file, ext) in [("javascript", "main.mjs", "js"), ("go", "main.go", "go")] {
             let out = work.path().join(format!("out_{probe}_{target}"));
