@@ -11,6 +11,7 @@ fn total(text: string) -> int {
 }
 fn main() {
     let text = fs::read_to_string("numbers.txt").unwrap()
+//~@50+6 ERROR W0002 explicit
     println("read ${text.len()} bytes")
     let sum = total(text)
     println("sum ${sum}")
