@@ -96,7 +96,6 @@ impl UnifiedNumericInference {
     /// `cache_root`: the shared cache root (`CompilerConfig::cache_root`).
     pub fn set_source_root(&mut self, root: &std::path::Path, cache_root: &std::path::Path) {
         self.float_collector.set_source_root(root, cache_root);
-        self.int_collector.set_source_root(root, cache_root);
     }
 
     /// See [`crate::type_inference::IntInference::register_own_functions`]: before a file's constraints are collected,

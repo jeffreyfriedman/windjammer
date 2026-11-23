@@ -637,7 +637,7 @@ impl<'ast> Analyzer<'ast> {
                     .and_then(|_| self.current_impl_functions.as_ref())
                     .and_then(|f| f.get(method.as_str()))
                     .and_then(|f| f.return_type.clone());
-                let ret = in_impl.or_else(|| registry.get_signature(&format!("{base}::{method}"))?.return_type.clone())?;
+                let ret = in_impl.or_else(|| registry.signature_declared_at(&format!("{base}::{method}"))?.return_type.clone())?;
                 type_base_for_registry_lookup(&ret)
             }
             _ => None,

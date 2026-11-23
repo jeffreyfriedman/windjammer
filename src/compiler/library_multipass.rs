@@ -364,17 +364,11 @@ pub(crate) fn build_library_multipass(
     // Merge explicit non-Copy structs with non-Copy enums for codegen registry
     let mut global_non_copy_types = global_non_copy_enums.clone();
     global_non_copy_types.extend(explicit_non_copy_structs.iter().cloned());
-    // `PartialEq` of a struct whose fields are declared in another module of this crate: decided once over every
-    // module's declarations (a per-file pass cannot see them).
-    let crate_partial_eq_types = {
-        let mut g = CodeGenerator::new_for_module(SignatureRegistry::new(), target);
-        g.set_copy_types_registry(global_copy_structs.clone());
-        g.set_explicit_copy_types_registry(global_explicit_copy_structs.clone());
-        g.set_non_copy_types_registry(global_non_copy_types.clone());
-        let programs: Vec<&crate::parser::Program<'_>> = parsed_programs.iter().collect();
-        g.collect_partial_eq_types_all(&programs);
-        g.partial_eq_types_snapshot()
-    };
+    let crate_partial_eq_types = super::library_codegen_inputs::crate_partial_eq_types(
+        &parsed_programs,
+        (&global_copy_structs, &global_explicit_copy_structs, &global_non_copy_types),
+        target,
+    );
     let mut dep_registry = SignatureRegistry::new();
     {
         let mut dep_copy_structs = Vec::new();
@@ -1350,26 +1344,7 @@ pub(crate) fn build_library_multipass(
             codegen.set_global_struct_field_types((*global_struct_fields).clone());
             codegen.set_library_const_types(&library_consts);
             codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
-            // Stdlib field/enum shapes + FQ Rust paths (`HttpMethod` →
-            // `windjammer_runtime::http::HttpMethod`) so string→unit-enum coercion
-            // works even when the cargo-test binary's exe-relative std lookup fails
-            // mid-session, and so sibling imports alone resolve without E0433.
-            if !needed_stdlib_modules.is_empty() {
-                let (std_fields, std_variants, std_paths) =
-                    super::library_copy_registry::collect_stdlib_api_types_for_modules(
-                        &needed_stdlib_modules,
-                        config.stdlib_path.as_deref(),
-                    );
-                if !std_fields.is_empty() {
-                    codegen.set_global_struct_field_types(std_fields);
-                }
-                if !std_variants.is_empty() {
-                    codegen.set_global_enum_variant_types(std_variants);
-                }
-                if !std_paths.is_empty() {
-                    codegen.set_stdlib_type_rust_paths(std_paths);
-                }
-            }
+            super::library_codegen_inputs::apply_stdlib_api_types(&mut codegen, &needed_stdlib_modules, config);
             codegen.set_output_position(&analysis.output_file, output, src_base.as_path());
             codegen.set_source_file(file);
             codegen.set_library_source_root(src_base.clone());

@@ -11,6 +11,7 @@ mod declaration_stub_registry;
 mod dependency_resolution;
 mod path_dep_metadata;
 pub mod incremental;
+mod library_codegen_inputs;
 mod library_copy_registry;
 mod lone_script_modules;
 mod value_formal_fixed_point;

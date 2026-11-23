@@ -317,7 +317,7 @@ impl<'ast> Analyzer<'ast> {
                 None
             }
             .or_else(|| {
-                let sig = registry?.get_signature(&format!("{inner_base}::{method}"))?;
+                let sig = registry?.signature_declared_at(&format!("{inner_base}::{method}"))?;
                 sig.return_type.clone()
             })?;
             return Self::type_base_for_qualified_sig_lookup(&declared);
