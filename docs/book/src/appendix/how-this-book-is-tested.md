@@ -24,7 +24,7 @@ runs as a project in the interpreter and compiled, with the same agreement check
 <!-- wj:gen name=book_stats -->
 | Measure | Count |
 |---|---|
-| Programs in the book | 133 |
+| Programs in the book | 134 |
 | Blocks marked `ignore` | 0 |
 | Programs that run interpreted only | 4 |
 | Chapters still to be written | 0 |

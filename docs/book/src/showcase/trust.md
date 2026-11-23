@@ -12,7 +12,7 @@ any difference is a recorded finding that has to shrink.
 counting the ones that run only in the interpreter:
 
 <!-- wj:gen name=metric key=book.examples -->
-133
+134
 <!-- wj:end -->
 
 **The specification.** Each rule in the language specification has an executable example with an expected output derived by
