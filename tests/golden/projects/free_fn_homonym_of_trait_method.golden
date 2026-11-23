@@ -82,7 +82,7 @@ fn list_items(&self, tenant_id: String) -> Vec<String> {
 use super::*;
 
 use crate::shelf::Shelf;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct Deps {
     pub shelf: Shelf,

@@ -2,7 +2,7 @@
 #[allow(unused_imports)]
 use super::*;
 #[inline]
-pub fn cell(row: &Vec<String>, index: usize) -> String {
+fn cell(row: &Vec<String>, index: usize) -> String {
     if index < row.len() {
         row[index].clone()
     } else {
@@ -65,7 +65,7 @@ impl Mapping {
 
 
 #[inline]
-pub fn cell(cells: &Vec<String>, idx: i64) -> String {
+fn cell(cells: &Vec<String>, idx: i64) -> String {
     if idx < (cells.len() as i64) {
         cells[idx as usize].clone()
     } else {

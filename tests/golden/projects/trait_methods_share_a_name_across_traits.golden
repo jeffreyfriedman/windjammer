@@ -130,7 +130,7 @@ use crate::ports::AuditDraft;
 use crate::ports::AuditSink;
 use crate::mem_events::MemEvents;
 use crate::mem_audit::MemAudit;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub struct Deps {
     pub audit: MemAudit,

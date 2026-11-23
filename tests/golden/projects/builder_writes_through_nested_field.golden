@@ -55,7 +55,7 @@ pub fn append_all(self, vs: &Vec<i64>) -> Port {
         let mut i = 0_usize;
         while i < vs.len() {
             port = port.append(vs[i]);
-            i += 1;
+            i = i.wrapping_add(1);
         }
         port
 }

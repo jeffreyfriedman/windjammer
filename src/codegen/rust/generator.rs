@@ -363,6 +363,8 @@ pub struct CodeGenerator<'ast> {
     /// First segment of non-`std`/`crate`/`super`/`self` `use` paths (`tokio`, `axum`, `serde`).
     /// MethodCall on these identifiers uses `::`, not a hardcoded crate-name list.
     pub(crate) imported_path_roots: std::collections::HashSet<String>,
+    /// Names a `use` brings in from a std `consts` module (`use std::f32::consts::PI`): values, never types.
+    pub(crate) imported_const_names: std::collections::HashSet<String>,
     /// Simple names of all extern (FFI) functions across all modules.
     /// Used by codegen to wrap calls in `unsafe {}` even when signature lookup fails.
     pub(crate) extern_function_names: std::collections::HashSet<String>,
@@ -569,6 +571,10 @@ impl<'ast> CodeGenerator<'ast> {
         if name == "std" || name == "Self" || name.contains('.') {
             return true;
         }
+        // A declared or imported constant is a value: `PI.to_degrees()` stays a method call.
+        if self.imported_const_names.contains(name) || self.module_const_types.contains_key(name) {
+            return false;
+        }
         if name.chars().next().is_some_and(|c| c.is_uppercase()) {
             return true;
         }
@@ -752,6 +758,7 @@ impl<'ast> CodeGenerator<'ast> {
             imported_fn_names: Default::default(),
             runtime_std_module_imports: std::collections::HashSet::new(),
             imported_path_roots: std::collections::HashSet::new(),
+            imported_const_names: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),

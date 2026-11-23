@@ -23,7 +23,7 @@ fn main() {
         if is_row_key(prefix_len, &keys[i]) {
             n += 1;
         }
-        i += 1;
+        i = i.wrapping_add(1);
     }
     println!("{} {} {}", n, KIND_ROW, rows::is_row_key(5_u8));
 }

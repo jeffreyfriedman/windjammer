@@ -50,7 +50,7 @@ pub fn set_owner(&self, id: u32, owner: String) -> Table {
             } else {
                 entries.push(entry);
             }
-            i += 1;
+            i = i.wrapping_add(1);
         }
         Table { entries }
 }

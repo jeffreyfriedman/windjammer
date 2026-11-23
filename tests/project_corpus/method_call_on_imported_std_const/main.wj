@@ -1,0 +1,10 @@
+// A method call on an imported constant stays a method call (`PI.to_degrees()`), also for a constant this file
+// declares: only names that declare a type are path roots. Expected by hand: 180 (PI in degrees), 6.
+// expect: 180 6
+use std::f32::consts::PI
+
+const SIX: f32 = 6.0
+
+fn main() {
+    println("${PI.to_degrees()} ${SIX.abs()}")
+}

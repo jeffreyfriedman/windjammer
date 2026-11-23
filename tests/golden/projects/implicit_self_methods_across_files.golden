@@ -91,7 +91,7 @@ pub fn make_line(n: i64) -> Mesh {
 use super::*;
 
 use crate::channel::Channel;
-#[derive(Default)]
+#[derive(PartialEq, Default)]
 #[repr(C)]
 pub struct Mixer {
     pub channels: Vec<Channel>,

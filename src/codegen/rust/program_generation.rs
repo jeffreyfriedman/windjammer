@@ -445,6 +445,12 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(alias_name.clone(), path.join("::"));
                 }
             }
+            if let Item::Use { path, alias, .. } = item {
+                if path.len() >= 2 && path[path.len() - 2] == "consts" {
+                    let bound = alias.clone().or_else(|| path.last().cloned());
+                    self.imported_const_names.extend(bound);
+                }
+            }
             if let Item::Use {
                 path, alias: None, ..
             } = item
