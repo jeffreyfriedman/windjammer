@@ -271,11 +271,7 @@ pub(crate) fn build_library_multipass(
     }
 
     let src_base: PathBuf = {
-        let raw = if base_path.is_file() {
-            base_path.parent().unwrap_or(base_path).to_path_buf()
-        } else {
-            base_path.to_path_buf()
-        };
+        let raw = crate::project_paths::entry_root(base_path).to_path_buf();
         std::fs::canonicalize(&raw).unwrap_or(raw)
     };
 
@@ -1387,8 +1383,8 @@ pub(crate) fn build_library_multipass(
             // Skip when there is no configured package name (temp/integration trees keep
             // `use crate::` for single-crate cargo-check harnesses).
             if is_crate_root_main {
-                if let Some(lib_name) = crate::cargo_toml::infer_configured_package_name(&src_base)
-                {
+                let lib_name = bin_entry_lib_name(&src_base, base_path, config);
+                if let Some(lib_name) = lib_name {
                     let lib_name = lib_name.replace('-', "_");
                     rewrite_bin_crate_imports_to_lib(&analysis.output_file, &lib_name)?;
                 }
@@ -1811,6 +1807,14 @@ fn bin_main_against_lib(content: &str, lib_name: &str) -> String {
         .sum::<usize>()
         .min(body.len());
     format!("{}{}{}", &body[..split], glob, &body[split..])
+}
+
+/// The crate name a bin entry imports its library by. A file build (`wj build runner.wj`) has the entry's directory as
+/// its whole package: the generated Cargo.toml names the lib by `infer_project_name_from(<entry dir>)`, and the bin must
+/// import that same name even when no manifest configures one.
+fn bin_entry_lib_name(src_base: &Path, base_path: &Path, config: &crate::compiler_config::CompilerConfig) -> Option<String> {
+    crate::cargo_toml::infer_configured_package_name(src_base)
+        .or_else(|| config.entry_use_paths_name_sibling_modules.then(|| crate::cargo_toml::infer_project_name_from(base_path)))
 }
 
 /// Rewrite `use crate::…` in a binary `main.rs` so it resolves against the package lib.

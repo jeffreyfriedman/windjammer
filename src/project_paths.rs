@@ -4,6 +4,19 @@ use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// The directory a single-file build treats as the source root: the file's parent, `.` for a bare file name
+/// (`Path::new("runner.wj").parent()` is the EMPTY path, which no `strip_prefix`/`canonicalize` understands, so
+/// outputs would be written next to the sources); a directory is its own root.
+pub fn entry_root(path: &Path) -> &Path {
+    if !path.is_file() {
+        return path;
+    }
+    match path.parent() {
+        Some(d) if !d.as_os_str().is_empty() => d,
+        _ => Path::new("."),
+    }
+}
+
 /// A directory that holds a project manifest is a project boundary.
 fn is_project_boundary(dir: &Path) -> bool {
     dir.join("wj.toml").exists() || dir.join("Cargo.toml").exists()
