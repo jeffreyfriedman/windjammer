@@ -9,7 +9,7 @@ pub struct Doc {
 }
 
 #[inline]
-pub fn draft(a: String, b: String) -> Doc {
+fn draft(a: String, b: String) -> Doc {
     Doc { a, b }
 }
 
