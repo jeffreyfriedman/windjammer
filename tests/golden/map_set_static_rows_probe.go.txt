@@ -169,12 +169,12 @@ func probe_statics(n int32, w float64) {
 	wjPrint(("" + wjF32(float32(wjInf(1)))) + "\n")
 	wjPrint(("" + wjBool((w < float64(1.7976931348623157e308)))) + "\n")
 	wjPrint(("" + wjBool(((w + float64(2.220446049250313e-16)) > w))) + "\n")
-	wjPrint(("" + wjItoa(wjResUnwrapOr(wjParseIntRadix[int32]("ff", int64(16)), int32(0)))) + "\n")
-	wjPrint(("" + wjItoa(wjResUnwrapOr(wjParseIntRadix[uint8]("101", int64(2)), uint8(0)))) + "\n")
-	wjPrint(("" + wjBool((!wjParseIntRadix[int64]("zz", int64(10)).Ok))) + "\n")
-	wjPrint(("" + string(rune(wjUnwrapOr(wjCharFromU32(int64(65)), Char(63))))) + "\n")
-	wjPrint(("" + wjBool(wjCharFromU32(int64(128512)).Ok)) + "\n")
-	wjPrint(("" + wjBool((!wjCharFromU32(int64(55296)).Ok))) + "\n")
+	wjPrint(("" + wjItoa(wjResUnwrapOr(wjParseIntRadix[int32]("ff", uint32(16)), int32(0)))) + "\n")
+	wjPrint(("" + wjItoa(wjResUnwrapOr(wjParseIntRadix[uint8]("101", uint32(2)), uint8(0)))) + "\n")
+	wjPrint(("" + wjBool((!wjParseIntRadix[int64]("zz", uint32(10)).Ok))) + "\n")
+	wjPrint(("" + string(rune(wjUnwrapOr(wjCharFromU32(uint32(65)), Char(63))))) + "\n")
+	wjPrint(("" + wjBool(wjCharFromU32(uint32(128512)).Ok)) + "\n")
+	wjPrint(("" + wjBool((!wjCharFromU32(uint32(55296)).Ok))) + "\n")
 }
 func wj_main() {
 	probe_int_map(int32(3), "one")

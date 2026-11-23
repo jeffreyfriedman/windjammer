@@ -54,8 +54,8 @@ impl<'m> Js<'m> {
             Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &r, &a, ty),
             Ty::Option(_) => self.lowered(CoreType::Option, recv, name, &r, &a, ty),
             Ty::Result(..) => self.lowered(CoreType::Result, recv, name, &r, &a, ty),
-            Ty::Map(k, v) => self.map_method(k, v, name, &r, &a),
-            Ty::Set(_) => self.set_method(name, &r, &a),
+            Ty::Map(..) => self.lowered(CoreType::Map, recv, name, &r, &a, ty),
+            Ty::Set(_) => self.lowered(CoreType::Set, recv, name, &r, &a, ty),
             other => self.unsupported(format!("method `{name}` on `{}`", other.describe())),
         }
     }
@@ -175,6 +175,7 @@ impl<'m> Js<'m> {
     fn lowered(&mut self, ct: CoreType, recv: &PExpr, name: &str, r: &str, a: &[String], ty: &Ty) -> PResult<String> {
         let m = self.m;
         let Some(row) = m.lowering.row(ct, name) else { return self.unsupported(format!("{} method `{name}`", ct.noun())) };
+        self.requires(ct.trait_name(), &recv.ty, ty)?;
         let elem = recv.ty.elem().unwrap_or(Ty::Unknown);
         let prim = self.is_prim(&elem);
         let guard = |g: Guard| match g {
@@ -194,82 +195,45 @@ impl<'m> Js<'m> {
                 Ok(format!("({place} = {value}, undefined)"))
             }
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
+            Some(Rule::Hook(Hook::Cast)) => self.unsupported(format!("{} method `{name}`: `cast` is the hook of an associated function", ct.noun())),
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no JavaScript rule", ct.noun())),
         }
     }
 
-    fn key_ok(&self, k: &Ty) -> PResult<()> {
-        if matches!(k, Ty::Int(_) | Ty::Str | Ty::Char | Ty::Bool) {
-            Ok(())
-        } else {
-            self.unsupported(format!("HashMap/HashSet key type `{}` (only integer, string, char and bool keys)", k.describe()))
+    /// The condition the trait puts on every call of it (`@js(requires = ..)`): a map call needs a key a JavaScript `Map` compares by value.
+    fn requires(&self, trait_name: &str, recv: &Ty, ty: &Ty) -> PResult<()> {
+        let Some(req) = self.m.lowering.requirement(trait_name, Target::Js) else { return Ok(()) };
+        if template::type_guard(req.guard, recv, ty) {
+            return Ok(());
         }
+        let key = [recv, ty].into_iter().find_map(|t| match t {
+            Ty::Map(k, _) => Some(k.describe()),
+            _ => None,
+        });
+        self.unsupported(req.reason.replace("{K}", &key.unwrap_or_default()))
     }
 
-    fn map_method(&mut self, k: &Ty, v: &Ty, name: &str, r: &str, a: &[String]) -> PResult<String> {
-        self.key_ok(k)?;
-        let _ = v;
-        Ok(match name {
-            "len" => format!("BigInt({r}.size)"),
-            "is_empty" => format!("({r}.size === 0)"),
-            "insert" => format!("$mapInsert({r}, {}, {})", a[0], a[1]),
-            "get" | "get_mut" => format!("$mapGetOpt({r}, {})", a[0]),
-            "contains_key" => format!("{r}.has({})", a[0]),
-            "remove" => format!("$mapRemove({r}, {})", a[0]),
-            "clear" => format!("{r}.clear()"),
-            "keys" | "into_keys" => format!("$sortedKeys({r})"),
-            "values" | "values_mut" | "into_values" => format!("$sortedValues({r})"),
-            "iter" | "iter_mut" | "into_iter" => format!("$sortedEntries({r})"),
-            _ => return self.unsupported(format!("HashMap method `{name}`")),
-        })
-    }
-
-    fn set_method(&mut self, name: &str, r: &str, a: &[String]) -> PResult<String> {
-        Ok(match name {
-            "len" => format!("BigInt({r}.size)"),
-            "is_empty" => format!("({r}.size === 0)"),
-            "insert" => format!("$setInsert({r}, {})", a[0]),
-            "contains" => format!("{r}.has({})", a[0]),
-            "remove" => format!("{r}.delete({})", a[0]),
-            "clear" => format!("{r}.clear()"),
-            "iter" | "into_iter" => format!("$sortedKeys({r})"),
-            _ => return self.unsupported(format!("HashSet method `{name}`")),
-        })
-    }
-
-    pub fn builtin_static(&mut self, owner: &str, name: &str, a: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
+    /// A call of an associated function or constant of a std type (`Vec::new`, `i64::MAX`): print its row for JavaScript. `ty`
+    /// is the call's type, which is also the type the function is on (`{R.max}`).
+    pub fn builtin_static(&mut self, owner: &str, name: &str, a: &[String], args: &[PExpr], ty: &Ty) -> PResult<String> {
         if let Some(c) = self.ordering_const(owner, name) {
             return Ok(c);
         }
-        if let Some(k) = IntKind::from_name(owner) {
-            let (lo, hi) = range_of(k);
-            return match name {
-                "MAX" => Ok(num::lit_int(hi, k)),
-                "MIN" => Ok(num::lit_int(lo, k)),
-                "from" => Ok(num::cast(&args[0].ty, &Ty::Int(k), a)),
-                "from_str_radix" => Ok(format!("$parseIntRadix({a}, {lo}n, {hi}n, {})", num::is_wide(k))),
-                _ => self.unsupported(format!("`{owner}::{name}`")),
-            };
-        }
-        match (owner, name) {
-            ("Vec", "new") | ("Vec", "with_capacity") => Ok("[]".into()),
-            ("Vec", "from") => Ok(format!("{a}.slice()")),
-            ("HashMap" | "BTreeMap", "new" | "with_capacity") => {
-                if let Ty::Map(k, _) = ty {
-                    self.key_ok(k)?;
-                }
-                Ok("new Map()".into())
+        let m = self.m;
+        let Some((trait_name, row)) = m.lowering.static_row(owner, name) else { return self.unsupported(format!("`{owner}::{name}`")) };
+        self.requires(trait_name, ty, ty)?;
+        match row.select(Target::Js, |g| template::type_guard(g, ty, ty)) {
+            Some(Rule::Emit { template, .. }) => {
+                let mut dbg = |t: &Ty| self.dbg_fn(t);
+                template::render_emit(template, &row.params, &mut JsOperands { receiver: "", args: a, recv: ty, result: ty, place: None, dbg: &mut dbg })
             }
-            ("HashSet" | "BTreeSet", "new" | "with_capacity") => Ok("new Set()".into()),
-            ("String" | "string", "new" | "with_capacity") => Ok("\"\"".into()),
-            ("String" | "string", "from") => Ok(a.to_string()),
-            ("f32" | "f64", m) if crate::codegen::portable::builtins::float_const(owner, m).is_some() => {
-                Ok(num::float_lit(crate::codegen::portable::builtins::float_const(owner, m).unwrap_or(0.0), owner == "f32"))
-            }
-            ("f64", "from") => Ok(num::cast(&args[0].ty, &Ty::F64, a)),
-            ("char", "from_u32") => Ok(format!("$charFromU32({a})")),
-            _ => self.unsupported(format!("`{owner}::{name}`")),
+            Some(Rule::Hook(Hook::Cast)) => match (args.first(), a.first()) {
+                (Some(from), Some(text)) => Ok(num::cast(&from.ty, ty, text)),
+                _ => self.unsupported(format!("`{owner}::{name}` converts its argument")),
+            },
+            Some(Rule::Unsupported(why)) => self.unsupported(format!("`{owner}::{name}`: {why}")),
+            _ => self.unsupported(format!("`{owner}::{name}` has no JavaScript rule")),
         }
     }
 }

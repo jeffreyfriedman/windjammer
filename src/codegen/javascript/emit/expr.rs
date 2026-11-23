@@ -217,10 +217,11 @@ impl<'m> Js<'m> {
 
     fn static_call(&mut self, owner: &str, name: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
         let user = self.m.structs.iter().any(|s| s.name == owner) || self.m.enums.iter().any(|e| e.name == owner) || self.m.traits.iter().any(|t| t.name == owner);
-        let a = if user { self.args_for(self.find_fn(Some(owner), name), args)? } else { self.args(args)? };
         if user {
+            let a = self.args_for(self.find_fn(Some(owner), name), args)?;
             return Ok(format!("{}.{}({a})", ident(owner), self.method_name(name)));
         }
+        let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
         self.builtin_static(owner, name, &a, args, ty)
     }
 

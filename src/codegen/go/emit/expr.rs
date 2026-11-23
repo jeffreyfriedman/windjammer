@@ -251,7 +251,7 @@ impl<'m> Go<'m> {
             let a = self.args_for(f, args)?;
             return Ok(format!("{}_{}{targs}({a})", ident(owner), ident(name)));
         }
-        let a = self.plain_args(args)?;
+        let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
         self.builtin_static(owner, name, &a, args, ty)
     }
 }

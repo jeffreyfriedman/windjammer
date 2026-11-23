@@ -87,7 +87,9 @@ fn examples() -> Vec<Case> {
     let table = CoreSurface::parse_source(&text).lowering();
     table
         .rows()
-        .filter_map(|(ty, row): (windjammer::stdlib_surface::lowering::CoreType, &Row)| {
+        .map(|(ty, row): (windjammer::stdlib_surface::lowering::CoreType, &Row)| (ty.trait_name(), row))
+        .chain(table.statics())
+        .filter_map(|(trait_name, row): (&str, &Row)| {
             let e = row.example.as_ref()?;
             // unsupported on a target: its only rule says so (a row with a guarded rule and an `unsupported` fallback, like
             // `parse`, works for the types its guards name)
@@ -99,7 +101,7 @@ fn examples() -> Vec<Case> {
                 })
                 .collect();
             let given = e.given.iter().flat_map(|g| g.split(';')).map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
-            Some(Case { id: format!("{}::{}", ty.trait_name(), row.name), given, src: e.src.clone(), expect: e.expect.clone(), unsupported })
+            Some(Case { id: format!("{trait_name}::{}", row.name), given, src: e.src.clone(), expect: e.expect.clone(), unsupported })
         })
         .collect()
 }

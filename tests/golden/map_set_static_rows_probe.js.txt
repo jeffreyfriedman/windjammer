@@ -137,12 +137,12 @@ export function probe_statics(n, w) {
   $print(("" + $f32(Math.fround(Infinity))) + "\n");
   $print(("" + String((w < 1.7976931348623157e308))) + "\n");
   $print(("" + String(((w + 2.220446049250313e-16) > w))) + "\n");
-  $print(("" + String(($parseIntRadix("ff", 16n, -2147483648n, 2147483647n, false).ok ? $parseIntRadix("ff", 16n, -2147483648n, 2147483647n, false).v : 0))) + "\n");
-  $print(("" + String(($parseIntRadix("101", 2n, 0n, 255n, false).ok ? $parseIntRadix("101", 2n, 0n, 255n, false).v : 0))) + "\n");
-  $print(("" + String((!$parseIntRadix("zz", 10n, -9223372036854775808n, 9223372036854775807n, true).ok))) + "\n");
-  $print(("" + $unwrapOr($charFromU32(65n), "?")) + "\n");
-  $print(("" + String(($charFromU32(128512n) !== null))) + "\n");
-  $print(("" + String(($charFromU32(55296n) === null))) + "\n");
+  $print(("" + String(($parseIntRadix("ff", 16, -2147483648n, 2147483647n, false).ok ? $parseIntRadix("ff", 16, -2147483648n, 2147483647n, false).v : 0))) + "\n");
+  $print(("" + String(($parseIntRadix("101", 2, 0n, 255n, false).ok ? $parseIntRadix("101", 2, 0n, 255n, false).v : 0))) + "\n");
+  $print(("" + String((!$parseIntRadix("zz", 10, -9223372036854775808n, 9223372036854775807n, true).ok))) + "\n");
+  $print(("" + $unwrapOr($charFromU32(65), "?")) + "\n");
+  $print(("" + String(($charFromU32(128512) !== null))) + "\n");
+  $print(("" + String(($charFromU32(55296) === null))) + "\n");
 }
 export function main() {
   probe_int_map(3, "one");

@@ -41,10 +41,15 @@ pub enum CoreType {
     String,
     Option,
     Result,
+    /// `HashMap<K, V>` and `BTreeMap<K, V>`: one portable type (`Ty::Map`), declared by `trait HashMap`.
+    Map,
+    /// `HashSet<T>` and `BTreeSet<T>`: one portable type (`Ty::Set`), declared by `trait HashSet`.
+    Set,
 }
 
 impl CoreType {
-    pub const ALL: [CoreType; 6] = [CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result];
+    pub const ALL: [CoreType; 8] =
+        [CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result, CoreType::Map, CoreType::Set];
 
     /// The trait of `std/rust_core.wji` that declares this type's methods.
     pub fn trait_name(self) -> &'static str {
@@ -55,6 +60,8 @@ impl CoreType {
             CoreType::String => "String",
             CoreType::Option => "Option",
             CoreType::Result => "Result",
+            CoreType::Map => "HashMap",
+            CoreType::Set => "HashSet",
         }
     }
 
@@ -67,6 +74,8 @@ impl CoreType {
             CoreType::String => "string",
             CoreType::Option => "Option",
             CoreType::Result => "Result",
+            CoreType::Map => "HashMap",
+            CoreType::Set => "HashSet",
         }
     }
 
@@ -93,10 +102,13 @@ pub enum Guard {
     OkF32,
     OkF64,
     OkBool,
+    /// The map type of the call (the receiver, or the result of an associated function) has a key a JavaScript `Map`
+    /// compares by value: an integer, string, char or bool.
+    KeyPrim,
 }
 
 impl Guard {
-    pub const ALL: [Guard; 9] = [
+    pub const ALL: [Guard; 10] = [
         Guard::ElemPrim,
         Guard::ElemPrimNotBool,
         Guard::RecvWide,
@@ -106,6 +118,7 @@ impl Guard {
         Guard::OkF32,
         Guard::OkF64,
         Guard::OkBool,
+        Guard::KeyPrim,
     ];
 
     pub fn name(self) -> &'static str {
@@ -119,6 +132,7 @@ impl Guard {
             Guard::OkF32 => "ok_f32",
             Guard::OkF64 => "ok_f64",
             Guard::OkBool => "ok_bool",
+            Guard::KeyPrim => "key_prim",
         }
     }
 }
@@ -128,14 +142,17 @@ impl Guard {
 pub enum Hook {
     /// The target's text of the receiver's value (`to_string`).
     Display,
+    /// The target's numeric conversion from the first argument's type to the call's type (`i64::from(x)`, `f64::from(x)`).
+    Cast,
 }
 
 impl Hook {
-    pub const ALL: [Hook; 1] = [Hook::Display];
+    pub const ALL: [Hook; 2] = [Hook::Display, Hook::Cast];
 
     pub fn name(self) -> &'static str {
         match self {
             Hook::Display => "display",
+            Hook::Cast => "cast",
         }
     }
 }
@@ -278,6 +295,8 @@ pub struct RawMethod {
     pub returns_receiver: bool,
     /// Declared `&mut self`.
     pub changes_receiver: bool,
+    /// An associated function (`Vec::new`, `i64::MAX`): it has no receiver.
+    pub is_static: bool,
     pub decorators: Vec<RawDecorator>,
 }
 
@@ -317,12 +336,25 @@ impl Row {
     }
 }
 
+/// A condition a trait puts on every call of its methods and associated functions on a target (`@js(requires = "key_prim",
+/// reason = "...")`): when the guard does not hold the call is refused with the reason (`{K}` is the key type).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Requirement {
+    pub guard: Guard,
+    pub reason: String,
+}
+
 /// The rows of the migrated types, keyed by (type, method name).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LoweringTable {
     /// By type, then name: a lookup by `&str` allocates nothing.
     rows: BTreeMap<CoreType, BTreeMap<String, Row>>,
     widen: BTreeMap<(CoreType, Target), Widen>,
+    /// The associated functions with a rule (`Vec::new`, `i64::MAX`), by trait name, then name.
+    statics: BTreeMap<String, BTreeMap<String, Row>>,
+    /// The trait that declares the associated functions of a type spelling (`i64` -> `Integer`, `BTreeMap` -> itself).
+    owners: BTreeMap<String, String>,
+    requires: BTreeMap<String, BTreeMap<Target, Requirement>>,
 }
 
 impl LoweringTable {
@@ -331,29 +363,71 @@ impl LoweringTable {
     pub fn from_declarations(traits: &[RawTrait]) -> Result<LoweringTable, String> {
         let mut table = LoweringTable::default();
         for t in traits {
-            let Some(ty) = CoreType::from_trait(&t.name) else {
-                for m in &t.methods {
-                    if let Some(d) = m.decorators.iter().find(|d| is_lowering_decorator(&d.name)) {
-                        return Err(format!("`{}::{}`: `@{}` on a trait that is not a migrated std type (CoreType)", t.name, m.name, d.name));
-                    }
-                }
-                continue;
-            };
+            let ty = CoreType::from_trait(&t.name);
             for d in &t.decorators {
+                if d.name == "owner" {
+                    // `@owner(names = "i8, i16")`: the spellings of the types whose associated functions this trait declares
+                    let names = d.arg("names").ok_or_else(|| format!("trait `{}`: `@owner` takes `names = \"..\"`", t.name))?;
+                    for n in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
+                        table.owners.insert(n.to_string(), t.name.clone());
+                    }
+                    continue;
+                }
                 let target = target_of(&d.name).ok_or_else(|| format!("trait `{}`: decorator `@{}` is not a lowering decorator", t.name, d.name))?;
-                match d.arg("widen") {
-                    Some("f64") if d.args.len() == 1 => {
+                match (d.arg("widen"), d.arg("requires")) {
+                    (Some("f64"), None) if d.args.len() == 1 => {
+                        let ty = ty.ok_or_else(|| format!("trait `{}`: `@{} widen` on a trait that is not a migrated std type", t.name, d.name))?;
                         table.widen.insert((ty, target), Widen::F64);
                     }
-                    other => return Err(format!("trait `{}`: `@{}` takes only `widen = \"f64\"` (got {other:?})", t.name, d.name)),
+                    (None, Some(g)) if d.args.len() == 2 && d.arg("reason").is_some() => {
+                        let guard = Guard::ALL.into_iter().find(|k| k.name() == g).ok_or_else(|| format!("trait `{}`: unknown guard `{g}`", t.name))?;
+                        let reason = d.arg("reason").unwrap_or_default().to_string();
+                        table.requires.entry(t.name.clone()).or_default().insert(target, Requirement { guard, reason });
+                    }
+                    _ => return Err(format!("trait `{}`: `@{}` takes `widen = \"f64\"` or `requires = \"<guard>\", reason = \"..\"`", t.name, d.name)),
                 }
             }
             for m in &t.methods {
-                let row = row_of(&t.name, m)?;
-                table.rows.entry(ty).or_default().insert(m.name.clone(), row);
+                let lowered = m.decorators.iter().any(|d| is_lowering_decorator(&d.name));
+                match ty {
+                    Some(ty) if !m.is_static => {
+                        table.rows.entry(ty).or_default().insert(m.name.clone(), row_of(&t.name, m)?);
+                    }
+                    // an associated function of a migrated type is a row (the gates ask for its rules); of any other trait, only
+                    // when it has rules (`Vec::new`: the other `Vec` methods are not migrated yet)
+                    _ if m.is_static && (ty.is_some() || lowered) => {
+                        table.statics.entry(t.name.clone()).or_default().insert(m.name.clone(), row_of(&t.name, m)?);
+                    }
+                    _ if lowered => return Err(format!("`{}::{}`: `@{}` on a trait that is not a migrated std type (CoreType)", t.name, m.name, m.decorators[0].name)),
+                    _ => {}
+                }
             }
         }
         Ok(table)
+    }
+
+    /// The associated function `name` of the type spelled `owner` (`Vec`, `i64`, `BTreeMap`), with the trait that declares it.
+    pub fn static_row(&self, owner: &str, name: &str) -> Option<(&str, &Row)> {
+        let (trait_name, by_name) = match self.owners.get(owner) {
+            Some(t) => self.statics.get_key_value(t.as_str())?,
+            None => self.statics.get_key_value(owner)?,
+        };
+        Some((trait_name.as_str(), by_name.get(name)?))
+    }
+
+    /// The trait whose associated functions the type spelled `owner` has.
+    pub fn owner_trait<'a>(&'a self, owner: &'a str) -> &'a str {
+        self.owners.get(owner).map_or(owner, String::as_str)
+    }
+
+    /// Every associated function with its trait, in (trait, name) order.
+    pub fn statics(&self) -> impl Iterator<Item = (&str, &Row)> {
+        self.statics.iter().flat_map(|(t, by_name)| by_name.values().map(move |r| (t.as_str(), r)))
+    }
+
+    /// The condition `trait_name` puts on every call on `target`.
+    pub fn requirement(&self, trait_name: &str, target: Target) -> Option<&Requirement> {
+        self.requires.get(trait_name)?.get(&target)
     }
 
     pub fn row(&self, ty: CoreType, name: &str) -> Option<&Row> {
@@ -373,6 +447,7 @@ impl LoweringTable {
 fn is_lowering_decorator(name: &str) -> bool {
     target_of(name).is_some() || name == "example" || name == "internal"
 }
+
 
 fn target_of(name: &str) -> Option<Target> {
     Target::ALL.into_iter().find(|t| t.decorator() == name)
@@ -448,7 +523,7 @@ mod tests {
     }
 
     fn method(name: &str, decorators: Vec<RawDecorator>) -> RawMethod {
-        RawMethod { name: name.into(), params: vec![], returns_receiver: true, changes_receiver: false, decorators }
+        RawMethod { name: name.into(), params: vec![], returns_receiver: true, changes_receiver: false, is_static: false, decorators }
     }
 
     #[test]

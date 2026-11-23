@@ -198,11 +198,11 @@ impl<'e> Lowerer<'e> {
         }
         let mut out = Vec::new();
         for (i, (_, a)) in args.iter().enumerate() {
-            let w = if owner == "String" || owner == "string" { Some(Ty::Str) } else { out.first().map(|p: &PExpr| p.ty.clone()).filter(|_| i > 0) };
+            let w = self.env.surface.declared_static_arg(&owner, name, i).or_else(|| out.first().map(|p: &PExpr| p.ty.clone()).filter(|_| i > 0));
             let v = self.expr(a, w.as_ref())?;
             out.push(self.own(v));
         }
-        match builtins::static_ret(&owner, name, &out, want) {
+        match builtins::static_ret(&self.env.surface, &owner, name, &out, want) {
             Some(ty) => Ok(PExpr::new(ty, PK::StaticCall { owner, name: name.to_string(), args: out })),
             None => self.err(format!("unknown associated function `{owner}::{name}`")),
         }

@@ -1,6 +1,6 @@
 //! Built-in std method / constructor emission for Go (helpers live in `wj_core.go`).
 
-use super::names::{go_string, ident};
+use super::names::ident;
 use super::num;
 use super::Go;
 use crate::codegen::portable::template::{self, Operands, TypeRef};
@@ -41,8 +41,8 @@ impl<'m> Go<'m> {
             Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a, args, ty),
             Ty::Option(_) => self.lowered(CoreType::Option, recv, name, &a, args, ty),
             Ty::Result(..) => self.lowered(CoreType::Result, recv, name, &a, args, ty),
-            Ty::Map(..) => self.map_method(recv, name, &a),
-            Ty::Set(_) => self.set_method(recv, name, &a),
+            Ty::Map(..) => self.lowered(CoreType::Map, recv, name, &a, args, ty),
+            Ty::Set(_) => self.lowered(CoreType::Set, recv, name, &a, args, ty),
             other => self.unsupported(format!("method `{name}` on `{}`", other.describe())),
         }
     }
@@ -165,75 +165,37 @@ impl<'m> Go<'m> {
             Some(Rule::Emit { template, .. }) => {
                 // the receiver's address, for a row that changes it (`{&self}`)
                 let place = if template.contains("{&self}") { Some(self.addr(recv)?) } else { None };
-                let out = template::render_emit(template, &row.params, &mut GoOperands { receiver: &r, place, args: a, arg_exprs: args, widen, recv: &recv.ty, result: ty })?;
+                let mut go_ty = |t: &Ty| self.ty(t);
+                let out = template::render_emit(template, &row.params, &mut GoOperands { receiver: &r, place, args: a, arg_exprs: args, widen, recv: &recv.ty, result: ty, go_ty: &mut go_ty })?;
                 Ok(if widen.is_some() && row.returns_receiver { format!("float32({out})") } else { out })
             }
             Some(Rule::Assign(_)) => self.unsupported(format!("{} method `{name}`: `assign` is a JavaScript place update", ct.noun())),
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
+            Some(Rule::Hook(Hook::Cast)) => self.unsupported(format!("{} method `{name}`: `cast` is the hook of an associated function", ct.noun())),
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no Go rule", ct.noun())),
         }
     }
 
-    fn map_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
-        let r = self.rv(recv)?;
-        Ok(match name {
-            "len" => format!("uint(len({r}))"),
-            "is_empty" => format!("(len({r}) == 0)"),
-            "insert" => format!("wjMapInsert({r}, {}, {})", a[0], a[1]),
-            "get" | "get_mut" => format!("wjMapGet({r}, {})", a[0]),
-            "contains_key" => format!("wjHas({r}, {})", a[0]),
-            "remove" => format!("wjMapRemove({r}, {})", a[0]),
-            "clear" => format!("clear({r})"),
-            "keys" | "into_keys" => format!("wjKeys({r})"),
-            "values" | "values_mut" | "into_values" => format!("wjValues({r})"),
-            "iter" | "iter_mut" | "into_iter" => format!("wjEntries({r})"),
-            _ => return self.unsupported(format!("HashMap method `{name}`")),
-        })
-    }
-
-    fn set_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
-        let r = self.rv(recv)?;
-        Ok(match name {
-            "len" => format!("uint(len({r}))"),
-            "is_empty" => format!("(len({r}) == 0)"),
-            "insert" => format!("wjSetInsert({r}, {})", a[0]),
-            "contains" => format!("wjHas({r}, {})", a[0]),
-            "remove" => format!("wjSetRemove({r}, {})", a[0]),
-            "clear" => format!("clear({r})"),
-            "iter" | "into_iter" => format!("wjKeys({r})"),
-            _ => return self.unsupported(format!("HashSet method `{name}`")),
-        })
-    }
-
-    pub fn builtin_static(&mut self, owner: &str, name: &str, a: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
+    /// A call of an associated function or constant of a std type (`Vec::new`, `i64::MAX`): print its row for Go. `ty` is the
+    /// call's type, which is also the type the function is on (`{R.max}`, `{R.go}`).
+    pub fn builtin_static(&mut self, owner: &str, name: &str, a: &[String], args: &[PExpr], ty: &Ty) -> PResult<String> {
         if let Some(c) = self.ordering_const(owner, name) {
             return Ok(c);
         }
-        if let Some(k) = IntKind::from_name(owner) {
-            let (lo, hi) = num::range_of(k);
-            return match name {
-                "MAX" => Ok(num::lit_int(hi, k)),
-                "MIN" => Ok(num::lit_int(lo, k)),
-                "from" => Ok(num::cast(&args[0].ty, &Ty::Int(k), a)),
-                "from_str_radix" => Ok(format!("wjParseIntRadix[{}]({a})", super::types::int_name(k))),
-                _ => self.unsupported(format!("`{owner}::{name}`")),
-            };
-        }
-        match (owner, name) {
-            ("Vec", "new" | "with_capacity") | ("HashMap" | "BTreeMap" | "HashSet" | "BTreeSet", "new" | "with_capacity") => Ok(format!("{}{{}}", self.ty(ty)?)),
-            ("Vec", "from") => Ok(format!("wjClone({a})")),
-            ("String" | "string", "new" | "with_capacity") => Ok("\"\"".into()),
-            ("String" | "string", "from") => Ok(a.to_string()),
-            ("f32" | "f64", m) if crate::codegen::portable::builtins::float_const(owner, m).is_some() => {
-                Ok(num::float_lit(crate::codegen::portable::builtins::float_const(owner, m).unwrap_or(0.0), owner == "f32"))
+        let m = self.m;
+        let Some((_, row)) = m.lowering.static_row(owner, name) else { return self.unsupported(format!("`{owner}::{name}`")) };
+        match row.select(Target::Go, |g| template::type_guard(g, ty, ty)) {
+            Some(Rule::Emit { template, .. }) => {
+                let mut go_ty = |t: &Ty| self.ty(t);
+                template::render_emit(template, &row.params, &mut GoOperands { receiver: "", place: None, args: a, arg_exprs: args, widen: None, recv: ty, result: ty, go_ty: &mut go_ty })
             }
-            ("f64", "from") => Ok(num::cast(&args[0].ty, &Ty::F64, a)),
-            ("char", "from_u32") => Ok(format!("wjCharFromU32({a})")),
-            _ => {
-                let _ = go_string("");
-                self.unsupported(format!("`{owner}::{name}`"))
-            }
+            Some(Rule::Hook(Hook::Cast)) => match (args.first(), a.first()) {
+                (Some(from), Some(text)) => Ok(num::cast(&from.ty, ty, text)),
+                _ => self.unsupported(format!("`{owner}::{name}` converts its argument")),
+            },
+            Some(Rule::Unsupported(why)) => self.unsupported(format!("`{owner}::{name}`: {why}")),
+            _ => self.unsupported(format!("`{owner}::{name}` has no Go rule")),
         }
     }
 }
@@ -251,6 +213,8 @@ struct GoOperands<'a> {
     widen: Option<Widen>,
     recv: &'a Ty,
     result: &'a Ty,
+    /// The Go spelling of a type (`{R.go}` of a call whose result is not an integer: `map[string]int64`).
+    go_ty: &'a mut dyn FnMut(&Ty) -> PResult<String>,
 }
 
 impl GoOperands<'_> {
@@ -285,6 +249,9 @@ impl Operands for GoOperands<'_> {
     }
 
     fn fact(&mut self, of: TypeRef, fact: Fact) -> PResult<String> {
+        if fact == Fact::Go && of == TypeRef::Result && !matches!(self.result, Ty::Int(_)) {
+            return (self.go_ty)(self.result);
+        }
         match template::int_kind_of(of, self.recv, self.result).and_then(|k| int_fact(k, fact)) {
             Some(text) => Ok(text),
             None => unsupported(format!("the type fact `{}` is not available for this type in Go", fact.name())),

@@ -11,9 +11,21 @@
 // stage C1, docs/design/numeric-width-redesign.md section 7); every entry is checked against rustc by
 // `tests/core_surface_rustc_test.rs`. `slice(start, end)` is the parser's spelling of `x[start..end]` (checked as `&x[a..b]`).
 
+// `Vec`'s methods are not rows yet (stage 6); its associated functions are (a function without a receiver is a row of its
+// trait when it carries rules: `Vec::new()` is the empty list, `{R.go}` the Go type of the result).
 pub trait Vec<T> {
+    @js(emit = "[]")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let v: Vec<i32> = Vec::new()", src = "v.len()", expect = "0")
     fn new() -> Vec<T>;
+    @js(emit = "[]")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let v: Vec<i32> = Vec::with_capacity(8)", src = "v.len()", expect = "0")
     fn with_capacity(capacity: usize) -> Vec<T>;
+    @js(emit = "{items}.slice()")
+    @go(emit = "wjClone({items})")
+    @example(given = "let a: Vec<i32> = [1, 2, 3]; let v: Vec<i32> = Vec::from(a)", src = "v.len()", expect = "3")
+    fn from(items: Vec<T>) -> Vec<T>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -97,20 +109,71 @@ pub trait VecDeque<T> {
     fn contains(self, value: &T) -> bool;
 }
 
+// Maps and sets. `HashMap` and `BTreeMap` are one portable type (iteration is in key order on every target), `HashSet` and
+// `BTreeSet` another: the instance rows are the `HashMap` and `HashSet` traits', the associated functions are each trait's
+// own. A JavaScript `Map` compares its keys by value only for an integer, string, char or bool, so every JavaScript call of a
+// map is refused for another key (`requires`; `{K}` is the key type). The spellings ADR-0039 removed (R010 `iter`, `iter_mut`,
+// `into_iter`; R091 `into_keys`, `into_values`, `values_mut`; R030 `capacity`) have no declaration; `contains_key` stays (the
+// Rust name of the canonical `contains`, and what `m.entry(k).or_insert(v)` lowers to).
+@js(requires = "key_prim", reason = "HashMap/HashSet key type `{K}` (only integer, string, char and bool keys)")
 pub trait HashMap<K, V> {
+    @js(emit = "new Map()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let m: HashMap<i32, i32> = HashMap::new()", src = "m.len()", expect = "0")
     fn new() -> HashMap<K, V>;
+    @js(emit = "new Map()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let m: HashMap<i32, i32> = HashMap::with_capacity(8)", src = "m.is_empty()", expect = "true")
+    fn with_capacity(capacity: usize) -> HashMap<K, V>;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> HashMap<K, V>;
+    @js(emit = "BigInt({self}.size)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10); m.insert(2, 20)", src = "m.len()", expect = "2")
     fn len(self) -> usize;
-    fn capacity(self) -> usize;
+    @js(emit = "({self}.size === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let m: HashMap<i32, i32> = HashMap::new()", src = "m.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "$mapGetOpt({self}, {key})")
+    @go(emit = "wjMapGet({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.get(1).unwrap_or(0)", expect = "10")
     fn get(self, key: &K) -> Option<&V>;
+    @js(emit = "$mapGetOpt({self}, {key})")
+    @go(emit = "wjMapGet({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.get_mut(1).unwrap_or(0)", expect = "10")
     fn get_mut(&mut self, key: &K) -> Option<&mut V>;
+    @js(emit = "$mapInsert({self}, {key}, {value})")
+    @go(emit = "wjMapInsert({self}, {key}, {value})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.insert(1, 11).unwrap_or(0)", expect = "10")
     fn insert(&mut self, key: K, value: V) -> Option<V>;
+    @js(emit = "$mapRemove({self}, {key})")
+    @go(emit = "wjMapRemove({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.remove(1).unwrap_or(0)", expect = "10")
     fn remove(&mut self, key: &K) -> Option<V>;
+    @js(emit = "{self}.has({key})")
+    @go(emit = "wjHas({self}, {key})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10)", src = "m.contains_key(1)", expect = "true")
     fn contains_key(self, key: &K) -> bool;
+    @js(emit = "{self}.clear()")
+    @go(emit = "clear({self})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(1, 10); m.clear()", src = "m.len()", expect = "0")
+    fn clear(&mut self);
+    @js(emit = "$sortedKeys({self})")
+    @go(emit = "wjKeys({self})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.keys().sum()", expect = "3")
+    fn keys(self) -> Iterator<&K>;
+    @js(emit = "$sortedValues({self})")
+    @go(emit = "wjValues({self})")
+    @example(given = "let mut m: HashMap<i32, i32> = HashMap::new(); m.insert(2, 20); m.insert(1, 10)", src = "m.values().sum()", expect = "30")
+    fn values(self) -> Iterator<&V>;
 }
 
+@js(requires = "key_prim", reason = "HashMap/HashSet key type `{K}` (only integer, string, char and bool keys)")
 pub trait BTreeMap<K, V> {
+    @js(emit = "new Map()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let m: BTreeMap<i32, i32> = BTreeMap::new()", src = "m.len()", expect = "0")
     fn new() -> BTreeMap<K, V>;
     fn clone(self) -> BTreeMap<K, V>;
     fn len(self) -> usize;
@@ -123,17 +186,46 @@ pub trait BTreeMap<K, V> {
 }
 
 pub trait HashSet<T> {
+    @js(emit = "new Set()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let s: HashSet<i32> = HashSet::new()", src = "s.len()", expect = "0")
     fn new() -> HashSet<T>;
+    @js(emit = "new Set()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let s: HashSet<i32> = HashSet::with_capacity(8)", src = "s.is_empty()", expect = "true")
+    fn with_capacity(capacity: usize) -> HashSet<T>;
+    @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> HashSet<T>;
+    @js(emit = "BigInt({self}.size)")
+    @go(emit = "uint(len({self}))")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1); s.insert(2)", src = "s.len()", expect = "2")
     fn len(self) -> usize;
-    fn capacity(self) -> usize;
+    @js(emit = "({self}.size === 0)")
+    @go(emit = "(len({self}) == 0)")
+    @example(given = "let s: HashSet<i32> = HashSet::new()", src = "s.is_empty()", expect = "true")
     fn is_empty(self) -> bool;
+    @js(emit = "$setInsert({self}, {value})")
+    @go(emit = "wjSetInsert({self}, {value})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1)", src = "s.insert(1)", expect = "false")
     fn insert(&mut self, value: T) -> bool;
+    @js(emit = "{self}.delete({value})")
+    @go(emit = "wjSetRemove({self}, {value})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1)", src = "s.remove(1)", expect = "true")
     fn remove(&mut self, value: &T) -> bool;
+    @js(emit = "{self}.has({value})")
+    @go(emit = "wjHas({self}, {value})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1)", src = "s.contains(1)", expect = "true")
     fn contains(self, value: &T) -> bool;
+    @js(emit = "{self}.clear()")
+    @go(emit = "clear({self})")
+    @example(given = "let mut s: HashSet<i32> = HashSet::new(); s.insert(1); s.clear()", src = "s.len()", expect = "0")
+    fn clear(&mut self);
 }
 
 pub trait BTreeSet<T> {
+    @js(emit = "new Set()")
+    @go(emit = "{R.go}{{}}")
+    @example(given = "let s: BTreeSet<i32> = BTreeSet::new()", src = "s.len()", expect = "0")
     fn new() -> BTreeSet<T>;
     fn clone(self) -> BTreeSet<T>;
     fn len(self) -> usize;
@@ -284,8 +376,20 @@ pub trait Result<T, E> {
 // (`to_owned`, `as_str`, `into_string`, `substring`, `as_bytes`, `to_ascii_uppercase`, ...) have no row: a portable backend
 // refuses them; `push_str` and `capacity` stay declared for the Rust side (the receiver-mode check reads them) and are
 // `unsupported` on the portable targets.
+@owner(names = "string")
 pub trait String {
+    @js(emit = "\"\"")
+    @go(emit = "\"\"")
+    @example(src = "String::new().len()", expect = "0")
     fn new() -> String;
+    @js(emit = "\"\"")
+    @go(emit = "\"\"")
+    @example(src = "String::with_capacity(4).len()", expect = "0")
+    fn with_capacity(capacity: usize) -> String;
+    @js(emit = "{value}")
+    @go(emit = "{value}")
+    @example(src = "String::from(\"abc\").len()", expect = "3")
+    fn from(value: string) -> String;
     @internal(reason = "a copy: `clone` is lowered to a copy of the value before any emitter sees it")
     fn clone(self) -> String;
     @js(emit = "BigInt($strlen({self}))")
@@ -416,7 +520,12 @@ pub trait String {
 // `char`'s `to_uppercase` / `to_lowercase` are Rust iterators over the case-mapped characters, lowered to the string they
 // spell (`@rustc(tail = ..)` is the adapter the rustc gate adds to Rust's result to get the declared one). The spellings
 // ADR-0039 removed (`is_ascii_digit`, `is_numeric`, `is_ascii_alphabetic`, `len_utf8`, `to_ascii_uppercase`, ...) have no row.
+@owner(names = "char")
 pub trait Char {
+    @js(emit = "$charFromU32({value})")
+    @go(emit = "wjCharFromU32({value})")
+    @example(src = "char::from_u32(65).unwrap_or('?')", expect = "A")
+    fn from_u32(value: u32) -> Option<char>;
     @js(emit = "/^\\p{{L}}$/u.test({self})")
     @go(emit = "wjIsAlphabetic({self})")
     @example(given = "let c: char = 'q'", src = "c.is_alphabetic()", expect = "true")
@@ -537,7 +646,29 @@ pub trait Instant {
 // expression that is wrapped into `T`'s range (two's complement). `when = "t_wide"` is a 64-bit receiver (a BigInt in
 // JavaScript), `t_i32` / `t_u32` the 32-bit ones `Math.imul` multiplies. A method with `unsupported` has no lowering on that
 // target yet; the reason is the diagnostic. An `@example` may declare the typed local it uses with `given = "let x: u8 = 250"`.
+@owner(names = "i8, i16, i32, i64, u8, u16, u32, u64, usize, isize")
 pub trait Integer<T> {
+    // Associated functions and constants of the integer types (`i64::MAX`). A constant is declared as a function without
+    // parameters and marked `@constant` (Rust spells it without the call); `{R.max}` is the type's bound printed by the target.
+    @constant
+    @js(emit = "{R.max}")
+    @go(emit = "{R.max}")
+    @example(src = "i32::MAX", expect = "2147483647")
+    fn MAX() -> T;
+    @constant
+    @js(emit = "{R.min}")
+    @go(emit = "{R.min}")
+    @example(src = "i8::MIN", expect = "-128")
+    fn MIN() -> T;
+    @js(hook = "cast")
+    @go(hook = "cast")
+    @example(given = "let n: i32 = 7", src = "i64::from(n)", expect = "7")
+    fn from<U>(value: U) -> T;
+    @js(emit = "$parseIntRadix({s}, {radix}, {O.lo}, {O.hi}, {O.wide})")
+    @go(emit = "wjParseIntRadix[{O.go}]({s}, {radix})")
+    @example(src = "i32::from_str_radix(\"ff\", 16).unwrap_or(0)", expect = "255")
+    @rustc(ret = "Result<i64, _>")
+    fn from_str_radix(s: &string, radix: u32) -> Result<T, string>;
     @js(emit = "({self} < {T.zero} ? {T.chk}(-{self}) : {self})")
     @go(emit = "wjAbs({self})")
     @example(given = "let x: i32 = -7", src = "x.abs()", expect = "7")
@@ -718,13 +849,90 @@ pub trait Integer<T> {
 
 // Methods whose result type depends on the float's width (`f32::to_bits` is a `u32`, `f64::to_bits` a `u64`): one
 // trait per width, consulted before `Float<T>`.
+@owner(names = "f32")
 pub trait F32 {
+    @constant
+    @js(emit = "Math.fround(3.4028234663852886e38)")
+    @go(emit = "float32(3.4028234663852886e38)")
+    @example(src = "f32::MAX > 1000000.0", expect = "true")
+    fn MAX() -> f32;
+    @constant
+    @js(emit = "Math.fround(-3.4028234663852886e38)")
+    @go(emit = "float32(-3.4028234663852886e38)")
+    @example(src = "f32::MIN < -1000000.0", expect = "true")
+    fn MIN() -> f32;
+    @constant
+    @js(emit = "Math.fround(1.1920928955078125e-7)")
+    @go(emit = "float32(1.1920928955078125e-7)")
+    @example(src = "f32::EPSILON < 0.001", expect = "true")
+    fn EPSILON() -> f32;
+    @constant
+    @js(emit = "Math.fround(1.1754943508222875e-38)")
+    @go(emit = "float32(1.1754943508222875e-38)")
+    @example(src = "f32::MIN_POSITIVE > 0.0", expect = "true")
+    fn MIN_POSITIVE() -> f32;
+    @constant
+    @js(emit = "Math.fround(Infinity)")
+    @go(emit = "float32(wjInf(1))")
+    @example(src = "f32::INFINITY.is_infinite()", expect = "true")
+    fn INFINITY() -> f32;
+    @constant
+    @js(emit = "Math.fround((-Infinity))")
+    @go(emit = "float32(wjInf(-1))")
+    @example(src = "f32::NEG_INFINITY < 0.0", expect = "true")
+    fn NEG_INFINITY() -> f32;
+    @constant
+    @js(emit = "Math.fround(NaN)")
+    @go(emit = "float32(wjNaN())")
+    @example(src = "f32::NAN.is_nan()", expect = "true")
+    fn NAN() -> f32;
     fn to_bits(self) -> u32;
     fn to_le_bytes(self) -> Vec<u8>;
     fn to_be_bytes(self) -> Vec<u8>;
 }
 
+@owner(names = "f64")
 pub trait F64 {
+    @constant
+    @js(emit = "1.7976931348623157e308")
+    @go(emit = "float64(1.7976931348623157e308)")
+    @example(src = "f64::MAX > 1000000.0", expect = "true")
+    fn MAX() -> f64;
+    @constant
+    @js(emit = "(-1.7976931348623157e308)")
+    @go(emit = "float64(-1.7976931348623157e308)")
+    @example(src = "f64::MIN < -1000000.0", expect = "true")
+    fn MIN() -> f64;
+    @constant
+    @js(emit = "2.220446049250313e-16")
+    @go(emit = "float64(2.220446049250313e-16)")
+    @example(src = "f64::EPSILON < 0.001", expect = "true")
+    fn EPSILON() -> f64;
+    @constant
+    @js(emit = "2.2250738585072014e-308")
+    @go(emit = "float64(2.2250738585072014e-308)")
+    @example(src = "f64::MIN_POSITIVE > 0.0", expect = "true")
+    fn MIN_POSITIVE() -> f64;
+    @constant
+    @js(emit = "Infinity")
+    @go(emit = "float64(wjInf(1))")
+    @example(src = "f64::INFINITY.is_infinite()", expect = "true")
+    fn INFINITY() -> f64;
+    @constant
+    @js(emit = "(-Infinity)")
+    @go(emit = "float64(wjInf(-1))")
+    @example(src = "f64::NEG_INFINITY < 0.0", expect = "true")
+    fn NEG_INFINITY() -> f64;
+    @constant
+    @js(emit = "NaN")
+    @go(emit = "float64(wjNaN())")
+    @example(src = "f64::NAN.is_nan()", expect = "true")
+    fn NAN() -> f64;
+    @js(hook = "cast")
+    @go(hook = "cast")
+    @example(given = "let n: i32 = 7", src = "f64::from(n)", expect = "7")
+    @rustc(arg = "i32")
+    fn from<U>(value: U) -> f64;
     fn to_bits(self) -> u64;
     fn to_le_bytes(self) -> Vec<u8>;
     fn to_be_bytes(self) -> Vec<u8>;

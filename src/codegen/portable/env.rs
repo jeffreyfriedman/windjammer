@@ -63,6 +63,8 @@ impl StdSurface {
             Ty::Str => return self.declared_on_trait(CoreType::String, &[], name, args, want),
             Ty::Option(t) => return self.declared_on_trait(CoreType::Option, &[(**t).clone()], name, args, want),
             Ty::Result(t, e) => return self.declared_on_trait(CoreType::Result, &[(**t).clone(), (**e).clone()], name, args, want),
+            Ty::Map(k, v) => return self.declared_on_trait(CoreType::Map, &[(**k).clone(), (**v).clone()], name, args, want),
+            Ty::Set(t) => return self.declared_on_trait(CoreType::Set, &[(**t).clone()], name, args, want),
             _ => return None,
         };
         // Only a method with a row: the width traits (`f32::to_bits`) are declared too, but have no lowering yet.
@@ -83,6 +85,8 @@ impl StdSurface {
             }
             Ty::Option(t) => (CoreType::Option, vec![(**t).clone()]),
             Ty::Result(t, e) => (CoreType::Result, vec![(**t).clone(), (**e).clone()]),
+            Ty::Map(k, v) => (CoreType::Map, vec![(**k).clone(), (**v).clone()]),
+            Ty::Set(t) => (CoreType::Set, vec![(**t).clone()]),
             _ => return None,
         };
         self.lowering.row(core_type, name)?;
@@ -109,6 +113,42 @@ impl StdSurface {
             Ty::Fn(params, ret) => Ty::Fn(params.iter().map(open).collect(), Box::new(open(&ret))),
             other => other,
         })
+    }
+
+    /// The result type of the associated function `owner::name(args)` (`Vec::new`, `HashMap::with_capacity`, `i64::MAX`,
+    /// `char::from_u32`) as its declaration gives it, `owner` being the type's spelling. The type's generics come from the
+    /// owner when it is a primitive (`Integer<T>` of `i64`: `T` is `i64`), else from the expected type (`HashMap<K, V>`
+    /// against `Map<string, i32>`), and stay unknown when nothing says (`Vec::new()` alone is a `Vec<?>`); the function's own
+    /// generics from the arguments. `None` when the surface declares no such function with rules.
+    pub fn declared_static_ret(&self, owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
+        let (trait_name, _) = self.lowering.static_row(owner, name)?;
+        let (type_generics, method_generics, params, ret) = self.core.declared_static(trait_name, name)?;
+        let ret = ret.unwrap_or(crate::parser::Type::Tuple(vec![]));
+        let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
+        let ty = from_ast(&ret, &generics, &Aliases::default());
+        let mut bound: Vec<Option<Ty>> = vec![None; generics.len()];
+        let owner_ty = from_ast(&crate::parser::Type::Custom(owner.to_string()), &[], &Aliases::default());
+        if type_generics.len() == 1 && !matches!(owner_ty, Ty::Adt(..)) {
+            bound[0] = Some(owner_ty);
+        }
+        for (param, arg) in params.iter().zip(args) {
+            bind_generics(&from_ast(param, &generics, &Aliases::default()), &arg.ty, &generics, &mut bound, true);
+        }
+        if let Some(want) = want {
+            bind_generics(&ty, want, &generics, &mut bound, false);
+        }
+        let all: Vec<Ty> = bound.into_iter().map(|b| b.unwrap_or(Ty::Unknown)).collect();
+        Some(ty.subst(&generics, &all))
+    }
+
+    /// The expected type of argument `index` of `owner::name(..)` as the declaration gives it (`String::from` takes a string,
+    /// `from_str_radix` a `u32` radix); `None` for a bare function generic (`i64::from(x)` takes anything) or no such function.
+    pub fn declared_static_arg(&self, owner: &str, name: &str, index: usize) -> Option<Ty> {
+        let (trait_name, _) = self.lowering.static_row(owner, name)?;
+        let (type_generics, method_generics, params, _) = self.core.declared_static(trait_name, name)?;
+        let generics: Vec<String> = type_generics.iter().chain(&method_generics).cloned().collect();
+        let want = from_ast(params.get(index)?, &generics, &Aliases::default());
+        (!matches!(&want, Ty::Param(_))).then_some(want).map(|t| t.subst(&generics, &vec![Ty::Unknown; generics.len()])).filter(informs)
     }
 
     /// The declared result of `name` on a type of `std/rust_core.wji` whose generics (`recv_args` for the trait's, then
@@ -167,7 +207,11 @@ fn bind_generics(pattern: &Ty, found: &Ty, generics: &[String], bound: &mut [Opt
             bind_generics(a, wa, generics, bound, lenient);
             bind_generics(b, wb, generics, bound, lenient);
         }
-        (Ty::Option(a), Ty::Option(wa)) | (Ty::Vec(a), Ty::Vec(wa)) | (Ty::Iter(a), Ty::Iter(wa)) => bind_generics(a, wa, generics, bound, lenient),
+        (Ty::Option(a), Ty::Option(wa)) | (Ty::Vec(a), Ty::Vec(wa)) | (Ty::Iter(a), Ty::Iter(wa)) | (Ty::Set(a), Ty::Set(wa)) => bind_generics(a, wa, generics, bound, lenient),
+        (Ty::Map(a, b), Ty::Map(wa, wb)) => {
+            bind_generics(a, wa, generics, bound, lenient);
+            bind_generics(b, wb, generics, bound, lenient);
+        }
         (Ty::Fn(pa, pr), Ty::Fn(wa, wr)) => {
             for (p, w) in pa.iter().zip(wa) {
                 bind_generics(p, w, generics, bound, lenient);

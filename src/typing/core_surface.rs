@@ -102,13 +102,14 @@ impl CoreSurface {
     /// Every declared trait with its decorators and methods, in name order (the input of [`LoweringTable`]).
     pub fn declared_traits(&self) -> Vec<RawTrait> {
         let mut by_trait: BTreeMap<&str, Vec<RawMethod>> = BTreeMap::new();
-        // an associated function (`String::new()`) is not a method: it has no receiver to lower
-        for ((t, m), e) in self.table.iter().filter(|(_, e)| !e.is_static) {
+        // an associated function (`String::new()`) has no receiver: its row is flagged `is_static`
+        for ((t, m), e) in self.table.iter() {
             by_trait.entry(t).or_default().push(RawMethod {
                 name: m.clone(),
                 params: e.param_names.clone(),
                 returns_receiver: e.ret.as_ref().is_some_and(is_receiver_type),
                 changes_receiver: e.changes_receiver,
+                is_static: e.is_static,
                 decorators: e.decorators.clone(),
             });
         }

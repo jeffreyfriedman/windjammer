@@ -33,6 +33,13 @@ pub fn type_guard(guard: Guard, recv: &Ty, result: &Ty) -> bool {
         (Guard::OkF32, _) => matches!(ok(), Some(Ty::F32)),
         (Guard::OkF64, _) => matches!(ok(), Some(Ty::F64)),
         (Guard::OkBool, _) => matches!(ok(), Some(Ty::Bool)),
+        (Guard::KeyPrim, _) => {
+            let key = |t: &Ty| match t {
+                Ty::Map(k, _) => Some((**k).clone()),
+                _ => None,
+            };
+            matches!(key(recv).or_else(|| key(result)), Some(Ty::Int(_) | Ty::Str | Ty::Char | Ty::Bool))
+        }
         _ => false,
     }
 }

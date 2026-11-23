@@ -19,12 +19,12 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use windjammer::codegen::portable::template::{Hole, Template};
 use windjammer::interpreter::builtins::{Kind, Registry};
-use windjammer::stdlib_surface::lowering::{CoreType, Fact, Guard, Hook, LoweringTable, Modifier, RawTrait, Rule, Target};
+use windjammer::stdlib_surface::lowering::{CoreType, Fact, Guard, Hook, LoweringTable, Modifier, RawTrait, Row, Rule, Target};
 use windjammer::typing::core_surface::CoreSurface;
 
 /// The types whose methods are migrated: every declaration of these traits needs a rule per target. A stage adds its
 /// types here (and to `CoreType`); the list never shrinks.
-const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result];
+const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result, CoreType::Map, CoreType::Set];
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -48,7 +48,7 @@ fn table() -> LoweringTable {
 
 fn declared(core: &CoreSurface, ty: CoreType) -> Vec<String> {
     let traits: Vec<RawTrait> = core.declared_traits();
-    traits.into_iter().filter(|t| t.name == ty.trait_name()).flat_map(|t| t.methods.into_iter().map(|m| m.name)).collect()
+    traits.into_iter().filter(|t| t.name == ty.trait_name()).flat_map(|t| t.methods.into_iter().filter(|m| !m.is_static).map(|m| m.name)).collect()
 }
 
 #[test]
@@ -74,54 +74,73 @@ fn row_problems(core: &CoreSurface, table: &LoweringTable) -> Vec<String> {
                 bad.push(format!("{id}: no row"));
                 continue;
             };
-            // an `@internal` row without rules is a form the compiler lowers before any emitter sees it (`clone` is a copy,
-            // `x[a..b]` an index): it has no rule and no example to hold. One with rules (`powi`) is held to them.
-            if row.internal.is_some() && Target::ALL.iter().all(|t| row.rules(*t).is_empty()) {
-                continue;
-            }
-            for target in Target::ALL {
-                let rules = row.rules(target);
-                if rules.is_empty() {
-                    bad.push(format!("{id}: no `@{}` rule (give it `emit`, `hook` or `unsupported = \"reason\"`)", target.decorator()));
-                    continue;
-                }
-                if let Some(last) = rules.last() {
-                    if matches!(last, Rule::Emit { when, .. } if !when.is_empty()) {
-                        bad.push(format!("{id}: the last `@{}` rule is guarded; a `when` list ends with an unguarded rule", target.decorator()));
+            check_row(&id, row, &mut bad);
+        }
+    }
+    // an associated function (`Vec::new`, `i64::MAX`) is held to the same rules, and a template of it has no receiver
+    for (trait_name, row) in table.statics() {
+        let id = format!("{trait_name}::{}", row.name);
+        check_row(&id, row, &mut bad);
+        for target in Target::ALL {
+            for rule in row.rules(target) {
+                if let Rule::Emit { template, .. } = rule {
+                    if Template::parse(template).is_ok_and(|t| t.holes().any(|h| matches!(h, Hole::SelfValue(_) | Hole::SelfPlace))) {
+                        bad.push(format!("{id}: `{template}` names the receiver; an associated function has none"));
                     }
                 }
-                for rule in rules {
-                    match rule {
-                        Rule::Unsupported(reason) if reason.trim().is_empty() => bad.push(format!("{id}: empty `unsupported` reason on `@{}`", target.decorator())),
-                        Rule::Emit { template, .. } => {
-                            if template.contains("${") {
-                                bad.push(format!("{id}: `${{` in template `{template}`"));
-                            }
-                            match Template::parse(template) {
-                                Err(e) => bad.push(format!("{id}: {e}")),
-                                Ok(t) => {
-                                    for h in t.holes() {
-                                        if let Hole::Arg(name, _) = h {
-                                            if !row.params.contains(name) {
-                                                bad.push(format!("{id}: `{{{name}}}` is not a declared parameter (declared: {:?})", row.params));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            match &row.example {
-                None => bad.push(format!("{id}: no `@example` (G3 builds its program from it)")),
-                Some(e) if e.src.trim().is_empty() || e.expect.trim().is_empty() => bad.push(format!("{id}: empty `@example`")),
-                _ => {}
             }
         }
     }
     bad
+}
+
+/// The rules and the example of one row (an instance method or an associated function): everything G1 holds a row to.
+fn check_row(id: &str, row: &Row, bad: &mut Vec<String>) {
+    // an `@internal` row without rules is a form the compiler lowers before any emitter sees it (`clone` is a copy,
+    // `x[a..b]` an index): it has no rule and no example to hold. One with rules (`powi`) is held to them.
+    if row.internal.is_some() && Target::ALL.iter().all(|t| row.rules(*t).is_empty()) {
+        return;
+    }
+    for target in Target::ALL {
+        let rules = row.rules(target);
+        if rules.is_empty() {
+            bad.push(format!("{id}: no `@{}` rule (give it `emit`, `hook` or `unsupported = \"reason\"`)", target.decorator()));
+            return;
+        }
+        if let Some(last) = rules.last() {
+            if matches!(last, Rule::Emit { when, .. } if !when.is_empty()) {
+                bad.push(format!("{id}: the last `@{}` rule is guarded; a `when` list ends with an unguarded rule", target.decorator()));
+            }
+        }
+        for rule in rules {
+            match rule {
+                Rule::Unsupported(reason) if reason.trim().is_empty() => bad.push(format!("{id}: empty `unsupported` reason on `@{}`", target.decorator())),
+                Rule::Emit { template, .. } => {
+                    if template.contains("${") {
+                        bad.push(format!("{id}: `${{` in template `{template}`"));
+                    }
+                    match Template::parse(template) {
+                        Err(e) => bad.push(format!("{id}: {e}")),
+                        Ok(t) => {
+                            for h in t.holes() {
+                                if let Hole::Arg(name, _) = h {
+                                    if !row.params.contains(name) {
+                                        bad.push(format!("{id}: `{{{name}}}` is not a declared parameter (declared: {:?})", row.params));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    match &row.example {
+        None => bad.push(format!("{id}: no `@example` (G3 builds its program from it)")),
+        Some(e) if e.src.trim().is_empty() || e.expect.trim().is_empty() => bad.push(format!("{id}: empty `@example`")),
+        _ => {}
+    }
 }
 
 #[test]
@@ -181,6 +200,8 @@ fn kind_of(ty: CoreType) -> Kind {
         CoreType::String => Kind::Str,
         CoreType::Option => Kind::Option,
         CoreType::Result => Kind::Result,
+        CoreType::Map => Kind::Map,
+        CoreType::Set => Kind::Set,
     }
 }
 
@@ -280,6 +301,35 @@ const REGISTERED_WITHOUT_ROW: &[(CoreType, &[&str])] = &[
     // Result: `expect_err` (R044), `is_ok_and` (R046), `map_or` (R045), `or_else` (R047) are removed spellings; `as_ref` and the
     // others are Rust adapters the interpreter accepts.
     (CoreType::Result, &["as_deref", "as_ref", "cloned", "copied", "expect_err", "is_ok_and", "iter", "map_or", "or_else"]),
+    // Map: `iter`, `iter_mut`, `into_iter` (R010), `into_keys`, `into_values`, `values_mut`, `remove_entry` (R091) and `get_or_insert`
+    // (R092) are removed spellings with no declaration; `entry` is lowered as a statement (`m.entry(k).or_insert(v)`, portable/lower/stmt.rs);
+    // the others are canonical rows (`first_key_value`, `range`, `retain`, `extend`, ...) without a lowering yet.
+    (
+        CoreType::Map,
+        &[
+            "entry",
+            "extend",
+            "first_key_value",
+            "get_or_insert",
+            "into_iter",
+            "into_keys",
+            "into_values",
+            "iter",
+            "iter_mut",
+            "last_key_value",
+            "pop_first",
+            "pop_last",
+            "range",
+            "remove_entry",
+            "retain",
+            "values_mut",
+        ],
+    ),
+    // Set: `iter` and `into_iter` are removed spellings (R010); the others are canonical rows without a lowering yet.
+    (
+        CoreType::Set,
+        &["difference", "extend", "first", "intersection", "into_iter", "is_disjoint", "is_subset", "is_superset", "iter", "last", "retain", "symmetric_difference", "take", "union"],
+    ),
 ];
 
 #[test]
@@ -389,15 +439,18 @@ fn shim_files(target: Target) -> &'static [&'static str] {
 }
 
 fn row_templates(table: &LoweringTable, target: Target) -> Vec<(String, String)> {
-    table
-        .rows()
-        .flat_map(|(ty, row)| {
-            row.rules(target).iter().filter_map(move |r| match r {
-                Rule::Emit { template, .. } | Rule::Assign(template) => Some((format!("{}::{}", ty.trait_name(), row.name), template.clone())),
+    let templates = |id: String, row: &windjammer::stdlib_surface::lowering::Row| -> Vec<(String, String)> {
+        row.rules(target)
+            .iter()
+            .filter_map(|r| match r {
+                Rule::Emit { template, .. } | Rule::Assign(template) => Some((id.clone(), template.clone())),
                 _ => None,
             })
-        })
-        .collect()
+            .collect()
+    };
+    let methods = table.rows().flat_map(|(ty, row)| templates(format!("{}::{}", ty.trait_name(), row.name), row));
+    let statics = table.statics().flat_map(|(t, row)| templates(format!("{t}::{}", row.name), row));
+    methods.chain(statics).collect()
 }
 
 #[test]
@@ -432,7 +485,8 @@ const DEAD_HELPERS_JS: &[&str] = &["$asciiLower", "$asciiUpper", "$optMapOr"];
 /// functions of `portable/stdlib.rs`): no literal names them, so a text search cannot tell them dead. The module-function
 /// stage (7) turns them into rows and removes this exemption.
 const DYNAMIC_PREFIXES: &[&str] = &["$std_", "$caps_", "wjstd_", "wjcaps_"];
-const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper", "wjOptIsSomeAnd", "wjOptMapOr"];
+/// Stage 5 dropped a map's `iter` (ADR-0039 R010): Go's `wjEntries` is dead for the same reason (`for (k, v) in m` is `$sortedEntries` in JavaScript, a range in Go).
+const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper", "wjEntries", "wjOptIsSomeAnd", "wjOptMapOr"];
 
 #[test]
 fn no_shim_helper_is_dead() {
@@ -506,13 +560,13 @@ fn variants(source: &str, name: &str) -> Vec<String> {
 /// A new variant of one of these needs this test edited with the reason: the vocabulary names type shapes and
 /// emitter capabilities, never std methods (section 2.3 of the design).
 const VOCABULARY: &[(&str, usize, &str)] = &[
-    ("Guard", 9, "ok_int, ok_f32, ok_f64, ok_bool: the `Ok` type of a `Result` result (`parse::<i32>()` picks its parser by it); elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it"),
-    ("Hook", 1, "display: the type-directed `to_string` emitter; `clone` joins with the Vec stage"),
+    ("Guard", 10, "ok_int, ok_f32, ok_f64, ok_bool: the `Ok` type of a `Result` result (`parse::<i32>()` picks its parser by it); elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it; key_prim: a map key a JavaScript `Map` compares by value (the `requires` of the map traits)"),
+    ("Hook", 2, "display: the type-directed `to_string` emitter; cast: the numeric conversion `i64::from(x)` / `f64::from(x)` prints from the argument's and the result's types (`num::cast`); `clone` joins with the Vec stage"),
     ("Modifier", 3, "f64: Go's operand widening for Float<T>; str: a `char` operand where Go wants a string (`string(rune(c))`); num: an integer JavaScript wants as a Number (`Number(n)`, a BigInt is not a length)"),
     ("Fact", 14, "dbg: the target's debug formatter of a type, asked of a `Result`'s error type (`{E.dbg}`: `unwrap` and `expect` print the error with it; it needs the type, so a template cannot spell it, and Go's runtime formats errors itself); lo, hi: the bounds as BigInt literals (`-128n`: what `$parseInt` compares in, whatever the width); bits signed wide min max zero one chk go: the numeric helpers' facts of the Integer rows; wrap_open, wrap_close: the text that brackets an expression wrapped into T's range (asIntN(64, ..), `(.. | 0)`, `((.. << 24) >> 24)`: a template is linear, so the bracket is two facts)"),
     ("Rule", 4, "Emit, Assign, Hook, Unsupported; `Assign` is JavaScript's place update (`(s = s + c, undefined)` for a string's `push`)"),
     ("Target", 2, "Js, Go; TypeScript uses the JavaScript rules; `Rust` joins when the Rust backend reads the table"),
-    ("CoreType", 6, "one per migrated std type (a stage adds its types): Float, Integer, Char, String, Option, Result"),
+    ("CoreType", 8, "one per migrated std type (a stage adds its types): Float, Integer, Char, String, Option, Result, Map (HashMap and BTreeMap), Set (HashSet and BTreeSet)"),
     ("Widen", 1, "F64"),
 ];
 
@@ -561,9 +615,7 @@ struct StdSurfaceToml {
 /// that spell a removed form carry `@internal` instead.)
 const REMOVED_SPELLED_WITHOUT_INTERNAL: &[&str] = &[
     "BTreeMap::contains_key",
-    "HashMap::capacity",
     "HashMap::contains_key",
-    "HashSet::capacity",
     "Iterator::cloned",
     "Iterator::copied",
     "Iterator::for_each",
@@ -604,7 +656,7 @@ fn removed_spellings(core: &CoreSurface) -> BTreeSet<String> {
     let removed = removed_forms();
     let mut out = BTreeSet::new();
     for t in core.declared_traits() {
-        for m in &t.methods {
+        for m in t.methods.iter().filter(|m| !m.is_static) {
             let samples = [format!("x.{}(", m.name), format!("x.{}()", m.name)];
             let internal = m.decorators.iter().any(|d| d.name == "internal");
             // the pattern must spell the method call itself (`\.to_owned\(`: the match includes the dot at index 1), not a
@@ -651,6 +703,13 @@ const ROWS_WITHOUT_ONE_DECLARATION: &[(CoreType, &str, &[&str])] = &[
     ),
     (CoreType::Option, "Option", &["flatten", "or", "replace", "zip"]),
     (CoreType::Result, "Result", &[]),
+    // Map: `new` is an associated function (its row is a static); `entry` is lowered as a statement; the others have no lowering yet.
+    (CoreType::Map, "HashMap", &["entry", "extend", "new", "retain"]),
+    (
+        CoreType::Set,
+        "HashSet",
+        &["difference", "extend", "intersection", "is_disjoint", "is_subset", "is_superset", "new", "retain", "symmetric_difference", "union"],
+    ),
 ];
 
 #[derive(serde::Deserialize)]

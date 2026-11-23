@@ -86,15 +86,33 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         // An associated function (`Vec::new`) is called on the type, with its generics instantiated.
         if surface.is_static(ty, method) {
             let (generics, _, params, ret) = surface.declared_static(ty, method).unwrap();
-            let args: Vec<String> = params.iter().map(|p| format!("arg::<{}>()", rust(p, false))).collect();
-            let ret_ty = ret.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into());
-            // The `Thread` trait declares the `std::thread` module's functions.
+            // `@rustc(arg = "i32")`: the type a function-generic argument is checked with (`f64::from` takes no `i64`);
+            // `@rustc(ret = "..")`: the result as Rust spells it (`from_str_radix` fails with a `ParseIntError`)
+            let rustc_arg = |key: &str| surface.decorators(ty, method).iter().find(|d| d.name == "rustc").and_then(|d| d.args.iter().find(|(k, _)| k == key)).map(|(_, v)| v.clone());
+            let args: Vec<String> = params
+                .iter()
+                .map(|p| match rustc_arg("arg") {
+                    Some(a) => format!("arg::<{a}>()"),
+                    None => format!("arg::<{}>()", rust(p, false)),
+                })
+                .collect();
+            let ret_ty = rustc_arg("ret").or_else(|| ret.map(|r| rust(&r, false))).unwrap_or_else(|| "()".into());
+            // The `Thread` trait declares the `std::thread` module's functions; `Integer`, `F32`, `F64` and `Char` are the primitive types.
             let path = match ty.as_str() {
                 "Thread" => "thread".to_string(),
                 "Sync" => "sync".to_string(),
+                "Integer" => "i64".to_string(),
+                "F32" => "f32".to_string(),
+                "F64" => "f64".to_string(),
+                "Char" => "char".to_string(),
                 _ => receiver(ty, &generics, false).replacen('<', "::<", 1),
             };
-            src.push_str(&format!("fn e{i}() {{ let _x: {ret_ty} = {path}::{method}({}); }}\n", args.join(", ")));
+            // `@constant`: an associated constant (`i64::MAX`), written without a call
+            if surface.decorators(ty, method).iter().any(|d| d.name == "constant") {
+                src.push_str(&format!("fn e{i}() {{ let _x: {ret_ty} = {path}::{method}; }}\n"));
+            } else {
+                src.push_str(&format!("fn e{i}() {{ let _x: {ret_ty} = {path}::{method}({}); }}\n", args.join(", ")));
+            }
             continue;
         }
         let (generics, method_generics, params, ret) = surface.declared(ty, method).unwrap();

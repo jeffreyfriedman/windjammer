@@ -43,13 +43,7 @@ pub fn arg_want(surface: &StdSurface, recv: &Ty, name: &str, i: usize, prev: &[P
     match recv {
         Ty::Vec(t) => vec_arg_want(t, name, i, prev),
         Ty::Iter(_) | Ty::Range(_) => iter_arg_want(&iter_elem(recv)?, name, i, prev),
-        Ty::Str | Ty::Option(_) | Ty::Result(..) => surface.declared_arg(recv, name, i),
-        Ty::Map(k, v) => match (name, i) {
-            ("insert", 0) | ("get", 0) | ("contains_key", 0) | ("remove", 0) | ("entry", 0) | ("get_mut", 0) => Some((**k).clone()),
-            ("insert", 1) => Some((**v).clone()),
-            _ => None,
-        },
-        Ty::Set(t) => (i == 0).then(|| (**t).clone()),
+        Ty::Str | Ty::Option(_) | Ty::Result(..) | Ty::Map(..) | Ty::Set(_) => surface.declared_arg(recv, name, i),
         Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Char => numeric_arg_want(recv, name, i),
         _ => None,
     }
@@ -105,9 +99,7 @@ pub fn ret_ty(surface: &StdSurface, recv: &Ty, name: &str, args: &[PExpr], want:
     match recv {
         Ty::Vec(t) => vec_ret(t, name, args, want),
         Ty::Iter(_) | Ty::Range(_) => iter_ret(&iter_elem(recv)?, name, args, want),
-        Ty::Map(k, v) => map_ret(k, v, name),
-        Ty::Set(t) => set_ret(t, name),
-        Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Char | Ty::Str | Ty::Option(_) | Ty::Result(..) => surface.declared_ret(recv, name, args, want),
+        Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Char | Ty::Str | Ty::Option(_) | Ty::Result(..) | Ty::Map(..) | Ty::Set(_) => surface.declared_ret(recv, name, args, want),
         Ty::Bool | Ty::Tuple(_) | Ty::Adt(..) | Ty::Param(_) => None,
         _ => None,
     }
@@ -171,74 +163,13 @@ fn iter_ret(e: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty>
     })
 }
 
-fn map_ret(k: &Ty, v: &Ty, name: &str) -> Option<Ty> {
-    Some(match name {
-        "len" => Ty::usize(),
-        "is_empty" | "contains_key" => Ty::Bool,
-        "insert" | "remove" => Ty::Option(b(v.clone())),
-        "get" | "get_mut" => Ty::Option(b(v.clone())),
-        "clear" => Ty::Unit,
-        "keys" | "into_keys" => iter_of(k.clone()),
-        "values" | "values_mut" | "into_values" => iter_of(v.clone()),
-        "iter" | "iter_mut" | "into_iter" => iter_of(pair(k.clone(), v.clone())),
-        _ => return None,
-    })
-}
-
-fn set_ret(t: &Ty, name: &str) -> Option<Ty> {
-    Some(match name {
-        "len" => Ty::usize(),
-        "is_empty" | "contains" | "insert" | "remove" => Ty::Bool,
-        "clear" => Ty::Unit,
-        "iter" | "into_iter" => iter_of(t.clone()),
-        _ => return None,
-    })
-}
-
-/// `f64::MAX`, `f32::EPSILON`, `f64::NAN`, ...: the exact value (an f32 constant is its f32 value widened).
-pub fn float_const(owner: &str, member: &str) -> Option<f64> {
-    let is32 = match owner {
-        "f32" => true,
-        "f64" => false,
-        _ => return None,
-    };
-    Some(match (member, is32) {
-        ("MAX", false) => f64::MAX,
-        ("MIN", false) => f64::MIN,
-        ("EPSILON", false) => f64::EPSILON,
-        ("MIN_POSITIVE", false) => f64::MIN_POSITIVE,
-        ("MAX", true) => f64::from(f32::MAX),
-        ("MIN", true) => f64::from(f32::MIN),
-        ("EPSILON", true) => f64::from(f32::EPSILON),
-        ("MIN_POSITIVE", true) => f64::from(f32::MIN_POSITIVE),
-        ("INFINITY", _) => f64::INFINITY,
-        ("NEG_INFINITY", _) => f64::NEG_INFINITY,
-        ("NAN", _) => f64::NAN,
-        _ => return None,
-    })
-}
-
-/// Static constructors / associated functions on std types, e.g. `Vec::new`, `String::from`.
-pub fn static_ret(owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
-    let from_want = |pick: fn(&Ty) -> bool, dflt: Ty| want.filter(|w| pick(w)).cloned().unwrap_or(dflt);
-    Some(match (owner, name) {
-        ("Vec", "new") | ("Vec", "with_capacity") => from_want(|w| matches!(w, Ty::Vec(_)), Ty::Vec(b(Ty::Unknown))),
-        ("Vec", "from") => args.first()?.ty.clone(),
-        ("HashMap", "new") | ("HashMap", "with_capacity") | ("BTreeMap", "new") => from_want(|w| matches!(w, Ty::Map(..)), Ty::Map(b(Ty::Unknown), b(Ty::Unknown))),
-        ("HashSet", "new") | ("HashSet", "with_capacity") | ("BTreeSet", "new") => from_want(|w| matches!(w, Ty::Set(_)), Ty::Set(b(Ty::Unknown))),
-        ("String", "new") | ("String", "from") | ("String", "with_capacity") | ("string", "new") | ("string", "from") => Ty::Str,
-        ("i64" | "i32" | "u64" | "u32" | "u8" | "usize" | "isize" | "i8" | "i16" | "u16", "from") => Ty::Int(IntKind::from_name(owner)?),
-        ("i64" | "i32" | "u64" | "u32" | "u8" | "usize" | "isize" | "i8" | "i16" | "u16", "MAX" | "MIN") => Ty::Int(IntKind::from_name(owner)?),
-        ("i64" | "i32" | "u64" | "u32" | "u8" | "usize" | "isize" | "i8" | "i16" | "u16", "from_str_radix") => {
-            Ty::Result(b(Ty::Int(IntKind::from_name(owner)?)), b(Ty::Str))
-        }
-        ("f64", "from") => Ty::F64,
-        ("f32", m) if float_const("f32", m).is_some() => Ty::F32,
-        ("f64", m) if float_const("f64", m).is_some() => Ty::F64,
-        ("char", "from_u32") => Ty::Option(b(Ty::Char)),
-        (o, v) if super::ordering::is_path(o) && super::ordering::variant_value(v).is_some() => super::ordering::ty(),
-        _ => return None,
-    })
+/// Static constructors, constants and associated functions on std types (`Vec::new`, `i64::MAX`, `char::from_u32`): the
+/// declaration's result (`std/rust_core.wji`); the ordering constants are the enumerable stage's.
+pub fn static_ret(surface: &StdSurface, owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
+    if let Some(t) = surface.declared_static_ret(owner, name, args, want) {
+        return Some(t);
+    }
+    (super::ordering::is_path(owner) && super::ordering::variant_value(name).is_some()).then(super::ordering::ty)
 }
 
 /// Methods whose arguments are stored (so place arguments must be copied).
