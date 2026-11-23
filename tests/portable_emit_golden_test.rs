@@ -227,7 +227,7 @@ fn rows_emit_what_the_emitters_printed_before_they_were_rows() {
     let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let work = Work::new();
     let mut bad = Vec::new();
-    for probe in ["float_rows_probe", "integer_rows_probe", "char_string_rows_probe", "option_result_rows_probe"] {
+    for probe in ["float_rows_probe", "integer_rows_probe", "char_string_rows_probe", "option_result_rows_probe", "map_set_static_rows_probe"] {
         std::fs::copy(root().join(format!("tests/golden/{probe}.wj")), work.path().join(format!("{probe}.wj"))).unwrap();
         for (target, out_file, ext) in [("javascript", "main.mjs", "js"), ("go", "main.go", "go")] {
             let out = work.path().join(format!("out_{probe}_{target}"));

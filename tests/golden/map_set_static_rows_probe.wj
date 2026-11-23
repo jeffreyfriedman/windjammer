@@ -1,0 +1,146 @@
+// Every method of the maps (HashMap, BTreeMap) and sets (HashSet, BTreeSet) and every associated function and constant
+// the portable emitters lower (Vec::new, HashMap::new, String::from, i64::MAX, f64::EPSILON, char::from_u32, ...).
+// tests/golden/map_set_static_rows_probe.{js,go}.txt hold the JavaScript and Go this program emitted before the map, set
+// and static rows moved into std/rust_core.wji (docs/design/table-driven-std-surface.md, stage 5); the output must stay
+// byte-identical. Keys are every kind a portable map takes (integer, string, char, bool).
+fn probe_int_map(k: i32, v: string) {
+    let mut m: HashMap<i32, string> = HashMap::new()
+    println("${m.is_empty()}")
+    println("${m.len()}")
+    m.insert(k, v)
+    m.insert(k + 1, "two")
+    println("${m.len()}")
+    println("${m.contains_key(k)}")
+    println("${m.contains_key(99)}")
+    println("${m.get(k).unwrap_or("none")}")
+    println("${m.get(99).is_none()}")
+    if let Some(old) = m.insert(k, "again") {
+        println("${old}")
+    }
+    println("${m.remove(k + 1).is_some()}")
+    println("${m.remove(77).is_none()}")
+    for key in m.keys() {
+        println("${key}")
+    }
+    for val in m.values() {
+        println("${val}")
+    }
+    m.clear()
+    println("${m.len()}")
+}
+
+fn probe_string_map(k: string, n: i64) {
+    let mut m: BTreeMap<string, i64> = BTreeMap::new()
+    m.insert(k, n)
+    m.insert("b", n + 1)
+    println("${m.len()}")
+    println("${m.contains_key("b")}")
+    println("${m.get("b").unwrap_or(0)}")
+    let total: i64 = m.values().sum()
+    println("${total}")
+    for key in m.keys() {
+        println("${key}")
+    }
+    println("${m.remove("b").unwrap_or(0)}")
+    println("${m.is_empty()}")
+}
+
+fn probe_char_bool_maps(c: char, b: bool) {
+    let mut m: HashMap<char, bool> = HashMap::with_capacity(8)
+    m.insert(c, b)
+    println("${m.get(c).unwrap_or(false)}")
+    let mut flags: HashMap<bool, i32> = HashMap::new()
+    flags.insert(b, 1)
+    flags.insert(!b, 2)
+    println("${flags.len()}")
+    println("${flags.contains_key(true)}")
+}
+
+fn probe_sets(x: i32, s: string) {
+    let mut a: HashSet<i32> = HashSet::new()
+    println("${a.is_empty()}")
+    println("${a.insert(x)}")
+    println("${a.insert(x)}")
+    println("${a.insert(x + 1)}")
+    println("${a.contains(x)}")
+    println("${a.contains(100)}")
+    println("${a.len()}")
+    println("${a.remove(x)}")
+    println("${a.remove(x)}")
+    for e in a {
+        println("${e}")
+    }
+    let mut b: BTreeSet<string> = BTreeSet::new()
+    b.insert(s)
+    b.insert("zeta")
+    b.insert("alpha")
+    println("${b.len()}")
+    println("${b.contains("alpha")}")
+    for e in b {
+        println("${e}")
+    }
+    let mut c: HashSet<char> = HashSet::with_capacity(4)
+    c.insert('q')
+    println("${c.contains('q')}")
+    c.clear()
+    println("${c.is_empty()}")
+}
+
+fn probe_statics(n: i32, w: f64) {
+    let xs: Vec<i32> = Vec::new()
+    println("${xs.len()}")
+    let mut ys: Vec<i32> = Vec::with_capacity(10)
+    ys.push(n)
+    println("${ys.len()}")
+    let zs: Vec<i32> = Vec::from(ys)
+    println("${zs.len()}")
+    let s1 = String::new()
+    let s2 = String::from("abc")
+    let s3 = String::with_capacity(4)
+    println("${s1.len() + s2.len() + s3.len()}")
+    println("${i64::MAX}")
+    println("${i64::MIN}")
+    println("${i32::MAX}")
+    println("${i32::MIN}")
+    println("${u8::MAX}")
+    println("${u8::MIN}")
+    println("${u32::MAX}")
+    println("${u64::MAX}")
+    println("${usize::MAX}")
+    println("${i16::MIN}")
+    println("${isize::MAX}")
+    let a: i64 = i64::from(n)
+    println("${a}")
+    let b: u64 = u64::from(7u32)
+    println("${b}")
+    let c: f64 = f64::from(n)
+    println("${c}")
+    println("${f64::EPSILON}")
+    println("${f64::MAX}")
+    println("${f64::MIN}")
+    println("${f64::MIN_POSITIVE}")
+    println("${f32::EPSILON}")
+    println("${f32::MAX}")
+    println("${f32::MIN}")
+    println("${f32::MIN_POSITIVE}")
+    println("${f64::INFINITY}")
+    println("${f64::NEG_INFINITY}")
+    println("${f64::NAN.is_nan()}")
+    println("${f32::INFINITY}")
+    println("${w < f64::MAX}")
+    println("${w + f64::EPSILON > w}")
+    println("${i32::from_str_radix("ff", 16).unwrap_or(0)}")
+    println("${u8::from_str_radix("101", 2).unwrap_or(0)}")
+    println("${i64::from_str_radix("zz", 10).is_err()}")
+    println("${char::from_u32(65).unwrap_or('?')}")
+    println("${char::from_u32(0x1F600).is_some()}")
+    println("${char::from_u32(0xD800).is_none()}")
+}
+
+fn main() {
+    probe_int_map(3, "one")
+    probe_string_map("a", 5)
+    probe_char_bool_maps('x', true)
+    probe_sets(4, "mid")
+    probe_statics(6, 2.5)
+}
