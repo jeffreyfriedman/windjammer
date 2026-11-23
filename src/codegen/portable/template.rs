@@ -6,7 +6,7 @@
 //! {name}       an argument, by the parameter name the declaration gives it
 //! {name:f64}   the same, with a modifier (`Modifier`)
 //! {T.max}      a fact (`Fact`) about the receiver's type `T`; `{R.go}` about the result `R`, `{O.go}` about the `Ok`
-//!              type of a `Result` result (`parse::<i32>()`)
+//!              type of a `Result` result (`parse::<i32>()`), `{E.dbg}` about the error type of a `Result` receiver
 //! {{  }}       a literal brace
 //! ```
 //!
@@ -43,7 +43,7 @@ pub fn int_kind_of<'a>(of: TypeRef, receiver: &'a Ty, result: &'a Ty) -> Option<
         (TypeRef::Receiver, _) => receiver,
         (TypeRef::Result, _) => result,
         (TypeRef::Ok, Ty::Result(ok, _)) => &**ok,
-        (TypeRef::Ok, _) => return None,
+        (TypeRef::Ok, _) | (TypeRef::Err, _) => return None,
     };
     match ty {
         Ty::Int(k) => Some(*k),
@@ -69,6 +69,8 @@ pub enum TypeRef {
     Result,
     /// The `Ok` type of a `Result` result.
     Ok,
+    /// The error type `E` of a `Result` receiver.
+    Err,
 }
 
 /// One `{...}` of a template.
@@ -191,7 +193,8 @@ fn parse_hole(body: &str) -> Result<Hole, String> {
             ['T'] => TypeRef::Receiver,
             ['R'] => TypeRef::Result,
             ['O'] => TypeRef::Ok,
-            _ => return Err(format!("unknown type `{ty}` in `{{{body}}}` (T, R or O)")),
+            ['E'] => TypeRef::Err,
+            _ => return Err(format!("unknown type `{ty}` in `{{{body}}}` (T, R, O or E)")),
         };
         let fact = Fact::ALL.into_iter().find(|f| f.name() == fact).ok_or_else(|| format!("unknown fact `{fact}` in `{{{body}}}`"))?;
         return Ok(Hole::Fact(of, fact));
@@ -306,6 +309,13 @@ mod tests {
         assert_eq!(int_kind_of(TypeRef::Ok, &Ty::Str, &parsed), Some(IntKind::U16));
         assert_eq!(int_kind_of(TypeRef::Ok, &Ty::Str, &Ty::Int(IntKind::U16)), None);
         assert_eq!(Template::parse("{O.go}").unwrap().holes().next(), Some(&Hole::Fact(TypeRef::Ok, Fact::Go)));
+    }
+
+    #[test]
+    fn the_error_types_debug_text_is_asked_by_e() {
+        assert_eq!(Template::parse("$unwrapRes({self}, {E.dbg})").unwrap().holes().last(), Some(&Hole::Fact(TypeRef::Err, Fact::Dbg)));
+        let result = Ty::Result(Box::new(Ty::Bool), Box::new(Ty::Str));
+        assert_eq!(int_kind_of(TypeRef::Err, &result, &Ty::Bool), None, "the error type has no integer facts here");
     }
 
     #[test]

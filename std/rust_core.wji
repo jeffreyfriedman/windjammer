@@ -143,31 +143,135 @@ pub trait BTreeSet<T> {
     fn contains(self, value: &T) -> bool;
 }
 
+// Option and Result methods. Lowering rows as for `String` below, plus: a closure parameter is declared `fn(T) -> U` and a
+// method generic (`U`, `F`, `E`) takes its type from the closure's result or the argument (so `map` is typed `Option<U>` with
+// `U` the closure's result), and `{E.dbg}` is the target's debug formatter of a `Result`'s error type (what `unwrap` and
+// `expect` print of an `Err`). `Option` is `null | {v}` in JavaScript and `.Ok` / `.V` in Go. `unwrap` is `@internal`: `x?`
+// lowers to a match that returns early and then the `unwrap` of the checked local (portable/flatten.rs `try_expr`);
+// `unwrap_or` and `unwrap_or_else` are `@internal`: `x ?? d` parses to them (a literal or variable default is the eager
+// `unwrap_or`, anything else the lazy `unwrap_or_else`). The other spellings ADR-0039 removed have no portable lowering:
+// `unwrap_or_default`, `cloned` and `copied` stay declared for the Rust side (rustc-checked, the receiver-mode check reads
+// them) and are `unsupported` here; `unwrap_err` is still lowered. `map_or`, `is_some_and` and `expect_err` (R045, R046, R044)
+// have no declaration, so a portable backend refuses them as an unknown method.
 pub trait Option<T> {
+    @internal(reason = "`x?` on an Option lowers to an early-return match on a local and then its `unwrap` (portable/flatten.rs try_expr)")
+    @js(emit = "$unwrapOpt({self})")
+    @go(emit = "wjUnwrapOpt({self})")
+    @example(given = "let o: Option<i32> = Some(7)", src = "o.unwrap()", expect = "7")
     fn unwrap(self) -> T;
+    @js(emit = "$expectOpt({self}, {message})")
+    @go(emit = "wjExpectOpt({self}, {message})")
+    @example(given = "let o: Option<i32> = Some(7)", src = "o.expect(\"present\")", expect = "7")
     fn expect(self, message: &str) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or(d)` when `d` is a literal or a variable (parser/binary_expression_parser.rs)")
+    @js(emit = "$unwrapOr({self}, {default})")
+    @go(emit = "wjUnwrapOr({self}, {default})")
+    @example(given = "let o: Option<i32> = None; let d: i32 = 9", src = "o.unwrap_or(d)", expect = "9")
     fn unwrap_or(self, default: T) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or_else(|| d)` for any other default, evaluated only when `x` is absent (parser/binary_expression_parser.rs)")
+    @js(emit = "$optOrElse({self}, {f})")
+    @go(emit = "wjOptOrElse({self}, {f})")
+    @example(given = "let o: Option<i32> = None", src = "o.unwrap_or_else(|| 4)", expect = "4")
+    fn unwrap_or_else(self, f: fn() -> T) -> T;
+    @js(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @go(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @example(given = "let o: Option<i32> = None", src = "o.unwrap_or_default()", expect = "0")
     fn unwrap_or_default(self) -> T;
+    @js(emit = "$okOr({self}, {err})")
+    @go(emit = "wjOkOr({self}, {err})")
+    @example(given = "let o: Option<i32> = None", src = "o.ok_or(\"missing\").err().expect(\"err\")", expect = "missing")
     fn ok_or<E>(self, err: E) -> Result<T, E>;
+    @js(emit = "({self} !== null)")
+    @go(emit = "{self}.Ok")
+    @example(given = "let o: Option<i32> = Some(3)", src = "o.is_some()", expect = "true")
     fn is_some(self) -> bool;
+    @js(emit = "({self} === null)")
+    @go(emit = "(!{self}.Ok)")
+    @example(given = "let o: Option<i32> = None", src = "o.is_none()", expect = "true")
     fn is_none(self) -> bool;
+    @js(emit = "$optMap({self}, {f})")
+    @go(emit = "wjOptMap({self}, {f})")
+    @example(given = "let o: Option<i32> = Some(7); let two: i32 = 2; let z: i32 = 0", src = "o.map(|x| x * two).unwrap_or(z)", expect = "14")
+    fn map<U>(self, f: fn(T) -> U) -> Option<U>;
+    @js(emit = "$optAndThen({self}, {f})")
+    @go(emit = "wjOptAndThen({self}, {f})")
+    @example(given = "let o: Option<i32> = Some(7); let one: i32 = 1; let z: i32 = 0", src = "o.and_then(|x| Some(x + one)).unwrap_or(z)", expect = "8")
+    fn and_then<U>(self, f: fn(T) -> Option<U>) -> Option<U>;
+    @js(emit = "$optFilter({self}, {f})")
+    @go(emit = "wjOptFilter({self}, {f})")
+    @example(given = "let o: Option<i32> = Some(7)", src = "o.filter(|x| x > 9).unwrap_or(1)", expect = "1")
+    fn filter(self, f: fn(&T) -> bool) -> Option<T>;
     // On `Option<&T>`: the copy of the referent (references carry no width).
+    @js(unsupported = "elements are values, there is nothing to copy (ADR-0039 R012)")
+    @go(unsupported = "elements are values, there is nothing to copy (ADR-0039 R012)")
+    @example(given = "let v: Vec<i32> = vec![1, 2]", src = "v.first().copied().unwrap_or(0)", expect = "1")
     fn copied(self) -> Option<T>;
+    @js(unsupported = "elements are values, there is nothing to clone (ADR-0039 R012)")
+    @go(unsupported = "elements are values, there is nothing to clone (ADR-0039 R012)")
+    @example(given = "let v: Vec<i32> = vec![1, 2]", src = "v.first().cloned().unwrap_or(0)", expect = "1")
     fn cloned(self) -> Option<T>;
+    @js(unsupported = "taking a value out of an Option place is not part of the portable surface")
+    @go(unsupported = "taking a value out of an Option place is not part of the portable surface")
+    @example(given = "let mut o: Option<i32> = Some(5)", src = "o.take().unwrap_or(0)", expect = "5")
     fn take(&mut self) -> Option<T>;
 }
 
 pub trait Result<T, E> {
+    @internal(reason = "`x?` on a Result lowers to an early-return match on a local and then its `unwrap` (portable/flatten.rs try_expr)")
+    @js(emit = "$unwrapRes({self}, {E.dbg})")
+    @go(emit = "wjUnwrapRes({self})")
+    @example(given = "let res: Result<i32, string> = Ok(7)", src = "res.unwrap()", expect = "7")
     fn unwrap(self) -> T;
+    @js(emit = "$expectRes({self}, {message}, {E.dbg})")
+    @go(emit = "wjExpectRes({self}, {message})")
+    @example(given = "let res: Result<i32, string> = Ok(7)", src = "res.expect(\"ok\")", expect = "7")
     fn expect(self, message: &str) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or(d)` when `d` is a literal or a variable (parser/binary_expression_parser.rs)")
+    @js(emit = "({self}.ok ? {self}.v : {default})")
+    @go(emit = "wjResUnwrapOr({self}, {default})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\"); let d: i32 = 9", src = "res.unwrap_or(d)", expect = "9")
     fn unwrap_or(self, default: T) -> T;
+    @internal(reason = "`x ?? d` parses to `x.unwrap_or_else(|| d)` for any other default, evaluated only when `x` is an error (parser/binary_expression_parser.rs)")
+    @js(emit = "$resOrElse({self}, {f})")
+    @go(emit = "wjResOrElse({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.unwrap_or_else(|e| 4)", expect = "4")
+    fn unwrap_or_else(self, f: fn(E) -> T) -> T;
+    @js(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @go(unsupported = "the default of a type is not part of the portable surface (ADR-0039 R043): write `x ?? 0`")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.unwrap_or_default()", expect = "0")
     fn unwrap_or_default(self) -> T;
+    @js(emit = "$resOk({self})")
+    @go(emit = "wjResOk({self})")
+    @example(given = "let res: Result<i32, string> = Ok(7); let z: i32 = 0", src = "res.ok().unwrap_or(z)", expect = "7")
     fn ok(self) -> Option<T>;
+    @js(emit = "$resErr({self})")
+    @go(emit = "wjResErr({self})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.err().expect(\"e\")", expect = "bad")
     fn err(self) -> Option<E>;
+    @js(emit = "$unwrapErr({self})")
+    @go(emit = "wjUnwrapErr({self})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.unwrap_err()", expect = "bad")
     fn unwrap_err(self) -> E;
-    fn expect_err(self, message: &str) -> E;
+    @js(emit = "{self}.ok")
+    @go(emit = "{self}.Ok")
+    @example(given = "let res: Result<i32, string> = Ok(3)", src = "res.is_ok()", expect = "true")
     fn is_ok(self) -> bool;
+    @js(emit = "(!{self}.ok)")
+    @go(emit = "(!{self}.Ok)")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.is_err()", expect = "true")
     fn is_err(self) -> bool;
+    @js(emit = "$resMap({self}, {f})")
+    @go(emit = "wjResMap({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Ok(7); let two: i32 = 2; let z: i32 = 0", src = "res.map(|x| x * two).unwrap_or(z)", expect = "14")
+    fn map<U>(self, f: fn(T) -> U) -> Result<U, E>;
+    @js(emit = "$resMapErr({self}, {f})")
+    @go(emit = "wjResMapErr({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Err(\"bad\")", src = "res.map_err(|e| \"worse\").err().expect(\"e\")", expect = "worse")
+    fn map_err<F>(self, f: fn(E) -> F) -> Result<T, F>;
+    @js(emit = "$resAndThen({self}, {f})")
+    @go(emit = "wjResAndThen({self}, {f})")
+    @example(given = "let res: Result<i32, string> = Ok(7); let one: i32 = 1; let z: i32 = 0", src = "res.and_then(|x| Ok(x + one)).unwrap_or(z)", expect = "8")
+    fn and_then<U>(self, f: fn(T) -> Result<U, E>) -> Result<U, E>;
 }
 
 // String methods. Lowering rows as for `Float<T>` below: the JavaScript / TypeScript and Go text of a call, with the

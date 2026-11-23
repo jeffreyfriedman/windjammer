@@ -39,8 +39,8 @@ impl<'m> Go<'m> {
             Ty::Char => self.lowered(CoreType::Char, recv, name, &a, args, ty),
             Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &a, args, ty),
             Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &a, args, ty),
-            Ty::Option(_) => self.opt_method(recv, name, &a),
-            Ty::Result(..) => self.res_method(recv, name, &a),
+            Ty::Option(_) => self.lowered(CoreType::Option, recv, name, &a, args, ty),
+            Ty::Result(..) => self.lowered(CoreType::Result, recv, name, &a, args, ty),
             Ty::Map(..) => self.map_method(recv, name, &a),
             Ty::Set(_) => self.set_method(recv, name, &a),
             other => self.unsupported(format!("method `{name}` on `{}`", other.describe())),
@@ -173,44 +173,6 @@ impl<'m> Go<'m> {
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no Go rule", ct.noun())),
         }
-    }
-
-    fn opt_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
-        let r = self.rv(recv)?;
-        Ok(match name {
-            "is_some" => format!("{r}.Ok"),
-            "is_none" => format!("(!{r}.Ok)"),
-            "unwrap" => format!("wjUnwrapOpt({r})"),
-            "expect" => format!("wjExpectOpt({r}, {})", a[0]),
-            "unwrap_or" => format!("wjUnwrapOr({r}, {})", a[0]),
-            "unwrap_or_else" => format!("wjOptOrElse({r}, {})", a[0]),
-            "map" => format!("wjOptMap({r}, {})", a[0]),
-            "and_then" => format!("wjOptAndThen({r}, {})", a[0]),
-            "filter" => format!("wjOptFilter({r}, {})", a[0]),
-            "ok_or" => format!("wjOkOr({r}, {})", a[0]),
-            "map_or" => format!("wjOptMapOr({r}, {}, {})", a[0], a[1]),
-            "is_some_and" => format!("wjOptIsSomeAnd({r}, {})", a[0]),
-            _ => return self.unsupported(format!("Option method `{name}`")),
-        })
-    }
-
-    fn res_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {
-        let r = self.rv(recv)?;
-        Ok(match name {
-            "is_ok" => format!("{r}.Ok"),
-            "is_err" => format!("(!{r}.Ok)"),
-            "unwrap" => format!("wjUnwrapRes({r})"),
-            "expect" => format!("wjExpectRes({r}, {})", a[0]),
-            "unwrap_err" => format!("wjUnwrapErr({r})"),
-            "unwrap_or" => format!("wjResUnwrapOr({r}, {})", a[0]),
-            "unwrap_or_else" => format!("wjResOrElse({r}, {})", a[0]),
-            "map" => format!("wjResMap({r}, {})", a[0]),
-            "map_err" => format!("wjResMapErr({r}, {})", a[0]),
-            "and_then" => format!("wjResAndThen({r}, {})", a[0]),
-            "ok" => format!("wjResOk({r})"),
-            "err" => format!("wjResErr({r})"),
-            _ => return self.unsupported(format!("Result method `{name}`")),
-        })
     }
 
     fn map_method(&mut self, recv: &PExpr, name: &str, a: &[String]) -> PResult<String> {

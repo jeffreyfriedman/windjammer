@@ -39,10 +39,12 @@ pub enum CoreType {
     Integer,
     Char,
     String,
+    Option,
+    Result,
 }
 
 impl CoreType {
-    pub const ALL: [CoreType; 4] = [CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String];
+    pub const ALL: [CoreType; 6] = [CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result];
 
     /// The trait of `std/rust_core.wji` that declares this type's methods.
     pub fn trait_name(self) -> &'static str {
@@ -51,6 +53,8 @@ impl CoreType {
             CoreType::Integer => "Integer",
             CoreType::Char => "Char",
             CoreType::String => "String",
+            CoreType::Option => "Option",
+            CoreType::Result => "Result",
         }
     }
 
@@ -61,6 +65,8 @@ impl CoreType {
             CoreType::Integer => "integer",
             CoreType::Char => "char",
             CoreType::String => "string",
+            CoreType::Option => "Option",
+            CoreType::Result => "Result",
         }
     }
 
@@ -175,10 +181,13 @@ pub enum Fact {
     /// The bounds of the type as arbitrary-precision literals (`-128n`, `255n`), whatever the width: what a parser compares in.
     Lo,
     Hi,
+    /// The target's text of the debug formatter of a type (`$dbgStr`, `$dbgVec($dbgInt)`): what a `Result`'s `unwrap` prints
+    /// of its error. Asked of the error type (`{E.dbg}`); a target whose runtime formats errors itself has no such fact.
+    Dbg,
 }
 
 impl Fact {
-    pub const ALL: [Fact; 13] = [
+    pub const ALL: [Fact; 14] = [
         Fact::Bits,
         Fact::Signed,
         Fact::Wide,
@@ -192,6 +201,7 @@ impl Fact {
         Fact::WrapClose,
         Fact::Lo,
         Fact::Hi,
+        Fact::Dbg,
     ];
 
     pub fn name(self) -> &'static str {
@@ -209,6 +219,7 @@ impl Fact {
             Fact::WrapClose => "wrap_close",
             Fact::Lo => "lo",
             Fact::Hi => "hi",
+            Fact::Dbg => "dbg",
         }
     }
 }

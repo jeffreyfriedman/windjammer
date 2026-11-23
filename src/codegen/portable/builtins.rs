@@ -43,15 +43,13 @@ pub fn arg_want(surface: &StdSurface, recv: &Ty, name: &str, i: usize, prev: &[P
     match recv {
         Ty::Vec(t) => vec_arg_want(t, name, i, prev),
         Ty::Iter(_) | Ty::Range(_) => iter_arg_want(&iter_elem(recv)?, name, i, prev),
-        Ty::Str => surface.declared_arg(recv, name, i),
+        Ty::Str | Ty::Option(_) | Ty::Result(..) => surface.declared_arg(recv, name, i),
         Ty::Map(k, v) => match (name, i) {
             ("insert", 0) | ("get", 0) | ("contains_key", 0) | ("remove", 0) | ("entry", 0) | ("get_mut", 0) => Some((**k).clone()),
             ("insert", 1) => Some((**v).clone()),
             _ => None,
         },
         Ty::Set(t) => (i == 0).then(|| (**t).clone()),
-        Ty::Option(t) => option_arg_want(t, name, i),
-        Ty::Result(t, e) => result_arg_want(t, e, name, i),
         Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Char => numeric_arg_want(recv, name, i),
         _ => None,
     }
@@ -78,27 +76,6 @@ fn iter_arg_want(e: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
         ("take", 0) | ("skip", 0) | ("step_by", 0) | ("nth", 0) => Some(Ty::usize()),
         ("zip", 0) | ("chain", 0) => Some(Ty::Unknown),
         ("fold", 1) => prev.first().map(|init| fnty(vec![init.ty.clone(), e.clone()], init.ty.clone())),
-        _ => None,
-    }
-}
-
-fn option_arg_want(t: &Ty, name: &str, i: usize) -> Option<Ty> {
-    match (name, i) {
-        ("unwrap_or", 0) => Some(t.clone()),
-        ("map", 0) | ("and_then", 0) | ("map_or", 1) | ("filter", 0) | ("unwrap_or_else", 0) | ("is_some_and", 0) => {
-            Some(fnty(if name == "unwrap_or_else" { vec![] } else { vec![t.clone()] }, Ty::Unknown))
-        }
-        ("expect", 0) => Some(Ty::Str),
-        _ => None,
-    }
-}
-
-fn result_arg_want(t: &Ty, e: &Ty, name: &str, i: usize) -> Option<Ty> {
-    match (name, i) {
-        ("unwrap_or", 0) => Some(t.clone()),
-        ("map", 0) | ("and_then", 0) => Some(fnty(vec![t.clone()], Ty::Unknown)),
-        ("map_err", 0) | ("unwrap_or_else", 0) => Some(fnty(vec![e.clone()], Ty::Unknown)),
-        ("expect", 0) => Some(Ty::Str),
         _ => None,
     }
 }
@@ -130,9 +107,7 @@ pub fn ret_ty(surface: &StdSurface, recv: &Ty, name: &str, args: &[PExpr], want:
         Ty::Iter(_) | Ty::Range(_) => iter_ret(&iter_elem(recv)?, name, args, want),
         Ty::Map(k, v) => map_ret(k, v, name),
         Ty::Set(t) => set_ret(t, name),
-        Ty::Option(t) => option_ret(t, name, args),
-        Ty::Result(t, e) => result_ret(t, e, name, args),
-        Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Char | Ty::Str => surface.declared_ret(recv, name, want),
+        Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Char | Ty::Str | Ty::Option(_) | Ty::Result(..) => surface.declared_ret(recv, name, args, want),
         Ty::Bool | Ty::Tuple(_) | Ty::Adt(..) | Ty::Param(_) => None,
         _ => None,
     }
@@ -216,41 +191,6 @@ fn set_ret(t: &Ty, name: &str) -> Option<Ty> {
         "is_empty" | "contains" | "insert" | "remove" => Ty::Bool,
         "clear" => Ty::Unit,
         "iter" | "into_iter" => iter_of(t.clone()),
-        _ => return None,
-    })
-}
-
-fn option_ret(t: &Ty, name: &str, args: &[PExpr]) -> Option<Ty> {
-    let closure_ret = || match args.first().map(|a| &a.ty) {
-        Some(Ty::Fn(_, r)) => Some((**r).clone()),
-        _ => None,
-    };
-    Some(match name {
-        "is_some" | "is_none" | "is_some_and" => Ty::Bool,
-        "unwrap" | "expect" | "unwrap_or" | "unwrap_or_default" | "unwrap_or_else" => t.clone(),
-        "map" => Ty::Option(b(closure_ret()?)),
-        "and_then" => closure_ret()?,
-        "filter" | "take" => Ty::Option(b(t.clone())),
-        "ok_or" => Ty::Result(b(t.clone()), b(args.first()?.ty.clone())),
-        "map_or" => args.first()?.ty.clone(),
-        _ => return None,
-    })
-}
-
-fn result_ret(t: &Ty, e: &Ty, name: &str, args: &[PExpr]) -> Option<Ty> {
-    let closure_ret = || match args.first().map(|a| &a.ty) {
-        Some(Ty::Fn(_, r)) => Some((**r).clone()),
-        _ => None,
-    };
-    Some(match name {
-        "is_ok" | "is_err" => Ty::Bool,
-        "unwrap" | "expect" | "unwrap_or" | "unwrap_or_default" | "unwrap_or_else" => t.clone(),
-        "unwrap_err" | "expect_err" => e.clone(),
-        "map" => Ty::Result(b(closure_ret()?), b(e.clone())),
-        "map_err" => Ty::Result(b(t.clone()), b(closure_ret()?)),
-        "and_then" => closure_ret()?,
-        "ok" => Ty::Option(b(t.clone())),
-        "err" => Ty::Option(b(e.clone())),
         _ => return None,
     })
 }

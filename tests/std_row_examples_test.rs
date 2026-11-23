@@ -58,6 +58,16 @@ const UNSUPPORTED: &[(&str, &str)] = &[
     ("Integer::swap_bytes", "js"),
     ("Integer::wrapping_pow", "go"),
     ("Integer::wrapping_pow", "js"),
+    ("Option::cloned", "go"),
+    ("Option::cloned", "js"),
+    ("Option::copied", "go"),
+    ("Option::copied", "js"),
+    ("Option::take", "go"),
+    ("Option::take", "js"),
+    ("Option::unwrap_or_default", "go"),
+    ("Option::unwrap_or_default", "js"),
+    ("Result::unwrap_or_default", "go"),
+    ("Result::unwrap_or_default", "js"),
     ("String::capacity", "go"),
     ("String::capacity", "js"),
     ("String::pop", "go"),
@@ -150,7 +160,7 @@ fn outputs<'a>(dir: &Path, probe: &ToolProbe, rows: &'a [Case]) -> Vec<(&'static
         let out = run(&d);
         v.push((name, cases, out));
     };
-    backend("interpreter", None, &|d| Some(run(Command::new(wj()).current_dir(d).args(["run", "--interpret", "rows.wj"]))));
+    backend("interpreter", None, &|d| Some(run(Command::new(wj()).current_dir(d).args(["run", "--interpret", "--no-lint", "rows.wj"]))));
     backend("rust", None, &|d| {
         probe.has(Tool::Rustc).then(|| {
             let out = d.join("out_rust");

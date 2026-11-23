@@ -119,8 +119,9 @@ fn every_core_surface_entry_typechecks_in_rustc() {
             _ => receiver(ty, &generics, by_ref),
         };
         let args: Vec<String> = params.iter().map(|p| format!("arg::<{}>()", rust(p, false))).collect();
-        // Rust's iterator adapters take their closure type as a generic too: no turbofish there.
-        let turbofish = if method_generics.is_empty() || iterator {
+        // Rust's iterator adapters and `Option::map` / `Result::map_err` take their closure type as a generic too: no turbofish there.
+        let takes_closure = params.iter().any(|p| matches!(p, Type::FunctionPointer { .. }));
+        let turbofish = if method_generics.is_empty() || iterator || takes_closure {
             String::new()
         } else {
             format!("::<{}>", method_generics.iter().map(|g| rust(&Type::Generic(g.clone()), false)).collect::<Vec<_>>().join(", "))

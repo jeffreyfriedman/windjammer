@@ -52,8 +52,8 @@ impl<'m> Js<'m> {
             Ty::Char => self.lowered(CoreType::Char, recv, name, &r, &a, ty),
             Ty::Int(_) => self.lowered(CoreType::Integer, recv, name, &r, &a, ty),
             Ty::F64 | Ty::F32 => self.lowered(CoreType::Float, recv, name, &r, &a, ty),
-            Ty::Option(_) => self.option_method(name, &r, &a),
-            Ty::Result(_, e) => self.result_method(name, &r, &a, e),
+            Ty::Option(_) => self.lowered(CoreType::Option, recv, name, &r, &a, ty),
+            Ty::Result(..) => self.lowered(CoreType::Result, recv, name, &r, &a, ty),
             Ty::Map(k, v) => self.map_method(k, v, name, &r, &a),
             Ty::Set(_) => self.set_method(name, &r, &a),
             other => self.unsupported(format!("method `{name}` on `{}`", other.describe())),
@@ -183,53 +183,20 @@ impl<'m> Js<'m> {
             g => template::type_guard(g, &recv.ty, ty),
         };
         match row.select(Target::Js, guard) {
-            Some(Rule::Emit { template, .. }) => template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty, place: None }),
+            Some(Rule::Emit { template, .. }) => {
+                let mut dbg = |t: &Ty| self.dbg_fn(t);
+                template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty, place: None, dbg: &mut dbg })
+            }
             Some(Rule::Assign(template)) => {
                 let place = self.place(recv)?;
-                let value = template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty, place: Some(&place) })?;
+                let mut dbg = |t: &Ty| self.dbg_fn(t);
+                let value = template::render_emit(template, &row.params, &mut JsOperands { receiver: r, args: a, recv: &recv.ty, result: ty, place: Some(&place), dbg: &mut dbg })?;
                 Ok(format!("({place} = {value}, undefined)"))
             }
             Some(Rule::Hook(Hook::Display)) => self.display(recv, &FmtSpec::default()),
             Some(Rule::Unsupported(why)) => self.unsupported(format!("{} method `{name}`: {why}", ct.noun())),
             None => self.unsupported(format!("{} method `{name}` has no JavaScript rule", ct.noun())),
         }
-    }
-
-    fn option_method(&mut self, name: &str, r: &str, a: &[String]) -> PResult<String> {
-        Ok(match name {
-            "is_some" => format!("({r} !== null)"),
-            "is_none" => format!("({r} === null)"),
-            "unwrap" => format!("$unwrapOpt({r})"),
-            "expect" => format!("$expectOpt({r}, {})", a[0]),
-            "unwrap_or" => format!("$unwrapOr({r}, {})", a[0]),
-            "unwrap_or_else" => format!("$optOrElse({r}, {})", a[0]),
-            "map" => format!("$optMap({r}, {})", a[0]),
-            "and_then" => format!("$optAndThen({r}, {})", a[0]),
-            "filter" => format!("$optFilter({r}, {})", a[0]),
-            "ok_or" => format!("$okOr({r}, {})", a[0]),
-            "map_or" => format!("$optMapOr({r}, {}, {})", a[0], a[1]),
-            "is_some_and" => format!("({r} !== null && ({})({r}.v))", a[0]),
-            _ => return self.unsupported(format!("Option method `{name}`")),
-        })
-    }
-
-    fn result_method(&mut self, name: &str, r: &str, a: &[String], e: &Ty) -> PResult<String> {
-        let dbg = self.dbg_fn(e)?;
-        Ok(match name {
-            "is_ok" => format!("{r}.ok"),
-            "is_err" => format!("(!{r}.ok)"),
-            "unwrap" => format!("$unwrapRes({r}, {dbg})"),
-            "expect" => format!("$expectRes({r}, {}, {dbg})", a[0]),
-            "unwrap_err" => format!("$unwrapErr({r})"),
-            "unwrap_or" => format!("({r}.ok ? {r}.v : {})", a[0]),
-            "unwrap_or_else" => format!("$resOrElse({r}, {})", a[0]),
-            "map" => format!("$resMap({r}, {})", a[0]),
-            "map_err" => format!("$resMapErr({r}, {})", a[0]),
-            "and_then" => format!("$resAndThen({r}, {})", a[0]),
-            "ok" => format!("$resOk({r})"),
-            "err" => format!("$resErr({r})"),
-            _ => return self.unsupported(format!("Result method `{name}`")),
-        })
     }
 
     fn key_ok(&self, k: &Ty) -> PResult<()> {
@@ -315,6 +282,8 @@ struct JsOperands<'a> {
     result: &'a Ty,
     /// The receiver as a place, for an `assign` rule.
     place: Option<&'a str>,
+    /// The debug formatter of a type (`{E.dbg}`): the emitter's own, asked only when a template names it.
+    dbg: &'a mut dyn FnMut(&Ty) -> PResult<String>,
 }
 
 /// `Num`: an integer operand printed as a JavaScript Number (a BigInt is not a length or an index). No other modifier is
@@ -346,6 +315,12 @@ impl Operands for JsOperands<'_> {
     }
 
     fn fact(&mut self, of: TypeRef, fact: Fact) -> PResult<String> {
+        if fact == Fact::Dbg {
+            return match (of, self.recv) {
+                (TypeRef::Err, Ty::Result(_, e)) => (self.dbg)(e),
+                _ => unsupported("the debug text is a fact about the error type of a `Result` receiver (`{E.dbg}`)"),
+            };
+        }
         match template::int_kind_of(of, self.recv, self.result).and_then(|k| int_fact(k, fact)) {
             Some(text) => Ok(text),
             None => unsupported(format!("the type fact `{}` is not available for this type in JavaScript", fact.name())),

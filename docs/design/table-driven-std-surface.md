@@ -4,10 +4,10 @@ last_verified: 8a9941cacf68
 ---
 # Table-driven std surface: one declaration per std function, backends as interpreters
 
-> **Stages 1, 2 and 3 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
-> `Integer`, `Char` and `String` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
+> **Stages 1, 2, 3 and 4 of 9 are implemented** (`src/stdlib_surface/lowering.rs`, `src/codegen/portable/template.rs`, the `Float`
+> `Integer`, `Char`, `String`, `Option` and `Result` rows of `std/rust_core.wji`, gates G1-G6 and G8 in `tests/std_lowering_table_test.rs`, G2 in
 > `tests/portable_emit_golden_test.rs`, G3 in `tests/std_row_examples_test.rs`). The other types, the portability diagnostic and the
-> module-function rows are stages 4-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
+> module-function rows are stages 5-8 below. Counts are measured at `8a9941cac` (`wt-int-b10`) with the real scanner
 > (`tests/common/heuristic_scan.rs`, run standalone over each file).
 >
 > What stage 1 settled that the text below leaves open: the signature stays in `CoreSurface` (the `support`-layer
@@ -49,6 +49,21 @@ last_verified: 8a9941cacf68
 > `unsupported` on both portable targets; `clone` and `slice` are `@internal` rows (a copy, and the parser's spelling of `x[a..b]`).
 > An associated function (`String::new`) is not a method row: statics are stage 5. Rows are looked up by type then name, so a
 > lookup allocates nothing.
+>
+> What stage 4 settled: `trait Option<T>` and `trait Result<T, E>` carry the rows. A closure parameter is declared `fn(T) -> U`
+> and a method generic takes its type from the argument: `StdSurface::declared_ret(recv, name, args, want)` binds the trait's
+> generics from the receiver (`Option<T>`'s `T`; `Result<T, E>`'s `T` and `E`), then every method generic from the arguments'
+> types (`map<U>(f: fn(T) -> U)` binds `U` to the closure's result, `ok_or<E>(err: E)` to the argument), then from the expected
+> result (`parse<F>`); `declared_arg` gives a closure its declared parameter types (`fn(T) -> ?`, a result it cannot know yet is
+> `Unknown`). The debug text of a `Result`'s error, which `unwrap` / `expect` print in JavaScript (`$unwrapRes(r, $dbgStr)`), is
+> the fact `{E.dbg}` (`Fact::Dbg`, asked of `TypeRef::Err`, the receiver's error type): the emitter answers it with its own
+> `dbg_fn`, only when a template names it, and Go has no such fact. `unwrap`, `unwrap_or` and `unwrap_or_else` are `@internal`
+> rows with rules: `x?` lowers to a match and then the `unwrap` of the checked local (`portable/flatten.rs`), and the parser lowers
+> `x ?? d` to `unwrap_or` (a literal or variable default) or `unwrap_or_else` (any other). The spellings ADR-0039 removed and
+> no desugaring produces have no portable lowering: `map_or`, `is_some_and` (R045, R046) and `expect_err` (R044) have no
+> declaration (a portable backend refuses them as an unknown method; the corpus never reached them), `unwrap_or_default`,
+> `cloned`, `copied` and `take` stay declared for the Rust side and are `unsupported` on both portable targets. Their JavaScript and
+> Go helpers (`$optMapOr`, `wjOptMapOr`, `wjOptIsSomeAnd`) are dead and listed in the dead-helper lists with the char ones.
 
 ## 1. Problem, in numbers
 

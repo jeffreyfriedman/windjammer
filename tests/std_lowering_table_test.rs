@@ -24,7 +24,7 @@ use windjammer::typing::core_surface::CoreSurface;
 
 /// The types whose methods are migrated: every declaration of these traits needs a rule per target. A stage adds its
 /// types here (and to `CoreType`); the list never shrinks.
-const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String];
+const MIGRATED: &[CoreType] = &[CoreType::Float, CoreType::Integer, CoreType::Char, CoreType::String, CoreType::Option, CoreType::Result];
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -179,6 +179,8 @@ fn kind_of(ty: CoreType) -> Kind {
         CoreType::Integer => Kind::Int,
         CoreType::Char => Kind::Char,
         CoreType::String => Kind::Str,
+        CoreType::Option => Kind::Option,
+        CoreType::Result => Kind::Result,
     }
 }
 
@@ -247,6 +249,37 @@ const REGISTERED_WITHOUT_ROW: &[(CoreType, &[&str])] = &[
             "trim_start_matches",
         ],
     ),
+    // Option: the removed spellings (R045-R048: map_or, is_some_and, or_else, as_ref, xor, ...) and `?.`'s `__opt_chain` have no
+    // declaration; the others are canonical rows (`and`, `or`, `zip`, `flatten`, `replace`, `insert`) without a lowering yet.
+    (
+        CoreType::Option,
+        &[
+            "__opt_chain",
+            "and",
+            "as_deref",
+            "as_mut",
+            "as_ref",
+            "as_slice",
+            "flatten",
+            "get_or_insert_with",
+            "insert",
+            "into_iter",
+            "is_some_and",
+            "iter",
+            "map_or",
+            "map_or_else",
+            "ok_or_else",
+            "or",
+            "or_else",
+            "replace",
+            "unzip",
+            "xor",
+            "zip",
+        ],
+    ),
+    // Result: `expect_err` (R044), `is_ok_and` (R046), `map_or` (R045), `or_else` (R047) are removed spellings; `as_ref` and the
+    // others are Rust adapters the interpreter accepts.
+    (CoreType::Result, &["as_deref", "as_ref", "cloned", "copied", "expect_err", "is_ok_and", "iter", "map_or", "or_else"]),
 ];
 
 #[test]
@@ -391,12 +424,15 @@ fn every_helper_a_template_calls_is_defined_in_the_shim() {
 /// Stage 3 dropped the char spellings ADR-0039 removed (`to_ascii_uppercase`, `to_ascii_lowercase`); their helpers are dead.
 /// Deleting them changes the runtime shim, which is part of every emitted program, so it changes every G2 hash: they go with
 /// the next stage that re-records (stage 7 wires `json` into the shim).
-const DEAD_HELPERS_JS: &[&str] = &["$asciiLower", "$asciiUpper"];
+///
+/// Stage 4 dropped `map_or` and `is_some_and` (ADR-0039 R045, R046): `$optMapOr`, `wjOptMapOr` and `wjOptIsSomeAnd` are dead
+/// for the same reason and go with them.
+const DEAD_HELPERS_JS: &[&str] = &["$asciiLower", "$asciiUpper", "$optMapOr"];
 /// Helpers the emitters name by building the text (`$std_<module>_<fn>`, `wjstd_<module>_<fn>` for the module
 /// functions of `portable/stdlib.rs`): no literal names them, so a text search cannot tell them dead. The module-function
 /// stage (7) turns them into rows and removes this exemption.
 const DYNAMIC_PREFIXES: &[&str] = &["$std_", "$caps_", "wjstd_", "wjcaps_"];
-const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper"];
+const DEAD_HELPERS_GO: &[&str] = &["wjAsciiLower", "wjAsciiUpper", "wjOptIsSomeAnd", "wjOptMapOr"];
 
 #[test]
 fn no_shim_helper_is_dead() {
@@ -473,10 +509,10 @@ const VOCABULARY: &[(&str, usize, &str)] = &[
     ("Guard", 9, "ok_int, ok_f32, ok_f64, ok_bool: the `Ok` type of a `Result` result (`parse::<i32>()` picks its parser by it); elem_prim, elem_prim_not_bool: the shape of the receiver's element (Vec::contains, sort); t_wide, t_i32, t_u32: the receiver's own integer type (a 64-bit BigInt receiver; `wrapping_mul` on the 32-bit types is `Math.imul`). `f32` joins when a float row needs it"),
     ("Hook", 1, "display: the type-directed `to_string` emitter; `clone` joins with the Vec stage"),
     ("Modifier", 3, "f64: Go's operand widening for Float<T>; str: a `char` operand where Go wants a string (`string(rune(c))`); num: an integer JavaScript wants as a Number (`Number(n)`, a BigInt is not a length)"),
-    ("Fact", 13, "lo, hi: the bounds as BigInt literals (`-128n`: what `$parseInt` compares in, whatever the width); bits signed wide min max zero one chk go: the numeric helpers' facts of the Integer rows; wrap_open, wrap_close: the text that brackets an expression wrapped into T's range (asIntN(64, ..), `(.. | 0)`, `((.. << 24) >> 24)`: a template is linear, so the bracket is two facts)"),
+    ("Fact", 14, "dbg: the target's debug formatter of a type, asked of a `Result`'s error type (`{E.dbg}`: `unwrap` and `expect` print the error with it; it needs the type, so a template cannot spell it, and Go's runtime formats errors itself); lo, hi: the bounds as BigInt literals (`-128n`: what `$parseInt` compares in, whatever the width); bits signed wide min max zero one chk go: the numeric helpers' facts of the Integer rows; wrap_open, wrap_close: the text that brackets an expression wrapped into T's range (asIntN(64, ..), `(.. | 0)`, `((.. << 24) >> 24)`: a template is linear, so the bracket is two facts)"),
     ("Rule", 4, "Emit, Assign, Hook, Unsupported; `Assign` is JavaScript's place update (`(s = s + c, undefined)` for a string's `push`)"),
     ("Target", 2, "Js, Go; TypeScript uses the JavaScript rules; `Rust` joins when the Rust backend reads the table"),
-    ("CoreType", 4, "one per migrated std type (a stage adds its types): Float, Integer, Char, String"),
+    ("CoreType", 6, "one per migrated std type (a stage adds its types): Float, Integer, Char, String, Option, Result"),
     ("Widen", 1, "F64"),
 ];
 
@@ -534,13 +570,8 @@ const REMOVED_SPELLED_WITHOUT_INTERNAL: &[&str] = &[
     "Iterator::nth",
     "Option::cloned",
     "Option::copied",
-    "Option::unwrap",
-    "Option::unwrap_or",
     "Option::unwrap_or_default",
-    "Result::expect_err",
-    "Result::unwrap",
     "Result::unwrap_err",
-    "Result::unwrap_or",
     "Result::unwrap_or_default",
     "String::capacity",
     "String::push_str",
@@ -618,6 +649,8 @@ const ROWS_WITHOUT_ONE_DECLARATION: &[(CoreType, &str, &[&str])] = &[
         "string",
         &["eq_ignore_case", "matches", "replacen", "rsplit", "rsplit_once", "split_once", "splitn", "strip_prefix", "strip_suffix", "trim_end_matches", "trim_matches", "trim_start_matches"],
     ),
+    (CoreType::Option, "Option", &["flatten", "or", "replace", "zip"]),
+    (CoreType::Result, "Result", &[]),
 ];
 
 #[derive(serde::Deserialize)]
