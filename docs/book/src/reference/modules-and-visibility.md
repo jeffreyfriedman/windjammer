@@ -67,8 +67,9 @@ fn main() {
 Naming an item through a module that does not re-export it is `WJ0194`, with the line to add as the fix; `wj fix <path>` adds
 it. A `pub use http::*` glob is an explicit re-export too.
 
-<!-- ignore: WJ0194 is reported by the project check (name resolution), which a fence does not run -->
-```wj,ignore
+This is rejected:
+
+```text
 mod adapters {
     pub mod http {
         pub fn serve() -> int {
