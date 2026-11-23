@@ -282,7 +282,7 @@ pub static ERRORS: &[CodeInfo] = &[
         origin: O::FrontEnd,
         maturity: "high_confidence",
         rust_codes: &["E0603", "E0616"],
-        explanation: "An item or field is used outside the module where it is visible.",
+        explanation: "An item or field is used outside the module where it is visible: called, imported with `use`, or re-exported with `pub use`.",
         cause: "The item was not declared `pub`.",
         fix: "Declare the item or field `pub`.",
         example_bad: "mod shapes {\n    fn hidden() -> int {\n        1\n    }\n}\n\nfn main() {\n    println(\"${shapes::hidden()}\")\n}",

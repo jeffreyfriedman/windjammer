@@ -1,0 +1,5 @@
+mod render
+
+fn main() {
+    println("${render::build_mesh(2)}")
+}

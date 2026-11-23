@@ -1,0 +1,3 @@
+fn helper(x: int) -> int {
+    x * 2
+}

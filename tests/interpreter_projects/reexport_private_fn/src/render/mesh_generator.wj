@@ -1,0 +1,3 @@
+fn build_mesh(n: int) -> int {
+    n * 3
+}

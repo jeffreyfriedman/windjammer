@@ -178,9 +178,10 @@ pub fn iterator_as_list(path: &Path) -> Result<Checked> {
     Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 
-/// The `WJ0013` diagnostics (a call with the wrong number of arguments) of the program at `path`, exactly as
-/// `wj check` reports them from the resolved callee's declaration; `wj build` stops on these before generating code.
-pub fn call_arity(path: &Path) -> Result<Checked> {
+/// The resolver-backed diagnostics `wj build` stops on before generating code, exactly as `wj check` reports them:
+/// `WJ0013` (a call with the wrong number of arguments) and `WJ0019` (a private item called, imported or
+/// re-exported outside its module).
+pub fn resolver_errors(path: &Path) -> Result<Checked> {
     let (sources, _) = inputs(path)?;
     let mut sink = Vec::new();
     let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
@@ -188,7 +189,7 @@ pub fn call_arity(path: &Path) -> Result<Checked> {
     let by_file: HashMap<String, &front::Parsed> = refs.iter().map(|p| (p.file.clone(), *p)).collect();
     let mut found = Vec::new();
     project::resolve_phase(path, &refs, &by_file, &mut found);
-    found.retain(|d| d.code == "WJ0013");
+    found.retain(|d| d.code == "WJ0013" || d.code == "WJ0019");
     Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 

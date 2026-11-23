@@ -18,6 +18,7 @@ Every definition gets a `DefId`; every call expression resolves to a `Res`: `Def
 2. `lookup.rs`  - scope lookup (items, `use`, alias, glob, `pub use`, `crate/self/super`), impl linking.
 3. `paths.rs`   - callee paths: `f`, `mod::f`, `Type::assoc`, `Self::assoc`, `Trait::m`, `Enum::V`.
 4. `walk.rs`    - walks bodies, tracks locals (shadowing), emits `CallResolution`s.
+5. `visibility.rs` - Rust's privacy rule (`private_uses`): a private item called, imported (`use`) or re-exported (`pub use`) outside its module and that module's descendants. The one check `wj check`, `wj build` and the interpreter share (WJ0019).
 `def.rs` / `res.rs` / `uses.rs` / `prelude.rs` are data + normalisation.
 
 ## Invariants

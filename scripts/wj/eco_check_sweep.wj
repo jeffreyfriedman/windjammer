@@ -1,0 +1,63 @@
+// Ecosystem check sweep: `wj check` over every apps/* and packages/* directory (one that has a wj.toml) and a list
+// of the directories whose output contains a diagnostic code. Read-only: nothing in the ecosystem is edited.
+//
+// Usage:
+//   wj run --interpret --allow process --allow fs.read --allow env.read --allow console \
+//       scripts/wj/eco_check_sweep.wj <wj-binary> <ecosystem-root> <code> [dir...]
+//   (the ecosystem root is the checkout WJ_ECOSYSTEM points at; no sibling directory is assumed)
+//
+// Prints `swept N directories` and one `dir | code | first matching line` row per directory that reports <code>,
+// then `violations: M`. Exit status is 0 either way: the report is data for the caller.
+use std::process
+use std::env
+use std::strings
+
+fn sweep_dirs(root: string) -> Vec<string> {
+    let cmd = "cd '" + root + "' && for d in apps/* packages/*; do [ -f \"$d/wj.toml\" ] && echo \"$d\"; done"
+    match process.run_with_output("sh", ["-c", cmd]) {
+        Ok(o) => strings.split_lines(o.stdout),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn first_match(wj: string, root: string, dir: string, code: string) -> string {
+    let cmd = "cd '" + root + "/" + dir + "' && '" + wj + "' check 2>&1 | grep -m1 '" + code + "'"
+    match process.run_with_output("sh", ["-c", cmd]) {
+        Ok(o) => strings.trim(o.stdout),
+        Err(_) => "",
+    }
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() < 4 {
+        println("usage: eco_check_sweep.wj <wj-binary> <ecosystem-root> <code> [dir...]")
+        return
+    }
+    let wj = args[1]
+    let root = args[2]
+    let code = args[3]
+    let mut dirs: Vec<string> = Vec::new()
+    let mut i = 4
+    while i < args.len() {
+        dirs.push(args[i])
+        i = i + 1
+    }
+    if dirs.len() == 0 {
+        for d in sweep_dirs(root) {
+            if strings.trim(d) != "" {
+                dirs.push(strings.trim(d))
+            }
+        }
+    }
+    println("swept ${dirs.len()} directories")
+    let mut hits = 0
+    for d in dirs {
+        let line = first_match(wj, root, d, code)
+        if line != "" {
+            println("${d} | ${code} | ${line}")
+            hits = hits + 1
+        }
+    }
+    println("violations: ${hits}")
+}

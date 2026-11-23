@@ -1,0 +1,14 @@
+// expect: WJ0019
+mod mesh {
+    fn generate() -> int {
+        1
+    }
+}
+
+mod render {
+    pub use super::mesh::generate;
+}
+
+fn main() {
+    println("${render::generate()}")
+}

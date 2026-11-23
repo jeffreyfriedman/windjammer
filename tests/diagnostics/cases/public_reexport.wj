@@ -1,0 +1,14 @@
+// expect: none
+mod mesh {
+    pub fn generate() -> int {
+        1
+    }
+}
+
+mod render {
+    pub use super::mesh::generate;
+}
+
+fn main() {
+    println("${render::generate()}")
+}

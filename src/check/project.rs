@@ -306,24 +306,6 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
             Res::Def(id) if matches!(c.kind, resolve::CallKind::Free | resolve::CallKind::Path) => {
                 let def = r.defs().get(*id);
                 let checked = matches!(def.kind, DefKind::Fn | DefKind::AssocFn { .. });
-                if checked && !def.is_pub && c.kind == resolve::CallKind::Path {
-                    let owner = &r.defs().get(def.module).path;
-                    let here = &r.defs().get(c.module).path;
-                    let visible = here == owner || owner.is_empty() || here.starts_with(&format!("{owner}::"));
-                    if !visible {
-                        let last = c.callee.rsplit("::").next().unwrap_or(&c.callee);
-                        let mut d = Diagnostic::error("WJ0019", format!("function `{}` is private", c.callee));
-                        let sp = span_for(&c.location, last).or_else(|| {
-                            let p = by_file.values().find(|p| p.text.contains(last))?;
-                            let ix = SourceIndex::new(p.file.clone(), &p.text);
-                            Locator::new(&ix).first_use(last)
-                        });
-                        if let Some(sp) = sp {
-                            d = d.at(sp.with_label("private function"));
-                        }
-                        out.push(d.with_help(format!("declare it `pub fn {last}` in module `{owner}`")));
-                    }
-                }
                 if checked && c.arg_count != def.arity {
                     let mut d = Diagnostic::error(
                         "WJ0013",
@@ -353,6 +335,26 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
             }
             _ => {}
         }
+    }
+    // WJ0019: the privacy check the interpreter shares (`resolve::private_uses`): a private item called, imported or
+    // re-exported outside its module and that module's descendants.
+    for pu in resolve::private_uses(&r) {
+        let def = r.defs().get(pu.def);
+        let last = pu.written.rsplit("::").next().unwrap_or(&pu.written).to_string();
+        let mut d = Diagnostic::error("WJ0019", pu.message(&r));
+        let sp = span_for(&pu.location, &last).or_else(|| {
+            let p = by_file.values().find(|p| p.text.contains(&last))?;
+            let ix = SourceIndex::new(p.file.clone(), &p.text);
+            Locator::new(&ix).first_use(&last)
+        });
+        if let Some(sp) = sp {
+            let label = match pu.kind {
+                resolve::PrivateUseKind::ReExport => format!("re-exports a private {}", resolve::noun(def.kind)),
+                _ => format!("private {}", resolve::noun(def.kind)),
+            };
+            d = d.at(sp.with_label(label));
+        }
+        out.push(d.with_help(pu.help(&r)));
     }
     for rd in &r.report.diagnostics {
         if rd.kind == DiagnosticKind::BadImport {

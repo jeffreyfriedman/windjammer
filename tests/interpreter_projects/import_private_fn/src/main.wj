@@ -1,0 +1,6 @@
+mod mathx
+use mathx::helper
+
+fn main() {
+    println("${helper(2)}")
+}

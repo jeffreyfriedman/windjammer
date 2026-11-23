@@ -11,7 +11,7 @@ use super::error::{ErrorKind, RuntimeError, Span};
 use super::loader::parse_source;
 use crate::module_system::sources::SourceFile;
 use crate::parser::{Item, Program};
-use crate::resolve::{CallKind, Collected, Def, DefId, DefKind, Found, Res, ResolvedProgram};
+use crate::resolve::{noun, Collected, Def, DefId, DefKind, Found, ResolvedProgram};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -219,76 +219,6 @@ fn referenced_modules(items: &[Item<'_>], base: &[String], out: &mut Vec<Vec<Str
     }
 }
 
-/// Rust's privacy rule on resolved definitions.
-struct Visibility<'c> {
-    c: &'c Collected<'static>,
-    /// Module defs that start another crate (dependencies): privacy does not leak across them.
-    crate_roots: HashSet<DefId>,
-}
-
-impl Visibility<'_> {
-    fn owning_module(&self, d: &Def) -> DefId {
-        match d.kind {
-            DefKind::Module => self.c.parent_of(d.id).unwrap_or(d.id),
-            _ => d.module,
-        }
-    }
-
-    fn is_ancestor_or_self(&self, anc: DefId, mut m: DefId) -> bool {
-        loop {
-            if m == anc {
-                return true;
-            }
-            if self.crate_roots.contains(&m) {
-                return false;
-            }
-            match self.c.parent_of(m) {
-                Some(p) => m = p,
-                None => return false,
-            }
-        }
-    }
-
-    fn crate_of(&self, mut m: DefId) -> DefId {
-        loop {
-            if self.crate_roots.contains(&m) {
-                return m;
-            }
-            match self.c.parent_of(m) {
-                Some(p) => m = p,
-                None => return m,
-            }
-        }
-    }
-
-    /// Visible from `from`: public items everywhere (file modules are always `pub mod`), private ones only
-    /// in their module's subtree within the same crate.
-    fn visible(&self, d: &Def, from: DefId) -> bool {
-        if d.is_pub || matches!(d.kind, DefKind::Variant { .. }) {
-            return true;
-        }
-        let owner = self.owning_module(d);
-        self.crate_of(owner) == self.crate_of(from) && self.is_ancestor_or_self(owner, from)
-    }
-}
-
-/// rustc's noun for a definition kind (E0603 wording).
-fn noun(kind: DefKind) -> &'static str {
-    match kind {
-        DefKind::Fn | DefKind::ExternFn => "function",
-        DefKind::Struct => "struct",
-        DefKind::Enum => "enum",
-        DefKind::Trait => "trait",
-        DefKind::Const => "constant",
-        DefKind::Static => "static",
-        DefKind::Module => "module",
-        DefKind::TypeAlias => "type alias",
-        DefKind::Method { .. } => "method",
-        DefKind::AssocFn { .. } => "associated function",
-        _ => "item",
-    }
-}
-
 impl Interpreter {
     /// Load a program whose files are already known (project mode) and bind it through the resolver.
     /// `rust_crates`: names of Rust-crate dependencies (calls into them are reported by the preflight).
@@ -339,13 +269,11 @@ impl Interpreter {
         let resolved = crate::resolve::resolve_program_with_crates(&inputs, &dep_names);
         self.reject_shadowed_type_names(&resolved)?;
         let module_ids = self.module_ids(&resolved.collected);
-        let crate_roots: HashSet<DefId> = crate_paths
-            .iter()
-            .filter_map(|p| resolved.collected.defs.find_path(&p.join("::")).iter().copied().find(|d| resolved.collected.defs.get(*d).kind == DefKind::Module))
-            .collect();
-        let vis = Visibility { c: &resolved.collected, crate_roots };
-        self.bind_uses(&resolved, &module_ids, &vis)?;
-        check_call_privacy(&resolved, &vis)?;
+        // the privacy check `wj check` and `wj build` run (`resolve::private_uses`): imports, re-exports and calls
+        if let Some(bad) = crate::resolve::private_uses(&resolved).first() {
+            return Err(semantic_at(format!("{} (E0603)", bad.message(&resolved)), bad.location.as_ref()));
+        }
+        self.bind_uses(&resolved, &module_ids)?;
         // an `extern fn` runs when the host bridge provides it or the C library does (scalar signatures)
         let progs: Vec<&crate::parser::Program<'_>> = all.iter().map(|f| f.program).collect();
         let c_sigs = super::host_bridge::extern_signatures(&progs).unwrap_or_default();
@@ -439,7 +367,7 @@ impl Interpreter {
         }
     }
 
-    fn bind_uses(&mut self, r: &ResolvedProgram<'static>, ids: &HashMap<DefId, usize>, vis: &Visibility<'_>) -> Result<(), RuntimeError> {
+    fn bind_uses(&mut self, r: &ResolvedProgram<'static>, ids: &HashMap<DefId, usize>) -> Result<(), RuntimeError> {
         let c = &r.collected;
         let mut scopes: Vec<(&DefId, &crate::resolve::ModuleScope)> = c.modules.iter().collect();
         scopes.sort_by_key(|(d, _)| **d);
@@ -450,9 +378,6 @@ impl Interpreter {
                 let mut found: Vec<Found> = c.resolve_type_path(*mdef, segs);
                 found.extend(c.lookup_path_value(*mdef, segs));
                 let defs: Vec<&Def> = found.iter().filter_map(|f| match f { Found::Def(d) => Some(c.defs.get(*d)), _ => None }).collect();
-                if let Some(bad) = defs.iter().find(|d| !vis.visible(d, *mdef)) {
-                    return Err(semantic_at(format!("{} `{}` is private (E0603)", noun(bad.kind), bad.name), u.location.as_ref()));
-                }
                 match &u.binding {
                     crate::resolve::Binding::Named(local) => {
                         // a module or type binding wins over a value of the same name (tuple-struct ctor)
@@ -489,7 +414,7 @@ impl Interpreter {
                             }
                         }
                         for d in defs.iter().filter(|d| matches!(d.kind, DefKind::Module | DefKind::Enum)) {
-                            self.bind_glob(c, ids, vis, d, m, *mdef);
+                            self.bind_glob(c, ids, d, m, *mdef);
                         }
                     }
                 }
@@ -499,7 +424,7 @@ impl Interpreter {
     }
 
     /// `use target::*`: every name visible in `target` (items and its own imports); enum: its variants.
-    fn bind_glob(&mut self, c: &Collected<'static>, ids: &HashMap<DefId, usize>, vis: &Visibility<'_>, target: &Def, into: usize, from: DefId) {
+    fn bind_glob(&mut self, c: &Collected<'static>, ids: &HashMap<DefId, usize>, target: &Def, into: usize, from: DefId) {
         let mut names: Vec<String> = Vec::new();
         if target.kind == DefKind::Enum {
             for v in c.members.get(&target.id).into_iter().flatten() {
@@ -528,7 +453,7 @@ impl Interpreter {
             if target.kind == DefKind::Enum {
                 found = c.members.get(&target.id).into_iter().flatten().copied().filter(|v| c.defs.get(*v).name == n).collect();
             }
-            let pick = found.iter().map(|d| c.defs.get(*d)).find(|d| vis.visible(d, from) && !matches!(d.kind, DefKind::Impl));
+            let pick = found.iter().map(|d| c.defs.get(*d)).find(|d| c.is_visible_from(d, from) && !matches!(d.kind, DefKind::Impl));
             if let Some(d) = pick {
                 if let Some(imp) = self.import_for(c, ids, d) {
                     self.modules[into].imports.entry(n).or_insert(imp);
@@ -538,20 +463,3 @@ impl Interpreter {
     }
 }
 
-/// Qualified calls to private functions (`math::helper()`), checked on the resolver's call table.
-fn check_call_privacy(r: &ResolvedProgram<'static>, vis: &Visibility<'_>) -> Result<(), RuntimeError> {
-    for call in &r.calls {
-        if call.kind != CallKind::Path && call.kind != CallKind::Free {
-            continue;
-        }
-        let Res::Def(id) = &call.res else { continue };
-        let d = r.collected.defs.get(*id);
-        if !matches!(d.kind, DefKind::Fn | DefKind::ExternFn | DefKind::Const | DefKind::Static) {
-            continue;
-        }
-        if !vis.visible(d, call.module) {
-            return Err(semantic_at(format!("{} `{}` is private (E0603)", noun(d.kind), d.name), call.location.as_ref()));
-        }
-    }
-    Ok(())
-}

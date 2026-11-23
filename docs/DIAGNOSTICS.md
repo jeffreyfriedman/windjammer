@@ -41,7 +41,7 @@ invokes cargo or rustc and never writes generated code. Exit status is 1 when an
 | WJ0015 | unknown method (on a known user type, or a name no type has) |
 | WJ0017 | `${x}` where `x` is a user type without `Display` |
 | WJ0018 | `impl Trait for T` missing required methods |
-| WJ0019 | call to a private function of another module |
+| WJ0019 | a private item called, imported or re-exported outside its module |
 | WJ0020 | `string + int`, arithmetic on strings, or declared `int` mixed with declared `float` |
 | WJ0003 (return) | literal of the wrong type returned from a function |
 | WJ0021 | duplicate top-level definition |
