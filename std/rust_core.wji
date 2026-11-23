@@ -387,7 +387,7 @@ pub trait Float<T> {
     fn atan(self) -> T;
     @js(emit = "Math.atan2({self}, {other})")
     @go(emit = "wjMath_atan2({self:f64}, {other:f64})")
-    @example(src = "(((1.0).atan2(1.0)) * 1000.0).round() / 1000.0", expect = "0.785")
+    @example(src = "(((1.0).atan2(2.0)) * 1000.0).round() / 1000.0", expect = "0.464")
     fn atan2(self, other: T) -> T;
     @js(emit = "Math.hypot({self}, {other})")
     @go(emit = "wjMath_hypot({self:f64}, {other:f64})")

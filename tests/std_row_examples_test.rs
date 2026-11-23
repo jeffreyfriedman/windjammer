@@ -24,7 +24,9 @@ fn wj() -> PathBuf {
 
 /// `(row id, example)` of every row with an example, in table order.
 fn examples() -> Vec<(String, String, String)> {
-    let table = CoreSurface::parse().lowering();
+    // from the file on disk, like the other gates: a mutation of a row is seen by the runner with the wj binary it was built into
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("std/rust_core.wji")).unwrap();
+    let table = CoreSurface::parse_source(&text).lowering();
     table
         .rows()
         .filter_map(|(ty, row): (CoreType, &Row)| row.example.as_ref().map(|e| (format!("{}::{}", ty.trait_name(), row.name), e.src.clone(), e.expect.clone())))
