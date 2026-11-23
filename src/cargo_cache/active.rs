@@ -49,7 +49,7 @@ pub fn held(tree: &Path) -> bool {
 }
 
 /// The newest modification time of a file under `path` (or of `path` itself when it is a file). Directory times
-/// and the lock files are left out: creating a lock file touches its directory without any build output changing.
+/// and the lock and marker files are left out: creating a lock file touches its directory without any build output changing.
 pub fn newest_mtime(path: &Path) -> Option<SystemTime> {
     if path.is_file() {
         return fs::metadata(path).and_then(|m| m.modified()).ok();
@@ -58,7 +58,7 @@ pub fn newest_mtime(path: &Path) -> Option<SystemTime> {
     if let Ok(rd) = fs::read_dir(path) {
         for e in rd.flatten() {
             let p = e.path();
-            if e.file_name() == LOCK_FILE {
+            if e.file_name() == LOCK_FILE || e.file_name() == super::evict::MARKER {
                 continue;
             }
             let t = if p.is_dir() { newest_mtime(&p) } else { e.metadata().and_then(|m| m.modified()).ok() };

@@ -21,11 +21,13 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 - `crate_version`: the `version` of every generated crate is `0.1.0+wj<hash of its directory>`; cargo identifies a root package in the shared target by name and version only, so same-named crates (directories with one name, every test crate) must differ there (pilot 6 finding 1). Gate: tests/run_identity_test.rs.
 
+- `evict` (size budget, `WJ_CACHE_MAX_GIB`): evicts only at the granularity cargo can rebuild: a whole `incremental/<session>` directory, or a whole unit (`.fingerprint/<name>-<hash>`, `build/<name>-<hash>` and every `deps/` file with that hash, removed together), least recently used first. It never deletes a single file from `build/` or `deps/` (that leaves cargo's fingerprints saying "fresh" over missing `bindgen.rs`, rlibs, linker inputs). It sweeps only a tree carrying the `.wj-cache-root` marker, which wj writes into the trees it creates (`cargo-target/shared`, `verify`); a compiler's own `debug/` / `release/` and any directory wj did not create have none and are never touched. A tree over budget that cannot be evicted safely gives one warning line. Gate: tests/cargo_cache_evict_test.rs.
+
 - `entries`: directories of content-addressed `<key>.json` entries shared by checkouts (`analysis/`, `verdicts/`). Writers hold the directory's shared lock; `wj cache prune` skips a held directory and drops entries older than 30 days. Gate: tests/shared_analysis_cache_test.rs.
 
 ## Entry points
 `cache_root`, `target_dir(kind)`, `configure_cargo_command`, `apply_lean_build_env` (src/cargo_cache/mod.rs); `build_profile::{apply_fast_dev_env, executables_from_cargo_json, publish_executables}` (the dev profile and documented-binary-location step shared by `wj build` and `wj run --compiled`).
 
 ## Tests
-Inline unit tests in src/cargo_cache/mod.rs.
+Inline unit tests in src/cargo_cache/mod.rs; tests/cargo_cache_evict_test.rs, tests/cargo_cache_active_test.rs.
 Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
