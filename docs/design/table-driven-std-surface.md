@@ -1,5 +1,5 @@
 ---
-status: proposal
+status: current
 last_verified: 8a9941cacf68
 ---
 # Table-driven std surface: one declaration per std function, backends as interpreters
