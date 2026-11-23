@@ -60,6 +60,20 @@ fn compiled(src: &str) -> Result<Run, String> {
     Ok(Run { stdout: String::from_utf8_lossy(&run.stdout).to_string(), exit: run.status.code().unwrap_or(-1) })
 }
 
+/// Like `compiled`, but through the full `wj build` (cargo) so the program links `windjammer_runtime`.
+fn compiled_with_runtime(src: &str) -> Result<Run, String> {
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("prog.wj");
+    fs::write(&f, src).unwrap();
+    let wj = Command::new(WJ).args(["build"]).arg(&f).current_dir(dir.path()).env("WJ_AGENT_CHILD", "1").output().unwrap();
+    if !wj.status.success() {
+        return Err(format!("wj build failed: {}{}", String::from_utf8_lossy(&wj.stdout), String::from_utf8_lossy(&wj.stderr)));
+    }
+    let bin = dir.path().join("build/target/debug/prog");
+    let run = Command::new(&bin).output().map_err(|e| format!("cannot run {}: {e}", bin.display()))?;
+    Ok(Run { stdout: String::from_utf8_lossy(&run.stdout).to_string(), exit: run.status.code().unwrap_or(-1) })
+}
+
 /// `Ok(())` when interpreter and compiled Rust agree (and match `expect` when given).
 fn check(src: &str, expect: Option<&str>) -> Result<(), String> {
     let rust = compiled(src)?;
@@ -96,7 +110,8 @@ fn corpus_case(name: &str) {
     // `// interp-gap: reason` marks a program the interpreter evaluates wrongly (reason in the file);
     // the compiled Rust must still print the hand-derived expectation.
     if src.lines().any(|l| l.starts_with("// interp-gap:")) {
-        let rust = compiled(&src).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let build = if src.lines().any(|l| l.starts_with("// needs-runtime:")) { compiled_with_runtime } else { compiled };
+        let rust = build(&src).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(rust.stdout, expect, "{name}: compiled output differs from the expectation");
         return;
     }
@@ -203,7 +218,63 @@ corpus_tests!(
     collect_owned_from_unknown_receiver,
     list_adapter_owned_option_return,
     integer_rotate_amount_is_u32,
+    associated_type_binding_in_bound,
+
+    bitwise_literal_takes_operand_width,
+    float_byte_conversions,
+    float_literal_compare_takes_float_width,
+    generic_constructor_declared_argument_width,
+    generic_self_argument_not_cloned,
+    if_else_statement_unit_and_value_tails,
+    if_else_statement_value_tail,
+    if_value_owned_and_borrowed_text,
+    index_by_borrowed_loop_var,
+    list_literal_in_returned_tuple_slot,
+    method_call_on_imported_constant,
+    operator_impl_infers_output,
+    operator_impl_selected_by_rhs_type,
+    operator_traits_as_supertraits_imported,
+    thread_handles,
 );
+
+/// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:
+/// an unregistered case would silently never run.
+#[test]
+fn every_corpus_case_is_registered_and_runs() {
+    let src = include_str!("codegen_correctness_test.rs");
+    let start = src.find("corpus_tests!(\n").expect("macro invocation") + "corpus_tests!(\n".len();
+    let end = start + src[start..].find("\n);").expect("macro end");
+    let mut registered: Vec<String> =
+        src[start..end].split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+    registered.sort();
+    let mut files: Vec<String> = fs::read_dir(corpus_dir())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let n = e.file_name().to_string_lossy().to_string();
+            n.strip_suffix(".wj").map(|s| s.to_string())
+        })
+        .collect();
+    files.sort();
+    let mut problems = Vec::new();
+    for f in &files {
+        if !registered.contains(f) {
+            problems.push(format!("corpus case `{f}.wj` is not registered in corpus_tests! (it never runs)"));
+        }
+    }
+    for r in &registered {
+        if !files.contains(r) {
+            problems.push(format!("corpus_tests! registers `{r}` but tests/codegen_correctness_corpus/{r}.wj does not exist"));
+        }
+    }
+    for w in registered.windows(2) {
+        if w[0] == w[1] {
+            problems.push(format!("`{}` is registered more than once", w[0]));
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
 
 // ------------------------------------------------------------------ generated programs
 

@@ -1,9 +1,12 @@
 // Threads: handles collected in a Vec, spawn closures returning a tail value, a Receiver moved into a worker.
 // interp-gap: the interpreter has no threads or channels
+// needs-runtime: thread and channel types come from windjammer_runtime, so rustc alone cannot link it; built with cargo
 // expect: 0 10 20
 // expect: 6
 use std::thread
+use std::thread::JoinHandle
 use std::sync::mpsc
+use std::sync::mpsc::Receiver
 fn worker(rx: Receiver<int>) -> int {
     let mut s = 0
     for v in rx { s += v }
