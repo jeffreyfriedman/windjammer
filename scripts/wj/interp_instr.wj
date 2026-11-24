@@ -16,6 +16,11 @@
 // interpreter Debug-formats and hashes source paths), so `--write` stores the method it ran with next to the rows
 // (`<counter>:method`: runs, cwd_chars, home, env) and `--check` says when its own cwd length differs from the recorded one.
 //
+// Effects (ADR-0021): this script declares no `extern` items. Its `--write` guard (inside_git_tree, method_json) uses the
+// std effect calls `fs.exists`, `env.get_or`, `env.vars` and `env.current_dir`, which the run grants by flag
+// (`--allow 'fs.read=**' --allow env.read --allow process`), the same way the other scripts under scripts/wj do; there is
+// nothing to route through an effect declaration. `wj check` of this file: 0 errors before and after.
+//
 // The counter: callgrind (`valgrind --tool=callgrind`) when valgrind is installed, else the hardware counter of
 // `/usr/bin/time -l` ("instructions retired", macOS). Counts from different counters are never compared: the
 // baseline keeps one table per counter, and `--check` with no table for this counter says so and passes.
