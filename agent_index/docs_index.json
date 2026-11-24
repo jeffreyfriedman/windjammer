@@ -6958,7 +6958,7 @@
     "kind": "stdlib",
     "module": "std::csv",
     "name": "parse",
-    "signature": "fn parse(data: string) -> Result<Vec<Vec<string>>, csv.Error>",
+    "signature": "fn parse(data: string) -> Result<Vec<Vec<string>>, string>",
     "source": "std/csv.wj",
     "summary": "Read CSV from string, returns vector of string records",
     "tags": [
@@ -6969,7 +6969,7 @@
     "kind": "stdlib",
     "module": "std::csv",
     "name": "parse_bytes",
-    "signature": "fn parse_bytes(data: &[u8]) -> Result<Vec<Vec<string>>, csv.Error>",
+    "signature": "fn parse_bytes(data: &[u8]) -> Result<Vec<Vec<string>>, string>",
     "source": "std/csv.wj",
     "summary": "Parse CSV from bytes",
     "tags": [
@@ -6980,7 +6980,7 @@
     "kind": "stdlib",
     "module": "std::csv",
     "name": "parse_with_headers",
-    "signature": "fn parse_with_headers(data: string) -> Result<(Vec<string>, Vec<Vec<string>>), csv.Error>",
+    "signature": "fn parse_with_headers(data: string) -> Result<(Vec<string>, Vec<Vec<string>>), string>",
     "source": "std/csv.wj",
     "summary": "Read CSV with headers, returns headers and data separately",
     "tags": [
@@ -7002,7 +7002,7 @@
     "kind": "stdlib",
     "module": "std::csv",
     "name": "write",
-    "signature": "fn write(records: &[Vec<string>]) -> Result<string, csv.Error>",
+    "signature": "fn write(records: &[Vec<string>]) -> Result<string, string>",
     "source": "std/csv.wj",
     "summary": "Write CSV from vector of records",
     "tags": [
@@ -7013,7 +7013,7 @@
     "kind": "stdlib",
     "module": "std::csv",
     "name": "write_with_headers",
-    "signature": "fn write_with_headers(headers: &[string], records: &[Vec<string>]) -> Result<string, csv.Error>",
+    "signature": "fn write_with_headers(headers: &[string], records: &[Vec<string>]) -> Result<string, string>",
     "source": "std/csv.wj",
     "summary": "Write CSV with headers",
     "tags": [
@@ -7321,7 +7321,7 @@
     "kind": "stdlib",
     "module": "std::env::mod",
     "name": "current_dir",
-    "signature": "fn current_dir() -> string",
+    "signature": "fn current_dir() -> Result<string, string>",
     "source": "std/env/mod.wj",
     "summary": "/ Get the current working directory",
     "tags": [
