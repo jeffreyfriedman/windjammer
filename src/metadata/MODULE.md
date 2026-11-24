@@ -11,6 +11,7 @@ In: analyzed items. Out/In: JSON metadata files and loaders (`load_struct_field_
 - Loaders tolerate missing files.
 - A `.wj.meta` outside a cache location is a legacy sidecar: never read (only the embedded `stdlib_meta/` is trusted); `legacy_sidecars.rs` finds and removes them.
 - `type_derives.rs`: which generated types derive `Serialize`; written as `serde_types` in a crate's `metadata.json` and read back so derive inference decides a dependency type's serde support from its declaration.
+- `projectless_key.rs`: the manifest-less cache key is the hash of the program's module closure (entry plus the files its `use`/`mod` declarations resolve), found by following imports with `stat`s, never by listing directories: startup never scales with the cwd, its siblings or a parent holding other repos (tests/projectless_closure_test.rs). The CLI registers the program entry (`set_program_entry`); the key is memoised per process while closure files are unchanged.
 - Nothing writes next to a source file (`tests/sidecar_hygiene_test.rs`).
 
 ## Owns
