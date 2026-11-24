@@ -241,6 +241,7 @@ corpus_tests!(
     let_bound_closure_literal_argument,
     list_literal_takes_expected_vec_type,
     for_var_shadows_struct_field,
+    field_and_free_fn_same_name,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:

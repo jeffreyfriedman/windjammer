@@ -1,0 +1,24 @@
+// A struct field and a top-level function may share a name: `label(..)` in a method calls the function, and
+// `self.label` reads the field.
+// expect: pos
+// expect: neg
+struct Tally {
+    label: string,
+}
+
+fn label(n: int) -> string {
+    if n > 0 { "pos" } else { "neg" }
+}
+
+impl Tally {
+    fn relabel(self, n: int) -> string {
+        self.label = label(n)
+        self.label
+    }
+}
+
+fn main() {
+    let mut t = Tally { label: "" }
+    println(t.relabel(3))
+    println(t.relabel(-3))
+}
