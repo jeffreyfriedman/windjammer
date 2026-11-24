@@ -1,0 +1,11 @@
+use std::time
+fn fib(n: int) -> int {
+    if n < 2 { return n }
+    fib(n - 1) + fib(n - 2)
+}
+fn main() {
+    let t0 = time::now_unix_nano()
+    let r = fib(@n@)
+    eprintln("STEADY_NS ${time::now_unix_nano() - t0}")
+    println("${r}")
+}

@@ -1,0 +1,8 @@
+const t0 = process.hrtime.bigint();
+let total = 0;
+for (let i = 0; i < @n@; i++) {
+  const x = i * 3 + 1;
+  if (x % 7 === 0) total += x; else total -= 1;
+}
+console.error(`STEADY_NS ${process.hrtime.bigint() - t0}`);
+console.log(String(total));

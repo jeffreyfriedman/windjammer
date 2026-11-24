@@ -1,0 +1,9 @@
+import sys, time
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+t0 = time.perf_counter_ns()
+r = fib(@n@)
+print("STEADY_NS", time.perf_counter_ns() - t0, file=sys.stderr)
+print(r)

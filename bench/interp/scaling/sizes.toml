@@ -1,0 +1,101 @@
+# Scaling set (ADR-0020 rung 2): the sizes of every bench/interp kernel at the 1x, 10x and 100x labels.
+# Edited by hand; gen.wj turns it and templates/<kernel>.{wj,mjs,py} into gen/<label>/<kernel>.{wj,mjs,py}
+# (committed, byte-identical on every run). `work` is the work multiplier against 1x (calls for fib30,
+# elements swept for sieve, loop iterations otherwise); the labels are nominal: where the slowest runtime
+# (python3) would exceed ~10 s at 100x the multiplier is capped and the label keeps its place on the ladder.
+# Value limits: every intermediate stays below 2^53 so node's doubles agree with the 64-bit integers.
+# Expected stdout per kernel and label: expected/<label>/<kernel>.out (all three runtimes must match it).
+
+# closures: length x10 at 10x, rounds x10 more at 100x
+[closures.1x]
+work = 1
+len = 1000
+rounds = 300
+[closures.10x]
+work = 10
+len = 10000
+rounds = 300
+[closures.100x]
+work = 100
+len = 10000
+rounds = 3000
+
+# fib30: calls 2.69M / 18.5M / 126M (n=30/34/38), capped: python3 about 7 s at n=38
+[fib30.1x]
+work = 1
+n = 30
+[fib30.10x]
+work = 6.85
+n = 34
+[fib30.100x]
+work = 46.98
+n = 38
+
+# hashmap: iterations and key space scale together (about 20 hits per key at every size)
+[hashmap.1x]
+work = 1
+iters = 200000
+keys = 10007
+[hashmap.10x]
+work = 10
+iters = 2000000
+keys = 100003
+[hashmap.100x]
+work = 100
+iters = 20000000
+keys = 1000003
+
+# loop5m: capped at x3 / x10: python3 needs about 1 s per 5M iterations
+[loop5m.1x]
+work = 1
+n = 5000000
+[loop5m.10x]
+work = 3
+n = 15000000
+[loop5m.100x]
+work = 10
+n = 50000000
+
+# nbody: capped at x60: python3 needs about 6 s per 1M steps
+[nbody.1x]
+work = 1
+steps = 20000
+[nbody.10x]
+work = 10
+steps = 200000
+[nbody.100x]
+work = 60
+steps = 1200000
+
+# sieve: capped at x16: a 16M-element list; python3 about 6 s
+[sieve.1x]
+work = 1
+n = 1000000
+[sieve.10x]
+work = 4
+n = 4000000
+[sieve.100x]
+work = 16
+n = 16000000
+
+# strings
+[strings.1x]
+work = 1
+iters = 200000
+[strings.10x]
+work = 10
+iters = 2000000
+[strings.100x]
+work = 100
+iters = 20000000
+
+# structs: capped at x40: python3 about 0.5 us per iteration
+[structs.1x]
+work = 1
+iters = 300000
+[structs.10x]
+work = 10
+iters = 3000000
+[structs.100x]
+work = 40
+iters = 12000000

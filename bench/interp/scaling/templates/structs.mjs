@@ -1,0 +1,15 @@
+class V2 {
+  constructor(x, y) { this.x = x; this.y = y; }
+  add(o) { return new V2(this.x + o.x, this.y + o.y); }
+  dot(o) { return this.x * o.x + this.y * o.y; }
+}
+const t0 = process.hrtime.bigint();
+let acc = new V2(0, 0);
+let s = 0;
+for (let i = 0; i < @iters@; i++) {
+  const v = new V2(i % 13, i % 7);
+  acc = acc.add(v);
+  s += acc.dot(v) % 1000;
+}
+console.error(`STEADY_NS ${process.hrtime.bigint() - t0}`);
+console.log(`${acc.x} ${acc.y} ${s}`);
