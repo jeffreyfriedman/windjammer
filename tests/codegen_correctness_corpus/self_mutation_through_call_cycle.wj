@@ -1,0 +1,29 @@
+// A cycle f <-> g where only the leaf mutates `self`: every member of the cycle still mutates it.
+// expect: len 1
+struct S {
+    v: Vec<int>,
+}
+
+impl S {
+    fn leaf(self) {
+        self.v.push(1)
+    }
+
+    fn f(self, k: int) {
+        if k == 0 {
+            self.leaf()
+            return
+        }
+        self.g(k - 1)
+    }
+
+    fn g(self, k: int) {
+        self.f(k)
+    }
+}
+
+fn main() {
+    let mut s = S { v: Vec::new() }
+    s.f(2)
+    println("len ${s.v.len()}")
+}

@@ -240,6 +240,9 @@ corpus_tests!(
     option_vec_some_literal_field,
     let_bound_closure_literal_argument,
     list_literal_takes_expected_vec_type,
+    self_mutation_through_call_cycle,
+    self_mutation_through_three_cycle,
+    param_mutation_through_call_cycle,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:

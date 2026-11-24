@@ -266,7 +266,7 @@ pub struct Interpreter {
     /// The process environment as the runner saw it at start (sorted); `env::vars` serves this, nothing reads the host itself.
     pub(crate) env_snapshot: Vec<(String, String)>,
     pub(crate) closure_counter: usize,
-    pub(crate) mutating_analysis: HashSet<usize>,
+    pub(crate) mut_scc: super::analysis::MutScc,
     /// Each module's parsed file, for the compiler's facts about it (`compiled_facts.rs`).
     pub(crate) programs: HashMap<usize, &'static crate::parser::Program<'static>>,
     /// The compiler's `&mut` parameters per module, computed on first use (`None`: analysis failed).
@@ -388,7 +388,7 @@ impl Interpreter {
             args: Vec::new(),
             env_snapshot: Vec::new(),
             closure_counter: 0,
-            mutating_analysis: HashSet::new(),
+            mut_scc: Default::default(),
             programs: HashMap::new(),
             compiled_facts: HashMap::new(),
             lit_widths: Vec::new(),

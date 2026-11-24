@@ -1,0 +1,36 @@
+// A three-member cycle a -> b -> c -> a; only the leaf (reached from c) mutates `self`.
+// expect: len 2
+struct S {
+    v: Vec<int>,
+}
+
+impl S {
+    fn leaf(self) {
+        self.v.push(1)
+    }
+
+    fn a(self, k: int) {
+        if k > 0 {
+            self.b(k - 1)
+        }
+    }
+
+    fn b(self, k: int) {
+        self.c(k)
+    }
+
+    fn c(self, k: int) {
+        if k == 0 {
+            self.leaf()
+            self.leaf()
+            return
+        }
+        self.a(k)
+    }
+}
+
+fn main() {
+    let mut s = S { v: Vec::new() }
+    s.a(3)
+    println("len ${s.v.len()}")
+}
