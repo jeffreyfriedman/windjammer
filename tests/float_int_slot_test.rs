@@ -47,12 +47,16 @@ fn rejected() -> Vec<(&'static str, String, &'static str)> {
 
 #[test]
 fn a_float_in_an_int_slot_and_an_int_in_a_float_slot_are_wj0003() {
+    let mut problems = Vec::new();
     for (name, src, message) in rejected() {
         let (ok, out, _, _t) = wj(&["check"], &src);
-        assert!(!ok && out.contains("error[WJ0003]") && out.contains(message), "{name}: {out}");
-        assert!(out.contains("convert explicitly:"), "{name}: the hint names the explicit conversion: {out}");
-        assert!(!out.contains("wj fix"), "{name}: a lossy conversion is a hint, never a machine-applicable fix: {out}");
+        if ok || !out.contains("error[WJ0003]") || !out.contains(message) {
+            problems.push(format!("{name}: not reported: {out}"));
+        } else if !out.contains("convert explicitly:") || out.contains("wj fix") {
+            problems.push(format!("{name}: the hint names the explicit conversion and offers no fix (a lossy conversion is never machine-applicable): {out}"));
+        }
     }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
 #[test]
@@ -78,14 +82,12 @@ fn explicit_conversions_and_untyped_literals_are_accepted() {
 
 #[test]
 fn a_name_imported_from_another_crate_is_not_the_project_function_of_that_name() {
-    // `median` is another crate's function here; a project function of the same name elsewhere must not judge it
-    let src = "use wj_stats::median\n\nfn median_of(xs: Vec<float>) -> float {\n    median(xs)\n}\n\nfn main() {\n    println(\"${median_of([1.0])}\")\n}\n";
-    let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("a.wj"), src).unwrap();
-    std::fs::write(tmp.path().join("b.wj"), "fn median(xs: Vec<float>) -> int {\n    0\n}\n\nfn main() {\n    println(\"${median([1.0])}\")\n}\n").unwrap();
-    let o = Command::new(WJ).arg("check").arg(tmp.path()).env("NO_COLOR", "1").output().unwrap();
-    let out = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
-    assert!(!out.contains("WJ0003"), "{out}");
+    // `median` is another crate's function in a.wj; the project function of the same name in b.wj must not judge it
+    let a = "use wj_stats::median\n\nfn median_of(xs: Vec<float>) -> float {\n    median(xs)\n}\n\nfn main() {\n    println(\"${median_of([1.0])}\")\n}\n";
+    let b = "fn median(xs: Vec<float>) -> int {\n    0\n}\n\nfn helper() {\n    println(\"${median([1.0])}\")\n}\n";
+    let found = windjammer::check::check_sources(std::path::Path::new("."), &[("a.wj".to_string(), a.to_string()), ("b.wj".to_string(), b.to_string())]);
+    let wrong: Vec<_> = found.iter().filter(|d| d.code == "WJ0003").map(|d| d.message.clone()).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
 }
 
 #[test]
