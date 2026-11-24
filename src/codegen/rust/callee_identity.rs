@@ -12,6 +12,27 @@ impl<'ast> CodeGenerator<'ast> {
         self.resolve_call_signature_of(name, None, n, own.as_ref()).filter(|r| !shadowed && (name.contains("::") || !r.sig.has_self_receiver))
     }
 
+    /// `name(..)` names a function this file declares at top level: not a parameter or local, not a sibling
+    /// method. A struct field of the same name is a different declaration and never the callee.
+    pub(crate) fn bare_callee_is_declared_free_fn(&self, name: &str) -> bool {
+        !name.contains("::")
+            && self.idiom.file_scope_fn_names.contains(name)
+            && !self.current_function_params.iter().any(|p| p.name == name)
+            && !self.local_variable_scopes.iter().any(|s| s.contains(name))
+            && !self.bare_call_is_sibling_method(name)
+    }
+
+    /// The text of a call's callee. A struct field of the same name as a declared free function does not make the
+    /// call a field read (`self.f(..)`).
+    pub(crate) fn generate_callee_expression(&mut self, function: &crate::parser::Expression<'ast>, func_name: &str) -> String {
+        let text = self.generate_expression(function);
+        let names_free_fn = matches!(function, crate::parser::Expression::Identifier { .. }) && self.bare_callee_is_declared_free_fn(func_name);
+        match text.strip_prefix("self.") {
+            Some(bare) if names_free_fn => bare.to_string(),
+            _ => text,
+        }
+    }
+
     pub(crate) fn resolve_call_signature_with_global(
         &self,
         func_name: &str,

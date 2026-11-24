@@ -242,6 +242,14 @@ corpus_tests!(
     list_literal_takes_expected_vec_type,
     condition_const_before_block_is_not_struct_literal,
     index_cast_applies_to_whole_modulo_expression,
+    for_var_shadows_struct_field,
+    field_and_free_fn_same_name,
+    option_str_unwrap_or_owned_default,
+    local_string_list_contains_text_arg,
+    if_arm_param_vs_substring,
+    moved_into_tuple_then_read_in_list_literal,
+    field_moved_then_whole_value_used,
+    string_if_let_moved_then_read,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:

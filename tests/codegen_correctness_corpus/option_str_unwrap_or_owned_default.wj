@@ -1,0 +1,17 @@
+// `Option<&str>.unwrap_or(owned)` (`strip_suffix`): the result is the owned `string` either way.
+// expect: nadya|nadya|was
+fn clean(s: string) -> string {
+    let t = s.trim().to_lowercase()
+    if t.ends_with("'s") { t.strip_suffix("'s").unwrap_or(t) } else { t }
+}
+
+fn norm_joining(j: string) -> string {
+    let mut s = j.trim().to_lowercase()
+    if s.ends_with(" for") { s = s.strip_suffix(" for").unwrap_or(s) }
+    if s == "were" { s = s.replace("were", "was") }
+    s
+}
+
+fn main() {
+    println("${clean(" Nadya's ")}|${clean("nadya")}|${norm_joining("were for")}")
+}

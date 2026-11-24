@@ -51,9 +51,13 @@ impl<'ast> CodeGenerator<'ast> {
         args: &[String],
         obj_str: &str,
     ) -> Option<String> {
-        if args.len() != 1 || obj_str.ends_with(".cloned()") || self.ref_default_call_type(object, method, arguments).is_none() {
+        if args.len() != 1 || obj_str.ends_with(".cloned()") || obj_str.ends_with(".map(|s| s.to_string())") || self.ref_default_call_type(object, method, arguments).is_none() {
             return None;
         }
-        Some(format!("{obj_str}.cloned().{method}({})", args[0]))
+        // `Option<&str>` (`strip_suffix`) owns its payload by `to_string`; `Option<&String>`/`&Vec`/`&Map` by `cloned`.
+        let target_is_str = matches!(self.infer_expression_type(object), Some(Type::Option(p))
+            if matches!(p.as_ref(), Type::Reference(t) if matches!(t.as_ref(), Type::Custom(n) if n == "str")));
+        let own = if target_is_str { ".map(|s| s.to_string())" } else { ".cloned()" };
+        Some(format!("{obj_str}{own}.{method}({})", args[0]))
     }
 }

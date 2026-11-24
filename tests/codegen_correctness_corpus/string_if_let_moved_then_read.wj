@@ -1,0 +1,27 @@
+// A `let` bound to an `if`/`else` of string literals is an owned `string`: storing it into a field and reading it
+// again afterwards copies it.
+// expect: breach 2
+struct M {
+    hm3: string,
+    sealed: bool,
+}
+
+impl M {
+    fn run(self, carried: bool) -> Vec<string> {
+        let mut evs: Vec<string> = []
+        let r = if self.sealed {
+            if carried { "cap" } else { "breach" }
+        } else {
+            if carried { "stopped" } else { "runs" }
+        }
+        self.hm3 = r
+        evs.push(r)
+        evs
+    }
+}
+
+fn main() {
+    let mut m = M { hm3: "", sealed: true }
+    let evs = m.run(false)
+    println("${m.hm3} ${evs.len() + 1}")
+}

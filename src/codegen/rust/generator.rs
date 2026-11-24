@@ -4089,7 +4089,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .current_function_return_type
                     .as_ref()
                     .is_some_and(|t| self.is_type_copy(t))
-                && !expr_str.starts_with('*')
+                && !expr_str.starts_with('*') && !self.str_ref_optimized_params.contains(name) // `&str` is the text itself
             {
                 *expr_str = format!("*{}", expr_str);
                 return;
@@ -4098,7 +4098,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(Type::Reference(inner) | Type::MutableReference(inner)) =
             self.infer_expression_type(expr)
         {
-            if self.is_type_copy(inner.as_ref()) {
+            if self.is_type_copy(inner.as_ref()) && !matches!(inner.as_ref(), Type::Custom(n) if n == "str") {
                 *expr_str = format!("*{}", expr_str);
             }
         }

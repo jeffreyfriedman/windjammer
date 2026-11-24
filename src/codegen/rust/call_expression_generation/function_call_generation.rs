@@ -451,7 +451,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     function: &Expression<'ast>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> String {
-    let mut func_str = gen.generate_expression(function);
+    let mut func_str = gen.generate_callee_expression(function, func_name);
     // A closure literal in callee position (`x |> |v| ..` => `(|v| ..)(x)`) needs parens.
     if matches!(function, Expression::Closure { .. }) {
         func_str = format!("({})", func_str);

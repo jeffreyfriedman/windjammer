@@ -5,6 +5,23 @@ use crate::parser::*;
 use super::{operators, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// A loop variable is a local for the loop body: it shadows a struct field of the same name
+    /// (`for v in votes { v.split(..) }` inside an `impl` whose struct has a field `v`).
+    fn generate_for_statement_scoped(
+        &mut self,
+        pattern: &Pattern<'ast>,
+        iterable: &'ast Expression<'ast>,
+        body: &[&'ast Statement<'ast>],
+        location: &crate::parser::ast::SourceLocation,
+    ) -> String {
+        let mut loop_locals = std::collections::HashSet::new();
+        self.extract_pattern_bindings(pattern, &mut loop_locals);
+        self.local_variable_scopes.push(loop_locals);
+        let out = self.generate_for_statement(pattern, iterable, body, location);
+        self.local_variable_scopes.pop();
+        out
+    }
+
     pub(in crate::codegen::rust) fn generate_loop_statement(
         &mut self,
         body: &[&'ast Statement<'ast>],
@@ -178,7 +195,7 @@ impl<'ast> CodeGenerator<'ast> {
                 label,
                 location,
             } => {
-                let out = self.generate_for_statement(pattern, iterable, body, location);
+                let out = self.generate_for_statement_scoped(pattern, iterable, body, location);
                 with_loop_label(out, label.as_deref())
             }
             Statement::Break { label, value, .. } => {
