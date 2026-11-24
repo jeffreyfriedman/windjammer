@@ -1,0 +1,23 @@
+// `if d > LIMIT { HIGH } else { LOW }`: an UPPER_CASE const before the block is the condition's last operand and the
+// block's first identifier is a value, never a struct literal `LIMIT { HIGH }` (struct literals are not allowed in
+// condition position, as in Rust).
+// expect: 1 0 2
+const LIMIT: float = 1.0
+const LOW: int = 0
+const HIGH: int = 1
+
+fn classify(d: float) -> int {
+    if d > LIMIT {
+        HIGH
+    } else {
+        LOW
+    }
+}
+
+fn main() {
+    let mut n = 0
+    while n < HIGH {
+        n += 1
+    }
+    println("${classify(2.0)} ${classify(0.5)} ${n + HIGH}")
+}

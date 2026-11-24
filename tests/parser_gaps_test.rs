@@ -255,3 +255,26 @@ fn continue_does_not_take_a_label_from_the_next_line() {
     assert!(d.contains("Continue { label: None"), "{d}");
     assert!(d.contains("label: Some(\"outer\")"), "{d}");
 }
+
+// ---- (4) struct literals never start in condition position --------------------------------
+
+#[test]
+fn const_before_block_in_if_condition_is_not_a_struct_literal() {
+    for src in [
+        "const LIMIT: float = 1.0\nfn f(d: float) -> int {\n    if d > LIMIT {\n        HIGH\n    } else {\n        LOW\n    }\n}\n",
+        "fn f(d: int) { while d < LIMIT {\n    step\n} }\n",
+        "fn f(d: int) { if let Some(x) = LIMIT {\n    x\n} }\n",
+        "fn f(d: int) -> int { let v = if d > LIMIT { HIGH } else { LOW }\n v }\n",
+    ] {
+        let d = body_dbg(src);
+        assert!(!d.contains("StructLiteral"), "{src}\n{d}");
+    }
+}
+
+#[test]
+fn struct_literal_still_parses_in_parens_and_calls_of_a_condition() {
+    let d = body_dbg("fn f() { if same((P { x }), q) {\n    g()\n} }\n");
+    assert!(d.contains("StructLiteral"), "{d}");
+    let d = body_dbg("fn f() { if same(P { x }, q) {\n    g()\n} }\n");
+    assert!(d.contains("StructLiteral"), "{d}");
+}

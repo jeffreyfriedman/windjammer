@@ -461,8 +461,8 @@ impl Parser {
 
             self.expect(Token::Assign)?;
 
-            // Parse value to match against
-            let value = self.parse_expression()?;
+            // Parse value to match against (a name before `{` is the block, not a struct literal)
+            let value = self.parse_match_value()?;
 
             // Parse optional guard: `if let Some(x) = opt if x > 0 { ... }`
             let guard = if self.current_token() == &Token::If {
@@ -534,8 +534,9 @@ impl Parser {
                 location: self.current_location(),
             }))
         } else {
-            // Regular if statement
-            let condition = self.parse_expression()?;
+            // Regular if statement. The condition is a scrutinee-style expression: a name followed
+            // by `{` opens the block, never a struct literal (as in Rust).
+            let condition = self.parse_match_value()?;
 
             self.expect(Token::LBrace)?;
             let then_block = self.parse_block_statements()?;
@@ -660,8 +661,8 @@ impl Parser {
 
             self.expect(Token::Assign)?; // '='
 
-            // Parse the expression to match against
-            let expr = self.parse_expression()?;
+            // Parse the expression to match against (a name before `{` is the block)
+            let expr = self.parse_match_value()?;
 
             self.expect(Token::LBrace)?;
             let body = self.parse_block_statements()?;
@@ -717,8 +718,8 @@ impl Parser {
                 location: self.current_location(),
             }))
         } else {
-            // Regular while loop
-            let condition = self.parse_expression()?;
+            // Regular while loop: same condition rule as `if` (no struct literal at top level).
+            let condition = self.parse_match_value()?;
 
             self.expect(Token::LBrace)?;
             let body = self.parse_block_statements()?;
