@@ -14,7 +14,7 @@
 //! earns some (`CREDIT_*`), so a loop that keeps invalidating its views never scans more than a
 //! constant factor of the helper work it already does.
 
-use super::kinds::{same_name, ty_of, Shape, Ty};
+use super::kinds::{same_name, ty_is, Shape, Ty};
 use super::rt::Ctx;
 use crate::interpreter::int::IntTy;
 use crate::interpreter::value::{FloatTy, Value};
@@ -116,7 +116,7 @@ fn fill(v: &mut Value, shape: &Shape, credit: i64, tbl: &mut Vec<i64>) -> bool {
         if s.uid != 0 || !same_name(&s.name, &shape.name) || s.fields.len() != shape.fields.len() {
             return false;
         }
-        let same = s.fields.iter().zip(&shape.fields).all(|((n, x), (m, t))| same_name(n, m) && (t.is_none() || ty_of(x) == *t));
+        let same = s.fields.iter().zip(&shape.fields).all(|((n, x), (m, t))| same_name(n, m) && ty_is(x, t));
         if !same {
             return false;
         }

@@ -1,0 +1,22 @@
+// A hot loop whose live-in scalars are captured by closures (boxed locals): machine code reads them in place.
+fn main() {
+    let mut total = 0
+    let mut step = 3
+    let add = |x| x + 1
+    let peek = || step
+    let mut i = 0
+    while i < 5000 {
+        total += step + i
+        i += 1
+    }
+    println("${total} ${peek()} ${add(total)}")
+    let mut scale = 2.5
+    let read = || scale
+    let mut acc = 0.0
+    let mut k = 0
+    while k < 3000 {
+        acc += scale * 2.0
+        k += 1
+    }
+    println("${acc} ${read()}")
+}
