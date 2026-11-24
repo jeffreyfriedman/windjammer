@@ -1,0 +1,25 @@
+// `text.strip_prefix(p).unwrap_or(text)`: `strip_prefix` is declared `Option<&str>`, so the default is applied after
+// the piece is owned (`.map(|s| s.to_string())`), never `.cloned()` (E0599 on `Option<&str>`).
+// expect: /b
+// expect: /x
+struct Mount {
+    prefix: string,
+}
+
+fn clean(p: string) -> string {
+    "${p}"
+}
+
+fn strip(url: string, m: Mount) -> string {
+    let cleaned = clean(url)
+    let mut rel = cleaned
+    if m.prefix != "/" {
+        rel = cleaned.strip_prefix(m.prefix).unwrap_or(cleaned)
+    }
+    rel
+}
+
+fn main() {
+    println(strip("/a/b", Mount { prefix: "/a" }))
+    println(strip("/x", Mount { prefix: "/a" }))
+}

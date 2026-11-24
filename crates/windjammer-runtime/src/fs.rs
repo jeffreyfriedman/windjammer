@@ -144,9 +144,10 @@ pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> Result<(), String> {
     crate::caps::dir_all(path, crate::caps_core::grant::DirAllOp::Remove).map_err(|e| e.to_string())
 }
 
-/// Copy a file
-pub fn copy<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<u64, String> {
-    crate::caps::copy(from, to).map_err(|e| e.to_string())
+/// Copy a file (Windjammer `std::fs::copy(from, to) -> Result<(), string>`: the declaration is the contract, the byte
+/// count is not part of it)
+pub fn copy<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), String> {
+    crate::caps::copy(from, to).map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// Rename a file or directory

@@ -30,8 +30,6 @@ config::get_backend
 config::get_or
 config::has_backend
 crypto::hash_password_with_cost
-crypto::sha512
-crypto::sha512_bytes
 csv::parse_bytes
 csv::parse_with_headers
 csv::reader_with_delimiter

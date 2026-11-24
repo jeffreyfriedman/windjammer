@@ -1,0 +1,30 @@
+// A `match` statement whose first arm is an or-pattern with an empty body and whose wildcard arm is a `return` keeps
+// that `return` when it is not the function's last statement (`if let .. { } else { reply(..) }` as a statement is E0308).
+// expect: 200:ok
+// expect: 405:no
+enum Method {
+    Get,
+    Head,
+    Post,
+}
+
+struct Req {
+    method: Method,
+}
+
+fn reply(status: int, body: string) -> string {
+    "${status}:${body}"
+}
+
+fn handle(req: Req) -> string {
+    match req.method {
+        Method::Get | Method::Head => {},
+        _ => return reply(405, "no"),
+    }
+    reply(200, "ok")
+}
+
+fn main() {
+    println(handle(Req { method: Method::Get }))
+    println(handle(Req { method: Method::Post }))
+}

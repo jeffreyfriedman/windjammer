@@ -39,7 +39,7 @@ pub fn remove(key: string) {
 }
 
 /// Get the current working directory
-pub fn current_dir() -> string {
+pub fn current_dir() -> Result<string, string> {
     // Compiler generates platform-specific implementation:
     // - Native: std::env::current_dir().to_string_lossy()
     // - WASM: window.location.pathname

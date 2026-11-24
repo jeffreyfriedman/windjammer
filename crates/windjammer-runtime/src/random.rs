@@ -30,10 +30,12 @@ pub fn choice<T: Clone>(items: &[T]) -> Option<T> {
     items.choose(&mut rand::thread_rng()).cloned()
 }
 
-/// Shuffle a vector
-pub fn shuffle<T>(items: &mut [T]) {
+/// Shuffle a vector (Windjammer `std::random::shuffle(list: Vec<T>) -> Vec<T>`: the declaration is the contract, the
+/// shuffled list is returned)
+pub fn shuffle<T>(mut items: Vec<T>) -> Vec<T> {
     use rand::seq::SliceRandom;
     items.shuffle(&mut rand::thread_rng());
+    items
 }
 
 #[cfg(test)]

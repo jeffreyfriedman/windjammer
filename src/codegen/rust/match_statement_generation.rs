@@ -544,10 +544,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let has_else = wildcard_body_stmts.is_some();
                 let old_in_func_body = self.in_function_body;
                 let old_in_void_block = self.in_void_block;
-                if !has_else {
-                    self.in_function_body = false;
-                    self.in_void_block = true;
-                }
+                self.enter_if_let_body(has_else);
 
                 self.indent_level += 1;
                 if let Expression::Block { statements, .. } = main_arm.body {
@@ -1759,5 +1756,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         saw_some_wildcard
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Generation state for the body of an `if let`. Without an `else` the body is a unit statement. With one, a
+    /// statement that is not the function's last is not the function's value, so its `else` block keeps its `return`
+    /// (a tail `reply(..)` there is rustc E0308), as for `if`/`else`.
+    fn enter_if_let_body(&mut self, has_else: bool) {
+        if !has_else || !self.current_is_last_statement {
+            self.in_function_body = false;
+        }
+        if !has_else {
+            self.in_void_block = true;
+        }
     }
 }

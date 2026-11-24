@@ -1,0 +1,12 @@
+// `text.split(sep).last().unwrap_or(text)`: the pieces of a split are `&str`, so the default is applied after the last
+// piece is owned (`.map(|s| s.to_string())`), never `.cloned()` (E0599 on `Option<&str>`).
+// expect: r.txt
+// expect: zz
+fn lastseg(file: string) -> string {
+    file.split("/").last().unwrap_or(file)
+}
+
+fn main() {
+    println(lastseg("p/q/r.txt"))
+    println(lastseg("zz"))
+}

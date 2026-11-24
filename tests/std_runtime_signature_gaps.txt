@@ -1,0 +1,24 @@
+# std/*.wj functions whose declared parameter or return TYPES the compiled runtime (crates/windjammer-runtime) does not
+# match, by kind (see tests/std_runtime_parity_test.rs `kind`): `module::function#ret`, `#pN` (parameter N), `#arity`.
+# Shrink-only: the gate fails on a mismatch that is not listed here and on a listed one that now agrees. Each line is a
+# decision still open (which side is the wj-facing contract), not a bug known to be harmless.
+#
+# opaque runtime handle types declared as a placeholder `int` (tests/bug_std_sync_channel_shared_wiring_test.rs covers the use)
+sync::shared#ret
+sync::shared_add#p0
+sync::shared_add#ret
+sync::shared_get#p0
+# a runtime-specific result type where the declaration promises text: pick one (compute::background returns BackgroundTask<T>,
+# the declaration Future<T>; process::execute returns CommandOutput, the declaration text)
+compute::background#ret
+process::execute#ret
+# the declaration is the shell form (`run(command)`), the runtime the argv form (`run(program, args)`)
+process::run#arity
+# assertions are lowered to macros by the compiler (src/codegen/rust/macro_conversion.rs); the runtime function takes a message
+test::assert#arity
+test::assert_contains#p0
+testing::assert#arity
+testing::assert_eq#arity
+testing::assert_ne#arity
+# declaration `parse(text, format) -> Result<DateTime, string>`, runtime `parse(text) -> Result<i64, String>` (an RFC 3339 parser)
+time::parse#arity
