@@ -228,6 +228,7 @@ impl SignatureRegistry {
     }
 
     pub fn new() -> Self {
+        crate::debug_env::count(crate::debug_env::Stage::RegistryCopy);
         Self::stdlib().clone()
     }
 

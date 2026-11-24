@@ -84,6 +84,7 @@ pub fn generate_rust(program: &Program) -> Result<String> {
 /// The Rust source of `program` for in-process readers (`wj check`'s move prediction, the interpreter's
 /// compiled-signature facts): no rustfmt pass, no additional files, no linter output.
 pub fn generate_rust_source(program: &Program) -> Result<String> {
+    crate::debug_env::count(crate::debug_env::Stage::RustGeneration);
     let config = CodegenConfig { idiomatic_output: false, report_lints: false, ..Default::default() };
     Ok(backend::create_backend(Target::Rust).generate(program, &config)?.source)
 }

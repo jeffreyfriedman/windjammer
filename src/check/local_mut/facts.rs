@@ -80,6 +80,7 @@ impl Facts {
     /// Facts for every file of one program: two analyzer passes (the second with the signatures of all files, as
     /// the build does), then the IR solver per file.
     pub fn build(files: &[(&str, &Program<'static>)], tables: Arc<StdlibTables>) -> Self {
+        crate::debug_env::count(crate::debug_env::Stage::FactsBuild);
         let mut facts = Facts { core: Some(crate::ir::stdlib_tables::shared_core_surface()), ..Default::default() };
         for (_, program) in files {
             facts.declarations(&program.items);

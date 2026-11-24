@@ -170,6 +170,7 @@ impl IrPipeline {
         registry: &crate::analyzer::SignatureRegistry,
         struct_field_types: Option<&HashMap<String, HashMap<String, crate::parser::Type>>>,
     ) -> IrModule {
+        crate::debug_env::count(crate::debug_env::Stage::IrLowering);
         // Borrowed, never copied: the table is library-wide and this runs per file (and per fixed-point round).
         let no_fields = HashMap::new();
         let struct_field_types = struct_field_types.unwrap_or(&no_fields);

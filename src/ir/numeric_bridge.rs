@@ -195,6 +195,7 @@ impl UnifiedNumericInference {
 
     /// Single-file convenience: prepare + collect + solve.
     pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
+        crate::debug_env::count(crate::debug_env::Stage::Numeric);
         self.reset_imported_type_registry();
         crate::debug_env::phase("numeric-reset");
         self.prepare_program(program);
