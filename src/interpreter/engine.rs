@@ -174,6 +174,8 @@ pub struct Interpreter {
     pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Compiled closure bodies by body address (`None` = run in the walker).
     pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// The compiled closure called last, by body address (what `compiled_closures` holds for that key).
+    pub(crate) last_closure: Option<(usize, Rc<super::resolved::CompiledClosure>)>,
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
     /// Machine code for hot integer functions is allowed (`--no-jit` / `WJ_JIT=0` clear it).
@@ -329,6 +331,7 @@ impl Interpreter {
             engine_resolved: false,
             compiled: HashMap::default(),
             compiled_closures: HashMap::default(),
+            last_closure: None,
             rstack: Vec::new(),
             jit_enabled: true,
             osr_regs: Vec::new(),
