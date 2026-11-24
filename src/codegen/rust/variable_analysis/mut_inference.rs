@@ -425,11 +425,19 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn expression_is_field_of_variable(&self, expr: &Expression, var_name: &str) -> bool {
-        match expr {
-            Expression::FieldAccess { object, .. } => {
-                matches!(**object, Expression::Identifier { ref name, .. } if name == var_name)
+        // `x.f`, and a write through an element of a field (`x.f[i]`, `x.f[i].g`): all change the variable's field.
+        let mut through_field = false;
+        let mut cur = expr;
+        loop {
+            match cur {
+                Expression::FieldAccess { object, .. } => {
+                    through_field = true;
+                    cur = object;
+                }
+                Expression::Index { object, .. } if through_field || matches!(**object, Expression::FieldAccess { .. }) => cur = object,
+                Expression::Identifier { name, .. } => return through_field && name == var_name,
+                _ => return false,
             }
-            _ => false,
         }
     }
 
