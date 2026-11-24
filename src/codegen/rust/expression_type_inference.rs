@@ -882,6 +882,10 @@ impl<'ast> CodeGenerator<'ast> {
     fn deref_method_lookup_receivers(receiver: &Type) -> Vec<Type> {
         let peeled = Self::peel_references(receiver).clone();
         let mut out = vec![peeled.clone()];
+        // `&str` (`s.trim()`) has the methods the surface declares on `String`: `s.trim().to_lowercase()` is a `String`.
+        if matches!(&peeled, Type::Custom(n) if n == "str") {
+            out.push(Type::String);
+        }
         if let Type::Parameterized(name, args) = &peeled {
             let leaf = crate::type_classification::type_name_leaf(name);
             if matches!(leaf, "Arc" | "Rc" | "Box") && args.len() == 1 {
