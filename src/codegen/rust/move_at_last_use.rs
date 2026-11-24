@@ -218,6 +218,34 @@ impl<'ast> CodeGenerator<'ast> {
         self.clone_facts.stmt_stack.last().is_some_and(|stmt| self.clone_facts.read_after.get(stmt).is_some_and(|names| names.contains(name)))
     }
 
+    /// A value tail (the arm of an `if` passed as an argument) that is a binding this function emits as a
+    /// reference, as a block value built for a call argument: the value is owned (it is moved into a by-value
+    /// formal or borrowed as a temporary), so the tail is a copy (`step(if c { a } else { b }, ..)` with `a`,
+    /// `b` borrowed `Data` parameters). A Copy type, a value without `Clone`, or an owned binding passes through.
+    pub(in crate::codegen::rust) fn arg_block_tail_copy_of_borrowed_binding(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+        let crate::parser::Expression::Identifier { name, .. } = expr else { return emitted };
+        if !self.idiom.call_arg_block_value || emitted != *name || !self.binding_is_known_borrow(name) {
+            return emitted;
+        }
+        let Some(ty) = self.infer_expression_type(expr) else { return emitted };
+        let pointee = match &ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref().clone(),
+            other => other.clone(),
+        };
+        if self.is_type_copy(&pointee) || !self.type_known_clone(&pointee, 0) || super::types::is_windjammer_text_type(&pointee) {
+            return emitted;
+        }
+        format!("{emitted}.clone()")
+    }
+
+    /// Generates a call argument as a value operand: block tails inside it are copies of borrowed bindings.
+    pub(in crate::codegen::rust) fn generate_call_argument_operand(&mut self, arg: &crate::parser::Expression<'ast>) -> String {
+        let prev = std::mem::replace(&mut self.idiom.call_arg_block_value, true);
+        let out = self.generate_value_operand(arg);
+        self.idiom.call_arg_block_value = prev;
+        out
+    }
+
     pub(in crate::codegen::rust) fn copy_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
         self.copy_if_read_again_at(expr, emitted, MoveSite::Argument)
     }

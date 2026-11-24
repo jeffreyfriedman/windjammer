@@ -21,6 +21,9 @@ pub(crate) struct IdiomScratch {
     pub(crate) text_iterator_locals: HashSet<String>,
     /// Locals bound to `text.split(..).next()` and the like: `Option<&str>` values.
     pub(crate) text_option_locals: HashSet<String>,
+    /// A call argument is being generated: a block value in it is built into a fresh value (moved into a by-value
+    /// formal, or borrowed as a temporary for a shared one), so its tails are never references to a binding.
+    pub(crate) call_arg_block_value: bool,
     /// Parameters of the comparator closure being generated (`sort_by(|a, b| ..)`): they are `&T`.
     pub(crate) ref_closure_params: HashSet<String>,
     /// Parameters of an iterator adapter's closure, with the reference depth of their type from the adapter's
