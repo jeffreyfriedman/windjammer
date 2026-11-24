@@ -527,7 +527,11 @@ impl Lo<'_, '_> {
         let (r, ty) = match t {
             Target::Index(slot, Elem::Scalar(ty), i) => {
                 let a = [*slot as i64, code(i.ty), code(*ty)].map(|c| self.k(c));
-                (self.call("index_get", rt::index_get as *const () as usize, &[a[0], i.v, a[1], a[2]], false, true), *ty)
+                let helper = |lo: &mut Self| lo.call("index_get", rt::index_get as *const () as usize, &[a[0], i.v, a[1], a[2]], false, true);
+                match rt::view_elem(*ty) {
+                    Some(size) if !self.it.fast_off("packedread") => (self.view_load(*slot, i, *ty, size, helper), *ty),
+                    _ => (helper(self), *ty),
+                }
             }
             Target::IndexField(slot, shape, i, f) => {
                 let (hint, ty) = shape.field(f)?;
@@ -580,6 +584,44 @@ impl Lo<'_, '_> {
             }
         }
         Some(())
+    }
+
+    /// `v[i]` of a packed vector: when the slot's view (`rt::View`, store or read; the helper fills a read one) has this
+    /// element type and `i` is in bounds, read the element's bits in place; else the helper (which also fails an index
+    /// out of bounds, as the walker does).
+    fn view_load(&mut self, slot: usize, i: &Val, ty: Ty, size: i64, helper: impl FnOnce(&mut Self) -> V) -> V {
+        let at = rt::VIEW_AT + (slot % rt::VIEWS * std::mem::size_of::<rt::View>()) as i32;
+        let flags = cranelift_codegen::ir::MemFlags::trusted();
+        let key = self.b.ins().load(types::I64, flags, self.ctx, at);
+        let ptr = self.b.ins().load(types::I64, flags, self.ctx, at + 8);
+        let len = self.b.ins().load(types::I64, flags, self.ctx, at + 16);
+        // a read view's key has `READ_VIEW` set: the same view, readable but not writable
+        let key = self.b.ins().band_imm(key, !rt::READ_VIEW);
+        let same = self.b.ins().icmp_imm(IntCC::Equal, key, rt::view_key(slot, ty));
+        // unsigned: a negative index is out of bounds
+        let inside = self.b.ins().icmp(IntCC::UnsignedLessThan, i.v, len);
+        let hit = self.b.ins().band(same, inside);
+        let (fast, slow, join) = (self.b.create_block(), self.b.create_block(), self.b.create_block());
+        let r = self.b.append_block_param(join, types::I64);
+        self.b.ins().brif(hit, fast, &[], slow, &[]);
+        self.b.switch_to_block(fast);
+        self.b.seal_block(fast);
+        // test-only mutant `viewreadidx` (debug builds): every element read at index 0 (inside the vector)
+        let k = if mutant(self.it, "viewreadidx") { self.b.ins().iconst(types::I64, 0) } else { i.v };
+        let off = self.b.ins().imul_imm(k, size);
+        let addr = self.b.ins().iadd(ptr, off);
+        let x = if size == 1 { self.b.ins().uload8(types::I64, flags, addr, 0) } else { self.b.ins().load(types::I64, flags, addr, 0) };
+        let n = self.b.ins().load(types::I64, flags, self.ctx, rt::VIEW_READS);
+        let n = self.b.ins().iadd_imm(n, 1);
+        self.b.ins().store(flags, n, self.ctx, rt::VIEW_READS);
+        self.b.ins().jump(join, &[x.into()]);
+        self.b.switch_to_block(slow);
+        self.b.seal_block(slow);
+        let y = helper(self);
+        self.b.ins().jump(join, &[y.into()]);
+        self.b.switch_to_block(join);
+        self.b.seal_block(join);
+        r
     }
 
     /// `v[i] = x` into a packed vector: when the slot's view (`rt::View`, filled by an earlier `index_set`)
