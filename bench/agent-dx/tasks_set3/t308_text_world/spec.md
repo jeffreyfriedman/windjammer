@@ -1,5 +1,7 @@
 Simulate a tiny text-adventure world. The input has two parts: world lines, then a line holding exactly `---`, then command lines. Without a `---` line the whole input is world lines and there are no commands. Empty lines are ignored in both parts (but world lines are still numbered by their position in the input, starting at 1). All fields are separated by single spaces. Names are non-empty tokens without spaces. Numbers (WEIGHT, CAP, LIMIT) are digits only with at most 6 digits (leading zeros allowed).
 
+**Line splitting (exact, no trimming).** Fields are obtained by splitting the line on single space characters, exactly. A leading, trailing or doubled space therefore produces an empty field, and the line is handled like any other line with a wrong number of fields or a malformed token (for example ` open a 1` is not `open a 1`). Only a line of length zero is an empty line: a line that holds only spaces is not.
+
 World lines, processed in order. A line that is malformed, or refers to something not yet declared, or declares a duplicate, prints `error: bad world line N` (N is its line number) and has no other effect:
 
 - `room NAME` declares a room.

@@ -1,5 +1,7 @@
 Implement a small spreadsheet. The input holds one command per line; empty lines are ignored. Cells are named by a column letter `A` to `J` followed by a row number 1 to 20 without leading zeros (`A1`, `J20`; `A0`, `A21`, `K1`, `a1` and `A01` are not cells). All values are integers.
 
+**Line splitting (exact, no trimming).** Fields are obtained by splitting the line on single space characters, exactly. A leading, trailing or doubled space therefore produces an empty field, and the line is handled like any other line with a wrong number of fields or a malformed token (for example ` open a 1` is not `open a 1`). Only a line of length zero is an empty line: a line that holds only spaces is not.
+
 Commands (a command word is followed by single spaces):
 
 - `set CELL CONTENT` stores CONTENT, the rest of the line after `set CELL ` (non-empty, may contain spaces), in the cell. If CONTENT starts with `=` it is a formula. Otherwise, if it is an optional `-` followed by 1 to 9 digits, it is a number. Anything else is text.

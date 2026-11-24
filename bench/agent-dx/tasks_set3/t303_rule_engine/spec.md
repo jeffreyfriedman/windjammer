@@ -1,5 +1,7 @@
 The input describes a shopping cart and an ordered list of discount rules, one per line, fields separated by single spaces. Empty lines are ignored but still count when numbering lines (line numbers start at 1). All amounts are integers in cents.
 
+**Line splitting (exact, no trimming).** Fields are obtained by splitting the line on single space characters, exactly. A leading, trailing or doubled space therefore produces an empty field, and the line is handled like any other line with a wrong number of fields or a malformed token (for example ` open a 1` is not `open a 1`). Only a line of length zero is an empty line: a line that holds only spaces is not.
+
 Line kinds:
 
 - `item SKU QTY UNIT`: a cart line. QTY is at least 1, UNIT at least 0.

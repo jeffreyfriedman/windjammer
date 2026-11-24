@@ -1,5 +1,7 @@
 Resolve an install order for packages with versioned dependencies. The input has one declaration per line, fields separated by single spaces. Empty lines are ignored but still count when numbering lines (starting at 1).
 
+**Line splitting (exact, no trimming).** Fields are obtained by splitting the line on single space characters, exactly. A leading, trailing or doubled space therefore produces an empty field, and the line is handled like any other line with a wrong number of fields or a malformed token (for example ` open a 1` is not `open a 1`). Only a line of length zero is an empty line: a line that holds only spaces is not.
+
 - `pkg NAME VERSION` declares a package with a single version.
 - `dep NAME DEP OP VERSION` says package NAME requires package DEP whose version satisfies the constraint `OP VERSION`. OP is one of `>=`, `<=`, `=`, `>`, `<`. The same NAME and DEP pair may have several `dep` lines; all must hold.
 - `install NAME` asks for NAME (and everything it needs) to be installed. Several `install` lines are allowed.

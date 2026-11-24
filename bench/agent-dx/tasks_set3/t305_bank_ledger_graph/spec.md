@@ -1,5 +1,7 @@
 Simulate a small bank ledger. The input holds one command per line, fields separated by single spaces; empty lines are ignored. Account names are non-empty tokens without spaces. AMOUNT is digits only with at most 9 digits (cents). Output is produced as commands are processed.
 
+**Line splitting (exact, no trimming).** Fields are obtained by splitting the line on single space characters, exactly. A leading, trailing or doubled space therefore produces an empty field, and the line is handled like any other line with a wrong number of fields or a malformed token (for example ` open a 1` is not `open a 1`). Only a line of length zero is an empty line: a line that holds only spaces is not.
+
 Commands:
 
 - `open NAME AMOUNT` creates an account with that opening balance (AMOUNT may be 0). If NAME already exists: `error: account exists NAME`.

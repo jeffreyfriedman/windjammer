@@ -1,5 +1,7 @@
 Simulate a line editor. The buffer is a list of text lines, initially empty, indexed from 0. The input holds one command per line, fields separated by single spaces. Empty input lines are ignored.
 
+**Line splitting (exact, no trimming).** Fields are obtained by splitting the line on single space characters, exactly. A leading, trailing or doubled space therefore produces an empty field, and the line is handled like any other line with a wrong number of fields or a malformed token (for example ` open a 1` is not `open a 1`). Only a line of length zero is an empty line: a line that holds only spaces is not.
+
 Commands:
 
 - `insert N TEXT` inserts TEXT as a new line so that it ends up at index N (N from 0 to the current line count inclusive).

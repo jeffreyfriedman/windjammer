@@ -1,5 +1,7 @@
 Implement a limit order book with price-time priority. The input holds one command per line, fields separated by single spaces; empty lines are ignored. Trader names are non-empty tokens. Numbers are digits only: QTY is 1 to 1000000, PRICE is 1 to 100000, ID is a positive integer with at most 7 digits. All output is printed as commands are processed.
 
+**Line splitting (exact, no trimming).** Fields are obtained by splitting the line on single space characters, exactly. A leading, trailing or doubled space therefore produces an empty field, and the line is handled like any other line with a wrong number of fields or a malformed token (for example ` open a 1` is not `open a 1`). Only a line of length zero is an empty line: a line that holds only spaces is not.
+
 Commands:
 
 - `buy TRADER QTY PRICE [ioc|fok]` and `sell TRADER QTY PRICE [ioc|fok]` submit a limit order. Without a flag the order is good-till-cancelled.
