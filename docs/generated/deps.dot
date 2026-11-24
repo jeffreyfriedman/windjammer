@@ -158,7 +158,7 @@ digraph deps {
   "check" -> "embedded_assets" [label="4"];
   "check" -> "fuzzy_matcher" [label="5"];
   "check" -> "intrinsics" [label="2"];
-  "check" -> "ir" [label="34"];
+  "check" -> "ir" [label="36"];
   "check" -> "lexer" [label="9"];
   "check" -> "linter" [label="3"];
   "check" -> "metadata" [label="6"];
