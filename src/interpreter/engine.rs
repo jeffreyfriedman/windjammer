@@ -192,6 +192,8 @@ pub struct Interpreter {
     pub(crate) jit_mutant: Option<String>,
     /// How often each fast path ran (reported with `WJ_JIT_DEBUG`, so a gate can tell one that silently stopped).
     pub(crate) fast: FastHits,
+    /// The buffer `push_str("${..}")` formats into (`strfast.rs`): taken for the statement, returned cleared; empty while a nested statement holds it.
+    pub(crate) fmt_scratch: String,
     /// How often the resolved engine left its compiled form for a slower one (reported with `WJ_JIT_DEBUG`, so a
     /// gate can hold each count where it is: a fallback that grows is a regression no output shows).
     pub(crate) fallback: Fallbacks,
@@ -343,6 +345,7 @@ impl Interpreter {
             jit_debug: false,
             jit_mutant: None,
             fast: FastHits::default(),
+            fmt_scratch: String::new(),
             fallback: Fallbacks::default(),
             #[cfg(feature = "jit")]
             jit: None,
@@ -652,6 +655,8 @@ pub(crate) struct FastHits {
     pub(crate) closurescope: u64,
     /// `x.len()` on a local string, vector or map read in place.
     pub(crate) lenfast: u64,
+    /// `x.len() <op> constant` conditions decided from the local's length in place.
+    pub(crate) lencmp: u64,
     /// Machine-code element reads and writes done straight on a packed vector.
     pub(crate) packedidx: u64,
     /// Machine-code element accesses through a reference chain resolved once per unit run.

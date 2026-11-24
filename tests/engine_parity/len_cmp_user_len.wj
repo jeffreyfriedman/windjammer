@@ -1,0 +1,21 @@
+// `x.len() <op> constant` when the program defines its own `len` method: the engine's length
+// shortcuts stay off, so a user type, a string and a vector all take the generic call.
+struct Bag {
+    n: int,
+}
+
+impl Bag {
+    fn len(self) -> int {
+        self.n * 2
+    }
+}
+
+fn main() {
+    let s = "héllo"
+    let v = [1, 2, 3]
+    let bag = Bag { n: 4 }
+    if bag.len() > 7 {
+        println("bag ${bag.len()}")
+    }
+    println("${s.len() > 5} ${s.len() == 6} ${v.len() < 4} ${v.len() >= 4} ${bag.len() == 8}")
+}

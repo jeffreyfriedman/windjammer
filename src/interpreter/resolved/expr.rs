@@ -109,7 +109,18 @@ pub(super) fn cond(cx: &mut Cx, e: E, what: &'static str, deref: bool) -> Option
             let (l, r) = (expr_eval(cx, left)?, expr_eval(cx, right)?);
             Some(match (l, r) {
                 (X::I(l, _), X::I(r, _)) => typed::compare(*op, l, r, lead_loc(e))?,
-                (l, r) => fast::compare(l.operand(), r.operand(), *op, lead_loc(e), what)?,
+                (l, r) => {
+                    let k = match &r {
+                        X::Const(Value::Int(k, t)) => Some((*k, *t)),
+                        X::I(I::Const(c), t) => Some((*c as i128, *t)),
+                        _ => None,
+                    };
+                    let c = fast::compare(l.operand(), r.operand(), *op, lead_loc(e), what)?;
+                    match k {
+                        Some(k) => super::method::len_cmp(cx, left, *op, k, lead_loc(e), c),
+                        None => c,
+                    }
+                }
             })
         }
         Expression::Binary { left, op: op @ (BinaryOp::And | BinaryOp::Or), right, .. } if boolish(left) && boolish(right) => {

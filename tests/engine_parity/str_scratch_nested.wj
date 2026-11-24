@@ -1,0 +1,61 @@
+// `s.push_str("${a}|${b}")` formats into a buffer the engine reuses between statements: an argument
+// that itself builds strings with `push_str` of interpolations (nested, recursive, from a user
+// `Display`), a long push followed by a short one (no bytes of the first survive), an empty template
+// piece, a string pushed onto itself through a clone, and a panic in an argument after an earlier
+// push (the string keeps what was pushed before).
+struct Tag {
+    n: int,
+}
+
+impl Display for Tag {
+    fn fmt(self, f: Formatter) -> FmtResult {
+        let mut inner = String::new()
+        inner.push_str("<${self.n}:${self.n * 2}>")
+        write!(f, "{}", inner)
+    }
+}
+
+fn build(n: int) -> int {
+    let mut t = String::new()
+    t.push_str("${n}-${n + 1}")
+    t.len()
+}
+
+fn rec(n: int) -> int {
+    if n <= 0 {
+        return 0
+    }
+    let mut t = String::new()
+    t.push_str("${n}/${rec(n - 1)}")
+    t.len()
+}
+
+fn main() {
+    let mut s = String::new()
+    let mut i = 0
+    while i < 30 {
+        s.push_str("${build(i)}|${rec(i % 5)}|${Tag { n: i }}")
+        i += 1
+    }
+    println("${s.len()} ${s}")
+    let mut a = String::new()
+    a.push_str("${123456789012345678}${98765432109876}")
+    a.push_str("${1}")
+    let em = ""
+    a.push_str("${em}${em}")
+    a.push_str("${7}${8}")
+    println(a)
+    let mut b = String::new()
+    let mut j = 0
+    while j < 10 {
+        let c = b.clone()
+        b.push_str("${c.len()}${j}")
+        j += 1
+    }
+    println(b)
+    let mut d = String::from("keep")
+    d.push_str("${1}")
+    let zero = 0
+    d.push_str("${5}${100 / zero}")
+    println("unreachable ${d}")
+}
