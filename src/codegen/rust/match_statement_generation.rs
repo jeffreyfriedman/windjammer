@@ -252,6 +252,12 @@ impl<'ast> CodeGenerator<'ast> {
         value_str
     }
 
+    /// The match is the value of the function: its arms are tail values, not statements. Read before anything else
+    /// generates nested blocks (they overwrite the flag).
+    fn match_is_function_value(&self) -> bool {
+        self.current_is_last_statement && self.in_function_body && !self.in_void_block && self.current_function_return_type.is_some()
+    }
+
     /// Generate code for a match statement
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn generate_match_statement(
@@ -259,6 +265,7 @@ impl<'ast> CodeGenerator<'ast> {
         value: &'ast Expression<'ast>,
         arms: &[crate::parser::MatchArm<'ast>],
     ) -> String {
+        let value_tail = self.match_is_function_value();
         // TDD FIX: Optimize boolean match expressions to matches! macro
         if arms.len() == 2 && arms[0].guard.is_none() && arms[1].guard.is_none() {
             let arm0_is_true = matches!(
@@ -514,23 +521,8 @@ impl<'ast> CodeGenerator<'ast> {
                 // mutably borrowed collection (`slots[i]` → IndexMut).
                 let scrutinee_is_mut_ref = scrutinee_ref_prefix.contains("mut")
                     || self.option_indexed_scrutinee_needs_mut_opt(Some(main_arm), value);
-                let upgraded_pattern = if let Expression::Block { statements, .. } = main_arm.body {
-                    self.upgrade_pattern_mut_bindings(
-                        &main_arm.pattern,
-                        statements.as_slice(),
-                        scrutinee_is_mut_ref,
-                        Some(main_arm.body),
-                        Some(value),
-                    )
-                } else {
-                    self.upgrade_pattern_mut_bindings(
-                        &main_arm.pattern,
-                        &[],
-                        scrutinee_is_mut_ref,
-                        Some(main_arm.body),
-                        Some(value),
-                    )
-                };
+                let body_stmts: &[&Statement] = if let Expression::Block { statements, .. } = main_arm.body { statements.as_slice() } else { &[] };
+                let upgraded_pattern = self.upgrade_pattern_mut_bindings(&main_arm.pattern, body_stmts, scrutinee_is_mut_ref, Some(main_arm.body), Some(value));
 
                 let mut output = self.indent();
                 output.push_str("if let ");
@@ -652,7 +644,8 @@ impl<'ast> CodeGenerator<'ast> {
                     self.cast_usize_arm_to_return_int(&mut body_str, main_arm.body);
                     output.push_str(&self.indent());
                     output.push_str(&body_str);
-                    output.push_str(";\n");
+                    // `else` arm present and the match is the function's value: this arm is the value too
+                    output.push_str(if has_else && value_tail { "\n" } else { ";\n" });
                 }
                 self.indent_level -= 1;
                 self.in_void_block = old_in_void_block;
