@@ -1,4 +1,4 @@
-// A three-member cycle a -> b -> c -> a; only the leaf (reached from c) mutates `self`.
+// A three-member cycle a -> b -> c -> a; only the leaf (reached from the entry member a) mutates `self`.
 // expect: len 2
 struct S {
     v: Vec<int>,
@@ -10,9 +10,12 @@ impl S {
     }
 
     fn a(self, k: int) {
-        if k > 0 {
-            self.b(k - 1)
+        if k == 0 {
+            self.leaf()
+            self.leaf()
+            return
         }
+        self.b(k - 1)
     }
 
     fn b(self, k: int) {
@@ -20,11 +23,6 @@ impl S {
     }
 
     fn c(self, k: int) {
-        if k == 0 {
-            self.leaf()
-            self.leaf()
-            return
-        }
         self.a(k)
     }
 }
