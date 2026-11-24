@@ -465,10 +465,22 @@ fn int_ty(kt: i64) -> Option<crate::interpreter::int::IntTy> {
 /// projection, a lock guard, `Rc`, a non-map) takes the general helper.
 #[inline(always)]
 unsafe fn lean_map<R>(c: *mut Ctx, slot: i64, f: impl FnOnce(&mut Rc<crate::interpreter::kmap::KMap>) -> R) -> Option<R> {
-    unsafe { lean_value(c, slot, |v| match v {
-        Value::Map(km) => Some(f(km)),
+    // SAFETY: as in `with_slot`; `f` sees only the map, never the context.
+    if let Some(i) = unsafe { local_cell(c, slot) } {
+        let ctx = unsafe { &mut *c };
+        let cell = ctx.cells[i].1.as_ref().expect("resolved");
+        let mut g = cell.try_borrow_mut().ok()?;
+        return match &mut *g {
+            Value::Map(km) => Some(f(km)),
+            _ => None,
+        };
+    }
+    let ctx = unsafe { &*c };
+    let it = unsafe { &mut *ctx.it };
+    match it.rstack.get_mut(ctx.base + slot as usize) {
+        Some(Value::Map(km)) => Some(f(km)),
         _ => None,
-    }) }.flatten()
+    }
 }
 
 /// The local at `slot` (directly or through plain references, `local_cell`) handed to `f`, which answers `None` for a
