@@ -143,7 +143,10 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             match next(it, inner)? {
                 None => return Ok(None),
                 Some(x) => {
-                    if truthy(&it.call_value1(f, x.clone())?) {
+                    let keep = it.call_value1(f, x.dup())?;
+                    let keep_it = truthy(&keep);
+                    keep.discard();
+                    if keep_it {
                         return Ok(Some(x));
                     }
                 }

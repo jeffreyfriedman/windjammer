@@ -580,6 +580,8 @@ impl Interpreter {
         if let Value::Func(c) = f {
             let mut one = [x];
             if let Some(r) = self.call_compiled_closure(c, &mut one) {
+                // a compiled call took the argument (left `Unit`): nothing to drop
+                std::mem::forget(one);
                 return r;
             }
             let [x] = one; // declined before it took the argument

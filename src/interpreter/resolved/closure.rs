@@ -181,7 +181,7 @@ impl Interpreter {
             for ((pos, s), v) in cc.free.iter().zip(&cc.free_by_value) {
                 self.rstack[base + s] = if *v {
                     self.fast.closurecopy += 1;
-                    env[*pos].1.borrow().clone()
+                    env[*pos].1.borrow().dup()
                 } else {
                     Value::Ref(Box::new(Place::of_slot(env[*pos].1.clone())))
                 };
