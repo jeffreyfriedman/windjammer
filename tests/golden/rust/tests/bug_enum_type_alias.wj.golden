@@ -1,4 +1,4 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum DialogueConsequence {
     CompleteQuest(QuestId),
     FailQuest(QuestId),

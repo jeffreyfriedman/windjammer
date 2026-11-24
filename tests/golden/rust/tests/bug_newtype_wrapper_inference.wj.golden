@@ -1,11 +1,11 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum DialogueConsequence {
     SetFlag(String),
     CompleteQuest(QuestId),
     UnlockQuest(QuestId),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 
 struct DialogueState {
     completed_quests: Vec<QuestId>,
