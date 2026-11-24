@@ -174,6 +174,9 @@ pub struct Interpreter {
     pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Compiled closure bodies by body address (`None` = run in the walker).
     pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Direct-mapped front of `compiled_closures` (slot = body address bits): a loop over an iterator chain calls
+    /// its few closures in turn, so a single "called last" entry always missed and paid a hash probe per call.
+    pub(crate) closure_cache: [Option<(usize, Rc<super::resolved::CompiledClosure>)>; 8],
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
     /// Machine code for hot integer functions is allowed (`--no-jit` / `WJ_JIT=0` clear it).
@@ -329,6 +332,7 @@ impl Interpreter {
             engine_resolved: false,
             compiled: HashMap::default(),
             compiled_closures: HashMap::default(),
+            closure_cache: Default::default(),
             rstack: Vec::new(),
             jit_enabled: true,
             osr_regs: Vec::new(),

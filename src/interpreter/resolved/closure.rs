@@ -33,6 +33,11 @@ pub(crate) struct CompiledClosure {
     /// body only reads is a plain slot (no walker slot per call); it takes plain values only.
     boxed: Vec<usize>,
     body: Code,
+    /// No boxed parameter slot and no free name: the guard loops of a call have nothing to check or bind.
+    simple: bool,
+    /// The window is exactly: the by-value free names (slots `0..free.len()`), then one slot per parameter, in
+    /// order, none boxed or `_`, then the body's locals: a call pushes the values in place and pads with `Unit`.
+    flat: bool,
     /// The closure value whose environment last matched `env_names`. A weak reference keeps its allocation
     /// (never its environment) alive, so no other closure can appear at that address and pass unchecked.
     checked: std::cell::RefCell<std::rc::Weak<Callable>>,
@@ -106,13 +111,18 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
         let free_boxed: Vec<bool> = free_slots.iter().map(|s| cx.is_boxed(*s)).collect();
         Some((cx.nslots(), pslots, code, boxed, free_boxed))
     })?;
+    let flat = boxed.is_empty()
+        && free_boxed.iter().all(|b| !b)
+        && pslots.iter().enumerate().all(|(i, s)| *s == Some(free.len() + i));
     Some(CompiledClosure {
+        flat,
         env_names: env.iter().map(|(n, _)| *n).collect(),
         nslots,
         params: pslots,
         // the walker looks a name up from the end of the scope: its last binding
         free: free.iter().enumerate().map(|(i, n)| (env.iter().rposition(|(m, _)| m == n).expect("free name is in the environment"), i)).collect(),
         free_by_value: free_boxed.iter().map(|b| !b).collect(),
+        simple: boxed.is_empty() && free.is_empty(),
         boxed,
         body: body_code,
         checked: std::cell::RefCell::new(std::rc::Weak::new()),
@@ -127,14 +137,23 @@ impl Interpreter {
             return None;
         }
         let key = *body as *const _ as usize;
-        let cc = match self.compiled_closures.get(&key) {
-            Some(cc) => cc.clone(),
-            None => {
-                let cc = compile(self, params, body, env, *module, self_ty.clone()).map(Rc::new);
-                self.compiled_closures.insert(key, cc.clone());
+        // the closures of a loop (an iterator chain calls each in turn) hit a direct-mapped cache: no hash probe
+        let slot = (key >> 4) & 7;
+        let cc = match &self.closure_cache[slot] {
+            Some((k, cc)) if *k == key => cc.clone(),
+            _ => {
+                let cc = match self.compiled_closures.get(&key) {
+                    Some(cc) => cc.clone(),
+                    None => {
+                        let cc = compile(self, params, body, env, *module, self_ty.clone()).map(Rc::new);
+                        self.compiled_closures.insert(key, cc.clone());
+                        cc
+                    }
+                }?;
+                self.closure_cache[slot] = Some((key, cc.clone()));
                 cc
             }
-        }?;
+        };
         // the environment shape is checked once per closure value (its environment never changes shape)
         if std::ptr::eq(cc.checked.borrow().as_ptr(), Rc::as_ptr(c)) && !self.fast_off("closureenv") {
             self.fast.closureenv += 1;
@@ -148,29 +167,52 @@ impl Interpreter {
             return Some(Err(e));
         }
         // a reference for a plain parameter: the walker binds it (reads follow it there)
-        if cc.params.iter().zip(args.iter()).any(|(p, a)| matches!(p, Some(s) if !cc.boxed.contains(s)) && matches!(a, Value::Ref(_))) {
+        let simple = cc.simple;
+        if cc.params.iter().zip(args.iter()).any(|(p, a)| matches!(p, Some(s) if simple || !cc.boxed.contains(s)) && matches!(a, Value::Ref(_))) {
             return None;
         }
         // a by-value name whose environment value is a reference (or in use) takes the walker, as a plain parameter does
-        for ((pos, _), v) in cc.free.iter().zip(&cc.free_by_value) {
-            if *v && env[*pos].1.try_borrow().map_or(true, |x| matches!(&*x, Value::Ref(_))) {
-                return None;
+        if !simple {
+            for ((pos, _), v) in cc.free.iter().zip(&cc.free_by_value) {
+                if *v && env[*pos].1.try_borrow().map_or(true, |x| matches!(&*x, Value::Ref(_))) {
+                    return None;
+                }
             }
         }
         let base = self.rstack.len();
-        self.rstack.resize(base + cc.nslots, Value::Unit);
-        for ((pos, s), v) in cc.free.iter().zip(&cc.free_by_value) {
-            self.rstack[base + s] = if *v {
+        self.rstack.reserve(cc.nslots);
+        if cc.flat {
+            for (pos, _) in &cc.free {
                 self.fast.closurecopy += 1;
-                env[*pos].1.borrow().clone()
-            } else {
-                Value::Ref(Box::new(Place::of_slot(env[*pos].1.clone())))
-            };
-        }
-        for (i, p) in cc.params.iter().enumerate() {
-            let a = if i < args.len() { std::mem::replace(&mut args[i], Value::Unit) } else { Value::Unit };
-            if let Some(s) = p {
-                self.rstack[base + s] = if cc.boxed.contains(s) { super::island::boxed(a) } else { a };
+                let v = env[*pos].1.borrow().dup();
+                self.rstack.push(v);
+            }
+            for i in 0..cc.params.len() {
+                let a = if i < args.len() { std::mem::replace(&mut args[i], Value::Unit) } else { Value::Unit };
+                self.rstack.push(a);
+            }
+            while self.rstack.len() < base + cc.nslots {
+                self.rstack.push(Value::Unit);
+            }
+        } else {
+            for _ in 0..cc.nslots {
+                self.rstack.push(Value::Unit);
+            }
+            if !simple {
+                for ((pos, s), v) in cc.free.iter().zip(&cc.free_by_value) {
+                    self.rstack[base + s] = if *v {
+                        self.fast.closurecopy += 1;
+                        env[*pos].1.borrow().dup()
+                    } else {
+                        Value::Ref(Box::new(Place::of_slot(env[*pos].1.clone())))
+                    };
+                }
+            }
+            for (i, p) in cc.params.iter().enumerate() {
+                let a = if i < args.len() { std::mem::replace(&mut args[i], Value::Unit) } else { Value::Unit };
+                if let Some(s) = p {
+                    self.rstack[base + s] = if !simple && cc.boxed.contains(s) { super::island::boxed(a) } else { a };
+                }
             }
         }
         // the walker's fresh scope for the body; when the caller's scope is already exactly that (compiled
@@ -193,14 +235,21 @@ impl Interpreter {
             other => other,
         };
         // the walker's `exit_scope_vars`: a panic poisons the lock guards the closure's own variables hold
-        if matches!(&r, Err(Ctl::Err(e)) if e.kind == crate::interpreter::error::ErrorKind::Panic) {
+        if !simple && matches!(&r, Err(Ctl::Err(e)) if e.kind == crate::interpreter::error::ErrorKind::Panic) {
             for s in &cc.boxed {
                 if let Value::Ref(p) = &self.rstack[base + s] {
                     crate::interpreter::scope::poison_if_guard(&p.slot.borrow());
                 }
             }
         }
-        self.rstack.truncate(base);
+        // pop the window; a slot holding a scalar owns nothing, so it skips the destructor call
+        while self.rstack.len() > base {
+            match self.rstack.pop() {
+                Some(v @ (Value::Int(..) | Value::Bool(_) | Value::Unit | Value::Float(..) | Value::Char(_))) => std::mem::forget(v),
+                Some(v) => drop(v),
+                None => break,
+            }
+        }
         self.depth -= 1;
         if swap {
             self.scope = self.frames.pop().expect("frame stack");

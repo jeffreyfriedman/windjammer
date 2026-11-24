@@ -105,19 +105,52 @@ fn int_cmp(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> Option<bool>
     })
 }
 
-/// `l op r` (not `&&`/`||`): operands left to right, then the operator at `loc`.
+/// `l op r` (not `&&`/`||`) over two operands: left to right, then the operator at `loc`.
+#[inline(always)]
+fn binary_of(it: &mut Interpreter, b: usize, l: &Operand, r: &Operand, op: BinaryOp, loc: Loc) -> R {
+    let x = get(it, b, l)?;
+    let y = get(it, b, r)?;
+    it.mark(loc);
+    match (x, y) {
+        (Got::Int(a, at), Got::Int(c, ct)) => int_op(op, a, at, c, ct),
+        // what `binary` does for two floats, without the dispatch
+        (Got::Val(Value::Float(a, at)), Got::Val(Value::Float(c, ct))) => crate::interpreter::ops::float_binary(op, a, at, c, ct),
+        (x, y) => it.binary(op, x.value(), y.value()),
+    }
+}
+
+/// `l op r` (not `&&`/`||`): operands left to right, then the operator at `loc`. `slot op const` and
+/// `slot op slot` on integers (the closure-body shapes) read the slots in place; any other value takes the general path.
 pub(super) fn binary(l: Operand, r: Operand, op: BinaryOp, loc: Loc) -> Code {
-    Box::new(move |it, b| {
-        let x = get(it, b, &l)?;
-        let y = get(it, b, &r)?;
-        it.mark(loc);
-        match (x, y) {
-            (Got::Int(a, at), Got::Int(c, ct)) => int_op(op, a, at, c, ct),
-            // what `binary` does for two floats, without the dispatch
-            (Got::Val(Value::Float(a, at)), Got::Val(Value::Float(c, ct))) => crate::interpreter::ops::float_binary(op, a, at, c, ct),
-            (x, y) => it.binary(op, x.value(), y.value()),
-        }
-    })
+    match (l, r) {
+        (Operand::Slot(s), Operand::Const(Value::Int(c, ct))) => Box::new(move |it, b| {
+            if let Value::Int(a, at) = &it.rstack[b + s] {
+                let (a, at) = (*a, *at);
+                it.mark(loc);
+                return int_op(op, a, at, c, ct);
+            }
+            binary_of(it, b, &Operand::Slot(s), &Operand::Const(Value::Int(c, ct)), op, loc)
+        }),
+        (Operand::Slot(s), Operand::Slot(t)) => Box::new(move |it, b| {
+            if let (Value::Int(a, at), Value::Int(c, ct)) = (&it.rstack[b + s], &it.rstack[b + t]) {
+                let (a, at, c, ct) = (*a, *at, *c, *ct);
+                it.mark(loc);
+                return int_op(op, a, at, c, ct);
+            }
+            binary_of(it, b, &Operand::Slot(s), &Operand::Slot(t), op, loc)
+        }),
+        // `(x % 3) == 0`: a computed left operand against an integer constant
+        (Operand::Code(c), Operand::Const(Value::Int(k, kt))) => Box::new(move |it, b| {
+            let v = c(it, b)?;
+            it.mark(loc);
+            match v {
+                Value::Int(a, at) => int_op(op, a, at, k, kt),
+                // what `binary_of` does for a non-integer left operand and an integer right one
+                v => it.binary(op, v, Value::Int(k, kt)),
+            }
+        }),
+        (l, r) => Box::new(move |it, b| binary_of(it, b, &l, &r, op, loc)),
+    }
 }
 
 /// A condition from a comparison: integers compare without building a `Value`.

@@ -138,7 +138,7 @@ impl VecBody {
     /// Element `i`, by value (no unpacking).
     pub fn get_value(&self, i: usize) -> Option<Value> {
         match self {
-            VecBody::Values(v) => v.get(i).cloned(),
+            VecBody::Values(v) => v.get(i).map(Value::dup),
             VecBody::Packed(p, _) => p.get(i),
         }
     }

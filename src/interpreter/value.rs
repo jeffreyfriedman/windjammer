@@ -234,6 +234,29 @@ pub enum Value {
 }
 
 impl Value {
+    /// `clone` with the scalar cases inline: a scalar owns nothing, so copying it needs no call into the derived
+    /// `Clone` (a jump table over every variant). Same result as `clone` for every value.
+    #[inline(always)]
+    pub fn dup(&self) -> Value {
+        match self {
+            Value::Int(a, t) => Value::Int(*a, *t),
+            Value::Bool(b) => Value::Bool(*b),
+            Value::Unit => Value::Unit,
+            Value::Float(f, t) => Value::Float(*f, *t),
+            Value::Char(c) => Value::Char(*c),
+            other => other.clone(),
+        }
+    }
+
+    /// Drop with the scalar cases inline: a scalar owns nothing, so it skips the drop-glue call.
+    #[inline(always)]
+    pub fn discard(self) {
+        match self {
+            Value::Int(..) | Value::Bool(_) | Value::Unit | Value::Float(..) | Value::Char(_) => std::mem::forget(self),
+            other => drop(other),
+        }
+    }
+
     /// The half-open range `a..b` of width `t`.
     pub fn range(a: i128, b: i128, t: IntTy) -> Value {
         Value::Range(Box::new((a, b)), t)
