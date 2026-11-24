@@ -179,6 +179,56 @@ def summarise(stream_text, result_json=None):
             "first_bash_denied": first is not None and any(d["id"] == first for d in perm)}
 
 
+VERIFY_WORDS = ("wj", "rustc", "go", "python3", "cargo", "./main", "./build/main")
+EXIT_MARK = re.compile(r"\[exit (\d+)\]|(?:^|\n)exit status: (\d+)\s*$|^Exit code (\d+)")
+FAIL_MARK = re.compile(r"(?m)^\s*(error(\[\w+\])?:|.*\bpanicked at\b|.*could not compile|.*Compilation failed|Traceback \(most recent call last\))")
+
+
+def result_shows_success(text, is_error=False, piped=False):
+    """True when a Bash tool RESULT shows a run that worked, whatever the command's textual shape (`| head`, `2>/dev/null`,
+    `; echo "[exit $?]"`): not an error result, no non-zero `[exit N]` / `exit status: N` / `Exit code N`, no compiler or panic
+    marker, and either some output or (no pipe or redirect to hide it) an empty one."""
+    text = text or ""
+    if is_error or classify_text(text) in ("dont-ask", "permission"):
+        return False
+    for m in EXIT_MARK.finditer(text):
+        if next(g for g in m.groups() if g is not None) != "0":
+            return False
+    if FAIL_MARK.search(text):
+        return False
+    return bool(text.strip()) or not piped
+
+
+def stream_compiled_ok(stream_text):
+    """True when some Bash call that builds, runs or checks (a `wj`, rustc, go, python3, cargo or built-program part) has a RESULT
+    showing success. Used next to the shim log: either source rescues a trial from `never_compiled`."""
+    uses, ok = {}, False
+    for ln in (stream_text or "").splitlines():
+        ln = ln.strip()
+        if not ln.startswith("{"):
+            continue
+        try:
+            ev = json.loads(ln)
+        except ValueError:
+            continue
+        msg = ev.get("message")
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            if ev.get("type") == "assistant" and c.get("type") == "tool_use" and c.get("name") == "Bash":
+                uses[c.get("id")] = str((c.get("input") or {}).get("command", ""))
+            elif ev.get("type") == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in uses:
+                cmd = uses[c["tool_use_id"]]
+                if not any(w in VERIFY_WORDS for w in sub_commands(cmd)):
+                    continue
+                if result_shows_success(_text_of(c.get("content")), bool(c.get("is_error")), bool(re.search(r"[|>]", cmd))):
+                    ok = True
+    return ok
+
+
 PROGRAM_FILE = re.compile(r"(^|[\\/])(main\.(wj|rs|py|go)|[A-Za-z0-9_]+_test\.wj|[A-Za-z0-9_]+\.(wj|rs|py|go))$")
 
 

@@ -343,6 +343,83 @@
    "expect": "allowed",
    "shape": "rule: echo hi | wc -l",
    "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled --stdin-text 'a\\nb\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text, escapes only",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled --stdin-text 'set A1 \\x3dA2*3\\nshow\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text with \\x3d for the =",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled --stdin-text 'x\\ty \\x24 \\x3c \\x3e\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text with tab and \\x24 \\x3c \\x3e",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled --stdin-text 'say \\\"hi\\\"\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text with escaped quotes",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "wj run --verify --stdin-text 'a\\nb\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text, escapes only",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "wj run --verify --stdin-text 'set A1 \\x3dA2*3\\nshow\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text with \\x3d for the =",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "wj run --verify --stdin-text 'x\\ty \\x24 \\x3c \\x3e\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text with tab and \\x24 \\x3c \\x3e",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "wj run --verify --stdin-text 'say \\\"hi\\\"\\n' main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-text with escaped quotes",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "printf 'a\\nb\\n' > ex1.txt && wj run --compiled --stdin-file ex1.txt main.wj",
+   "expect": "denied",
+   "shape": "printf [redirect] && wj",
+   "note": "pilot 12 U7 x3: the redirect stopped three trials after two turns"
+  },
+  {
+   "arm": "U7",
+   "command": "wj build main.wj 2>&1 | head -n 40",
+   "expect": "allowed",
+   "shape": "wj | head",
+   "note": "pilot 12 false positive (t302 U7.0): a real build behind `| head`"
+  },
+  {
+   "arm": "U7",
+   "command": "cat ex1.txt | wj run --compiled main.wj 2>/dev/null; echo \"[exit $?]\"",
+   "expect": "allowed",
+   "shape": "cat | wj ; echo [var]",
+   "note": "pilot 12 false positive (t305 U7.1)"
   }
  ]
 }

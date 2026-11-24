@@ -210,7 +210,10 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     sp = getattr(agent, "stream_path", None)
     den = DN.summarise(open(sp, errors="replace").read() if sp and os.path.exists(sp) else "", res["json"])
     input_writes = DN.input_writes(open(sp, errors="replace").read() if sp and os.path.exists(sp) else "")
-    never = not any(r["exit"] == 0 for r in an["invocations"] if r["verb"] in S.VERIFY_VERBS)   # no compile/run/check ever succeeded
+    stream_txt = open(sp, errors="replace").read() if sp and os.path.exists(sp) else ""
+    # no compile/run/check ever succeeded: by the shim log (exit codes) AND by the tool results in the stream (shapes such as
+    # `| head`, `2>/dev/null` or `; echo "[exit $?]"` can hide a call from the shim log)
+    never = not any(r["exit"] == 0 for r in an["invocations"] if r["verb"] in S.VERIFY_VERBS) and not DN.stream_compiled_ok(stream_txt)
     cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"
     timed_out = bool(res.get("timed_out"))
     if timed_out:   # the harness charges what the partial stream shows, else the per-trial cap; see spend.py

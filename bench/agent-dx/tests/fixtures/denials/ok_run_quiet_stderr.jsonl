@@ -1,0 +1,3 @@
+{"type": "assistant", "message": {"id": "m0", "content": [{"type": "tool_use", "id": "t0", "name": "Bash", "input": {"command": "wj run --compiled --stdin-file ex1.txt main.wj 2>/dev/null"}}]}}
+{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t0", "content": "42\n", "is_error": false}]}}
+{"type": "result", "subtype": "success", "is_error": false, "num_turns": 2, "result": "done"}

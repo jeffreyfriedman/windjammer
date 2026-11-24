@@ -92,6 +92,7 @@ def main(argv=None):
     p7.add_argument("--prior", action="append", default=None, help="recorded trials for the decomposition demo of --dry-run (repeatable; default: pilot 6 and the pilot-7 validation smoke)")
     p7.add_argument("--seed", type=int, default=None, help="order seed (default: config 'seed', else 0); recorded in every trial")
     p7.add_argument("--yes", action="store_true", help="launch (owner decision; never in CI)")
+    p7.add_argument("--stdin-text-hint", action="store_true", help="tell wj arms about `wj run --stdin-text '...'` (needs a compiler that has it; default OFF so existing configs keep their prompts)")
     p7p = sub.add_parser("pilot7-preflight", help="launch checks (wj commit, load, memory, open events, dry run); exit 1 on any red")
     p7p.add_argument("--config", default=P7.CONFIG)
     p7p.add_argument("--expect-commit", required=True, help="commit (prefix) the wj binary must be built from")
@@ -146,6 +147,7 @@ def main(argv=None):
     if a.cmd == "pilot7-references":
         return PF.run_references(a)
     if a.cmd == "pilot7":
+        AR.STDIN_TEXT_HINT = bool(a.stdin_text_hint)
         cfg = P7.load_config(a.config)
         if a.seed is not None:
             cfg["seed"] = a.seed
