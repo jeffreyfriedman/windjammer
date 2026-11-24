@@ -748,7 +748,7 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
-                    output.push_str(": String");
+                    self.push_owned_string_ascription(&mut output, var_name);
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -1168,7 +1168,7 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
-                    output.push_str(": String");
+                    self.push_owned_string_ascription(&mut output, var_name);
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -1646,6 +1646,15 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `: String` on an untyped `let`; the local is then an owned `String` for later move decisions (a move of it
+    /// copies when it is read again).
+    fn push_owned_string_ascription(&mut self, output: &mut String, var_name: Option<&str>) {
+        output.push_str(": String");
+        if let Some(vn) = var_name {
+            self.local_var_types.entry(vn.to_string()).or_insert(Type::String);
+        }
+    }
+
     /// `let act = text[a..b]` kept as the borrowed slice (not copied to an owned `String`): the local is a `&str`.
     fn note_text_slice_local(&mut self, var_name: Option<&str>, value: &Expression<'ast>, value_str: &str) {
         let Some(name) = var_name else { return };
