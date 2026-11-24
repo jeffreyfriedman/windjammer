@@ -3,6 +3,7 @@
 //! Maps are ordered by key (a valid HashMap iteration order; programs must not depend on it).
 
 use super::*;
+use std::borrow::Cow;
 
 type M = KMap;
 
@@ -48,23 +49,23 @@ pub fn register(r: &mut Registry) {
     // ---------------- Map ----------------
     r.pure(Kind::Map, "len", |_, v, _| Ok(Value::usize(map_of(v).len())));
     r.pure(Kind::Map, "is_empty", |_, v, _| Ok(Value::Bool(map_of(v).is_empty())));
-    r.pure(Kind::Map, "get", |_, v, a| Ok(Value::option(map_of(v).get(&Key(arg(&a, 0, "get")?)).cloned())));
+    r.pure(Kind::Map, "get", |_, v, a| Ok(Value::option(map_of(v).get_cloned(&Key(arg(&a, 0, "get")?)))));
     r.pure(Kind::Map, "contains_key", |_, v, a| Ok(Value::Bool(map_of(v).contains_key(&Key(arg(&a, 0, "contains_key")?)))));
     r.pure(Kind::Map, "get_or_insert", |_, v, _| Ok(v.clone()));
     r.pure(Kind::Map, "keys", |it, v, _| Ok(new_iter(map_of(v).ordered_keys(it.hash_seed))));
     r.pure(Kind::Map, "into_keys", |it, v, _| Ok(new_iter(map_of(v).ordered_keys(it.hash_seed))));
     r.pure(Kind::Map, "values", |it, v, _| Ok(new_iter(map_of(v).ordered_values(it.hash_seed))));
     r.pure(Kind::Map, "into_values", |it, v, _| Ok(new_iter(map_of(v).ordered_values(it.hash_seed))));
-    r.pure(Kind::Map, "iter", |it, v, _| Ok(new_iter(map_of(v).ordered(it.hash_seed).into_iter().map(|(k, x)| tup(k, x)).collect())));
-    r.pure(Kind::Map, "into_iter", |it, v, _| Ok(new_iter(map_of(v).ordered(it.hash_seed).into_iter().map(|(k, x)| tup(k, x)).collect())));
-    r.pure(Kind::Map, "first_key_value", |_, v, _| Ok(Value::option(map_of(v).iter().next().map(|(k, x)| tup(k, x)))));
-    r.pure(Kind::Map, "last_key_value", |_, v, _| Ok(Value::option(map_of(v).iter().next_back().map(|(k, x)| tup(k, x)))));
+    r.pure(Kind::Map, "iter", |it, v, _| Ok(new_iter(map_of(v).ordered(it.hash_seed).into_iter().map(|(k, x)| tup(&k, &x)).collect())));
+    r.pure(Kind::Map, "into_iter", |it, v, _| Ok(new_iter(map_of(v).ordered(it.hash_seed).into_iter().map(|(k, x)| tup(&k, &x)).collect())));
+    r.pure(Kind::Map, "first_key_value", |_, v, _| Ok(Value::option(map_of(v).iter().next().map(|(k, x)| tup(&k, &x)))));
+    r.pure(Kind::Map, "last_key_value", |_, v, _| Ok(Value::option(map_of(v).iter().next_back().map(|(k, x)| tup(&k, &x)))));
     r.pure(Kind::Map, "range", |_, v, a| {
         let (lo, hi) = match arg(&a, 0, "range")? {
             Value::Range(r, t) => (Value::Int(r.0, t), Value::Int(r.1, t)),
             _ => return Err(semantic("`range` expects a range")),
         };
-        Ok(new_iter(map_of(v).iter().filter(|(k, _)| k.0.structural_cmp(&lo) != std::cmp::Ordering::Less && k.0.structural_cmp(&hi) == std::cmp::Ordering::Less).map(|(k, x)| tup(k, x)).collect()))
+        Ok(new_iter(map_of(v).iter().filter(|(k, _)| k.0.structural_cmp(&lo) != std::cmp::Ordering::Less && k.0.structural_cmp(&hi) == std::cmp::Ordering::Less).map(|(k, x)| tup(&k, &x)).collect()))
     });
     r.mutating(Kind::Map, "insert", |_, v, a| {
         let k = arg(&a, 0, "insert")?;
@@ -95,7 +96,7 @@ pub fn register(r: &mut Registry) {
     });
     r.mutating(Kind::Map, "retain", |it, v, a| {
         let f = arg(&a, 0, "retain")?;
-        let src: Vec<(Key, Value)> = map_of(v).iter().map(|(k, x)| (k.clone(), x.clone())).collect();
+        let src: Vec<(Key, Value)> = map_of(v).iter().map(|(k, x)| (k.into_owned(), x.into_owned())).collect();
         let mut out = map_of(v).empty_like();
         for (k, x) in src {
             let keep = it.call_value(&f, vec![k.0.clone(), x.clone()])?;
@@ -108,12 +109,12 @@ pub fn register(r: &mut Registry) {
     });
     r.mutating(Kind::Map, "pop_first", |_, v, _| {
         let m = map_mut(v);
-        let k = m.keys().next().cloned();
+        let k = m.keys().next().map(Cow::into_owned);
         Ok(Value::option(k.and_then(|k| m.remove_entry(&k)).map(|(k, x)| tup(&k, &x))))
     });
     r.mutating(Kind::Map, "pop_last", |_, v, _| {
         let m = map_mut(v);
-        let k = m.keys().next_back().cloned();
+        let k = m.keys().next_back().map(Cow::into_owned);
         Ok(Value::option(k.and_then(|k| m.remove_entry(&k)).map(|(k, x)| tup(&k, &x))))
     });
     r.place(Kind::Map, "get_mut", |_, p, a| {
@@ -197,39 +198,39 @@ pub fn register(r: &mut Registry) {
     }
     r.pure(Kind::Set, "union", |_, v, a| {
         setop(v, &a, |x, y| {
-            let mut s: Vec<Key> = x.keys().cloned().collect();
+            let mut s: Vec<Key> = x.keys().map(Cow::into_owned).collect();
             for k in y.keys() {
-                if !x.contains_key(k) {
-                    s.push(k.clone());
+                if !x.contains_key(&k) {
+                    s.push(k.into_owned());
                 }
             }
             s.sort();
             s
         })
     });
-    r.pure(Kind::Set, "intersection", |_, v, a| setop(v, &a, |x, y| x.keys().filter(|k| y.contains_key(*k)).cloned().collect()));
-    r.pure(Kind::Set, "difference", |_, v, a| setop(v, &a, |x, y| x.keys().filter(|k| !y.contains_key(*k)).cloned().collect()));
+    r.pure(Kind::Set, "intersection", |_, v, a| setop(v, &a, |x, y| x.keys().filter(|k| y.contains_key(k)).map(Cow::into_owned).collect()));
+    r.pure(Kind::Set, "difference", |_, v, a| setop(v, &a, |x, y| x.keys().filter(|k| !y.contains_key(k)).map(Cow::into_owned).collect()));
     r.pure(Kind::Set, "symmetric_difference", |_, v, a| {
         setop(v, &a, |x, y| {
-            let mut s: Vec<Key> = x.keys().filter(|k| !y.contains_key(*k)).cloned().collect();
-            s.extend(y.keys().filter(|k| !x.contains_key(*k)).cloned());
+            let mut s: Vec<Key> = x.keys().filter(|k| !y.contains_key(k)).map(Cow::into_owned).collect();
+            s.extend(y.keys().filter(|k| !x.contains_key(k)).map(Cow::into_owned));
             s.sort();
             s
         })
     });
     r.pure(Kind::Set, "is_subset", |_, v, a| {
         let o = map_of(&arg(&a, 0, "is_subset")?);
-        Ok(Value::Bool(map_of(v).keys().all(|k| o.contains_key(k))))
+        Ok(Value::Bool(map_of(v).keys().all(|k| o.contains_key(&k))))
     });
     r.pure(Kind::Set, "is_superset", |_, v, a| {
         let o = map_of(&arg(&a, 0, "is_superset")?);
         let m = map_of(v);
-        let all = o.keys().all(|k| m.contains_key(k));
+        let all = o.keys().all(|k| m.contains_key(&k));
         Ok(Value::Bool(all))
     });
     r.pure(Kind::Set, "is_disjoint", |_, v, a| {
         let o = map_of(&arg(&a, 0, "is_disjoint")?);
-        Ok(Value::Bool(map_of(v).keys().all(|k| !o.contains_key(k))))
+        Ok(Value::Bool(map_of(v).keys().all(|k| !o.contains_key(&k))))
     });
     r.mutating(Kind::Set, "insert", |_, v, a| Ok(Value::Bool(map_mut(v).insert(Key(arg(&a, 0, "insert")?), Value::Unit).is_none())));
     r.mutating(Kind::Set, "remove", |_, v, a| Ok(Value::Bool(map_mut(v).remove(&Key(arg(&a, 0, "remove")?)).is_some())));
@@ -250,7 +251,7 @@ pub fn register(r: &mut Registry) {
     });
     r.mutating(Kind::Set, "retain", |it, v, a| {
         let f = arg(&a, 0, "retain")?;
-        let src: Vec<Key> = map_of(v).keys().cloned().collect();
+        let src: Vec<Key> = map_of(v).keys().map(Cow::into_owned).collect();
         let mut out = map_of(v).empty_like();
         for k in src {
             if matches!(it.call_value(&f, vec![k.0.clone()])?, Value::Bool(true)) {

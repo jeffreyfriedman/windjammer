@@ -53,12 +53,14 @@ pub(crate) struct Ctx {
     /// Element reads machine code made through a view (added to `FastHits::packedread` when the unit leaves).
     pub(crate) view_reads: i64,
     pub(crate) lean_inss: i64,
+    /// The lookups among `lean_gets` a typed array (`IntDense`) answered.
+    pub(crate) lean_typed: i64,
 }
 
 impl Ctx {
     pub(crate) fn new(it: *mut Interpreter, base: usize, plan: *const super::lower::Plan, reg: *const crate::interpreter::resolved::osr::Reg) -> Ctx {
         let (rows, row_tbls) = (Default::default(), Default::default());
-        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), cell_hit: [(0, 0); CELL_HITS], views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, found: 0, lean_gets: 0, view_reads: 0, lean_inss: 0 }
+        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), cell_hit: [(0, 0); CELL_HITS], views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, found: 0, lean_gets: 0, view_reads: 0, lean_inss: 0, lean_typed: 0 }
     }
 }
 
@@ -522,18 +524,26 @@ pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64,
         // SAFETY: as in `with_slot`.
         let miss = mutant(unsafe { &*(*c).it }, "mapleanfound");
         let r = unsafe {
-            lean_map(c, slot, |km| match km.get_int(int_value(k, t), t) {
-                // `miss` is the test-only mutant `mapleanfound`: an absent key reads as present (value 0)
-                None => Some((0, miss as i64)),
-                Some(x) => lean_bits(x, want).map(|b| (b, 1)),
+            lean_map(c, slot, |km| match km.typed_get(int_value(k, t)) {
+                // a typed array (`KMap::IntDense`): the bits are the stored word, the value is built only to be checked
+                Some(None) => Some((0, miss as i64, 1)),
+                Some(Some((x, vt))) => {
+                    lean_bits(&Value::Int(x as i128, vt), want).map(|b| (b, 1, 1))
+                }
+                None => match km.get_int(int_value(k, t), t) {
+                    // `miss` is the test-only mutant `mapleanfound`: an absent key reads as present (value 0)
+                    None => Some((0, miss as i64, 0)),
+                    Some(x) => lean_bits(&x, want).map(|b| (b, 1, 0)),
+                },
             })
         };
         // SAFETY: as in `with_slot`.
         let ctx = unsafe { &mut *c };
         match r {
-            Some(Some((b, found))) => {
+            Some(Some((b, found, typed))) => {
                 ctx.found = found;
                 ctx.lean_gets += 1;
+                ctx.lean_typed += typed;
                 return b;
             }
             // a map whose value is not a scalar of `want`: fails, nothing changed
@@ -557,7 +567,7 @@ unsafe fn map_get_general(c: *mut Ctx, slot: i64, k: i64, kt: i64, want: i64) ->
                 Value::Map(km) => match int_ty(kt).map(|t| km.get_int(int_value(k, t), t))? {
                     None => Some(0),
                     Some(x) => {
-                        let b = bits(x, from_code(want)?)?;
+                        let b = bits(&x, from_code(want)?)?;
                         found = 1;
                         Some(b)
                     }

@@ -254,6 +254,7 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     it.fast.packedread += ctx.view_reads as u64;
     it.fast.mapleanget += ctx.lean_gets as u64;
     it.fast.mapleanins += ctx.lean_inss as u64;
+    it.fast.mapleantyped += ctx.lean_typed as u64;
     let e = &unit.plan.exits[exit];
     for sp in e.spills.iter().filter(|sp| sp.slot != NO_SLOT && !e.after) {
         write(it, b + sp.slot, reg.kind(sp.slot), value(buf[sp.buf], sp.ty), sp.fresh);

@@ -1,0 +1,50 @@
+// Maps whose values are not 64-bit signed ints (i32, u64) or whose keys leave the array range stay on the ordinary store:
+// hot loops over them are served by the lean helpers without a typed array (fast_paths: `mapleantyped` stays 0).
+use std::collections::HashMap
+
+fn main() {
+    let mut a: HashMap<int, i32> = HashMap::new()
+    let mut b: HashMap<int, u64> = HashMap::new()
+    let mut c: HashMap<int, int> = HashMap::new()
+    let mut i = 0
+    while i < 30000 {
+        let k = (i * 7919) % 211
+        let x = match a.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        a.insert(k, x + 3)
+        let y = match b.get(&k) {
+            Some(v) => *v,
+            None => 18446744073709551000,
+        }
+        b.insert(k, y + 1)
+        let kk = k - 100
+        let z = match c.get(&kk) {
+            Some(v) => *v,
+            None => 0,
+        }
+        c.insert(kk, z + 1)
+        i += 1
+    }
+    let mut sa = 0
+    let mut sb: u64 = 0
+    let mut sc = 0
+    let mut j = 0
+    while j < 211 {
+        match a.get(&j) {
+            Some(v) => { sa += *v }
+            None => {}
+        }
+        match b.get(&j) {
+            Some(v) => { sb = (sb + *v % 1000003) % 1000003 }
+            None => {}
+        }
+        match c.get(&(j - 100)) {
+            Some(v) => { sc += *v }
+            None => {}
+        }
+        j += 1
+    }
+    println("widths ${a.len()} ${sa} ${b.len()} ${sb} ${c.len()} ${sc}")
+}

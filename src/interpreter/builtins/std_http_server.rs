@@ -151,7 +151,7 @@ fn response_parts(v: &Value) -> R<(u16, Vec<(String, String)>, Vec<u8>)> {
         _ => return Err(semantic("an http handler must return a ServerResponse")),
     };
     let headers = match field(v, "headers") {
-        Some(Value::Map(m)) => m.iter().map(|(k, x)| (str_of(&k.0), str_of(x))).collect(),
+        Some(Value::Map(m)) => m.iter().map(|(k, x)| (str_of(&k.0), str_of(&x))).collect(),
         _ => Vec::new(),
     };
     let body = match field(v, "binary_body").as_ref().and_then(|b| b.as_option().flatten().cloned()) {
@@ -321,7 +321,7 @@ fn with_route(router: &Value, method: &str, a: &[Value]) -> R {
 
 fn map_lookup(v: &Value, f: &str, k: &str) -> Value {
     match field(v, f) {
-        Some(Value::Map(m)) => Value::option(m.get(&Key(s(k))).cloned()),
+        Some(Value::Map(m)) => Value::option(m.get_cloned(&Key(s(k)))),
         _ => Value::none(),
     }
 }

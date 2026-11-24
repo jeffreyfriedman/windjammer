@@ -44,11 +44,14 @@ impl Serialize for Enc<'_> {
             Value::Char(c) => s.serialize_char(*c),
             Value::Str(t) => s.serialize_str(t),
             Value::Vec(_) | Value::Tuple(_) => self.seq(s, self.v.items().iter()),
-            Value::Set(m) => self.seq(s, m.keys().map(|k| &k.0)),
+            Value::Set(m) => {
+                let ks: Vec<_> = m.keys().collect();
+                self.seq(s, ks.iter().map(|k| &k.0))
+            }
             Value::Map(m) => {
                 let mut o = s.serialize_map(None)?;
                 for (k, x) in m.iter() {
-                    o.serialize_entry(&self.at(&k.0), &self.at(x))?;
+                    o.serialize_entry(&self.at(&k.0), &self.at(&x))?;
                 }
                 o.end()
             }

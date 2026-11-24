@@ -32,7 +32,7 @@ impl MapGet {
         let Value::Map(km) = &m else { return Ok(None) };
         let k = strip_refs((self.key)(it, b)?)?;
         it.fast.mapget += 1;
-        Ok(Some(km.get(&Key(k)).cloned()))
+        Ok(Some(km.get_cloned(&Key(k))))
     }
 }
 

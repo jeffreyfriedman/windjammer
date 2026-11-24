@@ -680,6 +680,8 @@ pub(crate) struct FastHits {
     /// Machine-code element reads straight from a packed vector's storage (a read `View`, `jit/rt.rs::read_view`).
     pub(crate) packedread: u64,
     pub(crate) mapleanins: u64,
+    /// Lean lookups among `mapleanget` answered by a typed array (`kmap.rs`'s `IntDense`).
+    pub(crate) mapleantyped: u64,
     /// Closures a compiled function created without a walker island (`resolved/closure.rs::create`).
     pub(crate) closurecreate: u64,
     /// Free names of a compiled closure given a copy of their value instead of a reference (`resolved/closure.rs`).

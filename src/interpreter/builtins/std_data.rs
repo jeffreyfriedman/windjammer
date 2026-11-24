@@ -329,7 +329,7 @@ fn register_regex(r: &mut Registry) {
     r.native("Captures", "name", |_, v, a| {
         let n = arg_str(&a, 0, "name")?;
         Ok(match field(v, "named") {
-            Some(Value::Map(m)) => Value::option(m.get(&Key(Value::str((*n).clone()))).cloned()),
+            Some(Value::Map(m)) => Value::option(m.get_cloned(&Key(Value::str((*n).clone())))),
             _ => Value::none(),
         })
     });

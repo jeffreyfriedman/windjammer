@@ -148,7 +148,7 @@ pub fn project(v: &Value, p: &Proj) -> R<Value> {
         (Value::Vec(vs), Proj::Index(i)) => vs.get_value(*i).ok_or_else(|| {
             panic_ctl(format!("index out of bounds: the len is {} but the index is {}", vs.len(), i))
         }),
-        (Value::Map(m), Proj::Key(k)) => m.get(&Key(k.clone())).cloned().ok_or_else(|| panic_ctl("key not found in map")),
+        (Value::Map(m), Proj::Key(k)) => m.get_cloned(&Key(k.clone())).ok_or_else(|| panic_ctl("key not found in map")),
         (Value::Enum(e), Proj::Index(i)) => match &e.payload {
             Payload::Tuple(vs) => vs.get(*i).cloned().ok_or_else(|| panic_ctl("variant field out of range")),
             _ => Err(panic_ctl("variant has no tuple payload")),

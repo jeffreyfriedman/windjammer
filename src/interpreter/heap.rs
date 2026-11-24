@@ -55,7 +55,7 @@ impl Walker {
             Value::Map(m) | Value::Set(m) => {
                 for (k, x) in m.iter() {
                     self.walk(&k.0, f);
-                    self.walk(x, f);
+                    self.walk(&x, f);
                 }
             }
             Value::Func(c) => {
@@ -235,7 +235,7 @@ impl Interpreter {
             },
             Value::Map(m) => {
                 for x in m.values() {
-                    Self::glue_order_in(x, out, seen, shared);
+                    Self::glue_order_in(&x, out, seen, shared);
                 }
             }
             Value::Rc(slot) | Value::Cell(_, slot, _) => {

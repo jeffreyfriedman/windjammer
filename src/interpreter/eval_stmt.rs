@@ -449,7 +449,7 @@ impl Interpreter {
                 let s = super::iter::as_iter(self, n)?;
                 self.drain_iter(&s)
             }
-            Value::Map(m) => Ok(m.ordered(self.hash_seed).into_iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
+            Value::Map(m) => Ok(m.ordered(self.hash_seed).into_iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.into_owned()])).collect()),
             Value::Set(m) => Ok(m.ordered_keys(self.hash_seed)),
             Value::Enum(e) if &*e.ty == "Option" => Ok(match &e.payload {
                 Payload::Tuple(p) => p.clone(),

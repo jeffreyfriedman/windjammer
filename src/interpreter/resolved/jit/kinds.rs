@@ -230,7 +230,7 @@ pub(crate) fn int_value(x: i64, t: IntTy) -> i128 {
 
 /// The scalar type of one of a map's values (`Unknown`: empty, or not a scalar).
 fn map_elem(m: &crate::interpreter::kmap::KMap) -> Elem {
-    match m.any_value().and_then(ty_of) {
+    match m.any_value().and_then(|v| ty_of(&v)) {
         Some(t) => Elem::Scalar(t),
         None => Elem::Unknown,
     }

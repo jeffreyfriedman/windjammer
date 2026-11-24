@@ -91,7 +91,7 @@ fn owns_destructor(v: &Value) -> bool {
             super::value::Payload::Tuple(xs) => xs.iter().any(owns_destructor),
             super::value::Payload::Struct(fs) => fs.iter().any(|(_, x)| owns_destructor(x)),
         },
-        Value::Map(m) => m.values().any(owns_destructor),
+        Value::Map(m) => m.values().any(|v| owns_destructor(&v)),
         Value::Rc(_) => true,
         _ => false,
     }
