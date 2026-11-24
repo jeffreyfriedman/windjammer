@@ -1,0 +1,14 @@
+// A call of a let-bound closure converts its arguments to the closure's annotated parameter types, as a call of a
+// declared function does: a string literal given to a `string` parameter is an owned `String`. A closure with
+// several annotated parameters is converted slot by slot, and a later `let` of the same name drops the old formals.
+// expect: 2
+// expect: ab-3
+// expect: 5
+fn main() {
+    let f = |strings: string| strings.len()
+    println("${f("ab")}")
+    let join = |s: string, n: int| "${s}-${n}"
+    println(join("ab", 3))
+    let f = |n: int| n + 1
+    println("${f(4)}")
+}

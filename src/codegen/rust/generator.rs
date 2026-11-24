@@ -273,6 +273,9 @@ pub struct CodeGenerator<'ast> {
     // and match-bound patterns (Some(x) from Option<Foo> → x: Foo).
     // Enables qualified method signature lookup for local variables (e.g., x.method() → Foo::method)
     pub(crate) local_var_types: std::collections::HashMap<String, Type>,
+    /// Let-bound closures with annotated parameters (`let f = |s: string| ..`): the formals a call `f("x")`
+    /// converts its arguments to, like an ordinary function's.
+    pub(crate) local_closure_sigs: std::collections::HashMap<String, crate::analyzer::FunctionSignature>,
     /// Locals bound with explicit `let ri = &i` / `&mut i` (not for-loop `&map`
     /// pattern bindings). Used so `identifier_already_ref` can deref true ref
     /// lets into owned Copy/usize without `*pos` on iterator Copy keys.
@@ -623,6 +626,7 @@ impl<'ast> CodeGenerator<'ast> {
             generating_traits: std::collections::HashSet::new(),
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
+            local_closure_sigs: std::collections::HashMap::new(),
             explicit_ref_let_bindings: std::collections::HashSet::new(),
             struct_field_types: std::collections::HashMap::new(),
             user_declared_struct_names: std::collections::HashSet::new(),

@@ -771,7 +771,9 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Function pointer signature extraction: when calling a function pointer
     // parameter (e.g., has_item(arg1, arg2)), build the signature from the
     // parameter's type instead of registry lookup.
-    let mut signature = gen
+    // A let-bound closure with annotated parameters names its formals, and shadows any function of its name.
+    let closure_signature = gen.local_closure_sigs.get(func_name).cloned();
+    let mut signature = closure_signature.clone().or_else(|| gen
         .current_function_params
         .iter()
         .find(|p| p.name == func_name)
@@ -835,7 +837,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             } else {
                 None
             }
-        });
+        }));
 
     // Unified signature resolution: local registry first, then converged library-wide registry.
     let mut resolved_via_fallback = false;
@@ -926,7 +928,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     // Bare same-module user API beats stdlib homonym (`join` vs `strings::join`).
     // Import aliases (`qs_get` → `wj_querystring::get`) are path-dep ABI, not local APIs.
-    if !func_name.contains("::") && !gen.is_import_alias_cross_crate_call(func_name) {
+    if !func_name.contains("::") && !gen.is_import_alias_cross_crate_call(func_name) && closure_signature.is_none() {
         if let Some(ref sig) = signature {
             signature = Some(
                 crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(

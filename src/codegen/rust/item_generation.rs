@@ -1219,6 +1219,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_body.clear();
         self.full_function_body_snapshot.clear();
         self.local_var_types.clear();
+        self.local_closure_sigs.clear();
         self.explicit_ref_let_bindings.clear();
         self.local_variable_scopes.clear();
 

@@ -225,6 +225,30 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Generate code for a let statement
     #[allow(clippy::too_many_lines)]
+    /// `let f = |s: string, n: int| ..`: the closure's formals as a signature, so `f("x", 1)` converts its
+    /// arguments like a call of a declared function. `None` unless every parameter is annotated.
+    fn closure_signature_of_let(
+        name: &str,
+        value: &Expression<'_>,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        let Expression::Closure { parameters, .. } = value else { return None };
+        let types: Option<Vec<Type>> = parameters
+            .iter()
+            .map(|p| {
+                let (_, ty) = p.split_once(": ")?;
+                Some(crate::codegen::rust::types::parse_wj_type_name(ty.trim()))
+            })
+            .collect();
+        let types = types?;
+        Some(crate::analyzer::FunctionSignature {
+            name: name.to_string(),
+            param_ownership: vec![crate::analyzer::OwnershipMode::Owned; types.len()],
+            formal_param_types: types.clone(),
+            param_types: types,
+            ..Default::default()
+        })
+    }
+
     pub(in crate::codegen::rust) fn generate_let_statement(
         &mut self,
         pattern: &Pattern<'ast>,
@@ -258,6 +282,17 @@ impl<'ast> CodeGenerator<'ast> {
             ) && self.let_binding_value_is_mutated_downstream(vn)
             {
                 self.upgrade_get_to_get_mut = true;
+            }
+        }
+
+        if let Some(vn) = var_name {
+            match Self::closure_signature_of_let(vn, value) {
+                Some(sig) => {
+                    self.local_closure_sigs.insert(vn.to_string(), sig);
+                }
+                None => {
+                    self.local_closure_sigs.remove(vn);
+                }
             }
         }
 
