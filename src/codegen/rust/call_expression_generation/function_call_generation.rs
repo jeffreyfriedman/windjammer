@@ -3,6 +3,7 @@
 use crate::analyzer::OwnershipMode;
 use crate::parser::*;
 
+use super::function_pointer_signature::function_pointer_param_signature;
 use super::super::CodeGenerator;
 
 /// Apply `&mut` at call sites from emitted callee metadata and converged registry signatures.
@@ -773,71 +774,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // parameter's type instead of registry lookup.
     // A let-bound closure with annotated parameters names its formals, and shadows any function of its name.
     let closure_signature = gen.local_closure_sigs.get(func_name).cloned();
-    let mut signature = closure_signature.clone().or_else(|| gen
-        .current_function_params
-        .iter()
-        .find(|p| p.name == func_name)
-        .and_then(|param| {
-            if let Type::FunctionPointer {
-                params,
-                return_type,
-            } = &param.type_
-            {
-                let param_ownership: Vec<OwnershipMode> = params
-                    .iter()
-                    .map(|ty| match ty {
-                        Type::String => OwnershipMode::Borrowed,
-                        Type::Custom(name) if name == "string" => OwnershipMode::Borrowed,
-                        Type::Reference(_) | Type::MutableReference(_) => OwnershipMode::Borrowed,
-                        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => {
-                            OwnershipMode::Owned
-                        }
-                        Type::Custom(name)
-                            if matches!(
-                                name.as_str(),
-                                "i32"
-                                    | "i64"
-                                    | "u32"
-                                    | "u64"
-                                    | "f32"
-                                    | "f64"
-                                    | "bool"
-                                    | "char"
-                                    | "usize"
-                                    | "isize"
-                            ) =>
-                        {
-                            OwnershipMode::Owned
-                        }
-                        _ => OwnershipMode::Owned,
-                    })
-                    .collect();
-                // Mirror Rust `fn(&str, …)` emission so call sites suppress field clones.
-                let emitted_rust_ref_params = Some(
-                    param_ownership
-                        .iter()
-                        .map(|o| matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed))
-                        .collect(),
-                );
-
-                Some(crate::analyzer::FunctionSignature {
-                    name: func_name.to_string(),
-                    param_types: params.clone(),
-                    formal_param_types: params.clone(),
-                    param_ownership,
-                    return_type: return_type.as_ref().map(|t| (**t).clone()),
-                    return_ownership: OwnershipMode::Owned,
-                    has_self_receiver: false,
-                    is_extern: false,
-                    emitted_rust_ref_params,
-                    string_ref_string_formal_params: None,
-                    field_extract_params: None,
-                    forwarding_borrow_params: None,
-                })
-            } else {
-                None
-            }
-        }));
+    let mut signature = closure_signature.clone().or_else(|| function_pointer_param_signature(gen, func_name));
 
     // Unified signature resolution: local registry first, then converged library-wide registry.
     let mut resolved_via_fallback = false;

@@ -9,6 +9,7 @@
 
 use crate::parser::*;
 
+use super::closure_signatures::ClosureSignatures;
 use super::{string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
@@ -223,32 +224,22 @@ impl<'ast> CodeGenerator<'ast> {
             || has_return(&body, name)
     }
 
-    /// Generate code for a let statement
-    #[allow(clippy::too_many_lines)]
-    /// `let f = |s: string, n: int| ..`: the closure's formals as a signature, so `f("x", 1)` converts its
-    /// arguments like a call of a declared function. `None` unless every parameter is annotated.
-    fn closure_signature_of_let(
-        name: &str,
-        value: &Expression<'_>,
-    ) -> Option<crate::analyzer::FunctionSignature> {
-        let Expression::Closure { parameters, .. } = value else { return None };
-        let types: Option<Vec<Type>> = parameters
-            .iter()
-            .map(|p| {
-                let (_, ty) = p.split_once(": ")?;
-                Some(crate::codegen::rust::types::parse_wj_type_name(ty.trim()))
-            })
-            .collect();
-        let types = types?;
-        Some(crate::analyzer::FunctionSignature {
-            name: name.to_string(),
-            param_ownership: vec![crate::analyzer::OwnershipMode::Owned; types.len()],
-            formal_param_types: types.clone(),
-            param_types: types,
-            ..Default::default()
-        })
+    /// Flag `upgrade_get_to_get_mut` when `let x = self.field.get(key)` has `x` mutated downstream.
+    fn note_get_to_get_mut_upgrade(&mut self, var_name: Option<&str>, value: &'ast Expression<'ast>) {
+        let Some(vn) = var_name else { return };
+        if super::self_analysis::is_self_field_get_call(
+            value,
+            &self.signature_registry,
+            self.current_struct_name.as_deref(),
+            Some(&self.struct_field_types),
+        ) && self.let_binding_value_is_mutated_downstream(vn)
+        {
+            self.upgrade_get_to_get_mut = true;
+        }
     }
 
+    /// Generate code for a let statement
+    #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn generate_let_statement(
         &mut self,
         pattern: &Pattern<'ast>,
@@ -273,27 +264,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         // TDD FIX (E0596): When `let x = self.field.get(key)` and downstream code
         // mutates the value obtained from x (via match/if-let), upgrade get→get_mut.
-        if let Some(vn) = var_name {
-            if super::self_analysis::is_self_field_get_call(
-                value,
-                &self.signature_registry,
-                self.current_struct_name.as_deref(),
-                Some(&self.struct_field_types),
-            ) && self.let_binding_value_is_mutated_downstream(vn)
-            {
-                self.upgrade_get_to_get_mut = true;
-            }
-        }
+        self.note_get_to_get_mut_upgrade(var_name, value);
 
         if let Some(vn) = var_name {
-            match Self::closure_signature_of_let(vn, value) {
-                Some(sig) => {
-                    self.local_closure_sigs.insert(vn.to_string(), sig);
-                }
-                None => {
-                    self.local_closure_sigs.remove(vn);
-                }
-            }
+            self.local_closure_sigs.record(vn, ClosureSignatures::of_let(value, vn));
         }
 
         // Mutability is explicit (ADR-0002): `let mut` in the source, never inferred for a local. A local changed

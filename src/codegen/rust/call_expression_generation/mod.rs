@@ -9,6 +9,7 @@
 
 mod argument_generation;
 mod function_call_generation;
+mod function_pointer_signature;
 mod stdlib_call_generation;
 mod trait_call_generation;
 
