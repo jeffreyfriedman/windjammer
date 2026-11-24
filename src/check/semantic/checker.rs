@@ -11,7 +11,9 @@ use super::rules::{self, Kind};
 use super::visit::{walk_block, walk_expr, walk_pattern, walk_stmt, Visitor};
 
 mod iter_use;
+mod numeric_flow;
 use iter_use::Use;
+use numeric_flow::Callee;
 use crate::check::locate::Locator;
 use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, SourceIndex, Span};
 use crate::fuzzy_matcher::levenshtein_distance;
@@ -164,7 +166,17 @@ impl Cx<'_, '_> {
             }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types, scalars, iter_locals, surface_of, uses, .. } = col;
+        let Collect { names, counts, let_types, scalars, iter_locals, surface_of, uses, elems, .. } = col;
+        let mut list_elems: HashMap<String, Kind> = elems
+            .into_iter()
+            .filter(|(n, k)| matches!(k, Kind::Int | Kind::Float) && counts.get(n).copied().unwrap_or(0) == 1)
+            .collect();
+        for p in params {
+            let kind = elements::element_of_type(&p.type_).filter(|k| matches!(k, Kind::Int | Kind::Float));
+            if let (Some(k), 1) = (kind, counts.get(&p.name).copied().unwrap_or(0)) {
+                list_elems.insert(p.name.clone(), k);
+            }
+        }
         let surface_of: HashMap<String, &'static str> = surface_of.into_iter().filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1).collect();
         let iter_locals: iterators::IterLocals = iter_locals.into_iter().filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1).collect();
         let scalars: HashMap<String, (Kind, bool)> = scalars
@@ -180,6 +192,7 @@ impl Cx<'_, '_> {
         let mut ck = Checker::new(self, &names, typed, self_ty.map(str::to_string));
         ck.ret_ty = ret.cloned();
         ck.scalars = scalars;
+        ck.list_elems = list_elems;
         ck.iter_locals = iter_locals;
         ck.surface_of = surface_of;
         ck.name_uses = uses;
@@ -193,6 +206,7 @@ impl Cx<'_, '_> {
         }
         if let (Some(Statement::Expression { expr, .. }), Some(ty)) = (body.last().map(|s| &**s), ret) {
             ck.wrapper_mismatch(ty, expr, " in return value");
+            ck.numeric_into_type(ty, expr, " in return value");
         }
         // A literal tail expression is the return value too.
         if let (Some(Statement::Expression { expr: Expression::Literal { value, location }, .. }), Some(ty)) =
@@ -392,6 +406,8 @@ struct Checker<'c, 'a, 'o> {
     self_ty: Option<String>,
     ret_ty: Option<Type>,
     scalars: HashMap<String, (Kind, bool)>,
+    /// Bindings declared as a list of one numeric kind (`xs: Vec<int>`), by declaration.
+    list_elems: HashMap<String, Kind>,
     iter_locals: iterators::IterLocals,
     surface_of: HashMap<String, &'static str>,
     /// How often each name is mentioned in the function (an iterator mentioned once may take `.count()`/`.next()`).
@@ -416,6 +432,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             self_ty,
             ret_ty: None,
             scalars: HashMap::new(),
+            list_elems: HashMap::new(),
             iter_locals: HashMap::new(),
             surface_of: HashMap::new(),
             name_uses: HashMap::new(),
@@ -800,6 +817,9 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         let Expression::Identifier { name, .. } = target else { return };
         let Some((lk, _)) = self.scalars.get(name).copied() else { return };
         let Some((rk, rdeclared)) = self.kind_of(value) else { return };
+        if matches!((lk, rk), (Kind::Int, Kind::Float) | (Kind::Float, Kind::Int)) {
+            return; // `numeric_flow` judges int against float
+        }
         let literal = matches!(value, Expression::Literal { .. });
         let ok = lk == rk || (lk == Kind::Float && rk == Kind::Int && (literal || !rdeclared));
         if ok {
@@ -845,8 +865,8 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         }
         self.wrapper_mismatch(ty, value, " in initializer");
         let (Some(want), Some((got, true))) = (rules::type_kind(ty), self.kind_of(value)) else { return };
-        if want == got {
-            return;
+        if want == got || matches!((want, got), (Kind::Int, Kind::Float) | (Kind::Float, Kind::Int)) {
+            return; // `numeric_flow` judges int against float
         }
         let span = match value {
             Expression::Call { function, .. } => self.operand_span(function),
@@ -1105,6 +1125,7 @@ impl Visitor for Checker<'_, '_, '_> {
                 self.skip.insert(*function as *const Expression<'_> as usize);
                 if let Expression::Identifier { name, location } = function {
                     self.call_literals(name, arguments);
+                    self.numeric_arguments(Callee::Fn(name), arguments);
                     if name.contains("::") {
                         let loc = self.effective(location);
                         self.variant_path(name, &loc);
@@ -1123,6 +1144,7 @@ impl Visitor for Checker<'_, '_, '_> {
             Expression::StructLiteral { name, fields, location } => {
                 let loc = self.effective(location);
                 self.struct_literal(name, fields, &loc);
+                self.numeric_fields(name, fields);
             }
             Expression::FieldAccess { object, field, location } => {
                 let loc = self.effective(location);
@@ -1137,9 +1159,10 @@ impl Visitor for Checker<'_, '_, '_> {
                 self.display_args(args);
                 self.debug_of_iterator(args);
             }
-            Expression::MethodCall { object, method, location, .. } => {
+            Expression::MethodCall { object, method, arguments, location, .. } => {
                 let loc = self.effective(location);
                 self.method_call(object, method, &loc);
+                self.numeric_arguments(Callee::Method(object, method), arguments);
             }
             _ => {}
         }
@@ -1156,10 +1179,13 @@ impl Visitor for Checker<'_, '_, '_> {
             Statement::Assignment { target, value, compound_op, .. } => {
                 if compound_op.is_none() {
                     self.assignment(target, value);
+                    self.numeric_assignment(target, value);
                 }
             }
             Statement::Let { type_: Some(ty), value, location, .. } => {
                 self.let_from_call(ty, value);
+                self.numeric_into_type(ty, value, " in initializer");
+                self.numeric_elements(ty, value, " in initializer");
                 self.annotation(ty, location);
             }
             _ => {}
@@ -1176,6 +1202,9 @@ impl Visitor for Checker<'_, '_, '_> {
         }
         if let Statement::Return { value: Some(v), location, .. } = s {
             self.returned_iterator(v, location);
+            if let Some(ty) = self.ret_ty.clone() {
+                self.numeric_into_type(&ty, v, " in return value");
+            }
         }
         if let (Statement::Return { value: Some(Expression::Literal { value, location }), .. }, Some(ty)) =
             (s, self.ret_ty.clone())

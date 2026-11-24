@@ -1,0 +1,7 @@
+// expect: WJ0003
+fn main() {
+    let x: f64 = 2.5
+    let marg: int = x * 3.0
+//~@21+7 ERROR WJ0003 mismatched types: expected `int`, found `float`
+    println("${marg}")
+}

@@ -200,7 +200,7 @@ cost (the partial stream priced at the config's table, else the per-trial cap); 
 
 **Permission policy (identical shell helpers for every arm).** `claude -p --permission-mode dontAsk`: only what `--allowedTools` lists runs, everything else is denied.
 Claude Code splits a compound command (`a && b | c; d`) and requires EVERY part to be allowed, so one unlisted part denies the whole line and the agent usually stops with the file unverified
-(pilots 8-10: 18 of 33 failed trials never compiled for this reason). Allowed for every arm: `Read, Edit, Write, Glob, Grep` (cwd) and
+(in pilots 8-10 many failed trials never compiled for this reason). Allowed for every arm: `Read, Edit, Write, Glob, Grep` (cwd) and
 `Bash(printf|echo|head|tail|cat|sed|cd|ls|wc|sort|uniq|tr|cut|grep|diff|./main|./build/main:*)` (`arms.SHELL_HELPERS`); plus only the arm's own toolchain
 (`Bash(wj build|run|test|check|fmt|lint|fix|docs|explain:*)` for wj arms, `rustc`/`go`/`python3` for R/G/P) and its MCP tools for MCP arms. The prompt tells the agent that chains with `|`, `&&`, `;` are fine
 when every part is on the list, and that a Bash line must not contain `$`, backticks, `<`, `>` or a space followed by `=` even inside quotes (Claude Code refuses those): such input goes through the Write tool and `cat input.txt | program`.

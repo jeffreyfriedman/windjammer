@@ -468,24 +468,6 @@ pub(crate) fn is_copy_base(base: &BaseType) -> bool {
     }
 }
 
-fn is_integer_base(base: &BaseType) -> bool {
-    matches!(
-        base,
-        BaseType::I8
-            | BaseType::I16
-            | BaseType::I32
-            | BaseType::I64
-            | BaseType::I128
-            | BaseType::U8
-            | BaseType::U16
-            | BaseType::U32
-            | BaseType::U64
-            | BaseType::U128
-            | BaseType::Usize
-            | BaseType::Isize
-    )
-}
-
 fn is_float_base(base: &BaseType) -> bool {
     matches!(base, BaseType::F32 | BaseType::F64)
 }
@@ -560,8 +542,9 @@ fn needs_numeric_cast(actual: &BaseType, expected: &BaseType) -> bool {
     if is_unsigned_integer_base(actual) && is_signed_integer_base(expected) {
         return true;
     }
-    is_integer_base(actual) && is_float_base(expected)
-        || is_float_base(actual) && is_integer_base(expected)
+    // Int <-> float is never converted implicitly: the program writes `as int` / `as float`, and `wj check` reports
+    // the missing conversion (WJ0003). An inserted `as i64` would silently truncate a float.
+    false
 }
 
 fn is_signed_integer_base(base: &BaseType) -> bool {
@@ -784,12 +767,23 @@ mod tests {
     }
 
     #[test]
-    fn int_to_float_needs_numeric_cast() {
-        let actual = owned(BaseType::I32);
-        let expected = owned(BaseType::F64);
+    fn int_and_float_are_never_cast_implicitly() {
+        for (a, e) in [
+            (BaseType::I32, BaseType::F64),
+            (BaseType::I64, BaseType::F32),
+            (BaseType::F64, BaseType::I64),
+            (BaseType::F32, BaseType::I32),
+            (BaseType::F64, BaseType::U64),
+        ] {
+            assert_eq!(compute_coercion(&owned(a.clone()), &owned(e.clone())), CoercionKind::Identity, "{a:?} -> {e:?}");
+        }
+    }
+
+    #[test]
+    fn integer_widths_still_convert_at_a_call() {
         assert_eq!(
-            compute_coercion(&actual, &expected),
-            CoercionKind::NumericCast(BaseType::F64)
+            compute_coercion(&copy(BaseType::U64), &owned(BaseType::I64)),
+            CoercionKind::NumericCast(BaseType::I64)
         );
     }
 

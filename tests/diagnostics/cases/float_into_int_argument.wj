@@ -1,0 +1,10 @@
+// expect: WJ0003
+fn half(v: int) -> int {
+    v / 2
+}
+
+fn main() {
+    let x: f64 = 9.0
+    let h = half(x)
+    println("${h}")
+}

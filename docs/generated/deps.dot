@@ -164,7 +164,7 @@ digraph deps {
   "check" -> "metadata" [label="6"];
   "check" -> "module_system" [label="5"];
   "check" -> "package" [label="9"];
-  "check" -> "parser" [label="76"];
+  "check" -> "parser" [label="77"];
   "check" -> "parser_impl" [label="1"];
   "check" -> "program_analysis" [label="12"];
   "check" -> "resolve" [label="5"];

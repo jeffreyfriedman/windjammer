@@ -14,6 +14,8 @@ pub struct FnInfo {
     pub params: Vec<Type>,
     pub ret: Option<Type>,
     pub generic: bool,
+    /// The declaration has a `self` receiver (`params` never lists it).
+    pub has_self: bool,
 }
 
 #[derive(Default)]
@@ -24,6 +26,8 @@ pub struct Index {
     pub types: HashSet<String>,
     /// Struct/enum name -> methods available on it (inherent, project-trait and known std-trait impls).
     pub methods: HashMap<String, HashSet<String>>,
+    /// (type, method) -> signatures of the methods an `impl` of a concrete type declares (one entry per impl).
+    pub method_sigs: HashMap<(String, String), Vec<FnInfo>>,
     /// Types with an impl of a trait this index does not know (its methods are unknown).
     pub opaque_impls: HashSet<String>,
     /// Methods every type may have through blanket `impl<T> Trait for T` impls.
@@ -70,6 +74,8 @@ pub struct FileNames {
     /// Types imported from this crate (`use crate::channel::Channel`): checked alone, the file cannot see their
     /// declarations, so their methods are not known to be missing.
     pub crate_types: HashSet<String>,
+    /// Names imported from another crate (`use wj_stats::median`): a project function of the same name is not it.
+    pub foreign: HashSet<String>,
 }
 
 /// Std modules usable without an explicit `use` (auto-imported by the compiler).
@@ -96,6 +102,7 @@ fn fn_info(d: &FunctionDecl<'_>) -> FnInfo {
         params,
         ret: d.return_type.clone(),
         generic: !d.type_params.is_empty() || d.parameters.iter().any(|p| p.pattern.is_some()),
+        has_self: d.parameters.iter().any(|p| p.name == "self"),
     }
 }
 
@@ -190,6 +197,11 @@ impl Index {
         if blanket {
             self.blanket_methods.extend(names);
         } else {
+            for f in &block.functions {
+                let mut info = fn_info(f);
+                info.generic |= !block.type_params.is_empty();
+                self.method_sigs.entry((ty.clone(), f.name.clone())).or_default().push(info);
+            }
             self.methods.entry(ty).or_default().extend(names);
         }
     }
@@ -284,6 +296,9 @@ impl FileNames {
                         self.external = true;
                     }
                     let leaf = alias.as_deref().or(path.last().map(String::as_str)).unwrap_or("");
+                    if !(first.starts_with("std") || first.starts_with('.') || matches!(first, "crate" | "self" | "super")) {
+                        self.foreign.insert(leaf.to_string());
+                    }
                     if matches!(first, "crate" | "self" | "super") && leaf.starts_with(|c: char| c.is_uppercase()) {
                         self.crate_types.insert(leaf.to_string());
                     }
