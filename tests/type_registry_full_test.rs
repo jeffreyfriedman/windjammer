@@ -46,7 +46,7 @@ pub struct Vec2 {
     fs::write(
         temp_dir.join("main.wj"),
         r#"
-use math::Vec2
+use math::vec2::Vec2
 
 struct Point {
     position: Vec2

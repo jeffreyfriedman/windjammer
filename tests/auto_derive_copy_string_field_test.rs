@@ -262,9 +262,9 @@ pub struct GamepadButton {
         (
             "input_rebinding/input_binding.wj",
             r#"
-use crate::input_rebinding::InputAction
-use crate::input_rebinding::KeyCode
-use crate::input_rebinding::GamepadButton
+use crate::input_rebinding::input_action::InputAction
+use crate::input_rebinding::key_code::KeyCode
+use crate::input_rebinding::gamepad_button::GamepadButton
 
 pub struct InputBinding {
     pub action: InputAction,
@@ -361,7 +361,7 @@ pub struct InputAction {
         (
             "input_rebinding/input_binding.wj",
             r#"
-use crate::input_rebinding::InputAction
+use crate::input_rebinding::input_action::InputAction
 
 pub struct InputBinding {
     pub action: InputAction,

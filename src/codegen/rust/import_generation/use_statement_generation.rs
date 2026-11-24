@@ -35,13 +35,17 @@ impl CodeGenerator<'_> {
                     if let Some(mod_dir) = self.output_module_dirs().and_then(|dirs| dirs.last().cloned()) {
                         let first_seg = rest.split("::").next().unwrap_or("");
                         if first_seg == mod_dir {
-                            if let Some(alias_name) = alias {
-                                return format!(
-                                    "{}use self::{} as {};\n",
-                                    pub_prefix, rest, alias_name
-                                );
+                            // `crate::<this_module>` IS this module, so the path below it is relative to `self`.
+                            let below = rest.strip_prefix(first_seg).unwrap_or(rest).trim_start_matches("::");
+                            if !below.is_empty() {
+                                if let Some(alias_name) = alias {
+                                    return format!(
+                                        "{}use self::{} as {};\n",
+                                        pub_prefix, below, alias_name
+                                    );
+                                }
+                                return format!("{}use self::{};\n", pub_prefix, below);
                             }
-                            return format!("{}use self::{};\n", pub_prefix, rest);
                         }
                     }
                 }

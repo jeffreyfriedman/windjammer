@@ -127,7 +127,7 @@ fn test_pub_use_crate_current_module_rewritten_to_self() {
         ("mod.wj", "pub mod animation\n"),
         (
             "animation/mod.wj",
-            "pub mod animation\npub use crate::animation::Animation\n",
+            "pub mod animation\npub use crate::animation::animation::Animation\n",
         ),
         (
             "animation/animation.wj",
