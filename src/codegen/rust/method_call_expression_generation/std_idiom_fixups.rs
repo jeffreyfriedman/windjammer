@@ -211,6 +211,12 @@ impl<'ast> CodeGenerator<'ast> {
             x = rest.trim_start();
         }
         let x = x.strip_suffix(".to_string()").unwrap_or(x);
+        // A list literal (or a local holding one) is an array of `&str`: its elements are slices, so both sides
+        // are compared as `str`. A `Vec<String>` holds `String` elements: `*m` is the `String`.
+        let slice_elements = matches!(object, Expression::Array { .. }) || matches!(recv_ty, Type::Array(..));
+        if slice_elements {
+            return Some(format!("{obj_str}.iter().any(|m| **m == *{x})"));
+        }
         Some(format!("{obj_str}.iter().any(|m| *m == *{x})"))
     }
 

@@ -253,6 +253,7 @@ corpus_tests!(
     option_field_unwrap_or_then_whole_value,
     match_call_result_bound_twice_in_call,
     indexed_field_write_in_loop_over_field,
+    list_literal_contains_text_arg,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:
