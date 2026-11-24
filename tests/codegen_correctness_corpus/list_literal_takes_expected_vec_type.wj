@@ -1,0 +1,107 @@
+// A bare list literal in a position whose declared type is a Vec is a Vec: call and method argument, struct field,
+// return value, let with a declared type, enum payload, nested lists, and the empty list.
+// expect: 1
+// expect: 3
+// expect: 3
+// expect: 5
+// expect: 5
+// expect: 7
+// expect: 7
+// expect: 8
+// expect: 1 2 1 4
+struct Event {
+    name: string,
+    value: int,
+}
+
+fn ev(name: string, value: int) -> Event {
+    Event { name: name, value: value }
+}
+
+struct Bag {
+    events: Vec<Event>,
+}
+
+enum Msg {
+    Many(Vec<Event>),
+    Pair(int, Vec<Event>),
+}
+
+impl Bag {
+    fn add(self, more: Vec<Event>) -> int {
+        self.events.len() + more.len()
+    }
+    fn single(value: int) -> Vec<Event> {
+        [ev("a", value)]
+    }
+    fn maybe(value: int) -> Vec<Event> {
+        if value > 0 {
+            return [ev("b", value)]
+        }
+        [ev("c", value)]
+    }
+}
+
+fn count(events: Vec<Event>) -> int {
+    events.len()
+}
+
+fn rows() -> Vec<Vec<int>> {
+    [[1], [2]]
+}
+
+fn nested(grid: Vec<Vec<int>>) -> int {
+    grid.len()
+}
+
+fn payload(m: Msg) -> int {
+    match m {
+        Msg::Many(es) => es.len(),
+        Msg::Pair(_, es) => es.len(),
+    }
+}
+
+fn empty_arg(events: Vec<Event>) -> int {
+    events.len()
+}
+
+fn main() {
+    println("${count([ev("a", 1)])}")
+    let bag = Bag { events: [ev("x", 1)] }
+    println("${bag.add([ev("y", 2), ev("z", 3)])}")
+    println("${Bag::single(4).len() + Bag::maybe(1).len() + rows().len() - 1}")
+    let declared: Vec<Event> = [ev("d", 5)]
+    println("${declared.len() + declared[0].value - 1}")
+    println("${payload(Msg::Many([ev("m", 1)])) + payload(Msg::Pair(1, [ev("n", 2), ev("o", 3)])) + 2}")
+    println("${nested([[1], [2]]) + nested([[1, 2], [3], [4]]) + 2}")
+    println("${empty_arg([]) + count([]) + 7}")
+    let e: Vec<Event> = []
+    println("${e.len() + 8}")
+    more()
+}
+
+// A `return` inside the initializer of a `let` returns the function's value; the default of `unwrap_or` is the option's element.
+struct Node {
+    req: Option<Vec<string>>,
+}
+
+fn names(n: Node) -> Vec<string> {
+    n.req.unwrap_or(["leah", "kit"])
+}
+
+fn first_or_default(o: Option<int>) -> Vec<int> {
+    let v = match o {
+        None => { return [1] },
+        Some(x) => x,
+    }
+    [v]
+}
+
+fn more() {
+    let n = Node { req: None }
+    let evs: Vec<Event> = match n.req {
+        Some(_) => [ev("p", 1)],
+        None => { if names(Node { req: None }).len() > 1 { [ev("q", 2)] } else { [ev("r", 3)] } },
+    }
+    println("${evs.len()} ${names(n).len()} ${first_or_default(None).len()} ${first_or_default(Some(4))[0]}")
+}

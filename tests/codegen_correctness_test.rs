@@ -239,6 +239,7 @@ corpus_tests!(
     thread_handles,
     option_vec_some_literal_field,
     let_bound_closure_literal_argument,
+    list_literal_takes_expected_vec_type,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:
