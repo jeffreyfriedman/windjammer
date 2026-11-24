@@ -2,7 +2,8 @@
 //! lent for change, decided by the IR solver (user code) and by the `&mut self` declarations of
 //! `std/rust_core.wji` (core types); declared field, payload and result types. Nothing here matches names.
 
-use crate::analyzer::{Analyzer, AnalyzedFunction, SignatureRegistry};
+use crate::analyzer::{AnalyzedFunction, SignatureRegistry};
+use crate::program_analysis::{Analyzed, FileKey, Globals, ProgramAnalysis};
 use crate::ir::safety_type::OwnedType;
 use crate::ir::stdlib_tables::StdlibTables;
 use crate::parser::ast::core::{EnumVariantData, FunctionDecl, Item, Program};
@@ -76,39 +77,71 @@ fn quiet<T>(f: impl FnOnce() -> T) -> Option<T> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).ok()
 }
 
+/// One file of the program: its name, the text that was parsed and the parse.
+pub struct SourceFile<'a> {
+    pub name: &'a str,
+    pub text: &'a str,
+    pub program: &'a Program<'static>,
+}
+
 impl Facts {
     /// Facts for every file of one program: two analyzer passes (the second with the signatures of all files, as
-    /// the build does), then the IR solver per file.
-    pub fn build(files: &[(&str, &Program<'static>)], tables: Arc<StdlibTables>) -> Self {
-        let mut facts = Facts { core: Some(crate::ir::stdlib_tables::shared_core_surface()), ..Default::default() };
-        for (_, program) in files {
-            facts.declarations(&program.items);
+    /// the build does), then the IR solver per file. The first pass is the analysis the rest of the check already
+    /// has (`session`), the second is computed here once per program.
+    pub fn build(
+        files: &[SourceFile<'_>],
+        tables: Arc<StdlibTables>,
+        session: &ProgramAnalysis,
+    ) -> Self {
+        crate::debug_env::count(crate::debug_env::Stage::FactsBuild);
+        let mut facts = Facts {
+            core: Some(crate::ir::stdlib_tables::shared_core_surface()),
+            ..Default::default()
+        };
+        for f in files {
+            facts.declarations(&f.program.items);
         }
         for n in std::mem::take(&mut facts.conflicting) {
             facts.fields.remove(&n);
             facts.variants.remove(&n);
             facts.types.remove(&n);
         }
+        let keys: Vec<FileKey> = files.iter().map(|f| FileKey::new(f.name, f.text)).collect();
         let mut global = SignatureRegistry::new();
-        for (file, program) in files {
-            let first = quiet(|| Analyzer::new().analyze_program_with_global_signatures(program, &SignatureRegistry::new()).ok()).flatten();
-            match first {
-                Some((_, registry, _)) => global.merge(&registry),
-                None => {
-                    facts.unanalyzed.insert(file.to_string());
+        let mut merged = Vec::new();
+        for (f, key) in files.iter().zip(&keys) {
+            match quiet(|| session.first_pass(key, f.program)) {
+                Some(first) if first.result.is_ok() => {
+                    if let Ok(ok) = &first.result {
+                        global.merge(&ok.registry);
+                    }
+                    merged.push(key.clone());
+                }
+                _ => {
+                    facts.unanalyzed.insert(f.name.to_string());
                 }
             }
         }
+        let global = Arc::new(global);
+        let globals = Globals::Merged(merged);
         let struct_fields: HashMap<String, HashMap<String, Type>> = facts.fields.clone();
-        for (file, program) in files {
-            if facts.unanalyzed.contains(*file) {
+        for (f, key) in files.iter().zip(&keys) {
+            if facts.unanalyzed.contains(f.name) {
                 continue;
             }
             let solved = quiet(|| {
-                let (analyzed, registry, _) = Analyzer::new().analyze_program_with_global_signatures(program, &global).ok()?;
+                let second = session.second_pass(key, f.program, globals.clone(), &global);
+                let Ok(Analyzed {
+                    functions: analyzed,
+                    registry,
+                    ..
+                }) = &second.result
+                else {
+                    return None;
+                };
                 let module = crate::ir::IrPipeline::new()
                     .with_stdlib_tables(tables.clone())
-                    .lower_to_ir(&analyzed, &registry, Some(&struct_fields));
+                    .lower_to_ir(analyzed, registry, Some(&struct_fields));
                 let modes: Vec<(FunctionDecl<'static>, HashMap<String, bool>)> = analyzed
                     .iter()
                     .zip(module.functions.iter())
@@ -116,7 +149,9 @@ impl Facts {
                         let lent = irf
                             .param_types
                             .iter()
-                            .map(|(n, st)| (n.clone(), matches!(st.ownership, OwnedType::MutRef(_))))
+                            .map(|(n, st)| {
+                                (n.clone(), matches!(st.ownership, OwnedType::MutRef(_)))
+                            })
                             .collect();
                         (af.decl.clone(), lent)
                     })
@@ -131,7 +166,7 @@ impl Facts {
                     }
                 }
                 None => {
-                    facts.unanalyzed.insert(file.to_string());
+                    facts.unanalyzed.insert(f.name.to_string());
                 }
             }
         }

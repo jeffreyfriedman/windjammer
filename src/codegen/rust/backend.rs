@@ -153,6 +153,49 @@ impl Default for RustBackend {
     }
 }
 
+impl RustBackend {
+    /// The generator half of [`CodegenBackend::generate`]: from the analyzer's and numeric inference's products to the
+    /// Rust text. Takes everything by value or reference, so a caller that already holds the products (the
+    /// `program_analysis` session of `wj check`) generates without analyzing again.
+    fn emit<'a>(
+        program: &Program<'a>,
+        compilation_target: CompilationTarget,
+        analyzed: &[crate::analyzer::AnalyzedFunction<'a>],
+        signatures: SignatureRegistry,
+        analyzed_trait_methods: std::collections::HashMap<String, std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'a>>>,
+        numeric_inference: crate::ir::numeric_bridge::UnifiedNumericInference,
+    ) -> String {
+        let inference_ok = numeric_inference.errors.is_empty();
+        if !inference_ok {
+            for e in &numeric_inference.errors {
+                eprintln!("Numeric inference error (RustBackend): {}", e);
+            }
+        }
+
+        let mut generator = crate::codegen::CodeGenerator::new(signatures, compilation_target);
+        generator.set_analyzed_trait_methods(analyzed_trait_methods);
+        if inference_ok {
+            generator.set_numeric_inference(numeric_inference);
+        }
+
+        // Pass analyzed functions so codegen has ownership info
+        generator.generate_program(program, analyzed)
+    }
+
+    /// The Rust `generate` would produce for `program` with the default configuration, from products the caller
+    /// already computed: `analyzed`, `signatures` and `analyzed_trait_methods` of `Analyzer::analyze_program` and the
+    /// program's numeric inference. The linter pass of `generate` is left out: with lints not reported it has no output.
+    pub fn generate_from_products<'a>(
+        program: &Program<'a>,
+        analyzed: &[crate::analyzer::AnalyzedFunction<'a>],
+        signatures: SignatureRegistry,
+        analyzed_trait_methods: std::collections::HashMap<String, std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'a>>>,
+        numeric_inference: crate::ir::numeric_bridge::UnifiedNumericInference,
+    ) -> String {
+        Self::emit(program, CompilationTarget::Rust, analyzed, signatures, analyzed_trait_methods, numeric_inference)
+    }
+}
+
 impl CodegenBackend for RustBackend {
     fn name(&self) -> &str {
         "Rust"
@@ -195,21 +238,7 @@ impl CodegenBackend for RustBackend {
 
         let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
         numeric_inference.infer_program(program);
-        let inference_ok = numeric_inference.errors.is_empty();
-        if !inference_ok {
-            for e in &numeric_inference.errors {
-                eprintln!("Numeric inference error (RustBackend): {}", e);
-            }
-        }
-
-        let mut generator = crate::codegen::CodeGenerator::new(signatures, compilation_target);
-        generator.set_analyzed_trait_methods(analyzed_trait_methods);
-        if inference_ok {
-            generator.set_numeric_inference(numeric_inference);
-        }
-
-        // Pass analyzed functions so codegen has ownership info
-        let code = generator.generate_program(program, &analyzed);
+        let code = Self::emit(program, compilation_target, &analyzed, signatures, analyzed_trait_methods, numeric_inference);
 
         let mut output = CodegenOutput::new(code.clone(), "rs".to_string());
 

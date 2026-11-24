@@ -1,0 +1,3 @@
+pub fn fill(items: Vec<int>) {
+    items.push(1)
+}

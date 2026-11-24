@@ -527,6 +527,7 @@ impl Parser {
     // ========================================================================
 
     pub fn parse(&mut self) -> Result<Program<'static>, String> {
+        crate::debug_env::count(crate::debug_env::Stage::Parse);
         let mut items = Vec::new();
 
         // Lexical errors first, each with line:column. Parsing a stream with invalid tokens

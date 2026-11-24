@@ -9,12 +9,13 @@
 
 use crate::diagnostics::{Diagnostic, Span};
 use crate::ir::explain::moves::{Move, MoveKind};
+use crate::program_analysis::{FileKey, Mode, ProgramAnalysis};
 
 pub use super::test_api::predicted_moves;
 
 /// WJ0007 diagnostics for one parsed file.
-pub fn predict(program: &crate::parser::Program<'_>, source: &str, file: &str) -> Vec<Diagnostic> {
-    let rust = generate(program);
+pub fn predict(program: &crate::parser::Program<'static>, source: &str, file: &str, session: &ProgramAnalysis) -> Vec<Diagnostic> {
+    let rust = generate_shared(program, source, file, session);
     remember(file, source, &rust);
     rust.map_or_else(Vec::new, |rust| {
         let mut out = predict_from(&rust, source, file);
@@ -47,6 +48,26 @@ pub fn take_generated(file: &str, source: &str) -> Option<Option<String>> {
     let mut kept = GENERATED.lock().unwrap_or_else(|e| e.into_inner());
     let at = kept.iter().position(|(f, s, _)| f == file && s == source)?;
     Some(kept.swap_remove(at).2)
+}
+
+/// [`generate`] from the session's analysis and numeric inference of the file instead of analyzing it again: the same
+/// text (the generator's own first two steps are exactly those products). In verify mode the fresh text must equal it.
+fn generate_shared(program: &crate::parser::Program<'static>, source: &str, file: &str, session: &ProgramAnalysis) -> Option<String> {
+    if session.mode() == Mode::Off {
+        return generate(program);
+    }
+    let key = FileKey::new(file, source);
+    let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let analysis = session.first_pass(&key, program);
+        let ok = analysis.result.as_ref().ok()?;
+        let numeric = session.numeric(&key, program);
+        Some(crate::codegen::generate_rust_source_from_products(program, &ok.functions, ok.registry.clone(), ok.trait_methods.clone(), (*numeric).clone()))
+    }));
+    let rust = rust.ok().flatten();
+    if session.mode() == Mode::Verify && rust != generate(program) {
+        crate::program_analysis::mismatch(&format!("the Rust generated from the shared products of {file} differs from the generator's own"));
+    }
+    rust
 }
 
 /// The Rust the compiler generates for one parsed file, in-process; `None` when the generator fails.

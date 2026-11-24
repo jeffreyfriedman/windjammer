@@ -26,9 +26,9 @@ pub const CODE: &str = "WJ0051";
 
 
 /// `WJ0051` diagnostics for every file of one program.
-pub fn run(parsed: &[&Parsed], tables: Arc<StdlibTables>) -> Vec<Diagnostic> {
-    let files: Vec<(&str, &crate::parser::ast::core::Program<'static>)> = parsed.iter().map(|p| (p.file.as_str(), &p.program)).collect();
-    let facts = facts::Facts::build(&files, tables);
+pub fn run(parsed: &[&Parsed], tables: Arc<StdlibTables>, session: &crate::program_analysis::ProgramAnalysis) -> Vec<Diagnostic> {
+    let files: Vec<facts::SourceFile<'_>> = parsed.iter().map(|p| facts::SourceFile { name: p.file.as_str(), text: p.text.as_str(), program: &p.program }).collect();
+    let facts = facts::Facts::build(&files, tables, session);
     let mut out = Vec::new();
     for p in parsed {
         if facts.unanalyzed.contains(&p.file) {

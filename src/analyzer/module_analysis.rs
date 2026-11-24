@@ -108,6 +108,7 @@ impl<'ast> Analyzer<'ast> {
         program: &Program<'ast>,
         global_signatures: &SignatureRegistry,
     ) -> Result<ProgramAnalysisResult<'ast>, String> {
+        crate::debug_env::count(crate::debug_env::Stage::RegistryCopy);
         let global_arc = std::sync::Arc::new(global_signatures.clone());
         self.analyze_program_with_global_arc(program, &global_arc)
     }
@@ -119,6 +120,7 @@ impl<'ast> Analyzer<'ast> {
         program: &Program<'ast>,
         global_signatures: &std::sync::Arc<SignatureRegistry>,
     ) -> Result<ProgramAnalysisResult<'ast>, String> {
+        crate::debug_env::count(crate::debug_env::Stage::AnalyzerPass);
         // THE PROPER SOLUTION: Multi-pass ownership analysis
         // Iterate until convergence - no workarounds, no heuristics, just correctness
 

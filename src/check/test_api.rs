@@ -14,7 +14,7 @@ pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
     let file = path.to_string_lossy().to_string();
     let tokens = crate::lexer::Lexer::new(&source).tokenize_with_locations();
     let Ok(program) = crate::parser::Parser::new_with_source(tokens, file.clone(), source.clone()).parse() else { return Vec::new() };
-    super::moves::predict(&program, &source, &file)
+    super::moves::predict(&program, &source, &file, &crate::program_analysis::ProgramAnalysis::new(super::analysis_mode()))
 }
 
 /// Drop the installed shared analysis store (tests install their own and must leave none behind).
