@@ -1,0 +1,5 @@
+pub fn bump_by(x: int) -> int {
+    let k: int = 1000
+    let c = |x: int| x + k
+    c(x)
+}

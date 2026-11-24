@@ -164,3 +164,9 @@ pub(super) fn read_boxed_arg(it: &mut Interpreter, i: usize, name: &'static str)
 pub(super) fn boxed(v: Value) -> Value {
     Value::Ref(Box::new(Place::temp(v)))
 }
+
+/// The `Debug` text of an AST node for identifier scanning: source file paths are left out (they are no identifiers,
+/// and printing them made the cost depend on the working directory's length).
+pub(super) fn ast_text(x: &dyn std::fmt::Debug) -> String {
+    crate::source_map::with_elided_paths(|| format!("{:?}", x))
+}

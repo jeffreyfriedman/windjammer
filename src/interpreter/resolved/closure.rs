@@ -51,7 +51,7 @@ pub(super) fn create(cx: &mut super::compile::Cx, parameters: &'static [String],
     if cx.closure_body || cx.it.fast_off("closurecreate") {
         return None;
     }
-    let text = format!("{:?}", body);
+    let text = super::island::ast_text(&body);
     let used: HashSet<&str> = text.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|w| !w.is_empty()).collect();
     let free = cx.visible_locals(&used);
     for (_, s) in &free {
@@ -80,7 +80,7 @@ fn param_name(p: &'static str) -> Option<&'static str> {
 
 fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'static str, Slot)], module: usize, self_ty: Option<Rc<str>>) -> Option<CompiledClosure> {
     let names: Vec<&'static str> = params.iter().map(|p| param_name(p.as_str())).collect::<Option<_>>()?;
-    let text = format!("{:?}", body);
+    let text = super::island::ast_text(&body);
     let used: HashSet<&str> = text.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|w| !w.is_empty()).collect();
     // environment names the body may use (the walker looks names up from the end: last wins)
     let mut free: Vec<&'static str> = Vec::new();

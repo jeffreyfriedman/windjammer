@@ -70,7 +70,7 @@ fn is_resource(v: &Value) -> bool {
 pub(crate) fn move_captures(f: Value) -> Value {
     let Value::Func(c) = &f else { return f };
     let Callable::Closure { params, body, env, module, self_ty, tparams } = &**c else { return f };
-    let text = format!("{:?}", body);
+    let text = crate::source_map::with_elided_paths(|| format!("{:?}", body));
     let mut new_env = Vec::with_capacity(env.len());
     for (name, slot) in env {
         if !text.contains(&format!("name: {:?}", name)) {

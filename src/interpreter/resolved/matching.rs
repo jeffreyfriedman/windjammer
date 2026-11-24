@@ -39,7 +39,7 @@ fn raw(cx: &mut Cx, e: E) -> Option<(Code, bool)> {
         let r = x.is_raw();
         return Some((x.code(), r));
     }
-    let island = Island::new(cx, &format!("{:?}", e));
+    let island = Island::new(cx, &super::island::ast_text(&e));
     Some((Box::new(move |it, b| island.run(it, b, |it| it.eval_raw(e))), true))
 }
 
