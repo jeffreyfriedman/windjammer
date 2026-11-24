@@ -171,6 +171,10 @@ pub enum Commands {
         #[arg(long, value_name = "FILE")]
         stdin_file: Option<std::path::PathBuf>,
 
+        /// The program's standard input, as one shell-safe argument with C escapes (`\n` `\t` `\\` `\'` `\"` `\xNN` `\NNN` `\u{...}`); write a literal `=` `$` `<` `>` as `\x3d` `\x24` `\x3c` `\x3e`. Interpreted and compiled runs get the same bytes; not with --stdin-file
+        #[arg(long, value_name = "TEXT", conflicts_with = "stdin_file")]
+        stdin_text: Option<String>,
+
         /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
         /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read
         /// once for both runs; when no input arrives within 2 s it is taken as empty. When the two runs agree it prints `wj verify: OK` (with the

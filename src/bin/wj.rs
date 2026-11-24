@@ -32,6 +32,13 @@ fn main() -> anyhow::Result<()> {
         println!("{}", windjammer::toolchain::identity::current().version_line());
         return Ok(());
     }
+    // `--stdin-text TEXT`: the same command with the (unescaped) text as stdin
+    {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        if let Some(code) = windjammer::cli::stdin_text::intercept(&args) {
+            std::process::exit(code);
+        }
+    }
     // `--stdin-file FILE`: the same command with the file as stdin (no shell pipe or quoting needed)
     {
         let args: Vec<String> = std::env::args().skip(1).collect();

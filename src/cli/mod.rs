@@ -4,6 +4,7 @@
 
 pub mod add;
 pub mod agent_wrap;
+pub mod stdin_text;
 pub mod build;
 pub mod build_caps;
 pub mod build_json;

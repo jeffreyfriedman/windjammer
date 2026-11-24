@@ -516,6 +516,10 @@ id = "wj run --stdin-file"
 statement = "Read standard input from this file (a plain way to give input without a shell pipe, quoting or `printf`)"
 
 [[promise]]
+id = "wj run --stdin-text"
+statement = "The program's standard input, as one shell-safe argument with C escapes (`\\n` `\\t` `\\\\` `\\'` `\\\"` `\\xNN` `\\NNN` `\\u{...}`); write a literal `=` `$` `<` `>` as `\\x3d` `\\x24` `\\x3c` `\\x3e`. Interpreted and compiled runs get the same bytes; not with --stdin-file"
+
+[[promise]]
 id = "wj run --interpret"
 statement = "Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release"
 

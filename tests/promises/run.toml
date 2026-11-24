@@ -559,6 +559,29 @@ exit = 1
 output_has = ["--stdin-file", "nope.txt"]
 
 [[case]]
+name = "run --stdin-text gives unescaped text as standard input, interpreted"
+polarity = "positive"
+files = { "m.wj" = "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        println(\"got ${line}\")\n    }\n}\n" }
+args = ["run", "--interpret", "--stdin-text", "a\\n\\x3dA2*3\\n\\u{e9}", "{w}/m.wj"]
+stdout_has = ["got a", "got =A2*3", "got é"]
+
+[[case]]
+name = "run --stdin-text with a bad escape names the offset"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--interpret", "--stdin-text", "ab\\q", "{w}/m.wj"]
+exit = 2
+output_has = ["--stdin-text", "unknown escape", "byte 2"]
+
+[[case]]
+name = "run --stdin-text and --stdin-file together are refused"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n", "in.txt" = "x\n" }
+args = ["run", "--interpret", "--stdin-text", "a", "--stdin-file", "{w}/in.txt", "{w}/m.wj"]
+exit = 2
+output_has = ["--stdin-text", "--stdin-file", "use one"]
+
+[[case]]
 name = "run --pair-list runs each listed program under both engines and prints a JSON line each"
 polarity = "positive"
 files = { "m.wj" = "fn main() {\n    println(\"pair-ok\")\n}\n", "list.txt" = "{w}/m.wj\n" }
