@@ -678,7 +678,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 // ADR-0014: `let x = [a, b]` is a growable list unless annotated as a fixed array.
                 let prev_list = self.array_literal_as_list;
-                self.array_literal_as_list = Self::list_literal_wanted(value, type_.as_ref());
+                self.array_literal_as_list = self.list_context_for_let(value, type_.as_ref());
                 let generated = self.generate_let_statement_with_context(pattern, *mutable, type_, value, location);
                 self.array_literal_as_list = prev_list;
                 self.append_let_else(generated, stmt)

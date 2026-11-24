@@ -27,12 +27,31 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&Statement<'_>],
         return_type: &Type,
     ) -> std::collections::HashSet<usize> {
+        Self::collect_tail_lists(Err(body), return_type)
+    }
+
+    /// Addresses of the list literals in value position of `value` bound to a place declared `declared`
+    /// (`let evs: Vec<Event> = match k { "a" => { if c { [x] } else { [y] } } .. }`): the same tail
+    /// positions as a return value.
+    pub(in crate::codegen::rust) fn collect_value_position_lists(
+        value: &Expression<'_>,
+        declared: &Type,
+    ) -> std::collections::HashSet<usize> {
+        Self::collect_tail_lists(Ok(value), declared)
+    }
+
+    fn collect_tail_lists(
+        root: Result<&Expression<'_>, &[&Statement<'_>]>,
+        return_type: &Type,
+    ) -> std::collections::HashSet<usize> {
         type Out = std::collections::HashSet<usize>;
         fn stmts(list: &[&Statement<'_>], tail: bool, ret: &Type, out: &mut Out) {
             for (i, st) in list.iter().enumerate() {
                 let last = tail && i + 1 == list.len();
                 match st {
                     Statement::Return { value: Some(e), .. } => expr(e, true, ret, out),
+                    // `let t = match f(x) { None => { return [e] } .. }`: a `return` in the initializer returns the function's value
+                    Statement::Let { value, .. } => expr(value, false, ret, out),
                     Statement::Expression { expr: e, .. } => expr(e, last, ret, out),
                     Statement::If { then_block, else_block, .. } => {
                         stmts(then_block, last, ret, out);
@@ -90,7 +109,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         let mut out = std::collections::HashSet::new();
-        stmts(body, true, return_type, &mut out);
+        match root {
+            Ok(value) => expr(value, true, return_type, &mut out),
+            Err(body) => stmts(body, true, return_type, &mut out),
+        }
         out
     }
 
@@ -112,6 +134,16 @@ impl<'ast> CodeGenerator<'ast> {
         wrapped
             || (matches!(value, Expression::Array { .. }) || Self::if_arms_yield_list_literals(value))
                 && declared.is_none_or(crate::type_classification::type_is_vec_container)
+    }
+
+    /// `let x: T = value`: whether `value` itself is a list literal, and records the list literals in its tail
+    /// positions (`if`/`match`/block arms) when `T` is declared a `Vec`.
+    pub(in crate::codegen::rust) fn list_context_for_let(&mut self, value: &Expression<'ast>, declared: Option<&Type>) -> bool {
+        if let Some(declared) = declared.filter(|t| Self::holds_list(t)) {
+            let tails = Self::collect_value_position_lists(value, declared);
+            self.idiom.declared_let_list_literals.extend(tails);
+        }
+        Self::list_literal_wanted(value, declared)
     }
 
     /// Generate `value` assigned to a place of type `target`: list literals are `Vec`s unless the place is a fixed array.

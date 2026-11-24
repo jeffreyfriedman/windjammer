@@ -58,6 +58,9 @@ fn collection_generic_subst(receiver_ty: &Type) -> Option<Vec<(String, Type)>> {
                 None
             }
         }
+        // `Option<T>` / `Result<T, E>` declare the generics their methods use (`unwrap_or(default: T)`).
+        Type::Option(inner) => Some(vec![("T".into(), inner.as_ref().clone())]),
+        Type::Result(ok, err) => Some(vec![("T".into(), ok.as_ref().clone()), ("E".into(), err.as_ref().clone())]),
         Type::Custom(name) => {
             // `Vec<String>` may appear as a single Custom name from type_to_name.
             parse_angled_type_args(name)
