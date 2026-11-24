@@ -78,8 +78,8 @@ impl<'ast> CodeGenerator<'ast> {
         (emitted_str_ref || self.clone_of_borrowed_text(object)).then(|| format!("{}.to_string()", obj_str.trim_end_matches(".clone()")))
     }
 
-    /// An explicit `w.clone()` argument whose receiver is borrowed text: the restored `.clone()` would keep the `&str`,
-    /// so the argument is the owned string (`.to_string()`).
+    /// An explicit `w.clone()` argument whose receiver is borrowed text (or an auto-cloned borrowed-text binding): the
+    /// `.clone()` would keep the `&str`, so the argument is the owned string (`.to_string()`).
     pub(in crate::codegen::rust) fn own_clone_of_borrowed_text_arg(&self, arg_expr: &Expression<'ast>, coerced: String) -> String {
         match arg_expr {
             Expression::MethodCall { object, .. }
@@ -91,6 +91,12 @@ impl<'ast> CodeGenerator<'ast> {
                     None => coerced,
                 }
             }
+            // The compiler's own auto-clone of a borrowed-text binding (no user `.clone()`): the same `&str` trap,
+            // decided by the binding's declared/inferred type.
+            Expression::Identifier { .. } if self.clone_of_borrowed_text(arg_expr) => match coerced.strip_suffix(".clone()") {
+                Some(base) => format!("{base}.to_string()"),
+                None => coerced,
+            },
             _ => coerced,
         }
     }

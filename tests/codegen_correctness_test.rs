@@ -265,6 +265,9 @@ corpus_tests!(
     self_mutation_through_call_cycle,
     self_mutation_through_three_cycle,
     param_mutation_through_call_cycle,
+    push_borrowed_text_into_vec_in_struct,
+    push_borrowed_text_into_vec_returned,
+    push_borrowed_text_into_map_value_vec,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:
