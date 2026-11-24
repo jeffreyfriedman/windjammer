@@ -130,8 +130,9 @@ impl Interpreter {
             return None;
         }
         let key = *body as *const _ as usize;
-        // the closure called last is the one called next in a loop: no hash probe for it
-        let cc = match &self.last_closure {
+        // the closures of a loop (an iterator chain calls each in turn) hit a direct-mapped cache: no hash probe
+        let slot = (key >> 4) & 7;
+        let cc = match &self.closure_cache[slot] {
             Some((k, cc)) if *k == key => cc.clone(),
             _ => {
                 let cc = match self.compiled_closures.get(&key) {
@@ -142,7 +143,7 @@ impl Interpreter {
                         cc
                     }
                 }?;
-                self.last_closure = Some((key, cc.clone()));
+                self.closure_cache[slot] = Some((key, cc.clone()));
                 cc
             }
         };
