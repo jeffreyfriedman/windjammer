@@ -1,0 +1,47 @@
+// `match m.get(&k) { Some(_) => .., _ => .. }` where the machine-code loop declines the lookup (string keys,
+// struct values: it only takes integer keys), so the closure engine's in-place lookup (`MapGet`) runs the arms:
+// `Some(_)` must match a present key and `_` an absent one. Keeps the `mapget` mutant of the corpus gate
+// load-bearing when the JIT takes the integer-keyed loops of map_get_match.wj.
+use std::collections::HashMap
+use std::collections::BTreeMap
+
+struct P {
+    x: int,
+}
+
+fn main() {
+    let mut names: HashMap<string, int> = HashMap::new()
+    names.insert("a", 1)
+    names.insert("bb", 2)
+    names.insert("ccc", 3)
+    let keys = ["a", "zz", "bb", "ccc", "q", "a"]
+    let mut present = 0
+    let mut absent = 0
+    let mut round = 0
+    while round < 40 {
+        let mut i = 0
+        while i < 6 {
+            let key = keys[i]
+            match names.get(&key) {
+                Some(_) => { present += 1 }
+                _ => { absent += 1 }
+            }
+            i += 1
+        }
+        round += 1
+    }
+    let mut rows: BTreeMap<string, P> = BTreeMap::new()
+    rows.insert("a", P { x: 5 })
+    rows.insert("b", P { x: 6 })
+    let mut seen = 0
+    let mut n = 0
+    while n < 30 {
+        let key = if n % 3 == 0 { "a" } else if n % 3 == 1 { "b" } else { "c" }
+        match rows.get(&key) {
+            Some(_) => { seen += 10 }
+            _ => { seen += 1 }
+        }
+        n += 1
+    }
+    println("${present} ${absent} ${seen}")
+}
