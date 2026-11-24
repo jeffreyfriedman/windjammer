@@ -5,6 +5,7 @@
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --refs         also count the twins under qjs, lua, python3 and node
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --check        fail when a kernel counts more than its recorded
 //                                                              instructions + 3% (bench/interp/instr_baseline.json)
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --self-test   check that the warm-row guard fires on a mislabelled row
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --write        record the counts (lower only; --allow-raise to raise,
 //                                                              --raise K1,K2 to raise only those kernels)
 //
@@ -177,18 +178,64 @@ fn sh_out(line: string) -> string {
 // layer and the stdlib tables (the stored checks are removed), so every cold run starts as a new program would.
 fn seed_root(wj: string, prog: string) -> string {
     let d = sh_out("mktemp -d")
-    sh_out("WJ_CARGO_TARGET_ROOT=" + quote(d) + " " + quote(wj) + " run --no-lint " + quote(prog) + " >/dev/null 2>&1; rm -rf " + quote(d + "/runs"))
+    sh_out("WJ_NO_STALE_WARN=1 WJ_CARGO_TARGET_ROOT=" + quote(d) + " " + quote(wj) + " run --no-lint " + quote(prog) + " >/dev/null 2>&1; rm -rf " + quote(d + "/runs"))
     d
 }
 
+// A warm row must show the front end answered from the stored check: the saving over the cold row is at least this
+// (the smallest real saving is ~30M, the startup program's; a warm-up that did not store the entry the counted runs
+// look up leaves the saving at ~0, and the "warm" row then reads as a cold one).
+const FRONT_END_MIN: int = 10000000
+
+fn warm_is_cold(cold: int, warm: int) -> bool {
+    cold - warm < FRONT_END_MIN
+}
+
+// The shell prefix of the uncounted warm-up run: the same environment as the counted runs (`count_once` exports
+// WJ_NO_STALE_WARN=1; the stored check's key includes it), whatever the caller's environment is. `drop_env` (the
+// `--self-test`) removes it again to show the guard fires.
+fn warm_up_env(drop_env: bool) -> string {
+    if drop_env { "env -u WJ_NO_STALE_WARN " } else { "WJ_NO_STALE_WARN=1 " }
+}
+
 // The cold count of `cmd` (a fresh copy of `seed` per run) and the warm one (one root after one uncounted run).
+// Exits when the warm row is not a warm one (see `warm_is_cold`).
 fn cold_warm(c: string, cmd: string, runs: int, expected: string, what: string, seed: string) -> (int, int) {
+    cold_warm_with(c, cmd, runs, expected, what, seed, false)
+}
+
+fn cold_warm_with(c: string, cmd: string, runs: int, expected: string, what: string, seed: string, drop_env: bool) -> (int, int) {
     let cold = measure(c, cmd, runs, expected, what, "cold:" + seed)
     let w = sh_out("mktemp -d")
-    sh_out("cp -R " + quote(seed) + "/. " + quote(w) + "/; WJ_CARGO_TARGET_ROOT=" + quote(w) + " " + cmd + " >/dev/null 2>&1; true")
+    sh_out("cp -R " + quote(seed) + "/. " + quote(w) + "/; WJ_CARGO_TARGET_ROOT=" + quote(w) + " " + warm_up_env(drop_env) + cmd + " >/dev/null 2>&1; true")
     let warm = measure(c, cmd, runs, expected, what + " (warm)", "warm:" + w)
     sh_out("rm -rf " + quote(w))
+    if warm_is_cold(cold, warm) {
+        eprintln("${what}: the warm row (${warm}) is not below the cold row (${cold}) by at least ${FRONT_END_MIN}: the repeat run did not hit the stored check. Is another process or a differing environment variable changing the cache key between the warm-up and the counted runs?")
+        process.exit(1)
+    }
     (cold, warm)
+}
+
+// `--self-test WJ_BIN`: the guard accepts a real warm row and rejects a cold-looking one, and a warm-up run
+// without WJ_NO_STALE_WARN (the defect this guard was added for) makes the agent_loop warm row read cold.
+fn self_test(c: string, wj: string, cwd: string, seed: string) {
+    if warm_is_cold(437000000, 30000000) || !warm_is_cold(437000000, 436500000) || !warm_is_cold(194000000, 194800000) {
+        eprintln("self-test: warm_is_cold misjudges its fixtures")
+        process.exit(1)
+    }
+    let expected = fs::read_to_string("${BENCH}/expected/agent_loop.out") ?? ""
+    let cmd = quote(wj) + " run " + quote(cwd + "/" + AGENT_LOOP)
+    let cold = measure(c, cmd, 1, expected, "self-test", "cold:" + seed)
+    let w = sh_out("mktemp -d")
+    sh_out("cp -R " + quote(seed) + "/. " + quote(w) + "/; WJ_CARGO_TARGET_ROOT=" + quote(w) + " " + warm_up_env(true) + cmd + " >/dev/null 2>&1; true")
+    let warm = measure(c, cmd, 1, expected, "self-test (warm)", "warm:" + w)
+    sh_out("rm -rf " + quote(w))
+    if !warm_is_cold(cold, warm) {
+        eprintln("self-test: a warm-up without WJ_NO_STALE_WARN still gave a warm row (cold ${cold}, warm ${warm}): the guard has nothing to catch, or the key no longer includes it")
+        process.exit(1)
+    }
+    println("self-test ok: guard fires on a mislabelled warm row (cold ${cold}, warm ${warm})")
 }
 
 fn kernels() -> Vec<string> {
@@ -240,7 +287,18 @@ fn main() {
     let cwd = env.current_dir() ?? "."
     let mut counts = object()
     let mut warm = object()
+    // A `.wj-cache/` in the working directory (what test runs leave in a checkout) is read and hashed on every run of
+    // a program that imports `std::collections` (`check/ambient.rs`: ~+21M instructions for 70 sidecars), so a count
+    // taken there is not the recorded one.
+    if fs.exists(cwd + "/.wj-cache") {
+        eprintln("${cwd}/.wj-cache exists: its sidecars are hashed into every run's cache key (about +21M instructions on HashMap programs) and the counts would not match the recorded rows. Remove it with: rm -rf ${cwd}/.wj-cache  (or run from a clean checkout).")
+        process.exit(1)
+    }
     let seed = seed_root(wj, cwd + "/" + STARTUP)
+    if args.contains("--self-test") {
+        self_test(c, wj, cwd, seed)
+        return
+    }
     // startup: the smallest program through the default `wj run` path
     let (hello, hello_warm) = cold_warm(c, quote(wj) + " run --no-lint " + quote(cwd + "/" + STARTUP), runs + 2, "hello\n", "startup", seed)
     counts = with(counts, "startup", from_int(hello as i64))

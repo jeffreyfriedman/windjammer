@@ -262,6 +262,9 @@ corpus_tests!(
     indexed_field_write_in_loop_over_field,
     list_literal_contains_text_arg,
     if_value_of_struct_params_as_owned_arg,
+    self_mutation_through_call_cycle,
+    self_mutation_through_three_cycle,
+    param_mutation_through_call_cycle,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:
