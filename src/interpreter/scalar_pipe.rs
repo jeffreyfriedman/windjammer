@@ -375,7 +375,8 @@ pub(crate) fn sum(it: &mut Interpreter, s: &Iter, hint: Option<IntTy>) -> Option
 }
 
 fn plan<'a>(it: &mut Interpreter, s: &'a Iter) -> Option<Plan<'a>> {
-    if !it.engine_resolved || !it.drop_types.is_empty() || it.hot.is_some() || it.limits.is_some() || it.fast_off("scalarpipe") {
+    if !it.engine_resolved || !it.drop_types.is_empty() || it.hot.is_some() || it.limits.is_some() || it.fast_off("scalarpipe") || it.fast_off("scalarbail") {
+        // a bail only exists for a chain that started typed, so switching `scalarbail` off means not starting one
         return None;
     }
     // the chain, top down to the source
