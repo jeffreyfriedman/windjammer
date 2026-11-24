@@ -409,9 +409,10 @@ unsafe fn lean_map<R>(c: *mut Ctx, slot: i64, f: impl FnOnce(&mut Rc<crate::inte
 
 /// The bits of a scalar map value at type `want`: `bits`, inlined (the lean helpers call it once per lookup).
 #[inline(always)]
-fn lean_bits(x: &Value, want: i64) -> Option<i64> {
+fn lean_bits(x: &Value, want: i64, loose: bool) -> Option<i64> {
     match (x, from_code(want)?) {
-        (Value::Int(i, vt), Ty::Int(t)) if *vt == t => {
+        // `loose` is the test-only mutant `mapleanwidth` (debug builds): any width is taken for the wanted one
+        (Value::Int(i, vt), Ty::Int(t)) if *vt == t || loose => {
             if super::kinds::unsigned_repr(t) {
                 u64::try_from(*i).ok().map(|u| u as i64)
             } else {
@@ -427,10 +428,13 @@ fn lean_bits(x: &Value, want: i64) -> Option<i64> {
 /// A map the local reaches (directly or through plain references) is read without the `with_slot`/`peek` machinery (`lean_map`).
 pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64, want: i64) -> i64 {
     if let (Some(t), false) = (int_ty(kt), cfg!(debug_assertions) && unsafe { (*(*c).it).fast_off("mapleanget") }) {
+        // SAFETY: as in `with_slot`.
+        let (loose, miss) = (mutant(unsafe { &*(*c).it }, "mapleanwidth"), mutant(unsafe { &*(*c).it }, "mapleanfound"));
         let r = unsafe {
             lean_map(c, slot, |km| match km.get_int(int_value(k, t), t) {
-                None => Some((0, 0)),
-                Some(x) => lean_bits(x, want).map(|b| (b, 1)),
+                // `miss` is the test-only mutant `mapleanfound`: an absent key reads as present (value 0)
+                None => Some((0, miss as i64)),
+                Some(x) => lean_bits(x, want, loose).map(|b| (b, 1)),
             })
         };
         // SAFETY: as in `with_slot`.
@@ -549,7 +553,10 @@ pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
     // (test-only mutant `vecstale`, debug builds: keep the stale resolution)
     if !mutant(unsafe { &*ctx.it }, "vecstale") {
         ctx.cells.clear();
-        ctx.cell_hit = [(0, 0); CELL_HITS];
+        // (test-only mutant `cellhitstale`: the hit table keeps pointing at the old resolution)
+        if !mutant(unsafe { &*ctx.it }, "cellhitstale") {
+            ctx.cell_hit = [(0, 0); CELL_HITS];
+        }
     }
     ctx.views = Default::default();
     ctx.clear_rows();
