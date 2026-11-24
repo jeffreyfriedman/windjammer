@@ -1,0 +1,7 @@
+error[WJ0003]: mismatched types: expected `int`, found `float` in initializer
+  --> float_into_int_let.wj:4:21
+  |
+4 |     let marg: int = x * 3.0
+  |                     ^^^^^^^ expected `int`, found `float`
+  = help: convert explicitly: `(x * 3.0) as int` (it drops the fraction), or declare it `float`
+  = explain: wj explain WJ0003

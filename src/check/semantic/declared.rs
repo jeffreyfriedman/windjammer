@@ -15,12 +15,15 @@ pub(super) fn core() -> &'static CoreSurface {
 pub struct Declared {
     /// (std module, function) -> declared return type.
     returns: HashMap<(String, String), Type>,
+    /// (std module, function) -> declared parameter types, for the functions that are not generic.
+    params: HashMap<(String, String), Vec<Type>>,
 }
 
 impl Declared {
     /// Load the surface and the declarations of `modules` (std module names such as `strings`).
     pub fn load<'a>(modules: impl Iterator<Item = &'a str>) -> Self {
         let mut returns = HashMap::new();
+        let mut params = HashMap::new();
         let asset = crate::embedded_assets::Asset::StdWj;
         for module in modules {
             let text = crate::embedded_assets::text(asset, &format!("{module}.wj"))
@@ -30,18 +33,26 @@ impl Declared {
             let Ok(program) = crate::parser_impl::Parser::new(tokens).parse() else { continue };
             for item in &program.items {
                 if let Item::Function { decl, .. } = item {
+                    if decl.type_params.is_empty() && decl.parameters.iter().all(|p| p.pattern.is_none()) {
+                        params.insert((module.to_string(), decl.name.clone()), decl.parameters.iter().map(|p| p.type_.clone()).collect());
+                    }
                     if let Some(ret) = &decl.return_type {
                         returns.insert((module.to_string(), decl.name.clone()), ret.clone());
                     }
                 }
             }
         }
-        Self { returns }
+        Self { returns, params }
     }
 
     /// The declared return type of `std::<module>::<function>`.
     pub fn std_return(&self, module: &str, function: &str) -> Option<&Type> {
         self.returns.get(&(module.to_string(), function.to_string()))
+    }
+
+    /// The declared parameter types of `std::<module>::<function>` (`None` for a generic or overloaded one).
+    pub fn std_params(&self, module: &str, function: &str) -> Option<&[Type]> {
+        self.params.get(&(module.to_string(), function.to_string())).map(Vec::as_slice)
     }
 
     /// The declared result of `text.method()` on a `String` receiver.

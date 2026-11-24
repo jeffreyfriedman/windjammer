@@ -1,0 +1,11 @@
+// expect: WJ0003
+struct Body {
+    mass: float,
+}
+
+fn main() {
+    let n: int = 3
+    let b = Body { mass: n }
+//~@26+1 ERROR WJ0003 mismatched types: expected `float`, found `int`
+    println("${b.mass}")
+}

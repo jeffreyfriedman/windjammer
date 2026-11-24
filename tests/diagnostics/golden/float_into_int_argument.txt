@@ -1,0 +1,7 @@
+error[WJ0003]: mismatched types: expected `int`, found `float` in argument of `half`
+  --> float_into_int_argument.wj:8:18
+  |
+8 |     let h = half(x)
+  |                  ^ expected `int`, found `float`
+  = help: convert explicitly: `x as int` (it drops the fraction), or declare it `float`
+  = explain: wj explain WJ0003

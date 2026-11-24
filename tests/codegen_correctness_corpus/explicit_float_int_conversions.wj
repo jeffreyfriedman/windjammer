@@ -1,0 +1,24 @@
+// Float and int meet only through an explicit `as`; an untyped integer literal argument is accepted where a float is declared.
+// expect: 4 9 6 30 4 19
+
+struct P {
+    x: float,
+    n: int,
+}
+
+fn half(v: int) -> int {
+    v / 2
+}
+
+fn scale(v: float) -> float {
+    v * 10.0
+}
+
+fn main() {
+    let x: float = 9.7
+    let n: int = x as int
+    let back: float = n as float
+    let lit: float = 3.0
+    let p = P { x: 4.0, n: (x * 2.0) as int }
+    println("${half(x as int)} ${back as int} ${(lit * 2.0) as int} ${(scale(3)) as int} ${p.x as int} ${p.n}")
+}

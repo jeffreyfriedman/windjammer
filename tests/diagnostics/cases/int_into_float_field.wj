@@ -1,0 +1,10 @@
+// expect: WJ0003
+struct Body {
+    mass: float,
+}
+
+fn main() {
+    let n: int = 3
+    let b = Body { mass: n }
+    println("${b.mass}")
+}

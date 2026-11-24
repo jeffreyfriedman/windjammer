@@ -268,6 +268,7 @@ corpus_tests!(
     push_borrowed_text_into_vec_in_struct,
     push_borrowed_text_into_vec_returned,
     push_borrowed_text_into_map_value_vec,
+    explicit_float_int_conversions,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:

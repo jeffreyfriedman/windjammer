@@ -97,6 +97,16 @@ pub const OPERATORS: &[Operator] = &[
         },
     },
     Operator {
+        name: "float-expression-into-int-annotation",
+        apply: |r| {
+            ("slot2", format!("let ratio: float = {}.5\n    let bad: int = ratio * 3.0", r.int(1, 9)))
+        },
+    },
+    Operator {
+        name: "float-variable-into-int-argument",
+        apply: |r| ("slot2", format!("let ratio: float = {}.5\n    let bad = scale(ratio, 2)", r.int(1, 9))),
+    },
+    Operator {
         name: "undefined-variable",
         apply: |r| {
             (
