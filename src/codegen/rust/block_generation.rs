@@ -103,7 +103,7 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             self.coerce_string_literals_to_owned = true;
                         }
-                        let mut expr_str = { let s = self.generate_expression(expr); self.copy_if_read_again_at(expr, s, super::move_at_last_use::MoveSite::Element) }; // a value tail moves: CLONE-USE-AFTER-MOVE
+                        let mut expr_str = { let s = self.generate_expression(expr); let s = self.copy_if_read_again_at(expr, s, super::move_at_last_use::MoveSite::Element); self.arg_block_tail_copy_of_borrowed_binding(expr, s) }; // a value tail moves: CLONE-USE-AFTER-MOVE
                         self.coerce_string_literals_to_owned = old_coerce_lit;
 
                         // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
@@ -787,7 +787,7 @@ impl<'ast> CodeGenerator<'ast> {
                 match stmt {
                     Statement::Expression { expr, .. } => {
                         output.push_str(&self.indent());
-                        let mut expr_str = { let s = self.generate_expression(expr); self.copy_if_read_again_at(expr, s, super::move_at_last_use::MoveSite::Element) }; // a value tail moves: CLONE-USE-AFTER-MOVE
+                        let mut expr_str = { let s = self.generate_expression(expr); let s = self.copy_if_read_again_at(expr, s, super::move_at_last_use::MoveSite::Element); self.arg_block_tail_copy_of_borrowed_binding(expr, s) }; // a value tail moves: CLONE-USE-AFTER-MOVE
 
                         // If in a match arm needing string conversion, convert string literals
                         if self.in_match_arm_needing_string {

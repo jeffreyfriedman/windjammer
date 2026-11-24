@@ -1,0 +1,29 @@
+// An Option field consumed by `unwrap_or` and then the whole value passed on by value.
+// expect: 7 ab
+struct Data {
+    tag: Option<string>,
+    k: i32,
+    items: Vec<string>,
+}
+
+struct Out {
+    items: Vec<string>,
+    total: i32,
+}
+
+fn apply(d: Data, extra: i32) -> Out {
+    let mut items = d.items
+    items.push("z")
+    Out { items: items, total: d.k + extra }
+}
+
+pub fn step(d: Data, extra: i32) -> (Out, string) {
+    let tag = d.tag.unwrap_or("")
+    let out = apply(d, extra)
+    (out, tag)
+}
+
+fn main() {
+    let (o, t) = step(Data { tag: Some("ab"), k: 4, items: ["q"] }, 3)
+    println("${o.total} ${t}")
+}

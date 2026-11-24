@@ -278,8 +278,9 @@ impl Collector {
                         c.declare_pattern(&arm.pattern);
                         c.derive(&arm.pattern, &src);
                         // `match parsed { Ok(w) => .. }` on an owned binding hands `w` over by value: an owned
-                        // value like a `let` (the backend filters the bindings it emits as references).
-                        if matches!(value, Expression::Identifier { .. }) {
+                        // value like a `let` (the backend filters the bindings it emits as references). The result of
+                        // a call is an owned temporary matched the same way (`match parse(t) { Ok(d) => .. }`).
+                        if matches!(value, Expression::Identifier { .. } | Expression::Call { .. }) {
                             let mut bound = Vec::new();
                             pattern_names(&arm.pattern, &mut bound);
                             c.let_bound.extend(bound);

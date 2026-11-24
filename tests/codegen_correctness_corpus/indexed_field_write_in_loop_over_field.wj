@@ -1,0 +1,33 @@
+// Indexed field write inside a loop over the same vector.
+// expect: 2 1 7
+struct Hint {
+    topic: string,
+    n: i32,
+}
+
+struct Board {
+    hints: Vec<Hint>,
+}
+
+impl Board {
+    fn bump(self, topic: string, cap: i32) -> i32 {
+        let mut level = 0
+        let mut i = 0
+        for h in self.hints {
+            if h.topic == topic {
+                level = if h.n + 1 > cap { cap } else { h.n + 1 }
+                self.hints[i].n = level
+            }
+            i += 1
+        }
+        level
+    }
+}
+
+fn main() {
+    let mut b = Board { hints: [Hint { topic: "x", n: 1 }, Hint { topic: "y", n: 0 }] }
+    let a = b.bump("x", 4)
+    let c = b.bump("y", 4)
+    let d = b.bump("x", 4) + b.bump("x", 4)
+    println("${a} ${c} ${d}")
+}

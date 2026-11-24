@@ -1,0 +1,45 @@
+// An if/else expression passed by value as an argument whose arms are two struct parameters, inside a loop.
+// expect: 14 33
+// expect: left 3
+struct Cfg {
+    name: string,
+    weight: i32,
+    tag: Option<string>,
+}
+
+fn inner(c: Cfg, base: i32) -> i32 {
+    c.weight + base + c.name.len() as i32
+}
+
+pub fn weigh(c: Cfg, base: i32) -> (i32, i32) {
+    let t = c.tag.unwrap_or("")
+    let o = inner(c, base)
+    (base, o + t.len() as i32)
+}
+
+fn peek(c: Cfg) -> i32 {
+    c.weight
+}
+
+fn run(first: Cfg, other: Cfg, n: i32) -> i32 {
+    let mut total = 0
+    let mut i = 0
+    while i < n {
+        let (b, o) = weigh(if i + 1 == n { first } else { other }, i)
+        total += o + b
+        i += 1
+    }
+    total + peek(first) + peek(other)
+}
+
+// A text-returning function whose block value picks one of two struct parameters: the parameters are not text.
+fn pick_label(flag: bool, a: Cfg, b: Cfg) -> string {
+    let c = if flag { a } else { b }
+    let w = peek(c)
+    "left ${w}"
+}
+
+fn main() {
+    println("${run(Cfg { name: "a", weight: 3, tag: Some("tt") }, Cfg { name: "b", weight: 5, tag: None }, 1)} ${run(Cfg { name: "c", weight: 5, tag: None }, Cfg { name: "d", weight: 4, tag: Some("t") }, 3)}")
+    println(pick_label(true, Cfg { name: "p", weight: 3, tag: None }, Cfg { name: "q", weight: 9, tag: None }))
+}

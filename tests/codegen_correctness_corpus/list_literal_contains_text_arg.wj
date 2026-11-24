@@ -1,0 +1,13 @@
+// List literal of text .contains with a text parameter.
+// expect: true false true
+fn known(kind: string) -> bool {
+    ["start", "tick", "move"].contains(kind)
+}
+
+fn known_ref(kind: string) -> bool {
+    ["start", "tick", "move"].contains(kind)
+}
+
+fn main() {
+    println("${known("tick")} ${known("zzz")} ${known_ref("move")}")
+}
