@@ -1,0 +1,4 @@
+{"type": "system", "subtype": "init", "tools": ["Bash", "Write"]}
+{"type": "assistant", "message": {"id": "m1", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "wj build main.wj && cat ex1.txt | ./build/target/debug/main ; echo \"---\"; cat ex2.txt | ./build/target/debug/main; echo \"[exit $?]\""}}]}}
+{"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "t1", "decision_reason_type": "mode", "message": "Permission to use Bash has been denied because Claude Code is running in don't ask mode."}
+{"type": "result", "subtype": "success", "is_error": false, "result": "unverified"}

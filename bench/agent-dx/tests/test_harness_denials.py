@@ -24,6 +24,13 @@ class DetectorTest(unittest.TestCase):
         self.assertTrue(shape.startswith("wj | head ; echo ; printf | ./main"), shape)
         self.assertIn("[var]", shape)
 
+    def test_system_permission_denied_event_is_counted_and_a_string_message_does_not_crash(self):
+        # Claude Code emits {"type":"system","subtype":"permission_denied",...,"message":"<string>"}: the parser used to
+        # call .get on that string and crash the whole pilot (pilot 11).
+        d = DN.summarise(fixture("system_permission_denied_event.jsonl"))
+        self.assertEqual((d["count"], d["kinds"], d["first_bash_denied"]), (1, {"dont-ask": 1}, True))
+        self.assertTrue(any("[var]" in s for s in d["shapes"]), d["shapes"])
+
     def test_space_equals_in_a_printf_pipeline_is_marked(self):
         d = DN.summarise(fixture("dontask_printf_equals_wj.jsonl"))
         self.assertEqual(d["count"], 1)

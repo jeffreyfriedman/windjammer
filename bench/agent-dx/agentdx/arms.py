@@ -133,7 +133,9 @@ SHIMMED = {"wj": "wj", "python": "python3", "go": "go", "rust": "rustc"}   # com
 # diff, the built binary as ./main or ./build/main). Equal for every arm: the toolchain commands (EXTRA_BASH) are the only per-language entries.
 # Not allowed for any arm: cargo (dependency fetch = network), timeout/xargs/find/awk/env (run arbitrary commands), curl/wget/ssh, git, rm/mv/cp/chmod/kill,
 # package managers, other interpreters.
-COMPILED_BINARIES = ["./main", "./build/main"]
+# `wj build main.wj` leaves the binary at ./build/target/{debug,release}/main (agents found the path from the build output; pilot 11's first
+# verification line ran `./build/target/debug/main` and was denied because only ./main and ./build/main were listed).
+COMPILED_BINARIES = ["./main", "./build/main", "./build/target/debug/main", "./build/target/release/main"]
 SHELL_HELPERS = ["printf", "echo", "head", "tail", "cat", "sed", "cd", "ls", "wc", "sort", "uniq", "tr", "cut", "grep", "diff"] + COMPILED_BINARIES
 SAFE_DENY_NOTE = "no network, no git push, no rm/mv outside the trial dir: none of curl/wget/git/rm/mv/chmod/pip/npm is allowed"
 

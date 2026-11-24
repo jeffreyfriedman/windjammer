@@ -120,7 +120,15 @@ def scan_stream(text):
         except ValueError:
             continue
         t = ev.get("type")
-        content = (ev.get("message") or {}).get("content")
+        msg = ev.get("message")
+        # `message` is a dict on assistant/user events and a plain string on system events.
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if t == "system" and ev.get("subtype") == "permission_denied":
+            # Claude Code's own denial event: exact (tool_use_id + reason), no text matching needed.
+            tid = ev.get("tool_use_id") or f"system-denial-{len(found)}"
+            found[tid] = "dont-ask" if ev.get("decision_reason_type") == "mode" else "permission"
+            uses.setdefault(tid, (ev.get("tool_name", "?"), ""))
+            continue
         if t == "assistant" and isinstance(content, list):
             for c in content:
                 if isinstance(c, dict) and c.get("type") == "tool_use":
