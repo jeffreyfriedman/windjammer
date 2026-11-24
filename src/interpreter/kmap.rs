@@ -1333,4 +1333,20 @@ mod tests {
         let k = m.iter().find(|(k, _)| matches!(k.0, Value::Int(5, _))).map(|(k, _)| format!("{:?}", k.0));
         assert_eq!(k.as_deref(), Some("Int(5, I32)"));
     }
+
+    #[test]
+    fn the_bits_entry_takes_only_what_the_array_holds() {
+        let mut m = filled(32);
+        m.remove(&int(5));
+        assert!(!m.set_int_bits(5, IntTy::I32, 1, IntTy::I64), "an absent slot needs the array's key type");
+        assert!(!m.set_int_bits(5, IntTy::I64, 1, IntTy::I32), "the value type must be the array's");
+        assert!(!m.set_int_bits(3, IntTy::I64, 1, IntTy::I32), "a present slot too");
+        assert!(!m.set_int_bits(64, IntTy::I64, 1, IntTy::I64), "past the array's reach: the general path grows it");
+        assert!(!m.set_int_bits(-1, IntTy::I64, 1, IntTy::I64));
+        assert_eq!((m.len(), m.store_kind()), (31, "intdense"));
+        assert!(m.set_int_bits(5, IntTy::I64, -4, IntTy::I64));
+        assert!(m.set_int_bits(3, IntTy::I32, 9, IntTy::I64), "a present slot keeps its key whatever type the call names");
+        same!((m.len(), m.get_cloned(&int(5)), m.get_cloned(&int(3))), (32, Some(val(-4)), Some(val(9))));
+        assert!(!filled(4).set_int_bits(1, IntTy::I64, 1, IntTy::I64), "not a typed array");
+    }
 }
