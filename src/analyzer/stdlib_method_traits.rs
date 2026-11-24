@@ -54,14 +54,42 @@ pub fn is_known_readonly(method: &str) -> bool {
     consensus_readonly_receiver(method, SignatureRegistry::stdlib())
 }
 
+/// Answers of the unqualified key-method predicates, by method name. They depend only on the name and the
+/// immutable stdlib baseline (no receiver type, no AST), and computing one probes every map/set type name
+/// against the registry, so each distinct name is answered once per process and kept with the baseline.
+/// Each of the two answers is computed when first asked for (`is_collection_key_method` stops at a map hit).
+struct KeyMethodMemo(std::sync::Mutex<std::collections::HashMap<String, [Option<bool>; 2]>>);
+
+/// The memoized `is_map_key_method` (`which` 0) or `is_set_lookup_method` (`which` 1) of `method`.
+fn stdlib_key_method(method: &str, which: usize) -> bool {
+    let stdlib = SignatureRegistry::stdlib();
+    let memo = stdlib
+        .derived()
+        .get_or_build(|| KeyMethodMemo(Default::default()));
+    if let Some(Some(answer)) = memo.0.lock().unwrap_or_else(|e| e.into_inner()).get(method).map(|a| a[which]) {
+        return answer;
+    }
+    let answer = if which == 0 {
+        method_is_map_key_qualified(method, None, stdlib)
+    } else {
+        method_is_set_lookup_qualified(method, None, stdlib)
+    };
+    memo.0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(method.to_string())
+        .or_default()[which] = Some(answer);
+    answer
+}
+
 pub fn is_map_key_method(method: &str) -> bool {
-    method_is_map_key_qualified(method, None, SignatureRegistry::stdlib())
+    stdlib_key_method(method, 0)
 }
 
 /// HashSet/BTreeSet lookup — signature-driven (borrowed first arg on set types).
 /// Ownership decisions must use `param_ownership` / codegen qualified helpers.
 pub fn is_set_lookup_method(method: &str) -> bool {
-    method_is_set_lookup_qualified(method, None, SignatureRegistry::stdlib())
+    stdlib_key_method(method, 1)
 }
 
 /// Map or set key-lookup method name — for AST decomposition of lookup shapes.
@@ -856,6 +884,23 @@ mod tests {
         assert!(is_set_lookup_method("contains"));
         assert!(is_set_lookup_method("remove"));
         assert!(!is_set_lookup_method("insert"));
+    }
+
+    #[test]
+    fn memoized_key_method_answers_equal_the_registry_probe() {
+        let reg = SignatureRegistry::stdlib();
+        for name in ["get", "contains_key", "contains", "remove", "insert", "push", "len", "no_such_method"] {
+            // twice: the first call fills the memo, the second reads it
+            for _ in 0..2 {
+                assert_eq!(is_map_key_method(name), method_is_map_key_qualified(name, None, reg), "{name}");
+                assert_eq!(is_set_lookup_method(name), method_is_set_lookup_qualified(name, None, reg), "{name}");
+                assert_eq!(
+                    is_collection_key_method(name),
+                    is_map_key_method(name) || is_set_lookup_method(name),
+                    "{name}"
+                );
+            }
+        }
     }
 
     #[test]
