@@ -26,7 +26,7 @@ fn test_all_modules_exist_and_work() {
 
     // std::crypto
     let hash = crypto::sha256_bytes(b"test");
-    assert!(!hash.is_empty());
+    assert_eq!(hash.len(), 32);
 
     // std::csv
     let _ = csv_mod::parse("a,b\n1,2");

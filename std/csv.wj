@@ -4,7 +4,7 @@
 use csv
 
 // Read CSV from string, returns vector of string records
-fn parse(data: string) -> Result<Vec<Vec<string>>, csv.Error> {
+fn parse(data: string) -> Result<Vec<Vec<string>>, string> {
     let mut reader = csv.Reader.from_reader(data.as_bytes())
     let mut records = Vec.new()
     
@@ -18,7 +18,7 @@ fn parse(data: string) -> Result<Vec<Vec<string>>, csv.Error> {
 }
 
 // Read CSV with headers, returns headers and data separately
-fn parse_with_headers(data: string) -> Result<(Vec<string>, Vec<Vec<string>>), csv.Error> {
+fn parse_with_headers(data: string) -> Result<(Vec<string>, Vec<Vec<string>>), string> {
     let mut reader = csv.Reader.from_reader(data.as_bytes())
     
     // Get headers
@@ -38,7 +38,7 @@ fn parse_with_headers(data: string) -> Result<(Vec<string>, Vec<Vec<string>>), c
 }
 
 // Write CSV from vector of records
-fn write(records: &[Vec<string>]) -> Result<string, csv.Error> {
+fn write(records: &[Vec<string>]) -> Result<string, string> {
     let mut writer = csv.Writer.from_writer([])
     
     for record in records {
@@ -53,7 +53,7 @@ fn write(records: &[Vec<string>]) -> Result<string, csv.Error> {
 }
 
 // Write CSV with headers
-fn write_with_headers(headers: &[string], records: &[Vec<string>]) -> Result<string, csv.Error> {
+fn write_with_headers(headers: &[string], records: &[Vec<string>]) -> Result<string, string> {
     let mut writer = csv.Writer.from_writer([])
     
     // Write headers
@@ -72,7 +72,7 @@ fn write_with_headers(headers: &[string], records: &[Vec<string>]) -> Result<str
 }
 
 // Parse CSV from bytes
-fn parse_bytes(data: &[u8]) -> Result<Vec<Vec<string>>, csv.Error> {
+fn parse_bytes(data: &[u8]) -> Result<Vec<Vec<string>>, string> {
     let mut reader = csv.Reader.from_reader(data)
     let mut records = Vec.new()
     

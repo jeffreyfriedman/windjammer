@@ -283,8 +283,7 @@ fn test_collections_vecdeque() {
 #[test]
 fn test_crypto_sha256() {
     let hash = crypto::sha256_bytes(b"hello world");
-    assert!(!hash.is_empty());
-    assert_eq!(hash.len(), 64); // SHA256 produces 64 hex characters
+    assert_eq!(hash.len(), 32); // SHA256 digest is 32 bytes; `sha256_hex` is its 64-character hex form
 }
 
 #[test]

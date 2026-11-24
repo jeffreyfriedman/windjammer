@@ -4,14 +4,23 @@
 
 use hmac::{Hmac, Mac};
 use sha1::{Digest as Sha1Digest, Sha1};
-use sha2::{Digest as Sha2Digest, Sha256};
+use sha2::{Digest as Sha2Digest, Sha256, Sha512};
 use subtle::ConstantTimeEq;
 
-/// SHA-256 hash
-pub fn sha256_bytes(data: &[u8]) -> String {
-    let mut hasher = <Sha256 as Sha2Digest>::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
+/// SHA-256 digest bytes (Windjammer `std::crypto::sha256_bytes(data: Vec<u8>) -> Vec<u8>`: the declaration in
+/// `std/crypto.wj` is the contract; the lowercase hex form is `sha256_hex`).
+pub fn sha256_bytes(data: &[u8]) -> Vec<u8> {
+    <Sha256 as Sha2Digest>::digest(data).to_vec()
+}
+
+/// SHA-512 digest bytes (Windjammer `std::crypto::sha512_bytes`).
+pub fn sha512_bytes(data: &[u8]) -> Vec<u8> {
+    <Sha512 as Sha2Digest>::digest(data).to_vec()
+}
+
+/// SHA-512 of string as lowercase hex (Windjammer `std::crypto::sha512`).
+pub fn sha512(data: impl AsRef<str>) -> String {
+    hex::encode(sha512_bytes(data.as_ref().as_bytes()))
 }
 
 /// SHA-256 hash of string (Windjammer `std::crypto::sha256(string)`).
@@ -21,7 +30,7 @@ pub fn sha256(data: impl AsRef<str>) -> String {
 
 /// SHA-256 hash of string
 pub fn sha256_string(s: &str) -> String {
-    sha256_bytes(s.as_bytes())
+    hex::encode(sha256_bytes(s.as_bytes()))
 }
 
 /// SHA-256 hex digest of string (Windjammer `std::crypto::sha256_hex`).
@@ -182,7 +191,10 @@ mod tests {
     #[test]
     fn test_sha256_bytes() {
         let hash = sha256_bytes(b"hello");
-        assert_eq!(hash.len(), 64);
+        assert_eq!(hash.len(), 32);
+        assert_eq!(hex::encode(&hash), "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+        assert_eq!(sha512_bytes(b"abc").len(), 64);
+        assert_eq!(&sha512("abc")[..16], "ddaf35a193617aba");
     }
 
     #[test]
