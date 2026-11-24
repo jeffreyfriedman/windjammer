@@ -4,7 +4,7 @@
 # measured javascript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 # measured typescript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 # measured go with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
-# measured wasm with wj 0.50.0+76377a493c (commit unknown unknown, clean, release, built 2026-11-23T01:08:52Z) on Linux x86_64
+# measured wasm with wj 0.50.0+5e4a798123 (commit 64228e442a64 2026-11-23, clean, release, built 2026-11-23T23:04:10Z) on Linux x86_64
 rust	conformance	basics/arithmetic	pass
 rust	conformance	basics/control_flow_basic	pass
 rust	conformance	basics/functions	pass
@@ -1091,7 +1091,7 @@ wasm	spec	collections/SPEC-COLL-007	pass
 wasm	spec	collections/SPEC-COLL-008	pass
 wasm	spec	collections/SPEC-COLL-009	build
 wasm	spec	collections/SPEC-COLL-010	pass
-wasm	spec	collections/SPEC-COLL-011	build
+wasm	spec	collections/SPEC-COLL-011	pass
 wasm	spec	collections/SPEC-COLL-012	pass
 wasm	spec	concurrency/SPEC-CONC-001	fail
 wasm	spec	concurrency/SPEC-CONC-002	pass

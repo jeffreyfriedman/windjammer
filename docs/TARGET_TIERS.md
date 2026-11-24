@@ -11,7 +11,7 @@ What each backend can run today, measured by the conformance programs (`tests/co
 | javascript | Tier 2 | 20/28 | 204/231 | 35 | 0 |
 | typescript | Tier 2 | 20/28 | 204/231 | 35 | 0 |
 | go | Tier 2 | 18/28 | 197/231 | 44 | 0 |
-| wasm | Tier 2 | 21/28 | 200/231 | 38 | 0 |
+| wasm | Tier 2 | 21/28 | 201/231 | 37 | 0 |
 | interpreter | Tier 2 | 26/28 | 231/231 | 2 | 0 |
 
 ## Failing programs (the ledger)
@@ -57,10 +57,10 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/numeric/SPEC-NUM-026` (build): Error: unsupported on this backend: integer method `swap_bytes`
 - `spec/ownership/SPEC-OWN-010` (build): Error: unsupported on this backend: call of unknown function `drop` (line 42)
 - `spec/ownership/SPEC-OWN-011` (fail): output line 1: got `assigned`, wanted `drop old`
-- `spec/ownership/SPEC-OWN-012` (build): Error: unsupported on this backend: Option method `take`
+- `spec/ownership/SPEC-OWN-012` (build): Error: unsupported on this backend: Option method `take`: taking a value out of an Option place is not part of the portable surface
 - `spec/statements/SPEC-STMT-007` (build): Error: unsupported on this backend: defer
 - `spec/stdlib/SPEC-STD-002` (build): error: W0010: use `string` instead of `str` -- Windjammer has one string type
-- `spec/strings/SPEC-STR-012` (build): Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+- `spec/strings/SPEC-STR-012` (build): Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
 - `spec/strings/SPEC-STR-016` (build): Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
 - `spec/strings/SPEC-STR-017` (build): Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
 - `spec/strings/SPEC-STR-018` (build): Error: unsupported on this backend: unknown identifier `strings` (line 22)
@@ -95,10 +95,10 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/numeric/SPEC-NUM-026` (build): Error: unsupported on this backend: integer method `swap_bytes`
 - `spec/ownership/SPEC-OWN-010` (build): Error: unsupported on this backend: call of unknown function `drop` (line 42)
 - `spec/ownership/SPEC-OWN-011` (fail): output line 1: got `assigned`, wanted `drop old`
-- `spec/ownership/SPEC-OWN-012` (build): Error: unsupported on this backend: Option method `take`
+- `spec/ownership/SPEC-OWN-012` (build): Error: unsupported on this backend: Option method `take`: taking a value out of an Option place is not part of the portable surface
 - `spec/statements/SPEC-STMT-007` (build): Error: unsupported on this backend: defer
 - `spec/stdlib/SPEC-STD-002` (build): error: W0010: use `string` instead of `str` -- Windjammer has one string type
-- `spec/strings/SPEC-STR-012` (build): Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+- `spec/strings/SPEC-STR-012` (build): Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
 - `spec/strings/SPEC-STR-016` (build): Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
 - `spec/strings/SPEC-STR-017` (build): Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
 - `spec/strings/SPEC-STR-018` (build): Error: unsupported on this backend: unknown identifier `strings` (line 22)
@@ -139,11 +139,11 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/numeric/SPEC-NUM-026` (build): Error: unsupported on this backend: integer method `swap_bytes`
 - `spec/ownership/SPEC-OWN-010` (build): Error: unsupported on this backend: call of unknown function `drop` (line 42)
 - `spec/ownership/SPEC-OWN-011` (fail): output line 1: got `assigned`, wanted `drop old`
-- `spec/ownership/SPEC-OWN-012` (build): Error: unsupported on this backend: Option method `take`
+- `spec/ownership/SPEC-OWN-012` (build): Error: unsupported on this backend: Option method `take`: taking a value out of an Option place is not part of the portable surface
 - `spec/statements/SPEC-STMT-009` (build): go vet or go build rejected the generated code
 - `spec/statements/SPEC-STMT-011` (build): go vet or go build rejected the generated code
 - `spec/stdlib/SPEC-STD-002` (build): error: W0010: use `string` instead of `str` -- Windjammer has one string type
-- `spec/strings/SPEC-STR-012` (build): Error: unsupported on this backend: built-in method `string::rfind` is not supported (line 11)
+- `spec/strings/SPEC-STR-012` (build): Error: unsupported on this backend: built-in method `string::is_char_boundary` is not supported (line 19)
 - `spec/strings/SPEC-STR-014` (fail): panics with the expected exit status but the message does not contain the expected text
 - `spec/strings/SPEC-STR-016` (build): Error: unsupported on this backend: built-in method `string::replacen` is not supported (line 23)
 - `spec/strings/SPEC-STR-017` (build): Error: unsupported on this backend: built-in method `string::split_once` is not supported (line 6)
@@ -168,7 +168,6 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - `spec/closures/SPEC-CLOS-009` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0308]: mismatched types
 - `spec/collections/SPEC-COLL-005` (build): the same generated Rust as the rust backend is rejected or wrong: error: lifetime may not live long enough
 - `spec/collections/SPEC-COLL-009` (build): the same generated Rust as the rust backend is rejected or wrong: error: lifetime may not live long enough
-- `spec/collections/SPEC-COLL-011` (build): the same generated Rust as the rust backend is rejected or wrong: error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize`
 - `spec/concurrency/SPEC-CONC-001` (fail): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 - `spec/concurrency/SPEC-CONC-003` (fail): the same generated Rust as the rust backend is rejected or wrong: needs a crate (windjammer_runtime, tokio or serde); this harness compiles with plain rustc, the cargo-based spec oracle (scripts/wj/spec_oracle.wj) covers it | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
 - `spec/concurrency/SPEC-CONC-009` (fail): the wasm build of the same generated Rust fails like the rust backend's (E0433: crate `windjammer_runtime` is not linked by the plain-rustc harness); it also uses `std::thread::spawn`/`Condvar` in `windjammer_runtime::task`, unavailable on wasm32-wasip1 | plan: ADR-0004 stage 3 for wasm (docs/concurrency/WASM_EXECUTOR_PLAN.md): even with the runtime crate linked, windjammer_runtime::task spawns std::thread, which wasm32-wasip1 does not provide, so the cooperative single-thread executor is needed: a BETA item | measured with the plain-rustc harness before it built through cargo: the rust row of this program now passes, so re-measure on the PC (`target_tiers.wj run <wj> --backend wasm --only <program>`); if it still fails, the cause is the thread-based `windjammer_runtime::task` (WASM_EXECUTOR_PLAN.md)
@@ -212,7 +211,7 @@ The ledger is `tests/conformance/backend_ledger.tsv`: it only shrinks (`target_t
 - javascript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 - typescript with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
 - go with wj 0.50.0+bbe6f8b5b8 (commit unknown unknown, clean, release, built 2026-11-17T07:41:16Z) on Darwin arm64
-- wasm with wj 0.50.0+76377a493c (commit unknown unknown, clean, release, built 2026-11-23T01:08:52Z) on Linux x86_64
+- wasm with wj 0.50.0+5e4a798123 (commit 64228e442a64 2026-11-23, clean, release, built 2026-11-23T23:04:10Z) on Linux x86_64
 
 ## Filling in what this machine could not run
 
