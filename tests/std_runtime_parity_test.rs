@@ -87,6 +87,233 @@ fn impl_methods(src: &str) -> BTreeSet<String> {
     out
 }
 
+// ---- signatures: the declared parameter and return TYPES against the runtime's ---------------------------------------
+//
+// The runtime is what `wj build` links; the `.wj` declaration is the contract a program is checked against and the
+// interpreter follows. A function whose two sides disagree on a type compiles under `wj run --interpret` and fails
+// under rustc (`sha256_bytes` declared `Vec<u8>`, returning a hex `String`). Types are compared by KIND (text, bytes,
+// integer, float, bool, unit, vec, option, result, map, tuple, named type): widths and borrows are not part of the
+// contract (`string` is `&str`/`String`/`impl AsRef<str>`; `Vec<u8>` is `&[u8]`).
+
+/// Splits `s` at commas that are outside every bracket pair.
+fn split_top(s: &str) -> Vec<String> {
+    let (mut depth, mut cur, mut out) = (0i32, String::new(), Vec::new());
+    for c in s.chars() {
+        match c {
+            '<' | '(' | '[' => depth += 1,
+            // `->` of a function type is not a closing bracket
+            '>' if cur.ends_with('-') => {}
+            '>' | ')' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(std::mem::take(&mut cur));
+                continue;
+            }
+            _ => {}
+        }
+        cur.push(c);
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur);
+    }
+    out.into_iter().map(|p| p.trim().to_string()).collect()
+}
+
+/// The kind of a type written in either language.
+fn kind(ty: &str) -> String {
+    let mut t = ty.trim();
+    loop {
+        let before = t;
+        t = t.strip_prefix('&').unwrap_or(t).trim_start();
+        if t.starts_with('\'') {
+            t = t.split_once(' ').map_or("", |x| x.1);
+        }
+        t = t.strip_prefix("mut ").unwrap_or(t);
+        if t == before {
+            break;
+        }
+    }
+    let inner = |t: &str, head: &str| -> Option<String> { t.strip_prefix(head)?.strip_suffix('>').map(str::to_string) };
+    if t.is_empty() || t == "()" || t == "!" {
+        return "unit".into();
+    }
+    // a module's result alias (`FsResult<string>`, `DialogResult<string>`) is `Result<T, _>`
+    if let Some(i) = t.strip_suffix('>').and_then(|r| r.split_once('<')).filter(|(h, _)| h.ends_with("Result") && *h != "Result").map(|(_, i)| i) {
+        return format!("result<{},any>", kind(i));
+    }
+    if t.starts_with('(') && t.ends_with(')') {
+        let parts: Vec<String> = split_top(&t[1..t.len() - 1]).iter().map(|p| kind(p)).collect();
+        return format!("({})", parts.join(","));
+    }
+    if let Some(i) = inner(t, "impl AsRef<").or_else(|| inner(t, "impl Into<")).or_else(|| inner(t, "impl Borrow<")) {
+        return kind(&i);
+    }
+    if t.starts_with("impl ") || t.starts_with("dyn ") || t.starts_with("fn(") || t.starts_with("fn ") {
+        return "any".into();
+    }
+    if t.len() == 1 && t.chars().all(|c| c.is_ascii_uppercase()) {
+        return "any".into();
+    }
+    match t {
+        "string" | "String" | "str" | "Path" | "PathBuf" | "char" | "Cow<str>" => return "text".into(),
+        "bool" => return "bool".into(),
+        "float" | "f32" | "f64" => return "float".into(),
+        "int" | "uint" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => return "int".into(),
+        "bytes" | "[u8]" | "Vec<u8>" => return "bytes".into(),
+        _ => {}
+    }
+    for head in ["Vec<", "VecDeque<", "HashSet<", "BTreeSet<"] {
+        if let Some(i) = inner(t, head) {
+            let k = kind(&i);
+            return if k == "int" && t == "Vec<u8>" { "bytes".into() } else { format!("vec<{k}>") };
+        }
+    }
+    if let Some(i) = t.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+        let i = i.split(';').next().unwrap_or(i);
+        return if kind(i) == "int" && i.trim() == "u8" { "bytes".into() } else { format!("vec<{}>", kind(i)) };
+    }
+    if let Some(i) = inner(t, "Option<") {
+        return format!("option<{}>", kind(&i));
+    }
+    if let Some(i) = inner(t, "Result<") {
+        let parts: Vec<String> = split_top(&i).iter().map(|p| kind(p)).collect();
+        return format!("result<{}>", parts.join(","));
+    }
+    for head in ["HashMap<", "BTreeMap<", "Map<"] {
+        if let Some(i) = inner(t, head) {
+            let parts: Vec<String> = split_top(&i).iter().map(|p| kind(p)).collect();
+            return format!("map<{}>", parts.join(","));
+        }
+    }
+    // a named type: the last path segment, without generic arguments
+    let head = t.split('<').next().unwrap_or(t);
+    head.rsplit("::").next().unwrap_or(head).trim().to_string()
+}
+
+/// Whether two kinds agree (`any` is a generic or a closure: it agrees with every kind).
+fn kinds_agree(a: &str, b: &str) -> bool {
+    if a == "any" || b == "any" {
+        return true;
+    }
+    let (sa, sb) = (split_kind(a), split_kind(b));
+    match (sa, sb) {
+        (Some((ha, pa)), Some((hb, pb))) => ha == hb && pa.len() == pb.len() && pa.iter().zip(&pb).all(|(x, y)| kinds_agree(x, y)),
+        (None, None) => a == b,
+        _ => false,
+    }
+}
+
+/// `head<a,b>` / `(a,b)` as head and arguments.
+fn split_kind(k: &str) -> Option<(String, Vec<String>)> {
+    if let Some(i) = k.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
+        return Some(("tuple".into(), split_top(i)));
+    }
+    let (head, rest) = k.split_once('<')?;
+    Some((head.to_string(), split_top(rest.strip_suffix('>')?)))
+}
+
+/// A declared signature: parameter types (not `self`) and return type, as written.
+#[derive(Debug, PartialEq, Clone)]
+struct Sig {
+    params: Vec<String>,
+    ret: String,
+}
+
+/// The signature text starting at `lines[i]` (a `fn` line): joined up to the opening `{` (or `;`).
+fn signature_text(lines: &[&str], i: usize) -> String {
+    let mut text = String::new();
+    for l in &lines[i..] {
+        text.push_str(l.trim());
+        text.push(' ');
+        if l.contains('{') || l.trim_end().ends_with(';') {
+            break;
+        }
+    }
+    text
+}
+
+fn parse_sig(text: &str, name: &str) -> Option<Sig> {
+    let after = &text[text.find(&format!("fn {name}"))? + 3 + name.len()..];
+    let mut rest = after.trim_start();
+    if rest.starts_with('<') {
+        let mut depth = 0;
+        let end = rest.char_indices().find(|(_, c)| {
+            depth += match c { '<' => 1, '>' => -1, _ => 0 };
+            depth == 0
+        })?;
+        rest = rest[end.0 + 1..].trim_start();
+    }
+    let rest = rest.strip_prefix('(')?;
+    let mut depth = 1;
+    let close = rest.char_indices().find(|(_, c)| {
+        depth += match c { '(' => 1, ')' => -1, _ => 0 };
+        depth == 0
+    })?.0;
+    let params: Vec<String> = split_top(&rest[..close])
+        .into_iter()
+        .filter(|p| !p.is_empty() && !matches!(p.as_str(), "self" | "&self" | "&mut self" | "mut self"))
+        .map(|p| p.split_once(':').map_or(p.clone(), |x| x.1.trim().to_string()))
+        .collect();
+    let tail = rest[close + 1..].trim();
+    let ret = tail.strip_prefix("->").map(|r| r.split(" where ").next().unwrap_or(r).split('{').next().unwrap_or(r).trim().trim_end_matches(';').trim().to_string()).unwrap_or_default();
+    Some(Sig { params, ret })
+}
+
+/// Signatures of the top-level functions of a module, the declaration side (`fn`) or the runtime side (`pub fn`).
+fn top_sigs(src: &str, runtime: bool) -> std::collections::BTreeMap<String, Sig> {
+    let body = if runtime { src.split("#[cfg(test)]").next().unwrap_or(src) } else { src };
+    let prefixes: &[&str] = if runtime { &["pub async fn ", "pub fn "] } else { &["pub async fn ", "pub fn ", "async fn ", "fn "] };
+    let lines: Vec<&str> = body.lines().collect();
+    let mut out = std::collections::BTreeMap::new();
+    for (i, l) in lines.iter().enumerate() {
+        if let Some(name) = fn_name(l, prefixes) {
+            if let Some(sig) = parse_sig(&signature_text(&lines, i), &name) {
+                out.entry(name).or_insert(sig);
+            }
+        }
+    }
+    out
+}
+
+/// `module::name#ret` / `module::name#pN` for every type the runtime function disagrees with its declaration on
+/// (`#arity` when the parameter counts differ).
+fn signature_mismatches() -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for (module, path) in std_modules() {
+        let declared = top_sigs(&std::fs::read_to_string(&path).unwrap(), false);
+        let runtime = top_sigs(&runtime_source(&module).unwrap_or_default(), true);
+        for (name, d) in &declared {
+            let Some(r) = runtime.get(name) else { continue };
+            if d.params.len() != r.params.len() {
+                out.insert(format!("{module}::{name}#arity"), format!("declared {d:?}, runtime {r:?}"));
+                continue;
+            }
+            for (i, (a, b)) in d.params.iter().zip(&r.params).enumerate() {
+                if !kinds_agree(&kind(a), &kind(b)) {
+                    out.insert(format!("{module}::{name}#p{i}"), format!("declared `{a}`, runtime `{b}`"));
+                }
+            }
+            if !kinds_agree(&kind(&d.ret), &kind(&r.ret)) {
+                out.insert(format!("{module}::{name}#ret"), format!("declared `{}`, runtime `{}`", d.ret, r.ret));
+            }
+        }
+    }
+    out
+}
+
+fn std_modules() -> Vec<(String, PathBuf)> {
+    let mut modules = Vec::new();
+    for e in std::fs::read_dir(root().join("std")).unwrap().flatten() {
+        let p = e.path();
+        let name = p.file_stem().unwrap().to_string_lossy().to_string();
+        if p.is_file() && p.extension().is_some_and(|x| x == "wj") {
+            modules.push((name, p));
+        } else if p.is_dir() && p.join("mod.wj").is_file() {
+            modules.push((name, p.join("mod.wj")));
+        }
+    }
+    modules
+}
+
 fn current_gaps() -> BTreeSet<String> {
     let std_dir = root().join("std");
     let mut modules: Vec<(String, PathBuf)> = Vec::new();
@@ -220,4 +447,63 @@ fn hex_and_base64_helpers_interpreted_equal_expected() {
 fn hex_and_base64_helpers_compiled_equal_expected() {
     let (out, err) = run(&[]);
     assert!(out.ends_with(EXPECTED), "stdout: {out}\nstderr: {err}");
+}
+
+fn signature_ledger() -> BTreeSet<String> {
+    let text = std::fs::read_to_string(root().join("tests/std_runtime_signature_gaps.txt")).unwrap();
+    text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).map(String::from).collect()
+}
+
+#[test]
+fn every_runtime_function_has_the_declared_parameter_and_return_types_or_is_listed() {
+    let detail = signature_mismatches();
+    let found: BTreeSet<String> = detail.keys().cloned().collect();
+    if std::env::var("WJ_PRINT_GAPS").is_ok() {
+        for (g, why) in &detail {
+            println!("SIG {g}: {why}");
+        }
+    }
+    let known = signature_ledger();
+    let new: Vec<_> = found.difference(&known).collect();
+    assert!(new.is_empty(), "the compiled runtime disagrees with the std declaration on a type (fix the side that breaks the wj-facing contract): {new:?}");
+    let fixed: Vec<_> = known.difference(&found).collect();
+    assert!(fixed.is_empty(), "types now agree: remove from tests/std_runtime_signature_gaps.txt: {fixed:?}");
+}
+
+#[test]
+fn the_signature_scanner_sees_a_type_that_disagrees() {
+    // mutation check on the oracle: the `sha256_bytes` shape (declared bytes, runtime text) is a mismatch; borrows,
+    // widths, text spellings and generics are not
+    let d = top_sigs("fn sha256_bytes(data: Vec<u8>) -> Vec<u8> {\n    vec![]\n}\nfn n(a: string, b: int) -> Result<Vec<u8>, string> {\n}\n", false);
+    let bad = top_sigs("pub fn sha256_bytes(data: &[u8]) -> String {\n}\n", true);
+    assert_eq!(d["sha256_bytes"].params, ["Vec<u8>"]);
+    assert!(kinds_agree(&kind(&d["sha256_bytes"].params[0]), &kind(&bad["sha256_bytes"].params[0])));
+    assert!(!kinds_agree(&kind(&d["sha256_bytes"].ret), &kind(&bad["sha256_bytes"].ret)));
+    let ok = top_sigs("pub fn n(\n    a: impl AsRef<str>,\n    b: u64,\n) -> Result<Vec<u8>, String> {\n}\n", true);
+    assert_eq!(d["n"].params.len(), ok["n"].params.len());
+    assert!(kinds_agree(&kind(&d["n"].ret), &kind(&ok["n"].ret)));
+    for (a, b) in d["n"].params.iter().zip(&ok["n"].params) {
+        assert!(kinds_agree(&kind(a), &kind(b)), "{a} vs {b}");
+    }
+    // a result that became a plain value is a mismatch
+    assert!(!kinds_agree(&kind("string"), &kind("Result<String, String>")));
+}
+
+/// `sha256_bytes` is declared `Vec<u8>`: the digest bytes feed `hex_encode`, compiled and interpreted alike. SHA-256 of
+/// the bytes 1, 2, 3 is 039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81 (FIPS 180-4).
+#[test]
+fn sha256_bytes_are_bytes_compiled_and_interpreted() {
+    const SRC: &str = "use std::crypto\nuse std::encoding\n\nfn main() {\n    let digest: Vec<u8> = crypto.sha256_bytes([1, 2, 3])\n    println(\"${digest.len()} ${encoding.hex_encode(digest)}\")\n}\n";
+    let want = "32 039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81\n";
+    for args in [&["--interpret"][..], &[][..]] {
+        let scr = Scratch::new("std-sha256-bytes");
+        let d = scr.path().to_path_buf();
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("prog.wj");
+        std::fs::write(&f, SRC).unwrap();
+        let o = Command::new(WJ).arg("run").args(args).arg(&f).current_dir(&d).output().unwrap();
+        let out = String::from_utf8_lossy(&o.stdout).to_string();
+        assert!(out.ends_with(want), "{args:?}: stdout {out}\nstderr {}", String::from_utf8_lossy(&o.stderr));
+    }
 }
