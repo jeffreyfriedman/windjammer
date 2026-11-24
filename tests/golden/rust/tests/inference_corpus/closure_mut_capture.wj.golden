@@ -1,8 +1,8 @@
 #[inline]
 fn fill(v: &mut Vec<i64>) -> i64 {
     let mut f = |i: i64| v.push(i);
-    f(0);
-    f(1);
+    f(0_i64);
+    f(1_i64);
     (v.len() as i64)
 }
 
