@@ -1,0 +1,29 @@
+// expect: 2
+// A borrowed text piece (substring) pushed WITHOUT a user .clone() into a Vec whose element type is fixed only
+// by where the Vec flows (struct field / return / map value) must become an owned String (`&str.clone()` stays `&str`).
+use std::collections::HashMap
+
+fn group(text: string) -> HashMap<string, Vec<string>> {
+    let parts: Vec<string> = text.split("{").collect()
+    let mut names = []
+    let mut i = 1
+    while i < parts.len() {
+        let seg = parts[i]
+        match seg.find("}") {
+            None => {},
+            Some(at) => {
+                let name = seg.substring(0, at)
+                names.push(name)
+            },
+        }
+        i += 1
+    }
+    let mut m: HashMap<string, Vec<string>> = HashMap::new()
+    m.insert("k", names)
+    m
+}
+
+fn main() {
+    let g = group("a{b}c{d}")
+    println("${g["k"].len()}")
+}

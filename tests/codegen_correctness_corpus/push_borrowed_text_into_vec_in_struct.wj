@@ -1,0 +1,38 @@
+// expect: 2
+// A borrowed text piece (substring) pushed WITHOUT a user .clone() into a Vec whose element type is fixed only
+// by where the Vec flows (struct field / return / map value) must become an owned String (&str.clone() stays &str).
+fn is_token_name(name: string) -> bool {
+    name != ""
+}
+
+pub struct Scanned {
+    pub names: Vec<string>,
+    pub clean: bool,
+}
+
+pub fn scan(text: string) -> Scanned {
+    let parts: Vec<string> = text.split("{").collect()
+    let mut names: Vec<string> = []
+    let mut clean = !parts[0].contains("}")
+    let mut i = 1
+    while i < parts.len() {
+        let seg = parts[i]
+        match seg.find("}") {
+            None => { clean = false },
+            Some(at) => {
+                let name = seg.substring(0, at)
+                if is_token_name(name) && !seg.substring(at + 1, seg.len()).contains("}") {
+                    names.push(name)
+                } else {
+                    clean = false
+                }
+            },
+        }
+        i += 1
+    }
+    Scanned { names: names, clean: clean }
+}
+
+fn main() {
+    println("${scan("a{b}c{d}").names.len()}")
+}
