@@ -139,6 +139,16 @@ pub(super) fn binary(l: Operand, r: Operand, op: BinaryOp, loc: Loc) -> Code {
             }
             binary_of(it, b, &Operand::Slot(s), &Operand::Slot(t), op, loc)
         }),
+        // `(x % 3) == 0`: a computed left operand against an integer constant
+        (Operand::Code(c), Operand::Const(Value::Int(k, kt))) => Box::new(move |it, b| {
+            let v = c(it, b)?;
+            it.mark(loc);
+            match v {
+                Value::Int(a, at) => int_op(op, a, at, k, kt),
+                // what `binary_of` does for a non-integer left operand and an integer right one
+                v => it.binary(op, v, Value::Int(k, kt)),
+            }
+        }),
         (l, r) => Box::new(move |it, b| binary_of(it, b, &l, &r, op, loc)),
     }
 }
