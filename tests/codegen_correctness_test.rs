@@ -241,6 +241,7 @@ corpus_tests!(
     let_bound_closure_literal_argument,
     list_literal_takes_expected_vec_type,
     condition_const_before_block_is_not_struct_literal,
+    index_cast_applies_to_whole_modulo_expression,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:

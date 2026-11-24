@@ -1,0 +1,11 @@
+// `items[((i + 1) % n) as usize]`: the cast applies to the whole parenthesised `(i + 1) % n`, with a literal addend
+// exactly as with a variable addend `((i + k) % n) as usize`.
+// expect: 2 4
+fn pick(items: Vec<int>, i: int, k: int) -> int {
+    let n = items.len() as int
+    items[((i + k) % n) as usize] + items[((i + 1) % n) as usize]
+}
+
+fn main() {
+    println("${pick([1, 2, 3], 2, 1)} ${pick([1, 2, 3], 2, 0)}")
+}

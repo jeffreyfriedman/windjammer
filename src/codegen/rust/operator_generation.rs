@@ -41,6 +41,10 @@ impl<'ast> CodeGenerator<'ast> {
         let prev_assign_int = self.assignment_int_target_type.take();
         let prev_in_struct_field = self.in_struct_literal_field;
         self.in_struct_literal_field = false;
+        // The cast applies to the WHOLE operand: an index-position `usize` expectation belongs to the
+        // cast's result, never to the operand's peers (`items[((i + 1) % n) as usize]` keeps `i` an
+        // `i64`; pushing `as usize` onto `i` mixes widths against `n`).
+        let prev_in_index = std::mem::replace(&mut self.in_index_context, false);
 
         // Add parentheses around binary expressions for correct precedence
         // because `as` has higher precedence than arithmetic in Rust:
@@ -66,6 +70,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.call_arg_expected_type = prev_call_arg;
         self.assignment_int_target_type = prev_assign_int;
         self.in_struct_literal_field = prev_in_struct_field;
+        self.in_index_context = prev_in_index;
         // Copy cast targets must not keep a stale shared borrow on the operand
         // (`&idx as usize` → E0606). Strip leading `&` before composing the cast.
         // also strip operand `.clone()` — Copy cast results never need it
