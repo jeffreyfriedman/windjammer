@@ -90,7 +90,7 @@ pub(super) fn int_op(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> R 
 
 /// A comparison of two integers (`None`: not a comparison, or `u128` ordering applies).
 #[inline(always)]
-fn int_cmp(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> Option<bool> {
+pub(super) fn int_cmp(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> Option<bool> {
     if IntTy::unify(at, bt) == IntTy::U128 {
         return None;
     }

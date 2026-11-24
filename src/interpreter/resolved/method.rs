@@ -10,6 +10,7 @@
 //! receiver and before evaluating anything else, so nothing runs twice.
 
 use super::compile::{Cx, E};
+use super::fast::Cond;
 use super::expr::{expr, expr_arg, X};
 use super::island::Island;
 use super::Code;
@@ -21,7 +22,8 @@ use std::rc::Rc;
 use crate::interpreter::error::R;
 use crate::interpreter::place::deref_value;
 use crate::interpreter::value::{Name, Place, Value};
-use crate::parser::{Expression, Type, UnaryOp};
+use crate::interpreter::int::IntTy;
+use crate::parser::{BinaryOp, Expression, Type, UnaryOp};
 use crate::source_map::Location;
 
 enum Recv {
@@ -246,28 +248,61 @@ impl SiteCache {
 /// without the receiver's place, clone and method dispatch (the builtins' `Value::usize`). Anything else, a
 /// box in use or a lock guard takes the generic call.
 fn len_fast(cx: &mut Cx, object: E, method: &str, arguments: &[(Option<String>, E)], generic: X) -> X {
-    let Expression::Identifier { name, .. } = object else { return generic };
-    let Some(slot) = cx.local(name) else { return generic };
-    if method != "len" || !arguments.is_empty() || cx.it.methods.keys().any(|(_, m)| m == "len") {
-        return generic;
-    }
+    let Some(slot) = len_receiver(cx, object, method, arguments) else { return generic };
     let generic = generic.code();
     X::R(Box::new(move |it, b| {
         if !it.fast_off("lenfast") {
-            let n = match &it.rstack[b + slot] {
-                Value::Ref(p) if p.path.is_empty() && p.guard.is_none() => match p.slot.try_borrow() {
-                    Ok(v) => length(&v),
-                    Err(_) => None,
-                },
-                v => length(v),
-            };
-            if let Some(n) = n {
+            if let Some(n) = local_len(&it.rstack[b + slot]) {
                 it.fast.lenfast += 1;
                 return Ok(Value::usize(n));
             }
         }
         generic(it, b)
     }))
+}
+
+/// The slot of `x` in `x.len()` when no user type has a `len` method (the shape `len_fast` reads in place).
+fn len_receiver(cx: &Cx, object: E, method: &str, arguments: &[(Option<String>, E)]) -> Option<usize> {
+    let Expression::Identifier { name, .. } = object else { return None };
+    let slot = cx.local(name)?;
+    if method != "len" || !arguments.is_empty() || cx.it.methods.keys().any(|(_, m)| m == "len") {
+        return None;
+    }
+    Some(slot)
+}
+
+/// The length held by a local (directly or through a plain box), if it is a string, vector or map.
+#[inline(always)]
+fn local_len(v: &Value) -> Option<usize> {
+    match v {
+        Value::Ref(p) if p.path.is_empty() && p.guard.is_none() => match p.slot.try_borrow() {
+            Ok(v) => length(&v),
+            Err(_) => None,
+        },
+        v => length(v),
+    }
+}
+
+/// `x.len() <op> k` (a condition over a local's length and an integer constant), in one step: the length
+/// is read in place and compared as the generic condition `fallback` would (`usize` against `k`, the
+/// location marked after both operands), with no `Value` built for the length. Any other receiver value
+/// (or `u128` ordering) runs `fallback`, which evaluates the whole comparison itself, so nothing runs twice.
+pub(super) fn len_cmp(cx: &Cx, left: E, op: BinaryOp, k: (i128, IntTy), loc: Option<&'static Location>, fallback: Cond) -> Cond {
+    let Expression::MethodCall { object, method, type_args: None, arguments, .. } = left else { return fallback };
+    let Some(slot) = len_receiver(cx, object, method, arguments) else { return fallback };
+    Box::new(move |it, b| {
+        if !it.fast_off("lencmp") {
+            if let Some(n) = local_len(&it.rstack[b + slot]) {
+                if let Some(c) = super::fast::int_cmp(op, n as i128, IntTy::Usize, k.0, k.1) {
+                    it.mark(loc);
+                    it.fast.lenfast += 1;
+                    it.fast.lencmp += 1;
+                    return Ok(c);
+                }
+            }
+        }
+        fallback(it, b)
+    })
 }
 
 /// The length of a string (bytes), vector or map held directly.

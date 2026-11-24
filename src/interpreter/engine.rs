@@ -655,6 +655,8 @@ pub(crate) struct FastHits {
     pub(crate) closurescope: u64,
     /// `x.len()` on a local string, vector or map read in place.
     pub(crate) lenfast: u64,
+    /// `x.len() <op> constant` conditions decided from the local's length in place.
+    pub(crate) lencmp: u64,
     /// Machine-code element reads and writes done straight on a packed vector.
     pub(crate) packedidx: u64,
     /// Machine-code element accesses through a reference chain resolved once per unit run.
