@@ -8,6 +8,13 @@
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --self-test   check that the warm-row guard fires on a mislabelled row
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --write        record the counts (lower only; --allow-raise to raise,
 //                                                              --raise K1,K2 to raise only those kernels)
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --self-test-write   check that --write refuses inside a git work tree
+//
+// `--write` records a baseline, so it refuses to run in a git work tree or beside a `.wj-cache` (see `write_refusal`):
+// a checkout's untracked files change the counts. Run it from a clean `git archive`. The count also depends on the
+// LENGTH of the working directory's path (about +55K instructions per path character on agent_loop warm: the
+// interpreter Debug-formats and hashes source paths), so `--write` stores the method it ran with next to the rows
+// (`<counter>:method`: runs, cwd_chars, home, env) and `--check` says when its own cwd length differs from the recorded one.
 //
 // The counter: callgrind (`valgrind --tool=callgrind`) when valgrind is installed, else the hardware counter of
 // `/usr/bin/time -l` ("instructions retired", macOS). Counts from different counters are never compared: the
@@ -270,6 +277,57 @@ fn millions(n: int) -> f64 {
     ((n as f64) / 100000.0).round() / 10.0
 }
 
+// True when `dir` or any parent holds a `.git` (file or directory: a work tree or a linked worktree).
+fn inside_git_tree(dir: string) -> bool {
+    let mut prefix = ""
+    for part in dir.split("/") {
+        if part != "" {
+            prefix = prefix + "/" + part
+            if fs.exists(prefix + "/.git") {
+                return true
+            }
+        }
+    }
+    false
+}
+
+// Why `--write` must not run in `cwd` ("" = it may). The recorded rows are the counts of a clean `git archive` of the
+// head (what the harness gate measures); a work tree adds files the compiler walks and hashes (`.wj-cache` sidecars, ~+21M;
+// untracked files; `.git` itself), so a baseline written there does not reproduce under the gate.
+fn write_refusal(cwd: string) -> string {
+    if inside_git_tree(cwd) || fs.exists(cwd + "/.wj-cache") {
+        return "refusing --write in ${cwd}: it is inside a git work tree or holds a .wj-cache, so the counts are not the clean-checkout counts the gate measures (a baseline written here does not reproduce). Record from a fresh export: git archive HEAD | tar -x -C <fresh dir> && cd <fresh dir> && wj run scripts/wj/interp_instr.wj -- WJ_BIN --write  (then copy bench/interp/instr_baseline.json back)"
+    }
+    ""
+}
+
+// The method a `--write` ran with, stored beside the rows so a record can be reproduced.
+fn method_json(runs: int, cwd: string) -> Json {
+    let home = env.get_or("HOME", "")
+    let mut m = object()
+    m = with(m, "runs", from_int(runs as i64))
+    m = with(m, "cwd_chars", from_int(cwd.len() as i64))
+    m = with(m, "home_cache", from_str(if fs.exists(home + "/.cache/windjammer") { "populated" } else { "empty" }))
+    m = with(m, "env_vars", from_int(env.vars().len() as i64))
+    m
+}
+
+// `--self-test-write WJ_BIN`: `--write` run inside a git work tree exits non-zero with the refusal, and writes nothing.
+fn self_test_write(wj: string, cwd: string) {
+    let t = sh_out("mktemp -d")
+    sh_out("mkdir " + quote(t + "/.git"))
+    let script = quote(cwd + "/scripts/wj/interp_instr.wj")
+    let line = "cd " + quote(t) + " && " + quote(wj) + " run --allow process --allow 'fs.read=**' --allow 'fs.write=**' --allow env.read --allow console " + script + " -- " + quote(wj) + " --write 2>&1; echo rc=$?"
+    let out = sh_out(line)
+    let wrote = fs.exists(t + "/" + BASELINE)
+    sh_out("rm -rf " + quote(t))
+    if !out.contains("refusing --write") || out.contains("rc=0") || wrote {
+        eprintln("self-test-write: --write in a git work tree was not refused (wrote: ${wrote}): ${out}")
+        process.exit(1)
+    }
+    println("self-test-write ok: --write is refused inside a git work tree")
+}
+
 fn main() {
     let args = env.args()
     if args.len() < 2 {
@@ -285,6 +343,10 @@ fn main() {
     }
     let key = platform_key(c)
     let cwd = env.current_dir() ?? "."
+    if args.contains("--self-test-write") {
+        self_test_write(wj, cwd)
+        return
+    }
     let mut counts = object()
     let mut warm = object()
     // A `.wj-cache/` in the working directory (what test runs leave in a checkout) is read and hashed on every run of
@@ -293,6 +355,13 @@ fn main() {
     if fs.exists(cwd + "/.wj-cache") {
         eprintln("${cwd}/.wj-cache exists: its sidecars are hashed into every run's cache key (about +21M instructions on HashMap programs) and the counts would not match the recorded rows. Remove it with: rm -rf ${cwd}/.wj-cache  (or run from a clean checkout).")
         process.exit(1)
+    }
+    if args.contains("--write") {
+        let why = write_refusal(cwd)
+        if why != "" {
+            eprintln(why)
+            process.exit(2)
+        }
     }
     let seed = seed_root(wj, cwd + "/" + STARTUP)
     if args.contains("--self-test") {
@@ -356,11 +425,19 @@ fn main() {
     }
     println(dumps(res, 1, true))
     let mut doc = parse(fs::read_to_string(BASELINE) ?? "{}") ?? object()
+    if args.contains("--check") {
+        let was = as_i64(get(get(doc, key + ":method") ?? object(), "cwd_chars") ?? Json::Null) ?? 0
+        let now = cwd.len() as i64
+        if was > 0 && (now - was > 8 || was - now > 8) {
+            eprintln("note: the recorded rows were taken at a ${was}-character cwd path, this run's is ${now}: the counts move about 55K instructions per path character (agent_loop warm), so a small difference is not a regression")
+        }
+    }
     let bad_cold = ratchet(args, doc, key, counts)
     let bad_warm = ratchet(args, doc, key + ":warm", warm)
     if args.contains("--write") {
         doc = with(doc, key, written(args, get(doc, key) ?? object(), counts))
         doc = with(doc, key + ":warm", written(args, get(doc, key + ":warm") ?? object(), warm))
+        doc = with(doc, key + ":method", method_json(runs, cwd))
         let _ = fs.write(BASELINE, dumps(doc, 1, true) + "\n")
     }
     if bad_cold || bad_warm {
