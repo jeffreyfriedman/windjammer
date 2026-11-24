@@ -159,9 +159,13 @@ impl Cx<'_, '_> {
             if let Some(k) = rules::type_kind(&p.type_) {
                 col.scalars.insert(p.name.clone(), (k, true));
             }
+            if let Some(t) = crate::ir::stdlib_tables::surface_type_name(&p.type_) {
+                col.surface_of.insert(p.name.clone(), t);
+            }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types, scalars, iter_locals, uses, .. } = col;
+        let Collect { names, counts, let_types, scalars, iter_locals, surface_of, uses, .. } = col;
+        let surface_of: HashMap<String, &'static str> = surface_of.into_iter().filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1).collect();
         let iter_locals: iterators::IterLocals = iter_locals.into_iter().filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1).collect();
         let scalars: HashMap<String, (Kind, bool)> = scalars
             .into_iter()
@@ -177,6 +181,7 @@ impl Cx<'_, '_> {
         ck.ret_ty = ret.cloned();
         ck.scalars = scalars;
         ck.iter_locals = iter_locals;
+        ck.surface_of = surface_of;
         ck.name_uses = uses;
         walk_block(&mut ck, body);
         for (name, location) in iter_use::reuse_after_consumption(body, &ck.iter_locals) {
@@ -217,6 +222,8 @@ struct Collect<'i> {
     scalars: HashMap<String, (Kind, bool)>,
     /// Bindings initialised with a std iterator (`let parts = "a,b".split(",")`), by the std declaration.
     iter_locals: iterators::IterLocals,
+    /// Bindings declared with a std surface type (`let m: HashMap<string, int>`, a `&Vec<int>` parameter).
+    surface_of: HashMap<String, &'static str>,
     uses: HashMap<String, usize>,
 }
 
@@ -232,6 +239,7 @@ impl<'i> Collect<'i> {
             let_types: HashMap::new(),
             scalars: HashMap::new(),
             iter_locals: HashMap::new(),
+            surface_of: HashMap::new(),
             uses: HashMap::new(),
         }
     }
@@ -299,9 +307,14 @@ impl Visitor for Collect<'_> {
                 }
             }
         }
+        if let Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_: Some(t), .. } = s {
+            if let Some(st) = crate::ir::stdlib_tables::surface_type_name(t) {
+                self.surface_of.insert(n.clone(), st);
+            }
+        }
         if let Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_: None, value, .. } = s {
-            let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
-            if let Some(root) = iterators::iterator_root(value, &text, &self.iter_locals) {
+            let recv = |e: &Expression<'_>| iterators::receiver_type(e, &self.surface_of).or_else(|| matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str)).then_some("String"));
+            if let Some(root) = iterators::iterator_root(value, &recv, &self.iter_locals) {
                 self.iter_locals.insert(n.clone(), root);
             }
         }
@@ -380,6 +393,7 @@ struct Checker<'c, 'a, 'o> {
     ret_ty: Option<Type>,
     scalars: HashMap<String, (Kind, bool)>,
     iter_locals: iterators::IterLocals,
+    surface_of: HashMap<String, &'static str>,
     /// How often each name is mentioned in the function (an iterator mentioned once may take `.count()`/`.next()`).
     name_uses: HashMap<String, usize>,
     /// Iterator bindings whose `.collect()` fix was already offered by an earlier report.
@@ -403,6 +417,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             ret_ty: None,
             scalars: HashMap::new(),
             iter_locals: HashMap::new(),
+            surface_of: HashMap::new(),
             name_uses: HashMap::new(),
             collected: HashSet::new(),
             skip: HashSet::new(),

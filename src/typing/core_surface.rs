@@ -200,7 +200,8 @@ impl CoreSurface {
         self.inner.traits.get(type_name)?.entries(type_name).get(method)
     }
 
-    fn has(&self, type_name: &str, method: &str) -> bool {
+    /// Whether `type_name` itself declares `method` (not through the sequence or iterator fall-backs of `declared`).
+    pub fn has(&self, type_name: &str, method: &str) -> bool {
         self.get(type_name, method).is_some()
     }
 

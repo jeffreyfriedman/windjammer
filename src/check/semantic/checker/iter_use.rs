@@ -43,8 +43,8 @@ impl Use<'_> {
 impl Checker<'_, '_, '_> {
     /// The iterator root of `e` (the producer method), when `e` is an iterator by declaration.
     pub(super) fn iterator_of(&self, e: &Expression<'_>) -> Option<String> {
-        let text = |e: &Expression<'_>| iterators::is_string_literal(e) || matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str));
-        iterators::iterator_root(e, &text, &self.iter_locals)
+        let recv = |e: &Expression<'_>| iterators::receiver_type(e, &self.surface_of).or_else(|| matches!(e, Expression::Identifier { name, .. } if self.scalars.get(name).is_some_and(|k| k.0 == Kind::Str)).then_some("String"));
+        iterators::iterator_root(e, &recv, &self.iter_locals)
     }
 
     /// Report `it` (an iterator expression) reaching a list-only place. `method` is the span of the list method for

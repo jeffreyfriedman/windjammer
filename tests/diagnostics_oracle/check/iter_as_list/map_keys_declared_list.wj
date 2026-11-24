@@ -1,0 +1,29 @@
+// expect: WJ0035
+// WJ0035 (iterator used as a list) for an iterator that a map declares (`keys`, `values`), by the receiver's declared type.
+use std::collections::HashMap
+
+fn main() {
+    let mut bal: HashMap<string, int> = HashMap::new()
+    bal.insert("a", 1)
+    let names: Vec<string> = bal.keys()
+//~     ^^^^^ ERROR WJ0035 stored where a list is declared
+    println("${names.len()}")
+}
+
+fn amounts(m: HashMap<string, int>) -> int {
+    let vals: Vec<int> = m.values()
+//~     ^^^^ ERROR WJ0035 stored where a list is declared
+    let n = vals.len() as int
+    n
+}
+
+// No report: collected first, only counted or walked, a list from the start.
+fn controls(m: HashMap<string, int>) -> int {
+    let ks: Vec<string> = m.keys().collect()
+    let n = m.keys().len()
+    let mut total = 0
+    for v in m.values() {
+        total += v
+    }
+    total + ks.len() as int + n as int
+}
