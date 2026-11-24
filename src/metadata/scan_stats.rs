@@ -23,3 +23,8 @@ pub(crate) fn meta_file_read() {
 pub(crate) fn closure_file() {
     event("closure");
 }
+
+/// One `.wj.meta` read for the ambient run-cache fingerprint (`check::ambient`).
+pub(crate) fn ambient_file() {
+    event("ambient");
+}

@@ -44,3 +44,4 @@ Layer `tooling`. Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.
 
 ## Tests
 Unit tests in `locate.rs`, `files.rs`, `watch.rs`, `semantic/`; tests/diagnostics_suite.rs; tests/check_cache_differential_test.rs (caches).
+- `ambient.rs`: the run-cache ambient key digests only the `.wj-cache` sidecars the program's `use` segments can reach (`<segment>.wj.meta`, or files in directories named by a segment); unrelated cache files are never listed or read (tests/ambient_cache_dir_test.rs). The key is sidecar content, so an mtime-only touch does not change it.

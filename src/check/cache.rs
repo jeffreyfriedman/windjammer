@@ -11,7 +11,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-const FORMAT: u32 = 3;
+const FORMAT: u32 = 4;
 
 #[derive(Serialize, Deserialize)]
 struct Entry {
@@ -19,7 +19,7 @@ struct Entry {
     identity: String,
     fingerprint: String,
     /// `ambient::use_depth` of the cached sources (identical sources give the identical depth).
-    use_depth: usize,
+    use_depth: ambient::UseScope,
     ambient: String,
     diagnostics: Vec<Diagnostic>,
 }
@@ -137,11 +137,11 @@ pub fn load(root: &Path, fp: &str) -> Option<Vec<Diagnostic>> {
     let text = unmask_root(root, &std::fs::read_to_string(path_for(root, "run")).ok()?);
     let e: Entry = serde_json::from_str(&text).ok()?;
     let hit = e.format == FORMAT && e.identity == identity() && e.fingerprint == fp;
-    (hit && ambient::fingerprint(e.use_depth).as_deref() == Some(e.ambient.as_str())).then_some(e.diagnostics)
+    (hit && ambient::fingerprint(&e.use_depth).as_deref() == Some(e.ambient.as_str())).then_some(e.diagnostics)
 }
 
 /// `ambient` is the digest taken before the checks ran (`None`: not cacheable).
-pub fn store(root: &Path, fp: &str, use_depth: usize, ambient: Option<&str>, diagnostics: &[Diagnostic]) {
+pub fn store(root: &Path, fp: &str, use_depth: ambient::UseScope, ambient: Option<&str>, diagnostics: &[Diagnostic]) {
     let Some(ambient) = ambient else { return };
     let p = path_for(root, "run");
     if let Some(dir) = p.parent() {
