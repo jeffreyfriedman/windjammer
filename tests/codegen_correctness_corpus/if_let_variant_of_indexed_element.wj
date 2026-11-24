@@ -1,0 +1,24 @@
+// Destructuring an element of a list in `if let` borrows the element (rustc E0507 otherwise): the list stays whole.
+// expect: 5 3
+enum Node {
+    Atom(int),
+    List(Vec<Node>, int),
+}
+
+fn first_atom(items: Vec<Node>) -> int {
+    if let Node::List(ps, _) = items[1] {
+        match ps[0] {
+            Node::Atom(n) => n,
+            _ => 0,
+        }
+    } else {
+        0
+    }
+}
+
+fn main() {
+    let mut items: Vec<Node> = []
+    items.push(Node::Atom(1))
+    items.push(Node::List([Node::Atom(5)], 1))
+    println("${first_atom(items)} ${items.len() + 1}")
+}

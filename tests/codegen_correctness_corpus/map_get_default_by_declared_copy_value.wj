@@ -1,0 +1,19 @@
+// `map.get(k).unwrap_or(d)` reads the value by copy when the map's declared value type is Copy, whether the map is a
+// parameter or a local, and `d` is the plain default.
+// expect: 7 0 5
+use std::collections::HashMap
+
+fn balance(net: HashMap<string, int>, who: string) -> int {
+    net.get(who).unwrap_or(0)
+}
+
+fn main() {
+    let mut net: HashMap<string, int> = HashMap::new()
+    net.insert("a", 7)
+    let d = "b"
+    let missing = net.get(d).unwrap_or(0)
+    let mut rates: HashMap<string, float> = HashMap::new()
+    rates.insert("x", 5.0)
+    let r = rates.get("x").unwrap_or(0.0)
+    println("${balance(net, "a")} ${missing} ${r as int}")
+}

@@ -62,6 +62,39 @@ pub(super) fn usize_bound(b: &str) -> String {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `w.clone()` where `w` is declared a reference to text (`&str` from `split`/`lines`/`chars`, a `&str` formal):
+    /// `Clone` on a `&str` keeps the `&str`, but Windjammer `string.clone()` is an owned string, so it lowers to
+    /// `.to_string()`. Decided by the receiver's declared type.
+    pub(in crate::codegen::rust) fn clone_of_borrowed_text(&self, object: &Expression<'ast>) -> bool {
+        matches!(self.infer_expression_type(object), Some(Type::Reference(inner)) if crate::codegen::rust::types::is_windjammer_text_type(&inner))
+    }
+
+    /// `x.clone()` where `x` is a `&str` formal the emitted signature takes by reference, or any receiver declared as a
+    /// reference to text: the owned string, `.to_string()`. `None` otherwise.
+    pub(in crate::codegen::rust) fn clone_of_text_ref_as_owned(&self, object: &Expression<'ast>, obj_str: &str) -> Option<String> {
+        let emitted_str_ref = matches!(object, Expression::Identifier { name, .. }
+            if self.emitted_rust_ref_formals.contains(name)
+                && self.current_function_params.iter().any(|p| p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)));
+        (emitted_str_ref || self.clone_of_borrowed_text(object)).then(|| format!("{}.to_string()", obj_str.trim_end_matches(".clone()")))
+    }
+
+    /// An explicit `w.clone()` argument whose receiver is borrowed text: the restored `.clone()` would keep the `&str`,
+    /// so the argument is the owned string (`.to_string()`).
+    pub(in crate::codegen::rust) fn own_clone_of_borrowed_text_arg(&self, arg_expr: &Expression<'ast>, coerced: String) -> String {
+        match arg_expr {
+            Expression::MethodCall { object, .. }
+                if crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr)
+                    && self.clone_of_borrowed_text(object) =>
+            {
+                match coerced.strip_suffix(".clone()") {
+                    Some(base) => format!("{base}.to_string()"),
+                    None => coerced,
+                }
+            }
+            _ => coerced,
+        }
+    }
+
     /// Does the receiver's (user) type define `method`? Then the call is not the stdlib one of that name.
     pub(in crate::codegen::rust) fn receiver_defines_method(&self, receiver_type: Option<&str>, method: &str) -> bool {
         receiver_type.is_some_and(|rt| self.method_exists_on_type_name(rt, method))

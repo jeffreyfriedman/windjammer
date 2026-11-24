@@ -411,9 +411,7 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } = &**object
                 {
-                    if let Some(ret) =
-                        self.runtime_std_module_fn_return_type(module_or_type, method)
-                    {
+                    if let Some(ret) = self.unshadowed_module_fn_return_type(module_or_type, method) {
                         return Some(ret);
                     }
                     // Associated functions: `TypeName::assoc()` (may parse as MethodCall).
@@ -1148,6 +1146,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => false,
         }
+    }
+
+    /// `module::method(..)` return type from the std runtime table, unless a parameter or local named `module` shadows the
+    /// module: `net.get(k)` on a binding `net` is the method of its declared type, not `net::get`.
+    fn unshadowed_module_fn_return_type(&self, module: &str, method: &str) -> Option<Type> {
+        let shadowed = self.local_var_types.contains_key(module) || self.current_function_params.iter().any(|p| p.name == module);
+        if shadowed { None } else { self.runtime_std_module_fn_return_type(module, method) }
     }
 
     /// Payload type of an owned-self `Option` adapter. `opt_ref.unwrap_or(d)` on `Option<&Copy>` is lowered

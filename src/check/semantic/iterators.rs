@@ -15,14 +15,14 @@ fn surface() -> &'static CoreSurface {
 
 /// Iterators that know their length (`ExactSizeIterator`): the surface does not model sizes, so `len` is not judged on
 /// a chain that starts at one of these producers.
-const EXACT_SIZE_PRODUCERS: [&str; 1] = ["bytes"];
+const EXACT_SIZE_PRODUCERS: [&str; 6] = ["bytes", "keys", "values", "iter", "iter_mut", "into_iter"];
 
 /// Bindings known to hold an iterator, with the producer method the chain started at (`split`, `bytes`, ..).
 pub type IterLocals = HashMap<String, String>;
 
-/// The producer method at the root of `e` when `e` evaluates to an iterator by declaration: `text` says whether an
-/// expression is a string; `locals` are the bindings known to hold an iterator.
-pub fn iterator_root(e: &Expression<'_>, text: &dyn Fn(&Expression<'_>) -> bool, locals: &IterLocals) -> Option<String> {
+/// The producer method at the root of `e` when `e` evaluates to an iterator by declaration: `recv` gives the surface
+/// type an expression is declared to have (`String`, `HashMap`, ..); `locals` are the bindings known to hold an iterator.
+pub fn iterator_root(e: &Expression<'_>, recv: &dyn Fn(&Expression<'_>) -> Option<&'static str>, locals: &IterLocals) -> Option<String> {
     match e {
         Expression::Identifier { name, .. } => locals.get(name).cloned(),
         Expression::MethodCall { object, method, .. } => {
@@ -32,10 +32,11 @@ pub fn iterator_root(e: &Expression<'_>, text: &dyn Fn(&Expression<'_>) -> bool,
                     .and_then(|(_, _, _, ret)| ret)
                     .is_some_and(|r| surface_type_name(&r).is_some_and(|h| h == ITERATOR))
             };
-            if text(object) {
-                declared_ret("String").then(|| method.clone())
+            if let Some(ty) = recv(object) {
+                // the receiver's own declaration decides (`HashMap::keys`, `String::split`), not a sequence fall-back
+                (surface().has(ty, method) && declared_ret(ty)).then(|| method.clone())
             } else if declared_ret(ITERATOR) {
-                iterator_root(object, text, locals)
+                iterator_root(object, recv, locals)
             } else {
                 None
             }
@@ -55,4 +56,13 @@ pub fn lists_only(method: &str, root: &str) -> bool {
     !(method == "len" && EXACT_SIZE_PRODUCERS.contains(&root))
         && surface().declared("Vec", method).is_some()
         && surface().declared(ITERATOR, method).is_none()
+}
+
+/// The surface type of a string literal or of a binding declared with a surface type (`HashMap<string, int>` -> `HashMap`).
+pub fn receiver_type(e: &Expression<'_>, declared: &HashMap<String, &'static str>) -> Option<&'static str> {
+    match e {
+        _ if is_string_literal(e) => Some("String"),
+        Expression::Identifier { name, .. } => declared.get(name).copied(),
+        _ => None,
+    }
 }

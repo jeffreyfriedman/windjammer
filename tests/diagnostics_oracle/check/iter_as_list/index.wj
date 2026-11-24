@@ -1,6 +1,6 @@
 // expect: WJ0035
 // WJ0035 (iterator used as a list), use kind: index. One code, one span, one fix from every entry point (ADR-0039, G8).
-IDXfn main() {
+fn main() {
     let line = "a b c"
     let parts = line.split_whitespace()
     println("${parts[1]}")

@@ -600,7 +600,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 format!("&{base}")
                             };
                         }
-                        coerced = crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
+                        coerced = self.own_clone_of_borrowed_text_arg(arg_to_generate, crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
                             arg_to_generate,
                             &arg_str,
                             &coerced,
@@ -608,7 +608,7 @@ impl<'ast> CodeGenerator<'ast> {
                             i,
                             &self.emitted_rust_ref_formals,
                             &self.current_function_params,
-                        );
+                        ));
                         coerced = crate::codegen::rust::call_site_borrow::reconcile_explicit_user_clone_into_owned_vec_formal(
                             self,
                             arg_to_generate,

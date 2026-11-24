@@ -1700,25 +1700,18 @@ impl<'ast> CodeGenerator<'ast> {
                 || preserve_at_call_site
                 || preserve_place_clone
             {
-                if let Expression::Identifier { name, .. } = object {
-                    let is_emitted_str_ref = self.emitted_rust_ref_formals.contains(name)
-                        && self.current_function_params.iter().any(|p| {
-                            p.name == *name
-                                && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                        });
-                    if is_emitted_str_ref {
-                        return format!("{}.to_string()", obj_str);
-                    }
+                if let Some(owned) = self.clone_of_text_ref_as_owned(object, &obj_str) {
+                    return owned;
                 }
                 return format!("{}.clone()", obj_str.trim_end_matches(".clone()"));
             }
             let with_clone = format!("{}.clone()", obj_str.trim_end_matches(".clone()"));
-            return crate::codegen::rust::string_utilities::lower_explicit_clone_call(
+            return self.clone_of_text_ref_as_owned(object, &with_clone).unwrap_or_else(|| crate::codegen::rust::string_utilities::lower_explicit_clone_call(
                 object,
                 &with_clone,
                 &self.emitted_rust_ref_formals,
                 &self.current_function_params,
-            );
+            ));
         }
 
         // UI FRAMEWORK: Check if we need to add .to_vnode() for .child() methods

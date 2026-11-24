@@ -172,7 +172,7 @@
 "src/codegen/rust/generator.rs" = 4427
 "src/codegen/rust/int_promotion_type_inference.rs" = 2183
 "src/codegen/rust/ir_call_site.rs" = 10425
-"src/codegen/rust/method_call_expression_generation/finalize.rs" = 2154
+"src/codegen/rust/method_call_expression_generation/finalize.rs" = 2147
 "src/codegen/rust/self_analysis.rs" = 2025
 "src/codegen/rust/signature_promotion.rs" = 4519
 "src/codegen/rust/statement_generation.rs" = 2424
@@ -201,7 +201,7 @@
 "src/codegen/rust/call_signature_resolution.rs::effective_param_ownership" = 314
 "src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 364
 "src/codegen/rust/expression_generation.rs::generate_expression_immut" = 453
-"src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 649
+"src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 647
 "src/codegen/rust/for_statement_generation.rs::generate_for_statement" = 553
 "src/codegen/rust/function_formal_parameter_generation.rs::collect_additional_formal_parameter_strings" = 3126
 "src/codegen/rust/function_generation_prepare.rs::prepare_codegen_environment_for_regular_function" = 658
@@ -218,10 +218,10 @@
 "src/codegen/rust/item_generation.rs::generate_impl" = 391
 "src/codegen/rust/item_generation.rs::generate_trait_with_analysis" = 308
 "src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1053
-"src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1216
+"src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1203
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
 "src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 968
-"src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2138
+"src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2131
 "src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 317
 "src/codegen/rust/program_generation.rs::generate_program" = 995
 "src/codegen/rust/stdlib_method_signatures.rs::init_stdlib_method_signatures" = 345

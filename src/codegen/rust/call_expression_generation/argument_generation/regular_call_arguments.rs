@@ -433,7 +433,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         i,
                         true,
                     );
-                    coerced =
+                    coerced = gen.own_clone_of_borrowed_text_arg(arg,
                         crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
                             arg,
                             &arg_str,
@@ -442,7 +442,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             i,
                             &gen.emitted_rust_ref_formals,
                             &gen.current_function_params,
-                        );
+                        ));
 
                     if let Some(ref sig) = peel_sig {
                         coerced = crate::codegen::rust::call_site_borrow::reconcile_explicit_user_clone_into_owned_vec_formal(

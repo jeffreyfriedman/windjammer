@@ -1,0 +1,28 @@
+// A `match` that is the value of a function: the first arm's value is the arm's result, and the wildcard arm is a
+// block that calls a diverging function and then yields a placeholder of the same type.
+// expect: 3
+// expect: error line 2: type error
+enum Value {
+    Int(int),
+    Bool(bool),
+}
+
+fn die(msg: string, line: int) {
+    println("error line ${line}: ${msg}")
+    std::process::exit(0)
+}
+
+fn want_int(v: Value, line: int) -> int {
+    match v {
+        Value::Int(n) => n,
+        _ => {
+            die("type error", line)
+            0
+        },
+    }
+}
+
+fn main() {
+    println("${want_int(Value::Int(3), 1)}")
+    println("${want_int(Value::Bool(true), 2)}")
+}

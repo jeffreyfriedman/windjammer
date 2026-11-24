@@ -250,6 +250,10 @@ corpus_tests!(
     moved_into_tuple_then_read_in_list_literal,
     field_moved_then_whole_value_used,
     string_if_let_moved_then_read,
+    match_value_arm_with_diverging_else,
+    map_get_default_by_declared_copy_value,
+    clone_of_split_piece_into_owned_list,
+    if_let_variant_of_indexed_element,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:
