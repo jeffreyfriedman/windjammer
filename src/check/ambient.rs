@@ -10,19 +10,31 @@ use std::path::Path;
 /// Directory entries a fingerprint may visit; beyond it the run is not cached at all.
 const WALK_BUDGET: usize = 20_000;
 
-/// Deepest `.wj.meta` candidate (directory levels below the working directory, file included) any top-level
-/// `use` of `programs` can name, with one level of slack.
-pub fn use_depth<'a>(programs: impl IntoIterator<Item = &'a crate::parser::Program<'static>>) -> usize {
+/// What the sidecar inference can read for a program: the deepest `.wj.meta` candidate (directory levels below the
+/// working directory, file included; one level of slack) and the path segments of its top-level `use`s. A candidate
+/// sidecar is `<segment>.wj.meta` or lies in a directory named by a segment, so nothing else is looked at.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct UseScope {
+    depth: usize,
+    names: Vec<String>,
+}
+
+/// The [`UseScope`] of `programs`.
+pub fn use_depth<'a>(programs: impl IntoIterator<Item = &'a crate::parser::Program<'static>>) -> UseScope {
     let mut depth = 0;
+    let mut names = std::collections::BTreeSet::new();
     for p in programs {
         for item in &p.items {
             if let Item::Use { path, .. } = item {
                 let levels: usize = path.iter().map(|s| 1 + s.matches(['/', '\\']).count()).sum();
                 depth = depth.max(levels + 2);
+                for seg in path.iter().flat_map(|s| s.split(['/', '\\'])).filter(|s| !s.is_empty() && !s.starts_with('.')) {
+                    names.insert(seg.to_string());
+                }
             }
         }
     }
-    depth
+    UseScope { depth, names: names.into_iter().collect() }
 }
 
 /// Digest of every `*.wj.meta` sidecar within `depth` levels of the working directory and of its `.wj-cache/`,
@@ -30,21 +42,28 @@ pub fn use_depth<'a>(programs: impl IntoIterator<Item = &'a crate::parser::Progr
 /// give the same digest in any checkout. It keys the whole-run cache, the per-project memo and the shared analysis
 /// cache alike. `None` when the working directory is unknown, the walk exceeds its budget, or a sidecar lies outside
 /// the working directory (a path that cannot be named portably): the caller must not cache.
-pub fn fingerprint(depth: usize) -> Option<String> {
-    let cwd = std::env::current_dir().ok()?;
+pub fn fingerprint(scope: &UseScope) -> Option<String> {
+    fingerprint_in(&std::env::current_dir().ok()?, scope)
+}
+
+/// [`fingerprint`] for the working directory `cwd`.
+fn fingerprint_in(cwd: &Path, scope: &UseScope) -> Option<String> {
+    let depth = scope.depth;
+    let names = &scope.names[..];
     let mut files = Vec::new();
     let mut budget = WALK_BUDGET;
     // Only cache locations are read (colocated `.wj.meta` sidecars are ignored by the inference).
-    walk(&cwd.join(".wj-cache"), depth + 1, &mut budget, &mut files)?;
+    walk(&cwd.join(".wj-cache"), names, depth + 1, &mut budget, &mut files)?;
     // `wj check` holds no `CompilerConfig`: the process's shared cache root holds manifest-less entries
     let cache_root = crate::compiler_config::shared_cache_root();
-    walk(&crate::metadata::meta_cache_root(&cwd, &cache_root), depth + 1, &mut budget, &mut files)?;
+    walk(&crate::metadata::meta_cache_root(cwd, &cache_root), names, depth + 1, &mut budget, &mut files)?;
     files.sort();
     files.dedup();
     let mut h = Sha256::new();
     for f in &files {
-        let rel = f.strip_prefix(&cwd).ok()?;
+        let rel = f.strip_prefix(cwd).ok()?;
         part(&mut h, rel.to_string_lossy().replace('\\', "/").as_bytes());
+        crate::metadata::scan_stats::ambient_file();
         part(&mut h, &std::fs::read(f).unwrap_or_default());
     }
     Some(format!("{:x}", h.finalize()))
@@ -56,24 +75,47 @@ pub fn part(h: &mut Sha256, bytes: &[u8]) {
     h.update(bytes);
 }
 
-fn walk(dir: &Path, depth: usize, budget: &mut usize, out: &mut Vec<std::path::PathBuf>) -> Option<()> {
+/// The candidate sidecars under `dir`: for each name, `<name>.wj.meta` and, inside the directory `<name>`, every
+/// sidecar and (recursively) the sub-directories that are themselves named. Entries of `dir` no name points at are
+/// neither listed nor read, so unrelated files cost nothing.
+fn walk(dir: &Path, names: &[String], depth: usize, budget: &mut usize, out: &mut Vec<std::path::PathBuf>) -> Option<()> {
     if depth == 0 {
         return Some(());
     }
+    for n in names {
+        *budget = budget.checked_sub(1)?;
+        let file = dir.join(format!("{n}.wj.meta"));
+        if file.is_file() {
+            out.push(file);
+        }
+        let sub = dir.join(n);
+        if sub.is_dir() {
+            list_module_dir(&sub, names, depth - 1, budget, out)?;
+        }
+    }
+    Some(())
+}
+
+fn list_module_dir(dir: &Path, names: &[String], depth: usize, budget: &mut usize, out: &mut Vec<std::path::PathBuf>) -> Option<()> {
+    if depth == 0 {
+        return Some(());
+    }
+    crate::metadata::scan_stats::dir_listed();
     let Ok(entries) = std::fs::read_dir(dir) else { return Some(()) };
     for e in entries.flatten() {
         *budget = budget.checked_sub(1)?;
         let p = e.path();
-        let name = e.file_name();
-        let name = name.to_string_lossy();
         if p.is_dir() {
-            // Module directories never start with a dot; `.wj-cache` is walked separately.
-            if !name.starts_with('.') {
-                walk(&p, depth - 1, budget, out)?;
+            let name = e.file_name();
+            if names.iter().any(|n| name.to_string_lossy() == n.as_str()) {
+                list_module_dir(&p, names, depth - 1, budget, out)?;
             }
-        } else if name.ends_with(".wj.meta") {
+        } else if e.file_name().to_string_lossy().ends_with(".wj.meta") {
             out.push(p);
         }
     }
     Some(())
 }
+
+#[cfg(test)]
+mod tests;

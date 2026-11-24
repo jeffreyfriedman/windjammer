@@ -283,7 +283,7 @@ fn run(root: &Path, sources: &[(String, String)]) -> Vec<Diagnostic> {
 
 struct RunOutput {
     diagnostics: Vec<Diagnostic>,
-    use_depth: usize,
+    use_depth: ambient::UseScope,
     /// Digest of the non-source inputs, taken before the checks ran; `None` when not caching.
     ambient: Option<String>,
 }
@@ -299,7 +299,7 @@ fn run_with(root: &Path, sources: &[(String, String)], use_cache: bool) -> RunOu
     }
     crate::debug_env::phase("check-parse");
     let use_depth = ambient::use_depth(parsed.iter().map(|p| &p.program));
-    let ambient = if use_cache { ambient::fingerprint(use_depth) } else { None };
+    let ambient = if use_cache { ambient::fingerprint(&use_depth) } else { None };
     let mut memo = ambient.as_deref().map(|a| file_cache::FileMemo::open(root, a));
     project::run(root, &parsed, &mut out, memo.as_mut());
     if let Some(mut m) = memo {

@@ -47,3 +47,5 @@ Unit tests in `locate.rs`, `files.rs`, `watch.rs`, `semantic/`; tests/diagnostic
 
 ## Shared analysis
 One `program_analysis::ProgramAnalysis` per run (`project::run`; `local_mutability_sources` makes its own): the diagnostics phase, `moves::predict` (the generator receives the shared analyzer and numeric products: `codegen::generate_rust_source_from_products`) and `local_mut::facts::Facts::build` (first pass shared, second pass keyed by the merged files) ask it instead of analyzing again. `WJ_NO_SHARED_ANALYSIS=1` / `WJ_VERIFY_SHARED_ANALYSIS=1` (`check::analysis_mode`) switch it off / verify it; output never changes. Gate: tests/program_analysis_test.rs.
+
+- `ambient.rs`: the run-cache ambient key digests only the `.wj-cache` sidecars the program's `use` segments can reach (`<segment>.wj.meta`, or files in directories named by a segment); unrelated cache files are never listed or read (tests/ambient_cache_dir_test.rs). The key is sidecar content, so an mtime-only touch does not change it.

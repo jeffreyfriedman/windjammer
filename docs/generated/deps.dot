@@ -161,7 +161,7 @@ digraph deps {
   "check" -> "ir" [label="34"];
   "check" -> "lexer" [label="9"];
   "check" -> "linter" [label="3"];
-  "check" -> "metadata" [label="4"];
+  "check" -> "metadata" [label="6"];
   "check" -> "module_system" [label="5"];
   "check" -> "package" [label="9"];
   "check" -> "parser" [label="76"];
