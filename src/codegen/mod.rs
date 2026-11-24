@@ -89,6 +89,19 @@ pub fn generate_rust_source(program: &Program) -> Result<String> {
     Ok(backend::create_backend(Target::Rust).generate(program, &config)?.source)
 }
 
+/// [`generate_rust_source`] from the analyzer's and numeric inference's products for `program` (the caller computed them
+/// once and shares them): the same text, without analyzing again.
+pub fn generate_rust_source_from_products<'a>(
+    program: &Program<'a>,
+    analyzed: &[crate::analyzer::AnalyzedFunction<'a>],
+    signatures: crate::analyzer::SignatureRegistry,
+    analyzed_trait_methods: std::collections::HashMap<String, std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'a>>>,
+    numeric_inference: crate::ir::numeric_bridge::UnifiedNumericInference,
+) -> String {
+    crate::debug_env::count(crate::debug_env::Stage::RustGeneration);
+    rust::backend::RustBackend::generate_from_products(program, analyzed, signatures, analyzed_trait_methods, numeric_inference)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

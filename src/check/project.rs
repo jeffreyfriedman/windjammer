@@ -108,13 +108,15 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
         );
     }
     crate::debug_env::phase("check-semantic");
+    // One analysis of each file for every consumer below (`program_analysis`).
+    let session = crate::program_analysis::ProgramAnalysis::new(super::analysis_mode());
     // Session-shared stdlib tables, computed on the first analysis that is not reused from the memo.
     let tables = std::cell::OnceCell::new();
     // ADR-0002: local bindings changed without `mut` (WJ0051), over the whole program at once
     if parsed.iter().any(|p| has_bindings(p)) {
         let t = tables.get_or_init(|| std::sync::Arc::new(StdlibTables::load_or_compute())).clone();
         crate::debug_env::phase("check-tables");
-        out.extend(super::local_mut::run(parsed, t));
+        out.extend(super::local_mut::run(parsed, t, &session));
     }
     crate::debug_env::phase("check-local-mut");
     for p in parsed {
@@ -125,7 +127,7 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
         if !has_errors {
             let reused = memo.as_mut().and_then(|m| m.get(&p.file, &p.text));
             let found = reused.unwrap_or_else(|| {
-                let d = analysis_phase(p, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::load_or_compute())).clone());
+                let d = analysis_phase(p, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::load_or_compute())).clone(), &session);
                 if let Some(m) = memo.as_mut() {
                     m.put(&p.file, &p.text, &d);
                 }
@@ -375,21 +377,16 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
 }
 
 /// Input: this file and the stdlib only (see `file_cache.rs`); keep it that way or key the memo on the new input.
-fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagnostic> {
+fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>, session: &crate::program_analysis::ProgramAnalysis) -> Vec<Diagnostic> {
     let mut out = Vec::new();
-    use crate::analyzer::{Analyzer, SignatureRegistry};
-    let mut analyzer = Analyzer::new();
-    crate::debug_env::phase("check-analyzer-new");
-    // the analysis only reads the global signatures: the per-process stdlib registry itself, not a clone of it
-    let sigs = SignatureRegistry::stdlib();
-    crate::debug_env::phase("check-analyzer-sigs");
-    let analysis = analyzer.analyze_program_with_global_signatures(&p.program, sigs);
+    // the analyzer's and numeric inference's answers for this file, shared with the move prediction and local mutability
+    let key = crate::program_analysis::FileKey::new(&p.file, &p.text);
+    let analysis = session.first_pass(&key, &p.program);
     crate::debug_env::phase("check-analyzer");
-    match analysis {
-        Ok((analyzed, registry, _)) => {
-            let mut num = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+    match &analysis.result {
+        Ok(crate::program_analysis::Analyzed { functions: analyzed, registry, .. }) => {
+            let num = session.numeric(&key, &p.program);
             crate::debug_env::phase("check-numeric-new");
-            num.infer_program(&p.program);
             for e in &num.errors {
                 out.push(
                     Diagnostic::error("WJ0027", e.clone())
@@ -398,7 +395,7 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
             }
             crate::debug_env::phase("check-numeric");
             let mut pipeline = crate::ir::IrPipeline::new().with_stdlib_tables(tables);
-            let module = pipeline.lower_to_ir(&analyzed, &registry, None);
+            let module = pipeline.lower_to_ir(analyzed, registry, None);
             crate::debug_env::phase("check-ir");
             use crate::ir::pipeline::DiagnosticSeverity as S;
             for d in &module.diagnostics {
@@ -423,7 +420,7 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
     if nothing_to_predict(p) {
         super::moves::skip(&p.file, &p.text);
     } else if !out.iter().any(|d| d.is_error()) {
-        out.extend(super::moves::predict(&p.program, &p.text, &p.file));
+        out.extend(super::moves::predict(&p.program, &p.text, &p.file, session));
     }
     crate::debug_env::phase("check-moves");
     out

@@ -1,0 +1,11 @@
+use crate::dep
+
+fn relay(items: Vec<int>) {
+    dep::fill(items)
+}
+
+fn main() {
+    let v: Vec<int> = Vec::new()
+    relay(v)
+    println("${v.len()}")
+}

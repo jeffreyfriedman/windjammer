@@ -41,7 +41,7 @@ fn ledger(r: &stages::Ran) -> String {
 #[test]
 fn cold_check_of_the_small_program_runs_each_stage_this_often() {
     let d = small();
-    let r = wj(d.path(), &["check", "p.wj"], &[]);
+    let r = wj(d.path(), &["check", "p.wj"], &UNSHARED);
     assert!(r.out.status.success(), "{}", r.stderr());
     assert_eq!(ledger(&r), PIN_CHECK_SMALL);
 }
@@ -51,7 +51,7 @@ fn cold_check_of_the_small_program_runs_each_stage_this_often() {
 #[test]
 fn cold_run_of_the_small_program_runs_each_stage_this_often() {
     let d = small();
-    let r = wj(d.path(), &["run", "--no-lint", "p.wj"], &[]);
+    let r = wj(d.path(), &["run", "--no-lint", "p.wj"], &UNSHARED);
     assert!(r.out.status.success(), "{}", r.stderr());
     assert_eq!(r.stdout().trim(), "3");
     assert_eq!(ledger(&r), PIN_RUN_SMALL);
@@ -63,12 +63,17 @@ fn cold_run_of_the_small_program_runs_each_stage_this_often() {
 fn cold_check_of_the_517_line_program_runs_each_stage_this_often() {
     let d = tempfile::tempdir().unwrap();
     std::fs::copy("tests/fixtures/program_analysis/gen500.wj", d.path().join("p.wj")).unwrap();
-    let r = wj(d.path(), &["check", "p.wj"], &[]);
+    let r = wj(d.path(), &["check", "p.wj"], &UNSHARED);
     assert!(r.out.status.success(), "{}", r.stderr());
     assert_eq!(ledger(&r), PIN_CHECK_517);
 }
 
+/// Every consumer computes for itself: what the check cost before the shared analysis (`program_analysis`), the
+/// reference the shared pins of tests/program_analysis_test.rs shrink from. (Registry copies are fewer than the 8 / 8 / 12 of
+/// the base: the second analyzer pass now shares one global registry instead of cloning it per file.)
+const UNSHARED: [(&str, &str); 1] = [("WJ_NO_SHARED_ANALYSIS", "1")];
+
 // The ledger only shrinks: step 0 of the design pins what the base does today.
-const PIN_CHECK_SMALL: &str = "parse=5 analyzer_pass=4 analyzer_reused=0 numeric=2 numeric_reused=0 ir_lowering=2 registry_copy=8 facts_build=1 rust_generation=1";
-const PIN_RUN_SMALL: &str = "parse=8 analyzer_pass=4 analyzer_reused=0 numeric=2 numeric_reused=0 ir_lowering=2 registry_copy=8 facts_build=1 rust_generation=1";
-const PIN_CHECK_517: &str = "parse=12 analyzer_pass=6 analyzer_reused=0 numeric=3 numeric_reused=0 ir_lowering=4 registry_copy=12 facts_build=1 rust_generation=1";
+const PIN_CHECK_SMALL: &str = "parse=5 analyzer_pass=4 analyzer_reused=0 numeric=2 numeric_reused=0 ir_lowering=2 registry_copy=6 facts_build=1 rust_generation=1";
+const PIN_RUN_SMALL: &str = "parse=8 analyzer_pass=4 analyzer_reused=0 numeric=2 numeric_reused=0 ir_lowering=2 registry_copy=6 facts_build=1 rust_generation=1";
+const PIN_CHECK_517: &str = "parse=12 analyzer_pass=6 analyzer_reused=0 numeric=3 numeric_reused=0 ir_lowering=4 registry_copy=10 facts_build=1 rust_generation=1";

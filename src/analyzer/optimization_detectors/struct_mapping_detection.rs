@@ -62,7 +62,9 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::StructLiteral { name, fields, .. } => {
                 let mut field_mappings = Vec::new();
-                let mut source_candidates = HashMap::new();
+                // ordered: the reported source and a tie between sources must not depend on hash order (a product the check
+                // shares must equal its recomputation, `program_analysis` verify mode)
+                let mut source_candidates = std::collections::BTreeMap::new();
 
                 for (field_name, field_expr) in fields {
                     let field_source = self.extract_field_source(field_expr);

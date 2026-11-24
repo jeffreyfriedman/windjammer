@@ -50,6 +50,7 @@ pub mod intrinsics; // ADR-0014 language intrinsics registry and surface-syntax 
 pub mod ir;
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
+pub mod program_analysis; // one analysis of a program shared by the consumers of a `wj check` run
 pub mod mem_report; // `wj build --mem-report`: RSS per pipeline phase
 pub mod metadata; // Cross-module type inference metadata
 pub mod optimizer;

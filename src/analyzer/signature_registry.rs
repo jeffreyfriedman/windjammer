@@ -227,10 +227,7 @@ impl SignatureRegistry {
         })
     }
 
-    pub fn new() -> Self {
-        crate::debug_env::count(crate::debug_env::Stage::RegistryCopy);
-        Self::stdlib().clone()
-    }
+    pub fn new() -> Self { crate::debug_env::count(crate::debug_env::Stage::RegistryCopy); Self::stdlib().clone() }
 
     /// Lightweight empty registry (no stdlib) for building deltas.
     pub fn empty() -> Self {

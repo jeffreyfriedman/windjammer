@@ -70,8 +70,8 @@ pub fn truthy(name: &str) -> bool {
 }
 
 /// The analysis stages `WJ_STAGE_COUNTERS=1` counts (docs/design/shared-program-analysis.md section 2.2): how often each
-/// runs in one process. A counter only increments an atomic; nothing reads it except the report and the tests, so counting
-/// can never change output.
+/// runs in one process. A run of a stage appends its name to the file `WJ_STAGE_COUNTERS` names and nothing else happens, so counting
+/// keeps no state and cannot change output; a reader counts the lines (tests/common/stages.rs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
     /// `Parser::parse` calls (lexing included).
@@ -95,18 +95,6 @@ pub enum Stage {
 }
 
 impl Stage {
-    const ALL: [Stage; 9] = [
-        Stage::Parse,
-        Stage::AnalyzerPass,
-        Stage::AnalyzerReused,
-        Stage::Numeric,
-        Stage::NumericReused,
-        Stage::IrLowering,
-        Stage::RegistryCopy,
-        Stage::FactsBuild,
-        Stage::RustGeneration,
-    ];
-
     /// The name the report and the pinned tests use.
     pub fn name(self) -> &'static str {
         match self {
@@ -123,34 +111,12 @@ impl Stage {
     }
 }
 
-static STAGE_COUNTS: [std::sync::atomic::AtomicU64; 9] = [const { std::sync::atomic::AtomicU64::new(0) }; 9];
-
-/// One more run of `stage` in this process.
+/// One more run of `stage` in this process: `WJ_STAGE_COUNTERS=<file>` appends one line `<name>` to the file (a file, not
+/// stderr: the check silences stderr around its work).
 pub fn count(stage: Stage) {
-    STAGE_COUNTS[stage as usize].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// How often `stage` ran in this process so far.
-pub fn stage_count(stage: Stage) -> u64 {
-    STAGE_COUNTS[stage as usize].load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// Every stage with its count, in report order.
-pub fn stage_counts() -> Vec<(&'static str, u64)> {
-    Stage::ALL.iter().map(|s| (s.name(), stage_count(*s))).collect()
-}
-
-/// `WJ_STAGE_COUNTERS=1`: print `[stages] name=N ...` on stderr when the process ends (any exit path).
-pub fn report_stage_counts_at_exit() {
-    #[cfg(unix)]
-    if enabled("WJ_STAGE_COUNTERS") {
-        extern "C" fn report() {
-            let line: Vec<String> = stage_counts().into_iter().map(|(n, c)| format!("{n}={c}")).collect();
-            eprintln!("[stages] {}", line.join(" "));
-        }
-        // SAFETY: `report` is a plain `extern "C" fn()` that only reads atomics and writes to stderr.
-        unsafe {
-            libc::atexit(report);
-        }
+    use std::io::Write;
+    let Some(path) = read("WJ_STAGE_COUNTERS") else { return };
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "{}", stage.name());
     }
 }

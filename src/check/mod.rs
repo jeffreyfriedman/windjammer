@@ -211,6 +211,20 @@ pub fn implicit_reexports(path: &Path) -> Result<Checked> {
     Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
 }
 
+/// How this run shares its analysis (`program_analysis`): `WJ_NO_SHARED_ANALYSIS=1` makes every consumer compute for itself
+/// (the differential oracle, output must not change), `WJ_VERIFY_SHARED_ANALYSIS=1` recomputes every reuse and asserts
+/// equality. Neither changes what is reported, so neither is part of any cache key.
+pub(crate) fn analysis_mode() -> crate::program_analysis::Mode {
+    use crate::program_analysis::Mode;
+    if crate::debug_env::truthy("WJ_NO_SHARED_ANALYSIS") {
+        Mode::Off
+    } else if crate::debug_env::truthy("WJ_VERIFY_SHARED_ANALYSIS") {
+        Mode::Verify
+    } else {
+        Mode::Shared
+    }
+}
+
 /// `local_mutability` over in-memory sources (one program); files that do not parse are left out.
 pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic> {
     let previous = std::panic::take_hook();
@@ -219,7 +233,7 @@ pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic>
     let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
     let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
     let tables = std::sync::Arc::new(crate::ir::stdlib_tables::StdlibTables::load_or_compute());
-    let found = local_mut::run(&refs, tables);
+    let found = local_mut::run(&refs, tables, &crate::program_analysis::ProgramAnalysis::new(analysis_mode()));
     std::panic::set_hook(previous);
     finish(found)
 }

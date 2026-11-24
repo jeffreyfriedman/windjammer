@@ -44,3 +44,6 @@ Layer `tooling`. Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.
 
 ## Tests
 Unit tests in `locate.rs`, `files.rs`, `watch.rs`, `semantic/`; tests/diagnostics_suite.rs; tests/check_cache_differential_test.rs (caches).
+
+## Shared analysis
+One `program_analysis::ProgramAnalysis` per run (`project::run`; `local_mutability_sources` makes its own): the diagnostics phase, `moves::predict` (the generator receives the shared analyzer and numeric products: `codegen::generate_rust_source_from_products`) and `local_mut::facts::Facts::build` (first pass shared, second pass keyed by the merged files) ask it instead of analyzing again. `WJ_NO_SHARED_ANALYSIS=1` / `WJ_VERIFY_SHARED_ANALYSIS=1` (`check::analysis_mode`) switch it off / verify it; output never changes. Gate: tests/program_analysis_test.rs.

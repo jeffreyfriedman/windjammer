@@ -47,7 +47,6 @@ fn main() -> anyhow::Result<()> {
             std::process::exit(windjammer::cli::agent_wrap::run_wrapped(lines));
         }
     }
-    windjammer::debug_env::report_stage_counts_at_exit();
     windjammer::debug_env::phase("main");
     let cli = Cli::parse();
     windjammer::debug_env::phase("clap");
