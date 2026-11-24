@@ -177,6 +177,20 @@ pub(crate) fn ty_of(v: &Value) -> Option<Ty> {
     }
 }
 
+/// `t.is_none() || ty_of(v) == t`, without building the `Option<Ty>` (the row view check runs per field per build).
+#[inline(always)]
+pub(crate) fn ty_is(v: &Value, t: &Option<Ty>) -> bool {
+    let Some(t) = t else { return true };
+    let r = match (v, t) {
+        (Value::Float(_, vt), Ty::Flt(t)) => vt == t && *t != FloatTy::F32,
+        (Value::Int(i, vt), Ty::Int(t)) => vt == t && int_ok(*t) && fits_repr(*i, *t),
+        (Value::Bool(_), Ty::Bool) => true,
+        _ => false,
+    };
+    debug_assert_eq!(r, ty_of(v) == Some(*t));
+    r
+}
+
 fn fits_repr(i: i128, t: IntTy) -> bool {
     if unsigned_repr(t) {
         (0..=u64::MAX as i128).contains(&i)
@@ -264,4 +278,32 @@ pub(crate) fn class_of(v: &Value) -> Class {
 /// out so the differential tests can show they would catch its absence. Always off in release.
 pub(crate) fn mutant(it: &crate::interpreter::engine::Interpreter, name: &str) -> bool {
     cfg!(debug_assertions) && it.jit_mutant.as_deref() == Some(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `ty_is` is the row view's field check: `shape field type unset, or ty_of(value) == it`, for every pairing.
+    #[test]
+    fn ty_is_agrees_with_ty_of() {
+        let values = [
+            Value::Int(5, IntTy::I64),
+            Value::Int(5, IntTy::I32),
+            Value::Int(-1, IntTy::U64),
+            Value::Int(i128::MAX, IntTy::I64),
+            Value::Int(i128::from(u64::MAX) + 1, IntTy::U64),
+            Value::Float(1.5, FloatTy::F64),
+            Value::Float(f64::NAN, FloatTy::F64),
+            Value::Float(1.5, FloatTy::F32),
+            Value::Bool(true),
+            Value::Unit,
+        ];
+        let tys = [None, Some(Ty::Int(IntTy::I64)), Some(Ty::Int(IntTy::I32)), Some(Ty::Int(IntTy::U64)), Some(Ty::Flt(FloatTy::F64)), Some(Ty::Flt(FloatTy::F32)), Some(Ty::Bool)];
+        for v in &values {
+            for t in &tys {
+                assert_eq!(ty_is(v, t), t.is_none() || ty_of(v) == *t, "{v:?} against {t:?}");
+            }
+        }
+    }
 }

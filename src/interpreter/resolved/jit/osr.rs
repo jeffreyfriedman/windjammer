@@ -227,7 +227,7 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     buf.clear();
     buf.resize(n, 0);
     for (i, slot, t) in &unit.plan.live {
-        buf[*i] = read(it, b + slot, reg.kind(*slot)).and_then(|v| bits(&v, *t))?;
+        buf[*i] = read_bits(it, b + slot, reg.kind(*slot), *t)?;
     }
     for sp in &unit.plan.live_structs {
         load_struct(it, b + sp.slot, reg.kind(sp.slot), sp, &mut buf)?;
@@ -294,6 +294,15 @@ pub(super) fn load_struct(it: &Interpreter, i: usize, kind: Option<SlotKind>, sp
 pub(super) fn make_struct(sp: &StructSpill, buf: &[i64]) -> Value {
     let fields = sp.fields.iter().map(|(n, k, t)| (n.clone(), value(buf[*k], *t))).collect();
     Value::Struct(Rc::new(crate::interpreter::value::StructVal { name: sp.name.clone(), fields, copy: sp.copy, uid: 0 }))
+}
+
+/// The bits of a scalar local of type `t` (`read` then `bits`, without cloning the value).
+fn read_bits(it: &Interpreter, i: usize, kind: Option<SlotKind>, t: Ty) -> Option<i64> {
+    match (kind?, &it.rstack[i]) {
+        (SlotKind::Boxed, Value::Ref(p)) => p.slot.try_borrow().ok().and_then(|v| bits(&v, t)),
+        (SlotKind::Boxed, _) => None,
+        (_, v) => bits(v, t),
+    }
 }
 
 /// A scalar local's value (a boxed one's walker slot holds it).
