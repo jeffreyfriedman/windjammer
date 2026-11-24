@@ -562,6 +562,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     _ => None,
                 })
             }
+            // `let e = match o { None => [], Some(x) => x }`: the block's tail is a `match` whose arms agree.
+            Expression::Block { statements, .. } => match statements.last()? {
+                Statement::Match { value, .. } => self.match_static_types.get(&crate::ir::numeric_defaults::node_id(value)).cloned(),
+                _ => None,
+            },
             Expression::Call { function, arguments, .. } => {
                 let name = Self::extract_callee_name(function)?;
                 // A core type's associated function (`HashMap::new()`) is typed by the core surface, never by a

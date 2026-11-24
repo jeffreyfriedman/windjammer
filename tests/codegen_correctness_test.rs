@@ -230,6 +230,7 @@ corpus_tests!(
     if_else_statement_value_tail,
     if_value_owned_and_borrowed_text,
     index_by_borrowed_loop_var,
+    loop_index_over_match_bound_list_is_int,
     list_literal_in_returned_tuple_slot,
     method_call_on_imported_constant,
     operator_impl_infers_output,

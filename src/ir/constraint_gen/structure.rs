@@ -117,6 +117,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     pub(super) fn walk_match_arms(&mut self, value: ConstraintVar, scrutinee: &Expression<'ast>, arms: &[MatchArm<'ast>]) -> Vec<ConstraintVar> {
         let mut out = Vec::new();
         let scrutinee_ty = self.static_type(scrutinee);
+        let mut arm_types: Vec<Option<Type>> = Vec::new();
         for arm in arms {
             self.scopes.push(HashMap::new());
             let pv = self.bind_pattern(&arm.pattern);
@@ -129,9 +130,21 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.cs.add_because(Constraint::TypeIs(guard_var, BaseType::Bool), tagged("TY-BOOL"));
             }
             out.push(self.walk_expression(arm.body));
+            arm_types.push(self.static_type(arm.body));
             self.scopes.pop();
         }
+        self.record_match_static_type(scrutinee, &arm_types);
         out
+    }
+
+    /// The declared type of a `match` value: the type every arm that has a declared type agrees on (`None => []`
+    /// has none; `Some(x) => x` has its payload's). Arms that disagree leave the match untyped.
+    fn record_match_static_type(&mut self, scrutinee: &Expression<'ast>, arm_types: &[Option<Type>]) {
+        let mut declared = arm_types.iter().flatten();
+        let Some(first) = declared.next() else { return };
+        if declared.all(|t| t == first) {
+            self.match_static_types.insert(crate::ir::numeric_defaults::node_id(scrutinee), first.clone());
+        }
     }
 
     /// The static types of the names a pattern binds against a value of declared type `ty` (`Some(r)` against an
