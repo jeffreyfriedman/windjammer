@@ -327,3 +327,50 @@ pub fn get_default() -> i32 {
         default_code
     );
 }
+
+/// The suffix fallback of `resolve_method_signature`: a receiver whose qualified key (`Meter::scale`) is absent
+/// resolves through a module-qualified homonym (`shapes::Meter::scale`) whose last segment equals the method.
+#[test]
+fn test_int_method_literal_infers_through_suffix_fallback_key() {
+    let source = r#"
+pub fn run(m: Meter) {
+    m.scale(5)
+}
+"#;
+
+    let mut lexer = lexer::Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser =
+        parser::Parser::new_with_source(tokens, "test.wj".to_string(), source.to_string());
+    let program = parser.parse().expect("Failed to parse");
+
+    let mut int_inference = type_inference::IntInference::new();
+    let mut sigs = std::collections::HashMap::new();
+    sigs.insert(
+        "shapes::Meter::scale".to_string(),
+        (
+            vec![
+                windjammer::parser::Type::Custom("Meter".to_string()),
+                windjammer::parser::Type::Custom("u64".to_string()),
+            ],
+            None,
+        ),
+    );
+    int_inference.set_global_function_signatures(sigs);
+    int_inference.infer_program(&program);
+
+    let mut analyzer = analyzer::Analyzer::new();
+    let (analyzed, _registry, _) = analyzer
+        .analyze_program(&program)
+        .expect("Failed to analyze");
+
+    let registry = analyzer::SignatureRegistry::new();
+    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
+    generator.set_int_inference(int_inference);
+    let rust_code = generator.generate_program(&program, &analyzed);
+
+    assert!(
+        rust_code.contains("5_u64"),
+        "suffix-fallback signature shapes::Meter::scale(u64) should type the literal u64. Generated:\n{rust_code}"
+    );
+}
