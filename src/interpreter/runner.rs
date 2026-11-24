@@ -25,7 +25,15 @@ pub fn exit_code_for(e: &RuntimeError) -> i32 {
 /// default binary of its `wj.toml`). Discovery is `module_system::project`, shared with the compiled `wj run`.
 /// The one place the runner reads the process environment for `env::vars()`.
 fn host_env() -> Vec<(String, String)> {
-    std::env::vars().collect()
+    // `wasm32-unknown-unknown` has no environment and `vars()` panics there: the browser playground sees none.
+    #[cfg(target_arch = "wasm32")]
+    {
+        Vec::new()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::vars().collect()
+    }
 }
 
 pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
