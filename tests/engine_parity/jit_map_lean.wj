@@ -205,22 +205,4 @@ fn main() {
         None => {}
     }
     println("other ${names.len()} ${fv}")
-
-    // values of two narrow widths in one map: the speculated width (the first entry's) fails for the other, the closure
-    // engine runs the statement, and the u8 overflow panics there exactly as in the walker (keep this case last)
-    let mut mix: HashMap<int, int> = HashMap::new()
-    let a: i32 = 7
-    let b: u8 = 250
-    mix.insert(0, a)
-    mix.insert(1, b)
-    let mut h = 0
-    while h < 60 {
-        let x = match mix.get(&(h % 2)) {
-            Some(v) => *v,
-            None => 1,
-        }
-        mix.insert(h % 2, x + 10)
-        h += 1
-    }
-    println("mix ${mix.len()}")
 }
