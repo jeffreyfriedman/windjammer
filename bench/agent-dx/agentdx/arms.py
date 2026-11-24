@@ -152,7 +152,9 @@ FAIL_NOTE = {"wj": "a failing `wj` call ends its output with `[exit N]`", "pytho
 # `printf 'set A1 \075A2*3\n' | ./main` is accepted where `printf 'set A1 =A2*3\n'` is refused. `=` is \075, `$` is \044, `<` is \074, `>` is \076.
 FILE_INPUT_RULE = ("To pipe input that contains a space followed by `=`, or `$`, `<` or `>`, spell that character as a printf octal escape "
                    "(`=` is `\\075`, `$` is `\\044`, `<` is `\\074`, `>` is `\\076`): `printf 'set A1 \\075A2*3\\n' | ...`. "
-                   "For a long input write it ONCE with the Write tool to `in.txt` and {route}.")
+                   "For a long input write it ONCE with the Write tool to `in.txt` and {route}. "
+                   "NEVER write `>` in a command (no `printf ... > in.txt`, no `2>&1`, no `2>/dev/null`): the whole line is refused and nothing runs. "
+                   "To create a file use the Write tool.")
 WJ_SUBCOMMAND_RULE = (" and call `wj` only with one of its subcommands (`build`, `run`, `test`, `check`, `fmt`, `lint`, `fix`, `docs`, `explain`), "
                       "never bare `wj` or `wj --version`")
 
@@ -181,6 +183,14 @@ AGENT_MODE_TEXT = (" One command, no redirects, no chains: `wj` output already i
                    "`exit status: N`, so do not use `2>&1`, pipes, `&&`, `;`, `$?` or `${PIPESTATUS}` (they are refused). Never write a space followed by `=` in a Bash command (refused even inside quotes): write multi-line input with the Write tool and pass it with `--stdin-file`.")
 
 
+# `wj run --stdin-text '<text>'` (compiler feature): the text is stdin, with C escapes; one plain command and no extra turn. Off unless the
+# harness flag `--stdin-text-hint` sets STDIN_TEXT_HINT, so existing pilot configs keep their prompts byte for byte.
+STDIN_TEXT_HINT = False
+STDIN_TEXT_RULE = ("\n\nFor a short input prefer `wj run --compiled --stdin-text 'line one\\nline two\\n' main.wj`: the text is the program's stdin, `\\n` is a newline "
+                   "and `\\t` a tab, and `=`, `$`, `<`, `>` are written `\\x3d`, `\\x24`, `\\x3c`, `\\x3e` (so `=A2*3` is `\\x3dA2*3`). It needs no pipe, no redirect "
+                   "and no input file. Use it instead of `printf ... | wj run` and never write `>`.")
+
+
 def head_agent(lang):
     """The pilot-8 task header: input through a file written with the Write tool (`--stdin-file`), no shell input pipes."""
     return head(lang, agent_mode=True)
@@ -188,7 +198,8 @@ def head_agent(lang):
 
 def prompt(task_id, arm):
     lang = ARMS[arm]["lang"]
-    return (head_agent(lang) if ARMS[arm].get("agent_mode") else head(lang)) + LOOP_TEXT[ARMS[arm]["loop"]] + AGENT_MODE_TEXT * bool(ARMS[arm].get("agent_mode")) + "\n\n" + T.render_prompt(task_id, lang, bool(ARMS[arm].get("agent_mode")))
+    hint = STDIN_TEXT_RULE if STDIN_TEXT_HINT and lang == "wj" else ""
+    return (head_agent(lang) if ARMS[arm].get("agent_mode") else head(lang)) + LOOP_TEXT[ARMS[arm]["loop"]] + AGENT_MODE_TEXT * bool(ARMS[arm].get("agent_mode")) + hint + "\n\n" + T.render_prompt(task_id, lang, bool(ARMS[arm].get("agent_mode")))
 
 
 def _bash(arm):

@@ -9,16 +9,20 @@ import json, os, subprocess, sys, time
 REAL, LOG, SRC = %(real)r, %(log)r, %(src)r
 t0 = time.time()
 p = subprocess.run([REAL] + sys.argv[1:], capture_output=True, text=True)
-sys.stdout.write(p.stdout); sys.stderr.write(p.stderr)
-if p.returncode != 0:
-    sys.stderr.write("[exit %%d]\\n" %% p.returncode)   # the sandbox forbids `$?`: this is how an agent sees a status
 try:
     src = open(SRC).read()[:20000]
 except OSError:
     src = ""
-with open(LOG, "a") as f:
+with open(LOG, "a") as f:   # logged BEFORE the output is written: `wj build | head -n 40` closes the pipe early (BrokenPipe)
     f.write(json.dumps({"argv": sys.argv[1:], "exit": p.returncode, "secs": round(time.time() - t0, 3),
                         "out": (p.stderr + p.stdout)[-2500:], "source": src}) + "\\n")
+if p.returncode != 0:
+    p.stderr += "[exit %%d]\\n" %% p.returncode   # the sandbox forbids `$?`: this is how an agent sees a status
+for stream, text in ((sys.stdout, p.stdout), (sys.stderr, p.stderr)):
+    try:
+        stream.write(text); stream.flush()
+    except (BrokenPipeError, OSError):
+        pass
 sys.exit(p.returncode)
 '''
 
