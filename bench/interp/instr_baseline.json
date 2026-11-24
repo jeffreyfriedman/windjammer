@@ -1,33 +1,33 @@
 {
  "callgrind:Linux-x86_64": {
-  "agent_loop": 563520600,
-  "closures": 805624836,
-  "fib30": 166803782,
-  "hashmap": 206101414,
-  "loop5m": 284649559,
-  "nbody": 642790675,
-  "sieve": 578331695,
-  "startup": 36391406,
-  "strings": 392746400,
-  "structs": 130244502
+  "agent_loop": 435793002,
+  "closures": 126861754,
+  "fib30": 159878616,
+  "hashmap": 194548973,
+  "loop5m": 277663517,
+  "nbody": 628906579,
+  "sieve": 565863909,
+  "startup": 34804449,
+  "strings": 380838059,
+  "structs": 119282706
  },
  "callgrind:Linux-x86_64:warm": {
-  "agent_loop": 31970080,
-  "closures": 703648302,
-  "fib30": 102485289,
-  "hashmap": 103169389,
-  "loop5m": 221856617,
+  "agent_loop": 30654461,
+  "closures": 41173734,
+  "fib30": 102441587,
+  "hashmap": 103125883,
+  "loop5m": 221799169,
   "nbody": 444587883,
-  "sieve": 490547405,
-  "startup": 4917590,
-  "strings": 307506889,
-  "structs": 38019438
+  "sieve": 488486784,
+  "startup": 4873193,
+  "strings": 307026439,
+  "structs": 37917235
  },
  "notes": {
   "callgrind:Linux-x86_64": {
    "nbody": {
-    "raised_by": "interpreter changes since the recording (not the f32 operand rounding), +0.8% (643541127 vs 638215202 on b11; reverting the f32 rounding hunk saves only 0.2%)",
-    "lower_when": "nbody is re-investigated: profile the f64 kernel between a8851e10c and b11 (gaps-math / interpreter changes)"
+    "lower_when": "nbody is re-investigated: profile the f64 kernel between a8851e10c and b11 (gaps-math / interpreter changes)",
+    "raised_by": "interpreter changes since the recording (not the f32 operand rounding), +0.8% (643541127 vs 638215202 on b11; reverting the f32 rounding hunk saves only 0.2%)"
    }
   }
  },
