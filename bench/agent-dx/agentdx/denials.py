@@ -177,3 +177,28 @@ def summarise(stream_text, result_json=None):
     return {"count": len(perm), "capability": kinds.get("capability", 0), "kinds": kinds, "shapes": shapes,
             "commands": [d["command"][:300] for d in perm][:20],
             "first_bash_denied": first is not None and any(d["id"] == first for d in perm)}
+
+
+PROGRAM_FILE = re.compile(r"(^|[\\/])(main\.(wj|rs|py|go)|[A-Za-z0-9_]+_test\.wj|[A-Za-z0-9_]+\.(wj|rs|py|go))$")
+
+
+def input_writes(stream_text):
+    """Number of Write calls that create something other than program source: the input files the prompt rule asks for when program
+    input contains a space before `=`, `$`, `<` or `>`. This is the rule's turn cost, reported per arm so it is visible in every pilot."""
+    n = 0
+    for ln in (stream_text or "").splitlines():
+        ln = ln.strip()
+        if not ln.startswith("{"):
+            continue
+        try:
+            ev = json.loads(ln)
+        except ValueError:
+            continue
+        msg = ev.get("message")
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if ev.get("type") == "assistant" and isinstance(content, list):
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Write":
+                    if not PROGRAM_FILE.search(str((c.get("input") or {}).get("file_path", ""))):
+                        n += 1
+    return n

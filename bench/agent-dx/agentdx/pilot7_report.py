@@ -65,6 +65,7 @@ def denial_stats(trials_by_model, arms):
             out[(m, a)] = {"n": len(sel), "denied": sum(1 for t in sel if is_denied(t)),
                            "first_denied": sum(1 for t in sel if (t.get("denials") or {}).get("first_bash_denied")),
                            "never": sum(1 for t in sel if t.get("never_compiled")),
+                           "input_writes": sum(t.get("input_writes") or 0 for t in sel),
                            "never_denied": sum(1 for t in sel if t.get("never_compiled") and is_denied(t)),
                            "passed": sum(1 for t in sel if t.get("pass_final")), "shapes": shapes, "commands": cmds}
     return out
@@ -78,14 +79,14 @@ def denial_section(den):
     md = ["## Harness permission denials and never-compiled trials", "",
           "A denial (flag `harness-denial`) is a tool call the sandbox refused: the don't-ask text or the result's `permission_denials`. "
           "HARNESS-LIMITED: more than 5% of the arm's trials had their FIRST Bash call denied. never-compiled: no compile/run/check call ever succeeded.", "",
-          "| model | arm | trials | pass@1 | never-compiled trials | of them with a denial | with a denial | first Bash denied | status | most frequent denied shapes |",
-          "|---|---|---|---|---|---|---|---|---|---|"]
+          "| model | arm | trials | pass@1 | never-compiled trials | of them with a denial | with a denial | first Bash denied | status | most frequent denied shapes | input-file writes per trial |",
+          "|---|---|---|---|---|---|---|---|---|---|---|"]
     for (m, a), d in den.items():
         n = d["n"]
         status = "HARNESS-LIMITED" if harness_limited(d) else ("OVER" if n and d["denied"] / n > PL.DENIAL_ARM_MAX_SHARE else "ok")
         top = "; ".join(f"`{k[:70]}` x{v}" for k, v in sorted(d["shapes"].items(), key=lambda x: -x[1])[:3]) or \
             "; ".join(f"`{k[:60]}` x{v}" for k, v in sorted(d["commands"].items(), key=lambda x: -x[1])[:3])
-        md.append(f"| {m} | {a} | {n} | {(d['passed'] / n if n else 0):.2f} | {d['never']} | {d['never_denied']} | {d['denied']} | {d['first_denied']} | {status} | {top} |")
+        md.append(f"| {m} | {a} | {n} | {(d['passed'] / n if n else 0):.2f} | {d['never']} | {d['never_denied']} | {d['denied']} | {d['first_denied']} | {status} | {top} | {(d['input_writes'] / n if n else 0):.2f} |")
     return md + [""]
 
 

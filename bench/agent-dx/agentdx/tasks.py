@@ -46,8 +46,16 @@ def render_prompt(task_id, lang, agent_mode=False):
             out += [f"File `{name}`:", "```", content.rstrip("\n"), "```"]
         out += ["Standard input:", "```", s.get("stdin", "").rstrip("\n"), "```",
                 "Expected standard output:", "```", s["stdout"].rstrip("\n"), "```", ""]
-    if agent_mode and any(re.search(r" =\S", x) for x in [t["spec"]] + [s.get("stdin", "") for s in samples]):
-        # the Bash safety check refuses a space followed by `=` anywhere in a command, quoted or not (measured, pilot 8)
-        out += ["Input for this task contains a space followed by `=`, which a shell command here cannot contain: write the input to a file "
-                "with the Write tool and pass it with `--stdin-file FILE`.", ""]
+    if any(re.search(r" =\S", x) for x in [t["spec"]] + [s.get("stdin", "") for s in samples]):
+        # the Bash safety check refuses a space followed by `=` anywhere in a command, quoted or not (measured, pilots 8 and 11).
+        # Every arm gets the note, each with its own way to feed the file (arms.FILE_ROUTE): the input needs ONE Write, never a printf.
+        from . import arms as _A
+        route = "pass it with `--stdin-file FILE`" if agent_mode else _A.FILE_ROUTE[lang]
+        if agent_mode:
+            out += ["Input for this task contains a space followed by `=`, which a shell command here cannot contain: write the input to a file "
+                    "with the Write tool and pass it with `--stdin-file FILE`.", ""]
+        else:
+            out += ["Input for this task contains a space followed by `=`, which a shell command here cannot contain: in a printf string write that `=` as "
+                    "the octal escape `\\075` (`printf 'set A1 \\075A2*3\\n' | ...`), or write the input once to a file with the Write tool and "
+                    f"{_A.FILE_ROUTE[lang]}.", ""]
     return "\n".join(out)

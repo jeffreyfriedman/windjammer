@@ -27,7 +27,8 @@ LOOP_TEXT = {
     "compiled-first": (
         "Development loop (required): iterate with the compiled production path.\n"
         "- `wj build main.wj` to compile (this is what the final grade uses)\n"
-        "- `wj run --compiled main.wj` to build and run the program (pass program input on stdin)\n"
+        "- `wj run --compiled main.wj` to build and run the program (pass program input on stdin: `printf 'a\\nb\\n' | wj run --compiled main.wj`, "
+        "or from a file you wrote with the Write tool: `wj run --compiled --stdin-file in.txt main.wj`)\n"
         "- `wj test .` if you write `*_test.wj` tests\n"
         "Do not use `--interpret`."),
     "compiled-first-agent": (
@@ -54,7 +55,7 @@ LOOP_TEXT = {
         "Do not use `wj run --compiled`."),
     "verify-one-command": (
         "Development loop: one command does everything. After writing `main.wj`, run "
-        "`printf '<input>' | wj run --verify main.wj`: it runs the program at once, builds it with the production compiler "
+        "`printf '<input>' | wj run --verify main.wj` (or `wj run --verify --stdin-file in.txt main.wj` for an input file): it runs the program at once, builds it with the production compiler "
         "(the final grade uses that build), runs the build on the same input and compares. Read what it reports, fix, and run "
         "it again. You are done when it exits 0 and the output is what the task asks for. No other build or run command is needed."),
     # pilot 8: `wj run --verify` exits 0 whenever the interpreted and compiled runs agree, whatever the program's own status
@@ -140,17 +141,38 @@ SHELL_HELPERS = ["printf", "echo", "head", "tail", "cat", "sed", "cd", "ls", "wc
 SAFE_DENY_NOTE = "no network, no git push, no rm/mv outside the trial dir: none of curl/wget/git/rm/mv/chmod/pip/npm is allowed"
 
 
-def head(lang):
+# How an arm feeds a program an input FILE (used when the input has a space before `=`, or `$`, `<`, `>`): the only per-language part.
+# Measured against Claude Code 2.1.331 with a local fake model (notes/harness-denials3.md): `cat in.txt | <program>` and
+# `wj run ... --stdin-file in.txt main.wj` are both accepted; `printf 'x =y' | ...` and `< in.txt` are refused.
+FILE_ROUTE = {"wj": "add `--stdin-file in.txt` to your `wj run` command (for example `wj run --compiled --stdin-file in.txt main.wj`)",
+              "python": "run `cat in.txt | python3 main.py`", "go": "run `cat in.txt | ./main`", "rust": "run `cat in.txt | ./main`"}
+FAIL_NOTE = {"wj": "a failing `wj` call ends its output with `[exit N]`", "python": "a failing `python3` call ends its output with `[exit N]`",
+             "go": "a failing `go` call ends its output with `[exit N]`", "rust": "a failing `rustc` call ends its output with `[exit N]`"}
+# Zero-extra-turn route (measured): printf expands octal escapes, and the safety check sees only the escape text, so
+# `printf 'set A1 \075A2*3\n' | ./main` is accepted where `printf 'set A1 =A2*3\n'` is refused. `=` is \075, `$` is \044, `<` is \074, `>` is \076.
+FILE_INPUT_RULE = ("To pipe input that contains a space followed by `=`, or `$`, `<` or `>`, spell that character as a printf octal escape "
+                   "(`=` is `\\075`, `$` is `\\044`, `<` is `\\074`, `>` is `\\076`): `printf 'set A1 \\075A2*3\\n' | ...`. "
+                   "For a long input write it ONCE with the Write tool to `in.txt` and {route}.")
+WJ_SUBCOMMAND_RULE = (" and call `wj` only with one of its subcommands (`build`, `run`, `test`, `check`, `fmt`, `lint`, `fix`, `docs`, `explain`), "
+                      "never bare `wj` or `wj --version`")
+
+
+def head(lang, agent_mode=False):
     grader = "the compiled `wj build` toolchain" if lang == "wj" else "the native toolchain"
     tool = {"wj": "`wj`", "python": "`python3`", "go": "`go`", "rust": "`rustc`"}[lang]
     cmds = tool + ", the compiled binary (`./main`), `printf`, `echo`, `cat`, `sed`, `cd`, `ls`, `wc`, `sort`, `uniq`, `tr`, `cut`, `grep`, `diff`, `head` and `tail`"
+    if agent_mode:
+        shell = ("(one plain command each, no pipes, redirects, chains, `$?`, `$()` or heredocs; write program input to a file with the Write tool and pass `--stdin-file FILE`). ")
+    else:
+        shell = ("(pipe input with `printf 'a\\nb\\n' | ...`; you may chain commands with `|`, `&&` and `;`, but EVERY part of a chain must be one of these commands, otherwise the whole line is refused and nothing runs. "
+                 "You are already in the project directory: use relative paths, never `cd` elsewhere or name a path outside it (`..`, `/tmp`, `~`)" + (WJ_SUBCOMMAND_RULE if lang == "wj" else "") + ". "
+                 "A Bash line must not contain `$`, backticks, `>` or `<`, or a space followed by `=`, even inside quotes, so there are no shell variables such as `$?`, no redirects (`2>&1`, `> f`, `< f`) "
+                 f"and no `timeout` or `pkill`: {FAIL_NOTE[lang]}. " + FILE_INPUT_RULE.format(route=FILE_ROUTE[lang]) + ") ")
     return (f"You are solving one programming task in {LANG_NAME[lang]}. Write the complete solution in the file `{SRC[lang]}` "
             "in the current directory. The program reads standard input (and command-line arguments / files in the "
             f"current directory when the task says so) and writes to standard output exactly as specified; it is graded "
             f"on hidden tests with {grader}. Create and edit files with the Write/Edit tools; the only shell "
-            f"commands available are {cmds} (pipe input with `printf 'a\\nb\\n' | ...`; you may chain commands with `|`, `&&` and `;`, but EVERY part of a chain must be one of these commands, otherwise the whole line is refused and nothing runs; "
-            "a Bash line must not contain `$`, backticks, `>` or `<`, or a space followed by `=`, even inside quotes, so there are no shell variables such as `$?` and no redirects: a command that fails ends its output with `[exit N]`; "
-            "to feed a program input that contains `=`, `<`, `>`, `$` or other unusual characters, create the input file with the Write tool and run `cat input.txt | <program>`). "
+            f"commands available are {cmds} " + shell +
             "Stop when you believe it is correct for all inputs.\n\n")
 
 
@@ -161,8 +183,7 @@ AGENT_MODE_TEXT = (" One command, no redirects, no chains: `wj` output already i
 
 def head_agent(lang):
     """The pilot-8 task header: input through a file written with the Write tool (`--stdin-file`), no shell input pipes."""
-    return head(lang).replace("(pipe input with `printf 'a\\nb\\n' | ...`; shell variables such as `$?` are not available, so a command that fails ends its output with `[exit N]`)",
-        "(one plain command each, no pipes, redirects, chains, `$?`, `$()` or heredocs; write program input to a file with the Write tool and pass `--stdin-file FILE`)")
+    return head(lang, agent_mode=True)
 
 
 def prompt(task_id, arm):

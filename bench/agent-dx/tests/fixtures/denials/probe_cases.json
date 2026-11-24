@@ -1,0 +1,348 @@
+{
+ "claude_code": "2.1.331",
+ "cases": [
+  {
+   "arm": "R",
+   "command": "rustc --edition 2021 -o main main.rs && printf 'set A1 =A2*3\\nshow\\n' | ./main && printf 'show\\n' | ./main",
+   "expect": "denied",
+   "shape": "rustc && printf | ./main && printf | ./main [space-eq]",
+   "note": "pilot 11 R x2"
+  },
+  {
+   "arm": "R",
+   "command": "rustc --edition 2021 -o main main.rs && printf 'set A1 \\075A2*3\\nshow\\n' | ./main && printf 'show\\n' | ./main",
+   "expect": "allowed",
+   "shape": "replacement: octal escape for the =",
+   "note": ""
+  },
+  {
+   "arm": "R",
+   "command": "printf 'a\\nb\\n' | ./main",
+   "expect": "allowed",
+   "shape": "printf | ./main",
+   "note": ""
+  },
+  {
+   "arm": "R",
+   "command": "cat in.txt | ./main",
+   "expect": "allowed",
+   "shape": "replacement: input file via cat",
+   "note": ""
+  },
+  {
+   "arm": "R",
+   "command": "./main < in.txt",
+   "expect": "allowed",
+   "shape": "redirect <",
+   "note": "MEASURED allowed by Claude Code 2.1.331 although the prompt still forbids it; the PC version must be probed (preflight)"
+  },
+  {
+   "arm": "R",
+   "command": "cat in.txt | ./main ; echo done",
+   "expect": "allowed",
+   "shape": "chain with ;",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "cat in.txt | wj run --compiled main.wj",
+   "expect": "allowed",
+   "shape": "cat | wj",
+   "note": "pilot 11 U7 x7: NOT reproduced as a denial locally; the exact denied commands were not recorded"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled --stdin-file in.txt main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-file, one plain command",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "printf 'a\\nb\\n' | wj run --compiled main.wj",
+   "expect": "allowed",
+   "shape": "printf | wj run",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "cat @CWD@/in.txt | wj run --compiled main.wj",
+   "expect": "allowed",
+   "shape": "absolute path inside the trial directory",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "cat /tmp/other/in.txt | wj run --compiled main.wj",
+   "expect": "denied",
+   "shape": "cat | wj with a path outside the trial directory",
+   "note": "candidate cause of pilot 11 U7 cat | wj"
+  },
+  {
+   "arm": "U7",
+   "command": "cat ../in.txt | wj run --compiled main.wj",
+   "expect": "denied",
+   "shape": "cat | wj with ..",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "cat in.txt | wj main.wj",
+   "expect": "denied",
+   "shape": "wj without an allowed subcommand",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "cat in.txt | wj",
+   "expect": "denied",
+   "shape": "bare wj",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "cat in.txt | wj version",
+   "expect": "denied",
+   "shape": "wj version is not an allowed subcommand",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "cd /tmp/x && cat in.txt | wj run --compiled main.wj ; cat in2.txt | wj run --compiled main.wj",
+   "expect": "denied",
+   "shape": "cd && cat | wj ; cat | wj (cd outside)",
+   "note": "pilot 11 U7 x2"
+  },
+  {
+   "arm": "U7",
+   "command": "cd @CWD@ && cat in.txt | wj run --compiled main.wj",
+   "expect": "allowed",
+   "shape": "cd to the trial directory itself",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "sed -n 1,5p main.wj && printf 'a\\n' | wj run --compiled main.wj",
+   "expect": "allowed",
+   "shape": "sed && printf | wj",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "printf 'a\\n' | wj run --compiled main.wj ; echo \"[exit $?]\"",
+   "expect": "allowed",
+   "shape": "printf | wj ; echo [var]",
+   "note": "MEASURED allowed: pilot 11's denial of this line was the unlisted binary path, not $?"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled main.wj > out.txt",
+   "expect": "denied",
+   "shape": "redirect >",
+   "note": ""
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled main.wj 2>&1 | head -20",
+   "expect": "allowed",
+   "shape": "2>&1",
+   "note": "MEASURED allowed by Claude Code 2.1.331 although the prompt still forbids it; the PC version must be probed (preflight)"
+  },
+  {
+   "arm": "U7",
+   "command": "printf 'a\\n' | wj run --compiled main.wj | head -20",
+   "expect": "allowed",
+   "shape": "pipe through head",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "printf 'x =y\\n' | wj run --verify main.wj",
+   "expect": "denied",
+   "shape": "printf | wj [space-eq]",
+   "note": "pilot 11 V3 x1"
+  },
+  {
+   "arm": "V3",
+   "command": "printf 'x \\075y\\n' | wj run --verify main.wj",
+   "expect": "allowed",
+   "shape": "replacement: octal escape",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "wj run --verify --stdin-file in.txt main.wj",
+   "expect": "allowed",
+   "shape": "replacement: --stdin-file",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "pkill main ; printf 'a\\n' | wj run --verify main.wj | tail -5 ; echo ok",
+   "expect": "denied",
+   "shape": "pkill ; printf | wj | tail ; echo",
+   "note": "pilot 11 V3 x1"
+  },
+  {
+   "arm": "V3",
+   "command": "sed -i 's/a/b/' main.wj && printf 'a\\n' | wj run --verify main.wj | tail -5",
+   "expect": "allowed",
+   "shape": "sed -i && printf | wj | tail",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "sed -i 's/a/b/' main.wj > log.txt && printf 'a\\n' | wj run --verify main.wj | tail -5 > out.txt",
+   "expect": "denied",
+   "shape": "sed && ... | tail [redirect]",
+   "note": "pilot 11 V3 x1"
+  },
+  {
+   "arm": "V3",
+   "command": "printf 'a \\044y \\074 b \\076 c\\n' | wj run --verify main.wj",
+   "expect": "allowed",
+   "shape": "octal escapes for $ < >",
+   "note": ""
+  },
+  {
+   "arm": "V3",
+   "command": "printf 'a $y\\n' | wj run --verify main.wj",
+   "expect": "allowed",
+   "shape": "dollar in printf",
+   "note": "MEASURED allowed by Claude Code 2.1.331 although the prompt still forbids it; the PC version must be probed (preflight)"
+  },
+  {
+   "arm": "V3",
+   "command": "printf 'a\\n' | timeout 10 wj run --verify main.wj",
+   "expect": "allowed",
+   "shape": "timeout wrapper is stripped by Claude Code, inner command checked",
+   "note": "not an allow-set entry; documented, not relied on"
+  },
+  {
+   "arm": "U7",
+   "command": "echo hi > f.txt",
+   "expect": "denied",
+   "shape": "rule: echo hi > f.txt",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled main.wj 2> err.txt",
+   "expect": "denied",
+   "shape": "rule: wj run --compiled main.wj 2> e",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled main.wj 2>/dev/null",
+   "expect": "allowed",
+   "shape": "rule: wj run --compiled main.wj 2>/d",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled main.wj >> log.txt",
+   "expect": "denied",
+   "shape": "rule: wj run --compiled main.wj >> l",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo $(date)",
+   "expect": "denied",
+   "shape": "rule: echo $(date)",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo `date`",
+   "expect": "denied",
+   "shape": "rule: echo `date`",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo $HOME",
+   "expect": "allowed",
+   "shape": "rule: echo $HOME",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "cat <<EOF\nhi\nEOF",
+   "expect": "denied",
+   "shape": "rule: cat <<EOF",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled main.wj < in.txt",
+   "expect": "allowed",
+   "shape": "rule: wj run --compiled main.wj < in",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo \"a > b\"",
+   "expect": "allowed",
+   "shape": "rule: echo \"a > b\"",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo a=b",
+   "expect": "allowed",
+   "shape": "rule: echo a=b",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo a= b",
+   "expect": "allowed",
+   "shape": "rule: echo a= b",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "x=1 echo hi",
+   "expect": "denied",
+   "shape": "rule: x=1 echo hi",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "wj run --compiled main.wj &",
+   "expect": "denied",
+   "shape": "rule: wj run --compiled main.wj &",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo a || echo b",
+   "expect": "allowed",
+   "shape": "rule: echo a || echo b",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "sed -i 's/a/b/' main.wj",
+   "expect": "allowed",
+   "shape": "rule: sed -i 's/a/b/' main.wj",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "cat in.txt | tee out.txt",
+   "expect": "denied",
+   "shape": "rule: cat in.txt | tee out.txt",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  },
+  {
+   "arm": "U7",
+   "command": "echo hi | wc -l",
+   "expect": "allowed",
+   "shape": "rule: echo hi | wc -l",
+   "note": "measured on Claude Code 2.1.331 (macOS)"
+  }
+ ]
+}

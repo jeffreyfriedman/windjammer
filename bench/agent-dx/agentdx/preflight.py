@@ -200,6 +200,9 @@ def run(args, environ=None, load1=None, mem_gb=None, say=print):
               ("memory", check_memory(available_memory_gb() if mem_gb is None else mem_gb, args.min_free_mem_gb)),
               ("events", check_events(cfg, open_event_ids(args.open_bugs), accepted) + bad),
               ("dry-run", dry)]
+    if getattr(args, "permission_probe", False):
+        from . import permprobe
+        checks.append(("permissions", permprobe.run_problems(args)))
     reds = []
     for name, problems in checks:
         say(f"{'RED  ' if problems else 'GREEN'} {name}" + "".join(f"\n      {p}" for p in problems))

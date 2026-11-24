@@ -287,3 +287,9 @@ syntax-error-then-fix run). They contain no LLM output. No live LLM run has been
   misreading of a spec. Specs were tightened wherever authors disagreed.
 - **Hidden is a convention.** See above; the oracle is in-repo.
 - **Machine load.** Wall times and timeouts are meaningful only on a quiet machine; use `AGENTDX_TIMEOUT_SCALE` and compare like with like.
+
+## Permission probe (harness-denials3): measured Claude Code rules, no paid call
+
+`python3 -m agentdx permission-probe` (or `pilot7-preflight ... --permission-probe`) runs the real `claude -p` against a local fake Messages API that answers with one Bash tool_use, with each arm's exact `--allowedTools`, and checks every case of `tests/fixtures/denials/probe_cases.json` (49 shapes). Run it on the machine that runs the pilot: Claude Code's rules differ by version and OS (the PC's pilot-11 `cat in.txt | wj run --compiled main.wj` denials did NOT reproduce on macOS 2.1.331).
+Measured on Claude Code 2.1.331: DENIED are a space followed by `=` (even in quotes), `> file`/`>>`/`2> file`, `$(..)`, backticks, heredocs, `VAR=1 cmd`, `&`, any command not covered by an allow rule (`wj` without an allowed subcommand, `tee`, `pkill`), `cd` or `cat` of a path outside the trial directory. ACCEPTED are `2>&1`, `2>/dev/null`, `<`, `$?`, `$VAR`, `||`, `sed -i`, `timeout N <allowed command>`, absolute paths inside the trial directory. The prompts still ask agents to avoid `$`, `<`, `>`, `timeout`, `pkill` (symmetric, stricter than 2.1.331 needs, because the PC version may differ).
+Rule for program input: pipe it with `printf`; spell a character the check refuses as an octal escape (`=` `\075`, `$` `\044`, `<` `\074`, `>` `\076`), which needs no extra turn; for long input use ONE Write of `in.txt` and `--stdin-file in.txt` (wj) or `cat in.txt | ./main`. The report's `input-file writes per trial` column measures the rule's turn cost per arm.

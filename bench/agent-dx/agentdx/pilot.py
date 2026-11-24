@@ -209,6 +209,7 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     u = _usage(res["json"])
     sp = getattr(agent, "stream_path", None)
     den = DN.summarise(open(sp, errors="replace").read() if sp and os.path.exists(sp) else "", res["json"])
+    input_writes = DN.input_writes(open(sp, errors="replace").read() if sp and os.path.exists(sp) else "")
     never = not any(r["exit"] == 0 for r in an["invocations"] if r["verb"] in S.VERIFY_VERBS)   # no compile/run/check ever succeeded
     cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"
     timed_out = bool(res.get("timed_out"))
@@ -219,7 +220,7 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     tr = {"schema": SCHEMA, "task": task, "arm": arm, "arm_name": A.ARMS[arm]["name"], "trial": trial,
           "model": getattr(agent, "model", None),
           "flags": ["harness-denial"] if (u.get("permission_denials") or den["count"]) else [],
-          "denials": den, "never_compiled": never,
+          "denials": den, "never_compiled": never, "input_writes": input_writes,
           "status": "timeout" if timed_out else "completed", "excluded_from_grading": timed_out,
           "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
           "final_grade": _slim(g["compiled"]), "pass_final": cpass,

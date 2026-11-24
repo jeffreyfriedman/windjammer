@@ -99,6 +99,11 @@ def main(argv=None):
     p7p.add_argument("--open-bugs", default=PF.DEFAULT_OPEN_BUGS)
     p7p.add_argument("--min-free-mem-gb", type=float, default=PF.DEFAULT_MIN_MEM_GB)
     p7p.add_argument("--prior", action="append", default=None)
+    p7p.add_argument("--permission-probe", action="store_true", help="also run the Claude Code permission probe (local fake model, no paid call)")
+    pp = sub.add_parser("permission-probe", help="check every recorded Bash shape against the installed Claude Code with a local fake model (no paid call); exit 1 on a difference")
+    pp.add_argument("--claude", default=None)
+    pp.add_argument("--cases", default=None)
+    pp.add_argument("--jobs", type=int, default=6)
     p7a = sub.add_parser("pilot7-references", help="gate (a): the nine t301-t309 references under `wj run --verify` against their oracle; exit 1 on any red")
     p7a.add_argument("--wj", default=None, help="wj binary (default: AGENTDX_WJ, WJ_BIN, then wj on PATH)")
     p7a.add_argument("--tasks-dir", default=PF.DEFAULT_TASKS, help="directory of t30N_* tasks (default: tasks_set3 beside the harness)")
@@ -135,6 +140,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.cmd == "pilot7-preflight":
         return PF.run(a)
+    if a.cmd == "permission-probe":
+        from . import permprobe
+        return permprobe.run(a)
     if a.cmd == "pilot7-references":
         return PF.run_references(a)
     if a.cmd == "pilot7":

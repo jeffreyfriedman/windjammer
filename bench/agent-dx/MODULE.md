@@ -53,6 +53,7 @@ Python and TypeScript, using identical tasks and one language-neutral oracle. No
 | `pilot7.py`, `pilot7_config.json` | Pilot 7: models x arms x tasks x trials from the config (price table with its date, per-model trial caps, hard cap), `MatrixGuard` (hard cap, per-model projection after N trials), `dry_run` (no LLM: matrix, workspaces, argv, guard simulation, decomposition of recorded trials priced per model). |
 | `spend.py`, `preflight.py` | Pilot 7 spend ledger (`spend.jsonl`, reserved-then-settled, reconciled from stream logs) and the automated launch checks (`pilot7-preflight`). |
 | `pilot7_report.py` | Pilot 7 report per model and arm with task-clustered CIs, the decomposition, and the attribution of the Rust-versus-Windjammer difference for the most expensive model. |
+| `permprobe.py` | Ground-truth probe of Claude Code's don't-ask decisions with a local fake model API (no paid call): `python3 -m agentdx permission-probe` replays tests/fixtures/denials/probe_cases.json; `predict()` is its offline mirror. |
 | `denials.py` | Detects harness permission denials (don't-ask text, other permission denials, capability diagnostics, result `permission_denials`) in a trial stream and records counts, command shapes and whether the first Bash call was denied. |
 | `cli.py` | `python3 -m agentdx <toolchains|gen|baseline|run|pilot|pilot-report|pilot6-report|replay|report|check-workspace>`. |
 
