@@ -6,7 +6,7 @@
 use super::engine::{FuncDef, Interpreter};
 use super::call::Resolved;
 use crate::parser::{EnumPatternBinding, Expression, Pattern, Statement, Type, UnaryOp};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 /// Names the body mutates (`all`), and names it only reassigns whole with `=` (`rebound`).
@@ -23,6 +23,73 @@ impl Muts {
     fn contains(&self, n: &str) -> bool {
         self.all.contains(n)
     }
+}
+
+/// The answer for one function: its inferred `&mut` parameters and whether it mutates `self`.
+type MutFacts = (Rc<Vec<bool>>, bool);
+
+/// Fixpoint state of the mutation analysis over call-graph cycles. A function that calls back into one still being
+/// analysed (`f -> g -> f`) sees that function's PROVISIONAL answer (starts as "mutates nothing"); the cycle's root
+/// re-runs until its own answer stops changing, and no member that depended on an in-progress function is cached early.
+#[derive(Default)]
+pub(crate) struct MutScc {
+    stack: Vec<usize>,
+    prov: HashMap<usize, MutFacts>,
+    /// answers that depend on an in-progress function: (function, answer, lowest stack index depended on)
+    tmp: HashMap<usize, (Rc<FuncDef>, MutFacts, usize)>,
+    low: usize,
+}
+
+/// Mutation facts of `f`, cached on the `FuncDef` once final (never while they still depend on an open cycle).
+pub fn solve(it: &mut Interpreter, f: &Rc<FuncDef>) -> MutFacts {
+    if let Some(m) = f.mutated.get() {
+        return (m.clone(), f.self_mutated.get().copied().unwrap_or(false));
+    }
+    let key = Rc::as_ptr(f) as usize;
+    if let Some(i) = it.mut_scc.stack.iter().position(|k| *k == key) {
+        it.mut_scc.low = it.mut_scc.low.min(i);
+        return it.mut_scc.prov.get(&key).cloned().unwrap_or_else(|| (Rc::new(vec![false; f.params.len()]), false));
+    }
+    if let Some((_, r, l)) = it.mut_scc.tmp.get(&key) {
+        let (r, l) = (r.clone(), *l);
+        it.mut_scc.low = it.mut_scc.low.min(l);
+        return r;
+    }
+    let depth = it.mut_scc.stack.len();
+    let saved_low = it.mut_scc.low;
+    it.mut_scc.stack.push(key);
+    let (res, low) = loop {
+        it.mut_scc.low = usize::MAX;
+        let (params, self_mut) = analyze(it, f);
+        let res: MutFacts = (Rc::new(params), self_mut);
+        let low = it.mut_scc.low;
+        let assumed = it.mut_scc.prov.get(&key).cloned().unwrap_or_else(|| (Rc::new(vec![false; f.params.len()]), false));
+        if low == depth && assumed != res {
+            it.mut_scc.prov.insert(key, res);
+            it.mut_scc.tmp.clear();
+            continue;
+        }
+        break (res, low);
+    };
+    it.mut_scc.stack.pop();
+    it.mut_scc.prov.remove(&key);
+    if low >= depth {
+        // f depends on no open ancestor: final, and so is every cached member of its cycle
+        let done: Vec<usize> = it.mut_scc.tmp.iter().filter(|(_, (_, _, l))| *l >= depth).map(|(k, _)| *k).collect();
+        for k in done {
+            if let Some((g, r, _)) = it.mut_scc.tmp.remove(&k) {
+                let _ = g.mutated.set(r.0);
+                let _ = g.self_mutated.set(r.1);
+            }
+        }
+        let _ = f.mutated.set(res.0.clone());
+        let _ = f.self_mutated.set(res.1);
+        it.mut_scc.low = saved_low;
+    } else {
+        it.mut_scc.tmp.insert(key, (f.clone(), res.clone(), low));
+        it.mut_scc.low = saved_low.min(low);
+    }
+    res
 }
 
 pub fn analyze(it: &mut Interpreter, f: &Rc<FuncDef>) -> (Vec<bool>, bool) {

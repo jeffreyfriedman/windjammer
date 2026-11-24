@@ -1,0 +1,27 @@
+// A cycle ping <-> pong over a parameter: only the leaf mutates it, so every member takes it by `&mut`.
+// expect: len 1 first 7
+struct Bag {
+    items: Vec<int>,
+}
+
+fn leaf(b: Bag) {
+    b.items.push(7)
+}
+
+fn ping(b: Bag, k: int) {
+    if k == 0 {
+        leaf(b)
+        return
+    }
+    pong(b, k - 1)
+}
+
+fn pong(b: Bag, k: int) {
+    ping(b, k)
+}
+
+fn main() {
+    let mut b = Bag { items: Vec::new() }
+    ping(b, 2)
+    println("len ${b.items.len()} first ${b.items[0]}")
+}

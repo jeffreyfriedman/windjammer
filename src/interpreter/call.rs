@@ -1162,27 +1162,11 @@ impl Interpreter {
     // ------------------------------------------------------------------
 
     pub(crate) fn param_mutation(&mut self, f: &Rc<FuncDef>) -> Rc<Vec<bool>> {
-        if let Some(m) = f.mutated.get() {
-            return m.clone();
-        }
-        let key = Rc::as_ptr(f) as usize;
-        if !self.mutating_analysis.insert(key) {
-            return Rc::new(vec![false; f.params.len()]); // recursion: assume not mutated
-        }
-        let (params, self_mut) = analysis::analyze(self, f);
-        self.mutating_analysis.remove(&key);
-        let rc = Rc::new(params);
-        let _ = f.mutated.set(rc.clone());
-        let _ = f.self_mutated.set(self_mut);
-        rc
+        analysis::solve(self, f).0
     }
 
     pub(crate) fn self_mutation(&mut self, f: &Rc<FuncDef>) -> bool {
-        if let Some(b) = f.self_mutated.get() {
-            return *b;
-        }
-        self.param_mutation(f);
-        f.self_mutated.get().copied().unwrap_or(false)
+        analysis::solve(self, f).1
     }
 }
 

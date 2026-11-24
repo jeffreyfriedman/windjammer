@@ -271,3 +271,48 @@ fn main() {
     .unwrap();
     assert_eq!(output.trim(), "1\n2\n4\n5\n7");
 }
+
+// ==========================================
+// Bug: a call-graph cycle f <-> g whose only mutation is in a leaf lost the callee's write to `self`
+// (the cycle members were cached as non-mutating). Both engines must agree with the compiled answer.
+// ==========================================
+
+fn run_engine(src: &str, engine: &str, tag: &str) -> String {
+    let dir = std::env::temp_dir().join(format!("wj_self_cycle_{}_{}", std::process::id(), tag));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("main.wj");
+    std::fs::write(&path, src).unwrap();
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["run", "--interpret", "--no-lint", "--engine", engine])
+        .arg(&path)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+#[test]
+fn call_cycle_mutation_reaches_the_caller_in_every_engine() {
+    let cases = [
+        // (program, expected)
+        (
+            "struct S { v: Vec<int> }\nimpl S {\n fn leaf(self) { self.v.push(1) }\n fn f(self, k: int) { if k == 0 { self.leaf()\n return }\n self.g(k - 1) }\n fn g(self, k: int) { self.f(k) }\n}\nfn main() { let mut s = S { v: Vec::new() }\n s.f(2)\n println(\"${s.v.len()}\") }\n",
+            "1",
+        ),
+        // cycle entered from the other side, and through a field of a parameter
+        (
+            "struct S { v: Vec<int> }\nstruct W { s: S }\nfn leaf(w: W) { w.s.v.push(1) }\nfn p(w: W, k: int) { if k == 0 { leaf(w)\n return }\n q(w, k - 1) }\nfn q(w: W, k: int) { p(w, k) }\nfn main() { let mut w = W { s: S { v: Vec::new() } }\n q(w, 3)\n p(w, 0)\n println(\"${w.s.v.len()}\") }\n",
+            "2",
+        ),
+        // a three-member cycle entered at different members
+        (
+            "struct S { v: Vec<int> }\nimpl S {\n fn leaf(self) { self.v.push(1) }\n fn f(self, k: int) { if k == 0 { self.leaf()\n return }\n self.g(k - 1) }\n fn g(self, k: int) { self.h(k) }\n fn h(self, k: int) { self.f(k) }\n}\nfn main() { let mut s = S { v: Vec::new() }\n s.g(5)\n s.h(0)\n println(\"${s.v.len()}\") }\n",
+            "2",
+        ),
+    ];
+    for (i, (src, want)) in cases.iter().enumerate() {
+        for engine in ["walker", "resolved"] {
+            assert_eq!(&run_engine(src, engine, &format!("{i}{engine}")), want, "case {i}, engine {engine}");
+        }
+    }
+}
