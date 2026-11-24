@@ -274,6 +274,13 @@ impl Collector {
                     self.in_arm(g, i, |c| {
                         c.declare_pattern(&arm.pattern);
                         c.derive(&arm.pattern, &src);
+                        // `match parsed { Ok(w) => .. }` on an owned binding hands `w` over by value: an owned
+                        // value like a `let` (the backend filters the bindings it emits as references).
+                        if matches!(value, Expression::Identifier { .. }) {
+                            let mut bound = Vec::new();
+                            pattern_names(&arm.pattern, &mut bound);
+                            c.let_bound.extend(bound);
+                        }
                         if let Some(guard) = arm.guard {
                             c.expr(guard);
                         }

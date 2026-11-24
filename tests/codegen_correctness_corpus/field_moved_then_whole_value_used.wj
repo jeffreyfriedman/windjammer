@@ -1,0 +1,52 @@
+// Reading a field into another place and then passing the whole value on (also for a value bound by a `match` arm):
+// the field read is a copy, so the value is still whole.
+// expect: leah 3
+// expect: kit 2
+struct World {
+    protagonist: string,
+    flags: Vec<string>,
+}
+
+fn flags_of(w: World) -> Vec<string> {
+    let mut out: Vec<string> = []
+    for f in w.flags { out.push(f) }
+    out
+}
+
+struct S {
+    protagonist: string,
+    flags: Vec<string>,
+}
+
+fn adopt(s: S, w: World) -> S {
+    let mut t = s
+    t.protagonist = w.protagonist
+    t.flags = flags_of(w)
+    t
+}
+
+fn parse_world(name: string) -> Result<World, string> {
+    if name == "" { return Err("empty") }
+    Ok(World { protagonist: name, flags: ["a", "b"] })
+}
+
+fn adopt_parsed(s: S, name: string) -> S {
+    let mut t = s
+    let parsed: Result<World, string> = parse_world(name)
+    match parsed {
+        Err(_e) => t,
+        Ok(w) => {
+            t.protagonist = w.protagonist
+            t.flags = flags_of(w)
+            t
+        },
+    }
+}
+
+fn main() {
+    let w = World { protagonist: "leah", flags: ["a", "b", "c"] }
+    let t = adopt(S { protagonist: "", flags: [] }, w)
+    println("${t.protagonist} ${t.flags.len()}")
+    let u = adopt_parsed(S { protagonist: "", flags: [] }, "kit")
+    println("${u.protagonist} ${u.flags.len()}")
+}

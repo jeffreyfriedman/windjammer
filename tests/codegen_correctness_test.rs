@@ -246,6 +246,7 @@ corpus_tests!(
     local_string_list_contains_text_arg,
     if_arm_param_vs_substring,
     moved_into_tuple_then_read_in_list_literal,
+    field_moved_then_whole_value_used,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:
