@@ -1,0 +1,53 @@
+// `s.len() <op> constant` in conditions: byte length not char count (multi-byte strings), an empty
+// string, a string rebuilt and modified between two length reads in the same condition, every
+// comparison operator, a constant on the left, a reference to the string,
+// and a vector and a map receiver.
+use std::collections::HashMap
+
+fn main() {
+    let mut s = String::new()
+    let e = ""
+    let u = "héllo wörld ✓ 日本語"
+    println("${e.len() == 0} ${e.len() > 0} ${u.len() > 20} ${u.len() >= 31} ${u.len() < 31} ${u.len() <= 30} ${u.len() != 31} ${31 == u.len()}")
+    let mut i = 0
+    let mut hits = 0
+    while i < 60 {
+        s.push_str("é${i}")
+        if s.len() > 40 {
+            hits += 1
+            s = String::new()
+        }
+        if s.len() == 5 || s.len() < 3 {
+            hits += 100
+        }
+        if s.len() >= 7 && s.len() <= 9 {
+            s.push_str("zz")
+            if s.len() >= 9 {
+                hits += 10000
+            }
+        }
+        i += 1
+    }
+    println("${hits} ${s.len()} ${s}")
+    let r = &s
+    if r.len() > 1 {
+        println("ref ${r.len()}")
+    }
+    let mut v: Vec<int> = Vec::new()
+    let mut m: HashMap<string, int> = HashMap::new()
+    let mut k = 0
+    while v.len() < 5 {
+        v.push(k)
+        m.insert("k${k}", k)
+        k += 1
+    }
+    println("${v.len() == 5} ${m.len() >= 5} ${m.len() > 5}")
+    let big = 3000000000
+    if s.len() < big {
+        println("big ok")
+    }
+    let neg = -1
+    if s.len() > neg {
+        println("neg ok")
+    }
+}

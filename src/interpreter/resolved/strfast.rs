@@ -121,14 +121,97 @@ pub(super) fn append_plain(it: &mut Interpreter, b: usize, pieces: &[String], ar
 
 /// `display_string`, appended in place for the values that need no allocation of their own.
 fn display_into(it: &mut Interpreter, v: Value, out: &mut String) -> R<()> {
-    use std::fmt::Write;
     match &v {
-        Value::Int(n, t) if *t != IntTy::U128 => {
-            let _ = write!(out, "{n}");
-        }
+        Value::Int(n, t) if *t != IntTy::U128 => push_int(out, *n),
         Value::Str(s) => out.push_str(s),
         Value::Char(c) => out.push(*c),
         _ => out.push_str(&it.display_string(&v)?),
     }
     Ok(())
+}
+
+/// `n` in decimal appended to `out`: the bytes `{n}` produces for an `i128`, without `core::fmt`. A
+/// sign, then the magnitude's digits two at a time (`u64` arithmetic when it fits, `u128` above).
+pub(super) fn push_int(out: &mut String, n: i128) {
+    const PAIRS: &[u8; 200] = b"0001020304050607080910111213141516171819202122232425262728293031323334353637383940414243444546474849\
+5051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+    let mut buf = [0u8; 40];
+    let mut at = buf.len();
+    let mut m = n.unsigned_abs();
+    while m > u64::MAX as u128 {
+        let (q, r) = (m / 100, (m % 100) as usize);
+        at -= 2;
+        buf[at..at + 2].copy_from_slice(&PAIRS[r * 2..r * 2 + 2]);
+        m = q;
+    }
+    let mut m = m as u64;
+    while m >= 100 {
+        let r = (m % 100) as usize;
+        m /= 100;
+        at -= 2;
+        buf[at..at + 2].copy_from_slice(&PAIRS[r * 2..r * 2 + 2]);
+    }
+    if m >= 10 {
+        at -= 2;
+        buf[at..at + 2].copy_from_slice(&PAIRS[m as usize * 2..m as usize * 2 + 2]);
+    } else {
+        at -= 1;
+        buf[at] = b'0' + m as u8;
+    }
+    if n < 0 {
+        at -= 1;
+        buf[at] = b'-';
+    }
+    if let Ok(digits) = std::str::from_utf8(&buf[at..]) {
+        out.push_str(digits);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::push_int;
+    use std::fmt::Write;
+
+    fn same(n: i128) {
+        let (mut a, mut b) = (String::from("x"), String::from("x"));
+        push_int(&mut a, n);
+        write!(b, "{n}").unwrap();
+        assert_eq!(a, b, "{n}");
+    }
+
+    #[test]
+    fn boundaries_match_core_fmt() {
+        let mut vals = vec![0i128, 1, -1, 9, 10, 11, 99, 100, 101, -9, -10, -99, -100, i128::MIN, i128::MAX, i128::MIN + 1, i128::MAX - 1];
+        for bits in [8u32, 16, 32, 64, 128] {
+            let (lo, hi) = (-(1i128 << (bits - 1).min(126)) , (1i128 << (bits - 1).min(126)));
+            for d in -2..=2 {
+                vals.extend([lo + d, hi + d, (hi - 1) + d]);
+            }
+        }
+        for t in [i8::MIN as i128, i8::MAX as i128, i16::MIN as i128, i16::MAX as i128, i32::MIN as i128, i32::MAX as i128, i64::MIN as i128, i64::MAX as i128, u8::MAX as i128, u16::MAX as i128, u32::MAX as i128, u64::MAX as i128, u64::MAX as i128 + 1, u64::MAX as i128 - 1] {
+            vals.extend([t - 1, t, t + 1, -t]);
+        }
+        let mut p = 1i128;
+        while let Some(next) = p.checked_mul(10) {
+            vals.extend([p - 1, p, p + 1, -p, -(p - 1), -(p + 1)]);
+            p = next;
+        }
+        for v in vals {
+            same(v);
+        }
+    }
+
+    #[test]
+    fn random_sample_matches_core_fmt() {
+        // xorshift with a fixed seed; each draw is shifted to every magnitude from 1 to 128 bits
+        let mut x: u128 = 0x9E37_79B9_7F4A_7C15_F39C_C060_5CED_C834;
+        for i in 0..200_000u32 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let v = (x >> (i % 128)) as i128;
+            same(v);
+            same(-v);
+        }
+    }
 }

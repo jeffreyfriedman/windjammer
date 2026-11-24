@@ -1,0 +1,68 @@
+// `push_str("${n}")` of integers of every width and sign through the resolved engine's integer
+// display path: zero, one, powers of ten and their neighbours, every MIN and MAX, a value that is
+// negative in the narrow type, a value in the upper half of the unsigned range, a second and third
+// argument in one template, nested formats, a width-specified format (the old route), and a
+// string appended to between the pushes.
+fn main() {
+    let mut s = String::new()
+    let a: i8 = -128
+    let b: i8 = 127
+    let c: i16 = -32768
+    let d: i16 = 32767
+    let e: i32 = -2147483648
+    let f: i32 = 2147483647
+    let g: i64 = -9223372036854775807 - 1
+    let h: i64 = 9223372036854775807
+    let one: i128 = 1
+    let half: i128 = one << 126
+    let j: i128 = half - 1 + half
+    let i: i128 = -j - 1
+    let k: isize = -9223372036854775807 - 1
+    let l: isize = 9223372036854775807
+    let m: u8 = 255
+    let n: u16 = 65535
+    let o: u32 = 4294967295
+    let p: u64 = 18446744073709551615
+    let uone: u128 = 1
+    let uhalf: u128 = uone << 127
+    let q: u128 = uhalf - 1 + uhalf
+    let r: usize = 4000000000
+    let z8: u8 = 0
+    let z: i128 = 0
+    s.push_str("${a}|${b}|${c}|${d}|${e}|${f}|")
+    s.push_str("${g}|${h}|${i}|${j}|${k}|${l}|")
+    s.push_str("${m}|${n}|${o}|${p}|${q}|${r}|${z8}|${z}")
+    println(s)
+    let mut t = String::new()
+    let mut x: i64 = 1
+    let mut count = 0
+    while count < 18 {
+        t.push_str("${x}/${x - 1}/${x + 1}/${-x};")
+        x = x * 10
+        count += 1
+    }
+    println(t)
+    let mut u = String::new()
+    let mut y: u64 = 1
+    let mut w = 0
+    while w < 63 {
+        u.push_str("${y},${y - 1},${y + 1},")
+        y = y * 2
+        w += 1
+    }
+    println(u)
+    let inner = "[${a}:${p}]"
+    let mut v = String::from("start")
+    v.push_str("${inner}<${b}-${m}>")
+    v.push_str("${42:>6}|${-42:06}|${255:x}|${5:#b}|${a:>6}|${p:x}")
+    v.push_str("${x},${i},${q}")
+    println(v)
+    let mut acc = String::new()
+    let mut n2: i32 = -50
+    while n2 <= 50 {
+        acc.push_str("${n2}")
+        acc.push_str("${acc.len()};")
+        n2 += 7
+    }
+    println(acc)
+}
