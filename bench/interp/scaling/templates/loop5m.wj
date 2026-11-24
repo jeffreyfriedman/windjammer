@@ -1,0 +1,13 @@
+use std::time
+fn main() {
+    let t0 = time::now_unix_nano()
+    let mut total: int = 0
+    let mut i: int = 0
+    while i < @n@ {
+        let x = i * 3 + 1
+        if x % 7 == 0 { total += x } else { total -= 1 }
+        i += 1
+    }
+    eprintln("STEADY_NS ${time::now_unix_nano() - t0}")
+    println("${total}")
+}
