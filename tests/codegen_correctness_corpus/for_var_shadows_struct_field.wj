@@ -1,0 +1,27 @@
+// A `for` variable is a local: inside an `impl` whose struct has a field of the same name, `v.split(..)` reads
+// the loop variable, never `self.v`.
+// expect: 5
+// expect: 2
+struct Tally {
+    v: int,
+    seen: int,
+}
+
+impl Tally {
+    fn count_parts(self, votes: Vec<string>) -> int {
+        let mut n = 0
+        for v in votes {
+            let parts: Vec<string> = v.split(":").collect()
+            if parts.len() == 0 { return 0 }
+            n += parts.len() as int
+        }
+        self.seen = n
+        n
+    }
+}
+
+fn main() {
+    let mut t = Tally { v: 1, seen: 0 }
+    println("${t.count_parts(["a:b", "c:d:e"])}")
+    println("${t.v + 1}")
+}
