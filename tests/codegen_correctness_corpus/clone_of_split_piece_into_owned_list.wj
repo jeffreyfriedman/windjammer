@@ -1,0 +1,11 @@
+// A piece produced by `split` is borrowed text; `.clone()` of it is an owned string, so it can be pushed into a
+// `Vec<string>`.
+// expect: 3 a-b-c
+fn main() {
+    let line = "a b c"
+    let mut v: Vec<string> = Vec::new()
+    for w in line.split(" ") {
+        v.push(w.clone())
+    }
+    println("${v.len()} ${v.join("-")}")
+}
