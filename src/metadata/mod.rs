@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 mod crate_metadata;
+mod projectless_key;
+pub use projectless_key::{program_key as projectless_program_key, set_program_entry};
 pub mod legacy_sidecars;
 mod function_metadata;
 mod generated_rust_signatures;

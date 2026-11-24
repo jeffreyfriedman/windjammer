@@ -18,6 +18,7 @@ fn pin_start(cmd: &Commands) -> Option<std::path::PathBuf> {
 fn run_toolchain(cmd: &Commands) {
     use windjammer::toolchain;
     if let Some(start) = pin_start(cmd) {
+        windjammer::metadata::set_program_entry(&start);
         if let Err(msg) = toolchain::pin::enforce(&start) {
             eprintln!("{msg}");
             std::process::exit(1);

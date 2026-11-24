@@ -18,3 +18,8 @@ pub(crate) fn dir_listed() {
 pub(crate) fn meta_file_read() {
     event("file");
 }
+
+/// One closure file of a manifest-less program read for its cache key (`projectless_key`).
+pub(crate) fn closure_file() {
+    event("closure");
+}
