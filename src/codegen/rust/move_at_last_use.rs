@@ -200,6 +200,24 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `expr` is a field path of an owned plain binding that is read again after the statement being
+    /// generated (liveness, `read_after`): consuming the field here would leave the binding partly moved,
+    /// so the consuming read (`data.hash.unwrap_or(..)`) copies the field instead.
+    pub(in crate::codegen::rust) fn field_root_read_again(&self, expr: &crate::parser::Expression<'_>) -> bool {
+        let mut root = expr;
+        while let crate::parser::Expression::FieldAccess { object, .. } = root {
+            root = object;
+        }
+        let crate::parser::Expression::Identifier { name, .. } = root else { return false };
+        if name == "self" || self.auto_clone_analysis.is_none() || !self.clone_facts.plain_bindings.contains(name) {
+            return false;
+        }
+        if !self.binding_emits_owned_value(name) {
+            return false;
+        }
+        self.clone_facts.stmt_stack.last().is_some_and(|stmt| self.clone_facts.read_after.get(stmt).is_some_and(|names| names.contains(name)))
+    }
+
     pub(in crate::codegen::rust) fn copy_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
         self.copy_if_read_again_at(expr, emitted, MoveSite::Argument)
     }
