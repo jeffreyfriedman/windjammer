@@ -15,7 +15,8 @@ const WJ: &str = env!("CARGO_BIN_EXE_wj");
 /// (program, the fast paths it must take).
 const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/structs.wj", &["inline"]),
-    ("bench/interp/hashmap.wj", &["mapjit"]),
+    ("bench/interp/hashmap.wj", &["mapjit", "mapleanget", "mapleanins"]),
+    ("tests/engine_parity/jit_map_lean.wj", &["mapleanget", "mapleanins"]),
     ("tests/engine_parity/jit_map_ops.wj", &["mapjit"]),
     ("bench/interp/sieve.wj", &["packed", "packedidx", "packedstore"]),
     ("bench/interp/nbody.wj", &["vecresolve", "rowview", "placeargs"]),
@@ -121,4 +122,13 @@ fn the_scalar_pipeline_takes_and_declines_exactly_these_chains() {
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+/// The lean map helpers (`jit/rt.rs::lean_map`) serve integer-keyed maps only: a program whose maps have string keys
+/// or struct values never counts one (its lookups run in the closure engine), and the same program with every lean
+/// helper switched off in a debug build still prints what the walker prints.
+#[test]
+fn the_lean_map_helpers_decline_other_shapes() {
+    let r = run("tests/engine_parity/map_get_wild.wj", "resolved", None);
+    assert_eq!((count(&r, "mapleanget").unwrap_or(0), count(&r, "mapleanins").unwrap_or(0)), (0, 0), "{:?}", r.counts);
 }

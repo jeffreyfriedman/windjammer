@@ -670,6 +670,9 @@ pub(crate) struct FastHits {
     pub(crate) placeargs: u64,
     /// Map lookups and inserts lowered to machine code (`jit/lower_map.rs`, counted when a unit is compiled).
     pub(crate) mapjit: u64,
+    /// Map lookups / inserts machine code served without the general helper (`jit/rt.rs::direct_map`).
+    pub(crate) mapleanget: u64,
+    pub(crate) mapleanins: u64,
     /// Closures a compiled function created without a walker island (`resolved/closure.rs::create`).
     pub(crate) closurecreate: u64,
     /// Free names of a compiled closure given a copy of their value instead of a reference (`resolved/closure.rs`).

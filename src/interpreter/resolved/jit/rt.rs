@@ -31,6 +31,9 @@ pub(crate) struct Ctx {
     /// statement, the only statements that can rebind a reference.
     /// `None`: the local holds its value directly (also remembered, so a plain local is looked at once).
     pub(crate) cells: Vec<(i64, Option<crate::interpreter::value::Slot>)>,
+    /// `cells` found again without a scan: by `slot % CELL_HITS`, the slot plus one (0: empty) and its index in `cells`
+    /// (`NO_CELL`: the local holds its value directly). Cleared with `cells`, never filled with anything but what `cells` holds.
+    pub(crate) cell_hit: [(i64, u32); CELL_HITS],
     /// Packed vectors machine code stores into without a call (`View`), by `slot % VIEWS`.
     pub(crate) views: [View; VIEWS],
     /// Stores machine code made through a view (added to `FastHits::packedstore` when the unit leaves).
@@ -45,12 +48,15 @@ pub(crate) struct Ctx {
     pub(crate) row_hits: i64,
     /// Whether the last `map_get` found its key (read by machine code after the call).
     pub(crate) found: i64,
+    /// Map lookups / inserts the lean helpers served (added to `FastHits::mapleanget` / `mapleanins` when the unit leaves).
+    pub(crate) lean_gets: i64,
+    pub(crate) lean_inss: i64,
 }
 
 impl Ctx {
     pub(crate) fn new(it: *mut Interpreter, base: usize, plan: *const super::lower::Plan, reg: *const crate::interpreter::resolved::osr::Reg) -> Ctx {
         let (rows, row_tbls) = (Default::default(), Default::default());
-        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, found: 0 }
+        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), cell_hit: [(0, 0); CELL_HITS], views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, found: 0, lean_gets: 0, lean_inss: 0 }
     }
 }
 
@@ -67,6 +73,8 @@ pub(crate) struct View {
 }
 
 pub(crate) const VIEWS: usize = 4;
+const CELL_HITS: usize = 8;
+const NO_CELL: u32 = u32::MAX;
 pub(crate) const FAIL: i32 = std::mem::offset_of!(Ctx, fail) as i32;
 pub(crate) const VIEW_AT: i32 = std::mem::offset_of!(Ctx, views) as i32;
 pub(crate) const VIEW_STORES: i32 = std::mem::offset_of!(Ctx, view_stores) as i32;
@@ -374,9 +382,79 @@ fn int_ty(kt: i64) -> Option<crate::interpreter::int::IntTy> {
     }
 }
 
+/// The map the local at `slot` holds, through at most plain references (`local_cell`, resolved once per unit run
+/// and cleared before every closure-run statement, the only statements that can rebind a reference): the lean map
+/// helpers' shape guard. The cell's CONTENT is read on every call (nothing of the map is cached), so a map replaced,
+/// cleared or mutated by closure-run code is seen by the next call. A local that is not a map reached this way (a
+/// projection, a lock guard, `Rc`, a non-map) takes the general helper.
+#[inline(always)]
+unsafe fn lean_map<R>(c: *mut Ctx, slot: i64, f: impl FnOnce(&mut Rc<crate::interpreter::kmap::KMap>) -> R) -> Option<R> {
+    // SAFETY: as in `with_slot`; `f` sees only the map, never the context.
+    if let Some(i) = unsafe { local_cell(c, slot) } {
+        let ctx = unsafe { &mut *c };
+        let cell = ctx.cells[i].1.as_ref().expect("resolved");
+        let mut g = cell.try_borrow_mut().ok()?;
+        return match &mut *g {
+            Value::Map(km) => Some(f(km)),
+            _ => None,
+        };
+    }
+    let ctx = unsafe { &*c };
+    let it = unsafe { &mut *ctx.it };
+    match it.rstack.get_mut(ctx.base + slot as usize) {
+        Some(Value::Map(km)) => Some(f(km)),
+        _ => None,
+    }
+}
+
+/// The bits of a scalar map value at type `want`: `bits`, inlined (the lean helpers call it once per lookup).
+#[inline(always)]
+fn lean_bits(x: &Value, want: i64) -> Option<i64> {
+    match (x, from_code(want)?) {
+        (Value::Int(i, vt), Ty::Int(t)) if *vt == t => {
+            if super::kinds::unsigned_repr(t) {
+                u64::try_from(*i).ok().map(|u| u as i64)
+            } else {
+                i64::try_from(*i).ok()
+            }
+        }
+        (x, want) => bits(x, want),
+    }
+}
+
 /// `m.get(&k)` of a map local (`mapfast::MapGet`'s lookup): the value's bits at type `want` and `Ctx::found`.
 /// Fails, changing nothing, when the local holds no map or the value is not a scalar of type `want`.
+/// A map the local reaches (directly or through plain references) is read without the `with_slot`/`peek` machinery (`lean_map`).
 pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64, want: i64) -> i64 {
+    if let (Some(t), false) = (int_ty(kt), cfg!(debug_assertions) && unsafe { (*(*c).it).fast_off("mapleanget") }) {
+        let r = unsafe {
+            lean_map(c, slot, |km| match km.get_int(int_value(k, t), t) {
+                None => Some((0, 0)),
+                Some(x) => lean_bits(x, want).map(|b| (b, 1)),
+            })
+        };
+        // SAFETY: as in `with_slot`.
+        let ctx = unsafe { &mut *c };
+        match r {
+            Some(Some((b, found))) => {
+                ctx.found = found;
+                ctx.lean_gets += 1;
+                return b;
+            }
+            // a map whose value is not a scalar of `want`: fails, nothing changed
+            Some(None) => {
+                ctx.found = 0;
+                ctx.fail = 1;
+                return 0;
+            }
+            None => {}
+        }
+    }
+    unsafe { map_get_general(c, slot, k, kt, want) }
+}
+
+/// `map_get` for a map behind references (or a local that holds no map: fails).
+unsafe fn map_get_general(c: *mut Ctx, slot: i64, k: i64, kt: i64, want: i64) -> i64 {
     let mut found = 0;
     let r = unsafe {
         with_slot(c, slot, |v| {
@@ -400,7 +478,20 @@ pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64,
 
 /// `m.insert(k, x)` statement of a map local (`mapfast::insert_stmt`): the map made unique, the key and the
 /// value stored as the walker's values. Fails, changing nothing, when the local holds no map.
+/// A map the local reaches (directly or through plain references) is written without the `with_slot`/`poke` machinery (`lean_map`).
 pub(crate) unsafe extern "C" fn map_insert(c: *mut Ctx, slot: i64, k: i64, kt: i64, x: i64, xt: i64) -> i64 {
+    if let (Some(t), Some(xty), false) = (int_ty(kt), from_code(xt), cfg!(debug_assertions) && unsafe { (*(*c).it).fast_off("mapleanins") }) {
+        let v = value(x, xty);
+        if unsafe { lean_map(c, slot, |km| Rc::make_mut(km).set_int(int_value(k, t), t, v)) }.is_some() {
+            unsafe { (*c).lean_inss += 1 };
+            return 0;
+        }
+    }
+    unsafe { map_insert_general(c, slot, k, kt, x, xt) }
+}
+
+/// `map_insert` for a map behind references (or a local that holds no map: fails).
+unsafe fn map_insert_general(c: *mut Ctx, slot: i64, k: i64, kt: i64, x: i64, xt: i64) -> i64 {
     unsafe {
         with_slot(c, slot, |v| {
             let t = int_ty(kt)?;
@@ -458,6 +549,7 @@ pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
     // (test-only mutant `vecstale`, debug builds: keep the stale resolution)
     if !mutant(unsafe { &*ctx.it }, "vecstale") {
         ctx.cells.clear();
+        ctx.cell_hit = [(0, 0); CELL_HITS];
     }
     ctx.views = Default::default();
     ctx.clear_rows();
@@ -557,19 +649,36 @@ fn packed_set(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, k: usize, x: i6
 /// The cell a local's value lives in when the local reaches it through plain references (no projection,
 /// no lock guard), resolved once per unit run; `None`: the local holds its value directly, or the chain
 /// has a projection (the element path walks it as before).
+#[inline(always)]
 unsafe fn local_cell(c: *mut Ctx, slot: i64) -> Option<usize> {
     // SAFETY: as in `with_slot`.
+    let h = unsafe { (*c).cell_hit[slot as usize % CELL_HITS] };
+    if h.0 == slot + 1 {
+        return (h.1 != NO_CELL).then_some(h.1 as usize);
+    }
+    unsafe { local_cell_miss(c, slot) }
+}
+
+/// `local_cell` when the slot is not in the hit table: the scan of `cells`, or the resolution (and remembering it).
+#[inline(never)]
+unsafe fn local_cell_miss(c: *mut Ctx, slot: i64) -> Option<usize> {
+    // SAFETY: as in `with_slot`.
     let ctx = unsafe { &mut *c };
-    if let Some(i) = ctx.cells.iter().position(|(s, _)| *s == slot) {
-        return ctx.cells[i].1.is_some().then_some(i);
-    }
-    let it = unsafe { &*ctx.it };
-    if it.fast_off("vecresolve") {
-        return None;
-    }
-    let cell = resolve_cell(it.rstack.get(ctx.base + slot as usize)?);
-    ctx.cells.push((slot, cell));
-    ctx.cells[ctx.cells.len() - 1].1.is_some().then_some(ctx.cells.len() - 1)
+    let found = match ctx.cells.iter().position(|(s, _)| *s == slot) {
+        Some(i) => i,
+        None => {
+            let it = unsafe { &*ctx.it };
+            if it.fast_off("vecresolve") {
+                return None;
+            }
+            let cell = resolve_cell(it.rstack.get(ctx.base + slot as usize)?);
+            ctx.cells.push((slot, cell));
+            ctx.cells.len() - 1
+        }
+    };
+    let i = ctx.cells[found].1.is_some().then_some(found);
+    ctx.cell_hit[slot as usize % CELL_HITS] = (slot + 1, i.map_or(NO_CELL, |i| i as u32));
+    i
 }
 
 /// The innermost cell behind a chain of plain references, or `None` (a plain value, a projection or a guard).
