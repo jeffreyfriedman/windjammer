@@ -1,6 +1,10 @@
 // Builds the browser playground's interpreter and holds it to the native one on the book's own samples (ADR-0034).
 //
-//   wj run scripts/book/playground_check.wj -- WJ_BIN WJ_DOCS_BIN SCRATCH_DIR [--skip-build] [--only SUBSTR]
+//   wj run scripts/book/playground_check.wj -- WJ_BIN WJ_DOCS_BIN SCRATCH_DIR [--skip-build] [--smoke-only] [--only SUBSTR]
+//
+// 0. SMOKE (always, cheap): the built wasm RUNS a hello program and a two-file project through `run-node.mjs` and must exit 0
+//    with exactly the expected stdout (a build that links but panics at run time, as `env::vars_os` did on wasm32, fails here);
+//    `--smoke-only` stops after this step (no wj-docs, no book samples: WJ_DOCS_BIN may then be `-`);
 //
 // 1. `cargo build --release --target wasm32-unknown-unknown` in crates/windjammer-playground, copied to
 //    docs/book/playground/windjammer_playground.wasm (skipped with --skip-build; the file must then exist);
@@ -10,6 +14,7 @@
 //    `ts,run` companion: playground == `node --experimental-strip-types`).
 // Run from the repository root. Exit status 1 when any step fails.
 use std::env
+use std::fs
 use std::process
 use std::strings
 
@@ -39,6 +44,39 @@ fn capture(command: string) -> string {
     }
 }
 
+// Runs one program through the built wasm (run-node.mjs, the page's own code path): exit status 0 and exactly `want` on stdout.
+fn smoke_case(site: string, wasm: string, input: string, want: string, label: string) -> bool {
+    let command = "node " + quote(site + "/run-node.mjs") + " " + quote(input) + " --wasm " + quote(wasm) + " 2>&1"
+    match process.run_with_output("sh", ["-c", command]) {
+        Ok(o) => {
+            if o.status != 0 {
+                println("FAIL smoke ${label}: exit ${o.status}: ${strings.trim(o.stdout + o.stderr)}")
+                return false
+            }
+            if strings.trim(o.stdout) != want {
+                println("FAIL smoke ${label}: stdout is `${strings.trim(o.stdout)}`, expected `${want}`")
+                return false
+            }
+            println("smoke ${label}: ok")
+            true
+        },
+        Err(e) => {
+            println("FAIL smoke ${label}: cannot run node: ${e}")
+            false
+        },
+    }
+}
+
+// The cheap run-time gate of the browser playground: hello and a two-file project through the built wasm.
+fn smoke(site: string, wasm: string, scratch: string) -> bool {
+    let dir = scratch + "/smoke"
+    sh("rm -rf " + quote(dir) + " && mkdir -p " + quote(dir + "/two"))
+    let _ = fs.write(dir + "/hello.wj", "fn main() {\n    println(\"playground smoke ok\")\n}\n")
+    let _ = fs.write(dir + "/two/main.wj", "use helper::double\n\nfn main() {\n    println(\"d \" + double(21).to_string())\n}\n")
+    let _ = fs.write(dir + "/two/helper.wj", "pub fn double(x: int) -> int {\n    x * 2\n}\n")
+    smoke_case(site, wasm, dir + "/hello.wj", "playground smoke ok", "hello") && smoke_case(site, wasm, dir + "/two", "d 42", "two-file project")
+}
+
 fn main() {
     let args: Vec<string> = env::args().collect()
     if args.len() < 4 {
@@ -49,11 +87,14 @@ fn main() {
     let docs = args[2]
     let scratch = args[3]
     let mut build = true
+    let mut smoke_only = false
     let mut only = ""
     let mut i = 4
     while i < args.len() {
         if args[i] == "--skip-build" {
             build = false
+        } else if args[i] == "--smoke-only" {
+            smoke_only = true
         } else if args[i] == "--only" && i + 1 < args.len() {
             only = args[i + 1]
             i += 1
@@ -81,6 +122,13 @@ fn main() {
         process.exit(1)
     }
     sh("ls -l " + quote(wasm))
+    if !smoke(site, wasm, scratch) {
+        process.exit(1)
+    }
+    if smoke_only {
+        println("playground check (smoke only): ok")
+        process.exit(0)
+    }
     if sh("node " + quote(site + "/build-ts-sandbox.mjs") + " --check") != 0 {
         println("FAIL ts-sandbox.html is stale")
         process.exit(1)
