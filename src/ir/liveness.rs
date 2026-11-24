@@ -66,6 +66,9 @@ struct Collector {
     /// Bindings the solver typed as scalars (numbers, `bool`, `char`): they hold no borrow, so a value they
     /// were computed from (`let fa = a.as_float()`) is not kept alive by them.
     scalars: BTreeSet<String>,
+    /// Per name, the latest mention seq of any binding derived from it, transitively ([`derived_horizon`]); filled on
+    /// first use, after collection (the queries `borrowed_by_later_live_binding` makes are all after `stmts`).
+    horizon: std::cell::RefCell<BTreeMap<String, Option<usize>>>,
 }
 
 /// A statement as `read_after` sees it.
@@ -645,19 +648,32 @@ pub fn captures(params: &[String], body: &Expression<'_>) -> BTreeSet<String> {
 /// A binding derived (transitively) from `name` is mentioned after `seq`: it may hold a
 /// borrow of `name`, so `name` must stay alive.
 fn borrowed_by_later_live_binding(c: &Collector, name: &str, seq: usize) -> bool {
+    let horizon = c.horizon.borrow().get(name).copied();
+    let horizon = horizon.unwrap_or_else(|| {
+        let h = derived_horizon(c, name);
+        c.horizon.borrow_mut().insert(name.to_string(), h);
+        h
+    });
+    horizon.is_some_and(|last| last > seq)
+}
+
+/// The latest mention seq among the bindings derived (transitively) from `name`, other than `name` itself and
+/// scalars; `None` when none is mentioned. It does not depend on the query's `seq`, so the walk over every
+/// `derived_from` entry runs once per name instead of once per (statement, name) query.
+fn derived_horizon(c: &Collector, name: &str) -> Option<usize> {
     let mut seen = BTreeSet::new();
+    let mut latest: Option<usize> = None;
     let mut work = vec![name.to_string()];
     while let Some(src) = work.pop() {
         for (binding, froms) in &c.derived_from {
             if binding != name && !c.scalars.contains(binding) && froms.contains(&src) && seen.insert(binding.clone()) {
-                if c.mentions.get(binding).is_some_and(|ms| ms.iter().any(|m| m.seq > seq)) {
-                    return true;
-                }
+                let last = c.mentions.get(binding).and_then(|ms| ms.iter().map(|m| m.seq).max());
+                latest = latest.max(last);
                 work.push(binding.clone());
             }
         }
     }
-    false
+    latest
 }
 
 #[cfg(test)]
@@ -729,6 +745,72 @@ mod tests {
         }
         decl.body.iter().for_each(|x| s(x, &set, &mut out));
         out
+    }
+
+    /// The per-name horizon answers exactly what the original per-query walk answered, for every name and seq.
+    fn reference_borrowed(c: &Collector, name: &str, seq: usize) -> bool {
+        let mut seen = BTreeSet::new();
+        let mut work = vec![name.to_string()];
+        while let Some(src) = work.pop() {
+            for (binding, froms) in &c.derived_from {
+                if binding != name && !c.scalars.contains(binding) && froms.contains(&src) && seen.insert(binding.clone()) {
+                    if c.mentions.get(binding).is_some_and(|ms| ms.iter().any(|m| m.seq > seq)) {
+                        return true;
+                    }
+                    work.push(binding.clone());
+                }
+            }
+        }
+        false
+    }
+
+    #[test]
+    fn derived_horizon_equals_the_per_query_walk() {
+        for src in ["fn main() { let a = vec![1]\n let b = a.iter()\n println(\"${b}\")\n let a = b\n println(\"${a}\")\n}\n", "fn main() {\n let a = vec![1]\n let b = a.iter()\n let c = b.map(|x| x)\n let a = b\n let n = a.len()\n let d = n + 1\n let mut e = c\n for i in 0..3 {\n let f = e\n println(\"${f}${d}${a.len()}\")\n }\n let g = d\n println(\"${g}\")\n}\n"] {
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program.items.iter().find_map(|i| match i { crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl), _ => None }).unwrap();
+        let body: Vec<&Statement<'_>> = decl.body.to_vec();
+        for scalars in [BTreeSet::new(), ["n".to_string()].into_iter().collect::<BTreeSet<String>>(), ["d".to_string(), "e".to_string()].into_iter().collect()] {
+            let c = collect_typed(&[], &body, &scalars);
+            assert!(!c.derived_from.is_empty());
+            let mut some_true = false;
+            for name in c.mentions.keys().chain(c.derived_from.keys()) {
+                for seq in 0..=c.seq + 1 {
+                    let got = borrowed_by_later_live_binding(&c, name, seq);
+                    some_true |= got;
+                    assert_eq!(got, reference_borrowed(&c, name, seq), "{name} at {seq} with scalars {scalars:?}");
+                }
+            }
+            assert!(some_true);
+        }
+        }
+    }
+
+    /// A shadowing rebinding derived from a binding that was itself derived from the same name puts `a` into its own
+    /// derived set (`a -> b -> a`). `a`'s own later mentions must not count as "a derived binding is still live"
+    /// (that would keep `a` alive until its own last mention, i.e. never last): the `binding != name` exclusion matters.
+    #[test]
+    fn a_name_derived_from_itself_does_not_borrow_itself() {
+        let src = "fn main() {\n let a = vec![1]\n let b = a.iter()\n let a = b.map(|x| x)\n println(\"${a}\")\n println(\"${a}\")\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program.items.iter().find_map(|i| match i { crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl), _ => None }).unwrap();
+        let body: Vec<&Statement<'_>> = decl.body.to_vec();
+        let c = collect_typed(&[], &body, &BTreeSet::new());
+        assert!(c.derived_from["a"].contains("b") && c.derived_from["b"].contains("a"), "{:?}", c.derived_from);
+        let last_b = c.mentions["b"].iter().map(|m| m.seq).max().unwrap();
+        let last_a = c.mentions["a"].iter().map(|m| m.seq).max().unwrap();
+        assert!(last_a > last_b);
+        // After b's last mention nothing derived from `a` (other than `a` itself) is live, although `a` is mentioned later.
+        assert!(!borrowed_by_later_live_binding(&c, "a", last_b));
+        for seq in 0..=c.seq + 1 {
+            assert_eq!(borrowed_by_later_live_binding(&c, "a", seq), reference_borrowed(&c, "a", seq), "seq {seq}");
+        }
     }
 
     #[test]
