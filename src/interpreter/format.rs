@@ -316,7 +316,7 @@ impl Interpreter {
                         out.push_str(&pad(ind + 1));
                         self.debug_fmt_leaf(&k.0, true, ind + 1, out, leaf)?;
                         out.push_str(": ");
-                        self.debug_fmt_leaf(val, true, ind + 1, out, leaf)?;
+                        self.debug_fmt_leaf(&val, true, ind + 1, out, leaf)?;
                         out.push_str(",\n");
                     }
                     out.push_str(&pad(ind));
@@ -329,7 +329,7 @@ impl Interpreter {
                         }
                         self.debug_fmt_leaf(&k.0, false, ind, out, leaf)?;
                         out.push_str(": ");
-                        self.debug_fmt_leaf(val, false, ind, out, leaf)?;
+                        self.debug_fmt_leaf(&val, false, ind, out, leaf)?;
                     }
                     out.push('}');
                 }

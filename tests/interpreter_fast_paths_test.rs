@@ -15,7 +15,8 @@ const WJ: &str = env!("CARGO_BIN_EXE_wj");
 /// (program, the fast paths it must take).
 const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/structs.wj", &["inline"]),
-    ("bench/interp/hashmap.wj", &["mapjit", "mapleanget", "mapleanins"]),
+    ("bench/interp/hashmap.wj", &["mapjit", "mapleanget", "mapleanins", "mapleantyped"]),
+    ("tests/engine_parity/kmap_intdense_sweep.wj", &["mapleanget", "mapleanins", "mapleantyped"]),
     ("tests/engine_parity/jit_map_lean.wj", &["mapleanget", "mapleanins"]),
     ("tests/engine_parity/jit_map_ops.wj", &["mapjit"]),
     ("bench/interp/sieve.wj", &["packed", "packedidx", "packedstore", "packedread"]),
@@ -133,4 +134,13 @@ fn the_scalar_pipeline_takes_and_declines_exactly_these_chains() {
 fn the_lean_map_helpers_decline_other_shapes() {
     let r = run("tests/engine_parity/map_get_wild.wj", "resolved", None);
     assert_eq!((count(&r, "mapleanget").unwrap_or(0), count(&r, "mapleanins").unwrap_or(0)), (0, 0), "{:?}", r.counts);
+}
+
+/// Typed integer arrays (`kmap.rs` IntDense) hold 64-bit signed values under integer keys only: the lean helpers answer
+/// from one for the kernel's map and never for i32 / u64 values or negative keys (those maps stay on the ordinary store).
+#[test]
+fn typed_arrays_are_only_for_64_bit_signed_int_values_and_keys_in_range() {
+    let r = run("tests/engine_parity/kmap_intdense_widths.wj", "resolved", None);
+    assert!(count(&r, "mapleanget").unwrap_or(0) > 0, "{:?}", r.counts);
+    assert_eq!(count(&r, "mapleantyped").unwrap_or(0), 0, "{:?}", r.counts);
 }

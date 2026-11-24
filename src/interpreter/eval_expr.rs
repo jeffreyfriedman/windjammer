@@ -470,8 +470,7 @@ impl Interpreter {
                 Ok(Value::str(s[*a as usize..*b as usize].to_string()))
             }
             (Value::Map(m), k) => m
-                .get(&Key(k.clone()))
-                .cloned()
+                .get_cloned(&Key(k.clone()))
                 .ok_or_else(|| panic_ctl("key not found in map")),
             (o, i) => Err(unsupported(format!("indexing {} with {}", o.type_name(), i.type_name()))),
         }
