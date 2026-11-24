@@ -1,0 +1,30 @@
+// Lazy map/filter chains over compiled closures: side effects run in element order (interleaved across the
+// stages), `take` stops pulling early, a captured mutable is updated by a stage, a non-scalar item survives the
+// filter, and a closure that panics mid-stream stops the chain at that element.
+fn main() {
+    let v = [1, 2, 3, 4, 5, 6]
+    let mut trace: Vec<int> = Vec::new()
+    let mut calls = 0
+    let r = 2
+    let out: Vec<int> = v.map(|x| {
+        calls += 1
+        trace.push(x)
+        x * r
+    }).filter(|x| x % 4 == 0).map(|x| x / 4).collect()
+    println("${out:?} ${calls} ${trace:?}")
+
+    let mut pulled = 0
+    let first: Vec<int> = v.map(|x| {
+        pulled += 1
+        x + 100
+    }).filter(|x| x % 2 == 0).take(2).collect()
+    println("${first:?} ${pulled}")
+
+    let words = ["a", "bb", "ccc", "dd"]
+    let kept: Vec<string> = words.filter(|w| w.len() == 2).map(|w| w + "!").collect()
+    println("${kept:?}")
+
+    let zero = 0
+    let total: int = v.map(|x| 12 / (x - 4 + zero)).sum()
+    println("${total}")
+}
