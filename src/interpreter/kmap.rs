@@ -480,12 +480,39 @@ impl KMap {
     }
 
     /// `insert` of an integer key whose old value (if any) is dropped: an array slot written in place.
+    /// `set_int` of an integer value given as bits (machine code's insert): `true` when a typed array took it in
+    /// place (the value's type is the array's, the slot is there, present or absent with this key type), `false`
+    /// with nothing changed: the caller then builds the `Value` and calls `set_int`.
+    #[inline]
+    pub fn set_int_bits(&mut self, i: i128, t: IntTy, x: i64, xt: IntTy) -> bool {
+        let Store::IntDense(d) = &mut self.store else { return false };
+        match usize::try_from(i) {
+            Ok(n) if xt == d.vt && n < d.vals.len() => {
+                let (w, bit) = (n >> 6, 1u64 << (n & 63));
+                if d.present[w] & bit != 0 {
+                    d.vals[n] = x;
+                    true
+                } else if t == d.kt {
+                    d.present[w] |= bit;
+                    d.vals[n] = x;
+                    d.len += 1;
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
     pub fn set_int(&mut self, i: i128, t: IntTy, v: Value) {
         if let (Store::IntDense(d), Value::Int(x, xt)) = (&mut self.store, &v) {
             if let (Ok(n), Ok(xv)) = (usize::try_from(i), i64::try_from(*x)) {
                 // an array of this value type, the slot there (a present one, or an absent one of this key type)
                 if *xt == d.vt && (d.has(n) || (t == d.kt && n < d.vals.len())) {
                     d.put(n, xv);
+                    // an integer owns nothing: no drop glue to run
+                    std::mem::forget(v);
                     return;
                 }
             }
@@ -980,7 +1007,14 @@ mod tests {
                     ),
                     40..=49 => {
                         if let Value::Int(i, t) = key.0 {
-                            p.typed.set_int(i, t, x.clone());
+                            // machine code's bits entry first (when the value is a plain int), else the `Value` one
+                            let taken = match &x {
+                                Value::Int(b, bt) if step % 2 == 0 => i64::try_from(*b).is_ok_and(|b| p.typed.set_int_bits(i, t, b, *bt)),
+                                _ => false,
+                            };
+                            if !taken {
+                                p.typed.set_int(i, t, x.clone());
+                            }
                             p.plain.set_int(i, t, x);
                         }
                     }

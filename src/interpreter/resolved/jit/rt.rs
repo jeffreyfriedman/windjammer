@@ -527,9 +527,9 @@ pub(crate) unsafe extern "C" fn map_get(c: *mut Ctx, slot: i64, k: i64, kt: i64,
             lean_map(c, slot, |km| match km.typed_get(int_value(k, t)) {
                 // a typed array (`KMap::IntDense`): the bits are the stored word, the value is built only to be checked
                 Some(None) => Some((0, miss as i64, 1)),
-                Some(Some((x, vt))) => {
-                    lean_bits(&Value::Int(x as i128, vt), want).map(|b| (b, 1, 1))
-                }
+                // the array's own type is the wanted one (signed, so the bits are the word): no `Value` built
+                Some(Some((x, vt))) if from_code(want) == Some(Ty::Int(vt)) => Some((x, 1, 1)),
+                Some(Some((x, vt))) => lean_bits(&Value::Int(x as i128, vt), want).map(|b| (b, 1, 1)),
                 None => match km.get_int(int_value(k, t), t) {
                     // `miss` is the test-only mutant `mapleanfound`: an absent key reads as present (value 0)
                     None => Some((0, miss as i64, 0)),
@@ -586,8 +586,19 @@ unsafe fn map_get_general(c: *mut Ctx, slot: i64, k: i64, kt: i64, want: i64) ->
 /// A map the local reaches (directly or through plain references) is written without the `with_slot`/`poke` machinery (`lean_map`).
 pub(crate) unsafe extern "C" fn map_insert(c: *mut Ctx, slot: i64, k: i64, kt: i64, x: i64, xt: i64) -> i64 {
     if let (Some(t), Some(xty), false) = (int_ty(kt), from_code(xt), cfg!(debug_assertions) && unsafe { (*(*c).it).fast_off("mapleanins") }) {
-        let v = value(x, xty);
-        if unsafe { lean_map(c, slot, |km| Rc::make_mut(km).set_int(int_value(k, t), t, v)) }.is_some() {
+        let done = unsafe {
+            lean_map(c, slot, |km| {
+                let km = Rc::make_mut(km);
+                // a typed array of this value type takes the bits in place (a signed 64-bit type: the bits are the word)
+                if let Ty::Int(xi) = xty {
+                    if km.set_int_bits(int_value(k, t), t, x, xi) {
+                        return;
+                    }
+                }
+                km.set_int(int_value(k, t), t, value(x, xty))
+            })
+        };
+        if done.is_some() {
             unsafe { (*c).lean_inss += 1 };
             return 0;
         }
