@@ -30,8 +30,16 @@ pub fn enabled(name: &str) -> bool {
 }
 
 /// The one read of the environment in this module (a name lookup and the prefix snapshot below both go through it).
+/// `wasm32-unknown-unknown` has no environment and `vars_os` panics there, so the browser playground sees none.
 fn all() -> impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)> {
-    std::env::vars_os()
+    #[cfg(target_arch = "wasm32")]
+    {
+        Vec::<(std::ffi::OsString, std::ffi::OsString)>::new().into_iter()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::vars_os()
+    }
 }
 
 fn read(name: &str) -> Option<std::ffi::OsString> {
