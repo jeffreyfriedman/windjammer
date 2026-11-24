@@ -1,0 +1,7 @@
+// A zero divisor mid-stream panics at that element with the boxed path's message.
+fn main() {
+    let v: Vec<int> = [4, 3, 2, 1, 0, 5]
+    println("start")
+    let s: int = v.map(|x| 12 / x).filter(|x| x > 2).sum()
+    println("${s}")
+}

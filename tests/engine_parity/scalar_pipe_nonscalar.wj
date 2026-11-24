@@ -1,0 +1,22 @@
+// Strings, tuples, floats, bools and casts keep the boxed path; a map to a non-integer does too. (The last two
+// integer sections, u64 elements and an empty result, are typed.)
+fn main() {
+    let words = ["a", "bb", "ccc", "dd"]
+    let lens: Vec<int> = words.map(|w| w.len()).collect()
+    println("${lens:?}")
+    let fl: Vec<f64> = [1.5, 2.5, 3.5]
+    let fs: f64 = fl.map(|x| x * 2.0).filter(|x| x > 3.0).sum()
+    println("${fs}")
+    let v: Vec<int> = [1, 2, 3, 4]
+    let as_f: Vec<f64> = v.map(|x| x as f64 * 0.5).collect()
+    println("${as_f:?}")
+    let b: Vec<bool> = v.map(|x| x > 2).collect()
+    println("${b:?}")
+    let big: Vec<u64> = [1, 2, 3]
+    let bs: u64 = big.map(|x| x * 3).sum()
+    println("${bs}")
+    let ts: Vec<(int, int)> = v.map(|x| (x, x * x)).collect()
+    println("${ts:?}")
+    let n: int = v.map(|x| x * 2).filter(|x| x > 100).sum()
+    println("${n}")
+}

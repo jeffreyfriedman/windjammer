@@ -1,0 +1,30 @@
+// map/filter chains of pure integer closures over packed integers or a range: drained without a `Value` per
+// element. Results, captured values, mixed literal widths, empty input and a source that is partly consumed.
+fn main() {
+    let v: Vec<int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let r = 3
+    let s: int = v.map(|x| x * r).filter(|x| x % 2 == 0).map(|x| x / 2 + 1).sum()
+    println("${s}")
+    let c: Vec<int> = v.filter(|x| *x > r).map(|x| x - r).collect()
+    println("${c:?}")
+    let n = v.map(|x| x + 1).filter(|x| x % 3 != 0).count()
+    println("${n}")
+    let w: Vec<i32> = [10, 20, 30, 40]
+    let k: i64 = 7
+    let t: i32 = w.map(|x| x * 2 + 1).filter(|x| x > 30).sum()
+    println("${t}")
+    let e: Vec<int> = Vec::new()
+    let z: int = e.map(|x| x * 2).filter(|x| x > 0).sum()
+    println("${z}")
+    let rs: int = (0..20).map(|x| x * x).filter(|x| x % 2 == 1).sum()
+    println("${rs}")
+    let total: int = (1..=5).map(|x| x * k).sum()
+    println("${total}")
+    let it = v.map(|x| x * 2)
+    let again: Vec<int> = it.filter(|x| x > 10).collect()
+    println("${again:?}")
+    let mut it2 = v.map(|x| x + 100)
+    let first = it2.next()
+    let rest: Vec<int> = it2.filter(|x| x % 2 == 0).collect()
+    println("${first:?} ${rest:?}")
+}

@@ -1,0 +1,9 @@
+// An i32 stage overflows at the 4th element: the panic message and the elements before it are the boxed path's.
+fn main() {
+    let v: Vec<i32> = [1000, 2000, 3000, 2000000000, 5]
+    let ok: Vec<i32> = v.filter(|x| x < 5000).map(|x| x * 2).collect()
+    println("${ok:?}")
+    println("start")
+    let s: i32 = v.map(|x| x + 1).map(|x| x * 2).sum()
+    println("${s}")
+}

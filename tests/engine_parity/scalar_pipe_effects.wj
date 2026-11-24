@@ -1,0 +1,15 @@
+// A closure that prints or pushes is never typed: effects happen in element order across the stages.
+fn main() {
+    let v: Vec<int> = [1, 2, 3, 4, 5, 6]
+    let mut trace: Vec<int> = Vec::new()
+    let out: Vec<int> = v.map(|x| {
+        trace.push(x)
+        x * 2
+    }).filter(|x| x % 4 == 0).map(|x| x + 1).collect()
+    println("${out:?} ${trace:?}")
+    let s: int = v.map(|x| {
+        println("seen ${x}")
+        x
+    }).filter(|x| x > 4).sum()
+    println("${s}")
+}
