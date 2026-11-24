@@ -192,6 +192,8 @@ pub struct Interpreter {
     pub(crate) jit_mutant: Option<String>,
     /// How often each fast path ran (reported with `WJ_JIT_DEBUG`, so a gate can tell one that silently stopped).
     pub(crate) fast: FastHits,
+    /// The buffer `push_str("${..}")` formats into (`strfast.rs`): taken for the statement, returned cleared; empty while a nested statement holds it.
+    pub(crate) fmt_scratch: String,
     /// How often the resolved engine left its compiled form for a slower one (reported with `WJ_JIT_DEBUG`, so a
     /// gate can hold each count where it is: a fallback that grows is a regression no output shows).
     pub(crate) fallback: Fallbacks,
@@ -343,6 +345,7 @@ impl Interpreter {
             jit_debug: false,
             jit_mutant: None,
             fast: FastHits::default(),
+            fmt_scratch: String::new(),
             fallback: Fallbacks::default(),
             #[cfg(feature = "jit")]
             jit: None,

@@ -54,12 +54,22 @@ pub(super) fn push_str_stmt(cx: &mut Cx, s: S) -> Option<Code> {
                 return generic(it, b);
             }
             it.mark(floc);
-            // formatted aside first: a failing argument or `Display` leaves the string as it was
-            let mut out = String::new();
-            append_plain(it, b, &pieces, &args, &mut out)?;
-            it.mark(loc);
-            it.fast.pushfmt += 1;
-            local_str(&mut it.rstack[b + slot], |s| Rc::make_mut(s).push_str(&out));
+            // formatted aside first: a failing argument or `Display` leaves the string as it was. The buffer is
+            // the interpreter's scratch, taken (a nested statement in an argument finds it empty and makes its
+            // own) and given back cleared on every exit; a huge one is not kept.
+            let mut out = std::mem::take(&mut it.fmt_scratch);
+            out.clear();
+            let done = append_plain(it, b, &pieces, &args, &mut out);
+            if done.is_ok() {
+                it.mark(loc);
+                it.fast.pushfmt += 1;
+                local_str(&mut it.rstack[b + slot], |s| Rc::make_mut(s).push_str(&out));
+            }
+            out.clear();
+            if out.capacity() <= SCRATCH_KEEP {
+                it.fmt_scratch = out;
+            }
+            done?;
             Ok(Value::Unit)
         }));
     }
@@ -81,6 +91,9 @@ pub(super) fn push_str_stmt(cx: &mut Cx, s: S) -> Option<Code> {
         Ok(Value::Unit)
     }))
 }
+
+/// The largest scratch buffer kept between statements (bytes of capacity).
+const SCRATCH_KEEP: usize = 1 << 16;
 
 type Loc = Option<&'static crate::source_map::Location>;
 
@@ -113,7 +126,13 @@ pub(super) fn append_plain(it: &mut Interpreter, b: usize, pieces: &[String], ar
     };
     out.push_str(&pieces[0]);
     for (v, piece) in vals.iter().zip(&pieces[1..]) {
-        display_into(it, deref_value(v.clone())?, out)?;
+        match v {
+            // the plain scalars and strings are read in place; any other value is dereferenced as before
+            Value::Int(n, t) if *t != IntTy::U128 => push_int(out, *n),
+            Value::Str(s) => out.push_str(s),
+            Value::Char(c) => out.push(*c),
+            v => display_into(it, deref_value(v.clone())?, out)?,
+        }
         out.push_str(piece);
     }
     Ok(())
