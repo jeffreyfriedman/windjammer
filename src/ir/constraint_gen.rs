@@ -154,6 +154,8 @@ struct AstConstraintWalker<'a, 'ast> {
     /// Static (parser) types of bindings, by their variable: the annotation, or the type of the initializer
     /// (option C stage C1: receiver types for the typed core surface).
     var_static_types: HashMap<ConstraintVar, Type>,
+    /// The declared type a `match` value has when its arms agree on one (by the scrutinee's node).
+    match_static_types: HashMap<usize, Type>,
     core_surface: Option<&'a crate::typing::core_surface::CoreSurface>,
     /// Negated integer literals and loop bindings whose element type is not modelled.
     numeric_unmodelled: numeric::Unmodelled,
@@ -362,6 +364,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             bind_counts: std::collections::BTreeMap::new(),
             scopes: vec![HashMap::new()],
             var_static_types: HashMap::new(),
+            match_static_types: HashMap::new(),
             core_surface: None,
             binding_vars: Vec::new(),
             numeric_unmodelled: Default::default(),

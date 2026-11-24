@@ -1,0 +1,51 @@
+// A `for i in 0..e.len()` counter over a list bound by `match` on an Option is one integer width at
+// every use: passed to an `int` parameter, used as an index, or both (it was `usize` at the call).
+// expect: 36 21 57 0
+
+fn weigh(i: int, tag: string) -> int {
+    i * 10 + tag.len()
+}
+
+fn by_call(o: Option<Vec<int>>) -> int {
+    let e = match o {
+        None => [],
+        Some(x) => x,
+    }
+    let mut sum = 0
+    for i in 0..e.len() {
+        sum = sum + weigh(i, "ab")
+    }
+    sum
+}
+
+fn by_index(o: Option<Vec<int>>) -> int {
+    let e = match o {
+        None => [],
+        Some(x) => x,
+    }
+    let mut sum = 0
+    for i in 0..e.len() {
+        sum = sum + e[i]
+    }
+    sum
+}
+
+fn by_both(o: Option<Vec<int>>) -> int {
+    let e = match o {
+        None => [],
+        Some(x) => x,
+    }
+    let mut sum = 0
+    for i in 0..e.len() {
+        sum = sum + weigh(i, "ab") + e[i]
+    }
+    sum
+}
+
+fn items() -> Vec<int> {
+    [5, 7, 9]
+}
+
+fn main() {
+    println("${by_call(Some(items()))} ${by_index(Some(items()))} ${by_both(Some(items()))} ${by_both(None)}")
+}

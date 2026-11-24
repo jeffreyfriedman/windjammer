@@ -178,6 +178,27 @@ fn the_documented_workaround_builds_and_is_not_reported() {
     assert!(rustc_rejects(&rust).is_none(), "{rust}");
 }
 
+/// A loop counter over a list bound by `match` on an Option is one width where it is passed and indexed:
+/// `wj check` is clean and `wj build` emits Rust rustc accepts (check and build agree).
+#[test]
+fn loop_counter_over_a_match_bound_list_has_one_width() {
+    let tmp = tempfile::tempdir().unwrap();
+    let f = tmp.path().join("loopvar.wj");
+    std::fs::write(
+        &f,
+        "fn fn_c(i: int, s: string) { }\nfn take(i: int) { }\n\
+         fn call_only(o: Option<Vec<int>>) {\n    let e = match o {\n        None => [],\n        Some(x) => x,\n    }\n    for i in 0..e.len() { fn_c(i, \"s1\") }\n}\n\
+         fn index_only(o: Option<Vec<int>>) -> int {\n    let e = match o {\n        None => [],\n        Some(x) => x,\n    }\n    let mut t = 0\n    for i in 0..e.len() { t = t + e[i] }\n    t\n}\n\
+         fn both(o: Option<Vec<int>>) -> int {\n    let e = match o {\n        None => [],\n        Some(x) => x,\n    }\n    let mut t = 0\n    for i in 0..e.len() { fn_c(i, \"s1\")\n        t = t + e[i] }\n    t\n}\n\
+         fn one_arg(o: Option<Vec<int>>) {\n    let e = match o {\n        None => [],\n        Some(x) => x,\n    }\n    for i in 0..e.len() { take(i) }\n}\n\
+         fn main() { call_only(None) }\n",
+    )
+    .unwrap();
+    assert!(predicted_widths(&f).is_empty(), "wj check must not predict a width clash");
+    let rust = built_rust(&f).expect("builds");
+    assert!(rustc_rejects(&rust).is_none(), "{rust}");
+}
+
 #[test]
 fn predictions_across_the_corpora() {
     let root = root();
@@ -211,7 +232,6 @@ fn predictions_across_the_corpora() {
     let pinned = [
         "examples/syntax_tests/99_error_test/main.wj 1",
         "examples/testing_examples.wj 3",
-        "examples/verified/hashset_basics.wj 2",
         "examples/verified/prog_lru_cache.wj 2",
         "tests/check_negative/mutants/algo_caesar_cipher__string_annotated_int.wj 1",
         "tests/check_negative/mutants/algo_roman_numerals__string_annotated_int.wj 1",
@@ -237,18 +257,13 @@ fn predictions_across_the_corpora() {
         "tests/diagnostics_oracle/check/numeric_string_to_int.wj 1",
         "tests/dogfood/voxel_raymarch.wj 4",
         "tests/drift_corpus/repros/closure_string_param_literal.wj 1",
-        "tests/drift_corpus/repros/explicit_ref_literal_arg.wj 2",
         // `int_element_compared_with_len_and_used_as_index` and `struct_field_read_moves_literal_to_i32` were pinned here while
         // rustc rejected their build; the width-13 merge (23231c430) fixed the emitted widths, so they are no longer predicted.
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
         "tests/effects/corpus/fs_helper_and_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
-        // rustc rejects the build with two E0308 (a width mix): a width bug the program exposes, measured and pinned until fixed
-        "tests/engine_parity/jit_map_ops.wj 2",
-        "tests/engine_parity/map_get_match.wj 2",
+        // rustc rejects the build with an E0308 (a width mix): a width bug the program exposes, measured and pinned until fixed
         "tests/engine_parity/match_arms.wj 1",
-        "tests/engine_parity/match_value.wj 3",
-        "tests/engine_parity/option_arm_values.wj 1",
         "tests/error_system/test_type_mismatch.wj 1",
         "tests/error_system_e2e/test_type_errors.wj 1",
         "tests/fixtures/library_multipass/postgres_query_vec_params.wj 1",
