@@ -1,0 +1,17 @@
+// An `if`/`else` value whose arms are a `string` slice and the `string` parameter itself is one owned `string`.
+// expect: x true
+// expect: x false
+fn bare(name: string) -> string {
+    if name.starts_with("!") { name.substring(1, name.len()) } else { name }
+}
+
+fn known(name: string) -> bool {
+    let names = ["x", "y"]
+    let b = if name.starts_with("!") { name.substring(1, name.len()) } else { name }
+    names.contains(b)
+}
+
+fn main() {
+    println("${bare("!x")} ${known("!x")}")
+    println("${bare("x")} ${known("z")}")
+}
