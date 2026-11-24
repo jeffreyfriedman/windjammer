@@ -99,8 +99,17 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> BTreeSet<u32
         }
     }
     let u = &fc.unmodelled;
-    for &v in u.loop_bindings.iter().chain(&u.unknown_lengths).chain(&u.unknown_fields).chain(&u.opaque) {
+    for &v in u.loop_bindings.iter().chain(&u.unknown_lengths).chain(&u.unknown_fields) {
         held.extend(view.class(v));
+    }
+    // A value passed where the walk cannot see the expected type (a callee with no signature: a function of another
+    // module the lone file does not load) is held only while nothing fixed its width. A class some use fixed
+    // (`k` declared `int`, so `k * 2` is an `int`) keeps that width whatever the formal is: Rust takes both operands
+    // of `*` at one type, so the literal beside `k` must not fall back to the legacy `i32`.
+    for &v in &u.opaque {
+        if result.defaulted.get(v.0 as usize).copied().unwrap_or(true) {
+            held.extend(view.class(v));
+        }
     }
     // Bindings of one name with different widths are not named by one NUM-LOCAL-WIDTH fact (see `publish`); their
     // classes are still published, and each read carries its own binding's width (NUM-USE-WIDTH).
@@ -414,10 +423,18 @@ mod tests {
     }
 
     /// A value passed to a call the walk cannot type is opaque: its class (and the class of its elements) stays
-    /// with the legacy deciders instead of taking the default.
+    /// with the legacy deciders instead of taking the default (a class a use fixed keeps its width: see
+    /// `unresolved_callee_argument_keeps_fixed_width`).
     #[test]
     fn values_passed_to_unknown_calls_are_not_published() {
         let f = facts("pub fn f() {\n    let v = [1, 2]\n    mystery(v, 3)\n}\n", "f");
         assert!(f.literal_widths.is_empty(), "{:?}", f.literal_widths);
+    }
+
+    /// `let a = f(k * 2)` with `f` unresolved and `k` declared `int`: the literal is an `int` like `k`.
+    #[test]
+    fn unresolved_callee_argument_keeps_fixed_width() {
+        let f = facts("pub fn f(n: int) {\n    let mut k = 0\n    while k < n {\n        let a = mystery(k * 2)\n        k += 1\n    }\n}\n", "f");
+        assert!(f.literal_widths.values().any(|w| *w == BaseType::I64), "{:?}", f.literal_widths);
     }
 }

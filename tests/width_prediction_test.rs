@@ -332,3 +332,26 @@ fn text_inside_a_list_is_not_reported_as_a_width() {
     assert!(d[0].help.iter().all(|h| !h.contains("`int`")) && d[0].help.iter().any(|h| h.contains("&str")), "{:?}", d[0].help);
     assert!(d[0].notes.iter().any(|n| n.contains("family C")), "{:?}", d[0].notes);
 }
+
+/// A file of a crate that imports a function of another module of the crate (`use crate::util::read_word`) and is
+/// checked alone, before any build left the module's signature behind: the callee is unresolved, and the literal in
+/// `read_word(buf, k * 2)` is an `int` like `k` (declared by `buf.len() as int`), never the legacy `i32`.
+#[test]
+fn literal_beside_int_in_argument_of_unresolved_import_is_int() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = |rel: &str, text: &str| {
+        let p = dir.path().join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    w("wj.toml", "[package]\nname = \"crate-import-let-int-literal\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    w("src/lib.wj", "pub mod util\n");
+    w("src/util.wj", "pub fn read_word(buf: Vec<u8>, offset: int) -> int {\n    buf[offset as usize] as int\n}\n");
+    let main = "use crate::util::read_word\n\nfn main() {\n    let buf: Vec<u8> = [1, 2, 3, 4, 5, 6, 7, 8]\n    let n = buf.len() as int\n    let mut k = 0\n    while k < n / 2 {\n        let x = read_word(buf, k * 2)\n        assert_eq(x, k * 2 + 1)\n        k += 1\n    }\n}\n";
+    w("tests/use_repro.wj", main);
+    let path = dir.path().join("tests/use_repro.wj");
+    let found = predicted_widths(&path);
+    assert!(found.is_empty(), "{found:?}");
+    let rust = built_rust(&path).expect("the lone file builds");
+    assert!(rust.contains("k * 2_i64") && !rust.contains("_i32"), "{rust}");
+}
