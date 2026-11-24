@@ -198,6 +198,7 @@ corpus_tests!(
     substring_tail_value,
     text_slice_in_every_position,
     callable_struct_fields,
+    match_or_pattern_return_arm_not_if_let_tail,
     dyn_fn_signature,
     slice_bounds_from_find_index,
     int_cast_operand_not_promoted_to_float,
