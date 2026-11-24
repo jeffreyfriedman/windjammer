@@ -374,7 +374,10 @@ impl IntInference {
             .function_signatures
             .iter()
             .filter(|(func_name, (params, _))| {
-                func_name.split("::").last() == Some(method)
+                // `ends_with` is necessary for the last segment to equal `method`; it spares building a
+                // `split("::")` searcher for the (many) keys that cannot match.
+                func_name.ends_with(method)
+                    && func_name.split("::").last() == Some(method)
                     && (params.len() == arg_count + 1 || params.len() == arg_count)
                     && Self::key_may_be_method_of(func_name, params, arg_count, &receiver_type)
             })
