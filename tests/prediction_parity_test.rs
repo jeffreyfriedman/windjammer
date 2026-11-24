@@ -141,11 +141,14 @@ fn the_differential_fails_when_the_in_process_predictor_drops_a_family() {
     // corpus program that still has a family-B prediction; B is retired from the check when none has one (its last
     // repro, explicit_ref_literal_arg.wj, compiles since the map-key borrow fix).
     let family_b = corpus().into_iter().find(|f| predicted_widths_via(f, false).0.iter().any(|d| family(d) == 'B'));
+    // family C is retired from the check the same way when no corpus program has one: its last repro,
+    // closure_string_param_literal.wj, compiles since a let-bound closure's call converts its arguments.
+    let family_c = corpus().into_iter().find(|f| predicted_widths_via(f, false).0.iter().any(|d| family(d) == 'C'));
     let mut cases: Vec<(PathBuf, char)> = vec![
         (r.join("tests/drift_corpus/repros/let_literal_captured_by_closure.wj"), 'A'),
-        (r.join("tests/drift_corpus/repros/closure_string_param_literal.wj"), 'C'),
     ];
     cases.extend(family_b.map(|f| (f, 'B')));
+    cases.extend(family_c.map(|f| (f, 'C')));
     for (file, fam) in cases {
         let file = file.display().to_string();
         let files = vec![PathBuf::from(&file)];

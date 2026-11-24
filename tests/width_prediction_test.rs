@@ -120,9 +120,8 @@ fn drift_repros_of_the_families_are_predicted() {
         ("let_literal_captured_by_closure.wj", 5),
         // `shadow_match_binding_literal` and `shadowed_option_literal_arms` are no longer here: `wj build` (the
         // configuration the prediction now builds with) emits `1_i64` for both and rustc accepts them
-        // family C (`String` against `&str`); family B (`&3` dropped on a map key) is fixed: explicit_ref_literal_arg.wj
-        // is no longer predicted
-        ("closure_string_param_literal.wj", 6),
+        // family C (`String` against `&str`) at a call of a let-bound closure is fixed: closure_string_param_literal.wj is no
+        // longer predicted; family B (`&3` dropped on a map key) is fixed: explicit_ref_literal_arg.wj is no longer predicted
     ] {
         let d = predicted_widths(&repros.join(f));
         assert!(!d.is_empty(), "{f}: no prediction");
@@ -249,18 +248,16 @@ fn predictions_across_the_corpora() {
         "tests/check_negative/mutants/strings_build__string_annotated_int.wj 1",
         "tests/check_negative/mutants/strings_format_specs__string_annotated_int.wj 1",
         "tests/check_negative/mutants/strings_unicode__string_annotated_int.wj 1",
-        "tests/conformance_programs/174_closure_mut_capture.wj 3",
+        "tests/conformance_programs/174_closure_mut_capture.wj 1",
         "tests/conformance_programs/98_bignum_factorial.wj 1",
         "tests/diagnostics/cases/let_string_to_int.wj 1",
         "tests/diagnostics/cases/numeric_string_to_int.wj 1",
         "tests/diagnostics_oracle/check/let_string_to_int.wj 1",
         "tests/diagnostics_oracle/check/numeric_string_to_int.wj 1",
         "tests/dogfood/voxel_raymarch.wj 4",
-        "tests/drift_corpus/repros/closure_string_param_literal.wj 1",
         // `int_element_compared_with_len_and_used_as_index` and `struct_field_read_moves_literal_to_i32` were pinned here while
         // rustc rejected their build; the width-13 merge (23231c430) fixed the emitted widths, so they are no longer predicted.
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
-        "tests/effects/corpus/fs_helper_and_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
         // rustc rejects the build with an E0308 (a width mix): a width bug the program exposes, measured and pinned until fixed
         "tests/engine_parity/match_arms.wj 1",
