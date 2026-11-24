@@ -1,0 +1,28 @@
+// A value moved into a returned tuple and read by a later element (inside a list literal's call argument) is copied
+// for the earlier use: Rust evaluates the elements in order.
+// expect: 3:set
+struct Ev {
+    kind: string,
+    detail: string,
+}
+
+fn ev(kind: string, detail: string) -> Ev {
+    Ev { kind: kind, detail: detail }
+}
+
+struct S {
+    flags: Vec<string>,
+}
+
+fn set_flags(state: S, value: string) -> (S, Vec<Ev>) {
+    let mut s = state
+    s.flags.push("a")
+    s.flags.push("b")
+    s.flags.push("c")
+    return (s, [ev("set", "${s.flags.len()}:${value}")])
+}
+
+fn main() {
+    let r = set_flags(S { flags: [] }, "set")
+    println("${r.1[0].detail}")
+}

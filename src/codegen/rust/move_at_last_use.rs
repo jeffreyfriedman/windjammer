@@ -119,9 +119,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// its name) of a known non-Copy owned value that is read again (later in the statement, after
     /// it, or in the next loop iteration; `ir::liveness`): the move copies instead. Everything else
     /// passes through unchanged. With the liveness mutation (nothing read again) this never fires.
-    /// The one CLONE-USE-AFTER-MOVE decision, for every consuming position. `site` only says which reads
-    /// count as "again": an element of a collection, tuple or struct literal ignores other reads in the
-    /// same statement (they may be in an exclusive `match` arm: `Ok(_) => (tx, true), Err(_) => (tx, false)`).
+    /// The one CLONE-USE-AFTER-MOVE decision, for every consuming position. A read later in the same statement
+    /// counts as "again" (`reread_in` already leaves out sibling `match`/`if` arms: `Ok(_) => (tx, true), Err(_) => (tx, false)`).
     pub(in crate::codegen::rust) fn copy_if_read_again_at(&self, expr: &crate::parser::Expression<'_>, emitted: String, site: MoveSite) -> String {
         // Never copy a value without `Clone`, whichever rule proposed it (a binding, a field such as a
         // channel end): the move stays, and `wj check` reports the later use (WJ0007) instead of rustc
@@ -155,7 +154,9 @@ impl<'ast> CodeGenerator<'ast> {
             return emitted;
         }
         let node = crate::ir::numeric_defaults::node_id(expr);
-        let again_in_stmt = site == MoveSite::Argument && self.clone_facts.reread_stack.last().is_some_and(|r| r.contains(&node));
+        // `reread_in` already leaves out reads in a sibling `match`/`if` arm, so a literal element read again later in
+        // its own statement (`(s, [ev(s.len())])`: Rust moves the first slot before the second reads it) is copied too.
+        let again_in_stmt = self.clone_facts.reread_stack.last().is_some_and(|r| r.contains(&node));
         let again_after = match self.clone_facts.stmt_stack.last() {
             Some(stmt) => self.clone_facts.read_after.get(stmt).is_some_and(|names| names.contains(name)),
             None => false,
