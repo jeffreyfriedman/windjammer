@@ -1,0 +1,38 @@
+// The same non-Copy struct, bound by a match arm, passed twice by value in one call.
+// expect: 10 6 bad
+struct Data {
+    name: string,
+    k: i32,
+    items: Vec<string>,
+}
+
+struct Out {
+    items: Vec<string>,
+    total: i32,
+}
+
+fn parse(name: string, k: i32) -> Result<Data, string> {
+    if name == "" { return Err("bad") }
+    Ok(Data { name: name, k: k, items: ["x", "y"] })
+}
+
+fn eat(d: Data) -> Out {
+    Out { items: d.items, total: d.k + d.name.len() as i32 }
+}
+
+fn both(a: Data, b: Data, extra: i32) -> i32 {
+    let x = eat(a)
+    let y = eat(b)
+    x.total + y.total + x.items.len() as i32 + y.items.len() as i32 + extra
+}
+
+pub fn twice(name: string, k: i32) -> string {
+    match parse(name, k) {
+        Err(e) => e,
+        Ok(d) => "${both(d, d, 0)}",
+    }
+}
+
+fn main() {
+    println("${twice("n", 2)} ${twice("n", 0)} ${twice("", 1)}")
+}
