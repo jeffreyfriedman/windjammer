@@ -240,6 +240,7 @@ float | is_nan | x.is_nan() -> bool | not-a-number test
 float | is_finite | x.is_finite() -> bool | neither infinite nor NaN
 float | is_infinite | x.is_infinite() -> bool | infinity test
 float | is_sign_negative | x.is_sign_negative() -> bool | sign bit is set
+float | is_sign_positive | x.is_sign_positive() -> bool | sign bit is clear
 float | copysign | x.copysign(y: float) -> float | x with the sign of y
 float | mul_add | x.mul_add(a: float, b: float) -> float | x*a + b
 float | rem_euclid | x.rem_euclid(y: float) -> float | non-negative remainder

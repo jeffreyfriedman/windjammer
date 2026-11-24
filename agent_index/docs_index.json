@@ -1861,6 +1861,17 @@
   {
     "kind": "builtin",
     "module": "float",
+    "name": "is_sign_positive",
+    "signature": "x.is_sign_positive() -> bool",
+    "source": "agent_index/builtins.txt",
+    "summary": "sign bit is clear",
+    "tags": [
+      "float"
+    ]
+  },
+  {
+    "kind": "builtin",
+    "module": "float",
     "name": "log",
     "signature": "x.log(base: float) -> float",
     "source": "agent_index/builtins.txt",

@@ -146,11 +146,11 @@ fn is_inside(c: &Collected<'_>, module: DefId, anc: DefId) -> bool {
 pub fn implicit_reexports(r: &ResolvedProgram<'_>) -> Vec<ImplicitReexport> {
     let c = &r.collected;
     let mut out: Vec<ImplicitReexport> = Vec::new();
-    let mut push = |gaps: Vec<(DefId, DefId, DefId, String)>, module: DefId, written: String, location: Option<Location>| {
+    let mut push = |gaps: Vec<(DefId, DefId, DefId, String)>, module: DefId, written: String, at: Option<&Location>| {
         for (reexporter, child, def, name) in gaps {
-            let dup = out.iter().any(|o| o.reexporter == reexporter && o.def == def && o.written == written && o.location.as_ref().map(|l| (&l.file, l.line)) == location.as_ref().map(|l| (&l.file, l.line)));
+            let dup = out.iter().any(|o| o.reexporter == reexporter && o.def == def && o.written == written && o.location.as_ref().map(|l| (&l.file, l.line)) == at.map(|l| (&l.file, l.line)));
             if !dup {
-                out.push(ImplicitReexport { reexporter, child, def, name, written: written.clone(), location: location.clone(), inside_reexporter: is_inside(c, module, reexporter) });
+                out.push(ImplicitReexport { reexporter, child, def, name, written: written.clone(), location: at.cloned(), inside_reexporter: is_inside(c, module, reexporter) });
             }
         }
     };
@@ -172,7 +172,7 @@ pub fn implicit_reexports(r: &ResolvedProgram<'_>) -> Vec<ImplicitReexport> {
             if explicit {
                 gaps.retain(|g| u.segments.last() != Some(&g.3));
             }
-            push(gaps, *module, u.segments.join("::"), u.location.clone());
+            push(gaps, *module, u.segments.join("::"), u.location.as_ref());
         }
     }
     for call in &r.calls {
@@ -180,7 +180,7 @@ pub fn implicit_reexports(r: &ResolvedProgram<'_>) -> Vec<ImplicitReexport> {
             continue;
         }
         let segs: Vec<String> = call.callee.split("::").map(str::to_string).collect();
-        push(c.implicit_steps(call.module, &segs, Ns::Value).0, call.module, call.callee.clone(), call.location.clone());
+        push(c.implicit_steps(call.module, &segs, Ns::Value).0, call.module, call.callee.clone(), call.location.as_ref());
     }
     out
 }
