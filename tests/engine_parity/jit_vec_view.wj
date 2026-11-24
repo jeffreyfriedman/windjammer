@@ -117,6 +117,17 @@ fn main() {
     }
     println("cow ${seen} ${old}")
 
+    // a store right after each push (growth moves the storage under a store view that must have been dropped)
+    let mut ps: Vec<int> = Vec::new()
+    ps.push(0)
+    let mut n = 1
+    while n < 700 {
+        ps.push(n)
+        ps[0] = n
+        n += 1
+    }
+    println("pushstore ${ps[0]} ${ps.len()} ${ps[699]}")
+
     // another width than the packing's, and an unpacked vector (strings)
     let mut small: Vec<i32> = Vec::new()
     let mut m = 0
