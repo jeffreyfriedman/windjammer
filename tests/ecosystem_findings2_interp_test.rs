@@ -112,7 +112,7 @@ fn body_uses_of_two_functions_do_not_leak_into_each_other() {
 
 // ------------------------------------------------------------------ (10) re-export through `mod.wj`
 
-/// The generated Rust declares `pub use self::child::*` in every `mod.rs`, so `crate::adapters::serve` names the
+/// ADR 0040: `adapters/mod.wj` re-exports `serve` with an explicit `pub use`, so `crate::adapters::serve` names the
 /// function defined in `adapters/http_server.wj`; the interpreter binds the same name.
 #[test]
 fn module_reexports_the_public_items_of_its_children() {
@@ -120,7 +120,7 @@ fn module_reexports_the_public_items_of_its_children() {
         ("wj.toml", &format!("{TOML}\n[dependencies]\n")),
         ("src/main.wj", "use crate::adapters::serve\n\nfn main() {\n    println(\"${serve(7)}\")\n}\n"),
         ("src/mod.wj", "pub mod adapters\n"),
-        ("src/adapters/mod.wj", "pub mod http_server\n"),
+        ("src/adapters/mod.wj", "pub mod http_server\npub use http_server::serve\n"),
         ("src/adapters/http_server.wj", "pub fn serve(port: int) -> int {\n    port + 1\n}\n\nfn hidden() -> int {\n    0\n}\n"),
     ]);
     let (out, err, code) = run_interpreted(dir.path(), "src/main.wj");
@@ -134,7 +134,7 @@ fn private_items_of_child_modules_are_not_reexported() {
         ("wj.toml", &format!("{TOML}\n[dependencies]\n")),
         ("src/main.wj", "use crate::adapters::hidden\n\nfn main() {\n    println(\"${hidden()}\")\n}\n"),
         ("src/mod.wj", "pub mod adapters\n"),
-        ("src/adapters/mod.wj", "pub mod http_server\n"),
+        ("src/adapters/mod.wj", "pub mod http_server\npub use http_server::serve\n"),
         ("src/adapters/http_server.wj", "fn hidden() -> int {\n    0\n}\n\npub fn serve() -> int {\n    1\n}\n"),
     ]);
     let (_, err, code) = run_interpreted(dir.path(), "src/main.wj");

@@ -65,7 +65,7 @@ impl Stack {
 
     // Create module 2: imports and uses Stack
     let inventory_source = r#"
-use crate::Stack
+use crate::item::Stack
 
 pub fn remove_from_stack(mut stack: Stack, quantity: i32) {
     stack.remove(quantity);
@@ -168,7 +168,7 @@ impl Stack {
 
     // Create module 2: uses Stack
     let inventory_source = r#"
-use crate::Stack
+use crate::stack::Stack
 
 pub struct Inventory {
     pub items: Vec<Option<Stack>>,
@@ -287,7 +287,7 @@ impl ItemStack {
 
     // Create module that uses type
     let inventory_source = r#"
-use crate::ItemStack
+use crate::item::ItemStack
 
 pub fn process(mut slots: Vec<Option<ItemStack>>, index: i32, quantity: i32) {
     if let Some(stack) = &mut slots[index as usize] {

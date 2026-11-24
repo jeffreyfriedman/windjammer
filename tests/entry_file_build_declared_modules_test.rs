@@ -27,7 +27,7 @@ fn project(dir: &Path) {
     };
     w("wj.toml", "[package]\nname = \"rx\"\nversion = \"0.1.0\"\n");
     w("src/main.wj", "pub mod adapters\n\nuse crate::adapters::serve\n\nfn main() {\n    println(\"${serve(2)}\")\n}\n");
-    w("src/adapters/mod.wj", "pub mod http_server\n");
+    w("src/adapters/mod.wj", "pub mod http_server\npub use http_server::serve\n");
     w("src/adapters/http_server.wj", "pub fn serve(n: int) -> int {\n    n\n}\n");
 }
 
@@ -44,7 +44,7 @@ fn entry_file_build_generates_its_declared_modules_as_the_project_build_does() {
     let d = tempfile::tempdir().unwrap();
     project(d.path());
     let check = wj(d.path(), &["check", "src/main.wj"]);
-    assert!(check.status.success(), "the program follows the child re-export rule:\n{}", text(&check));
+    assert!(check.status.success(), "the program follows the explicit re-export rule (ADR 0040):\n{}", text(&check));
     let alone = wj(d.path(), &["build", "src/main.wj", "-o", "out-entry"]);
     let t = text(&alone);
     assert!(alone.status.success(), "wj build src/main.wj (with cargo) failed:\n{t}");
@@ -59,7 +59,7 @@ fn entry_file_build_generates_its_declared_modules_as_the_project_build_does() {
         assert!(!a.is_empty() && a == b, "{rel} differs from the project build:\n--- entry\n{a}\n--- project\n{b}");
     }
     let m = std::fs::read_to_string(d.path().join("out-entry/adapters/mod.rs")).unwrap();
-    assert!(m.contains("pub use self::http_server::*;"), "the module re-exports its child:\n{m}");
+    assert!(m.contains("pub use self::http_server::serve;"), "the module re-exports `serve` through its explicit pub use (ADR 0040):\n{m}");
     let run = wj(d.path(), &["run", "--compiled", "src/main.wj"]);
     assert!(run.status.success() && String::from_utf8_lossy(&run.stdout).trim() == "2", "compiled run:\n{}", text(&run));
 }

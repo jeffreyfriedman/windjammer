@@ -426,10 +426,43 @@ impl CodeGenerator<'_> {
                         }
                     }
                 }
+
+                // `type ChannelId = i32`: an alias is `PartialEq` when its target is.
+                for item in &program.items {
+                    if let Item::TypeAlias {
+                        name,
+                        type_params,
+                        target,
+                        ..
+                    } = item
+                    {
+                        if type_params.is_empty()
+                            && !self.partial_eq_types.contains(name)
+                            && self.is_partial_eq_type(target)
+                        {
+                            self.partial_eq_types.insert(name.clone());
+                        }
+                    }
+                }
             }
 
             if self.partial_eq_types.len() == sz {
                 break;
+            }
+        }
+
+        // The facts are keyed by bare name. Two modules may each declare a struct of one name; when any of them
+        // does not support `PartialEq`, a parent holding "that name" must not assume it does.
+        for program in programs {
+            for item in &program.items {
+                if let Item::Struct { decl: s, .. } = item {
+                    if self.partial_eq_types.contains(&s.name)
+                        && !(self.struct_emits_partial_eq(s)
+                            && s.fields.iter().all(|f| self.is_partial_eq_type(&f.field_type)))
+                    {
+                        self.partial_eq_types.remove(&s.name);
+                    }
+                }
             }
         }
     }

@@ -82,7 +82,7 @@ fn test_declared_math_module_import_uses_crate_path() {
     fs::write(root.join("math/vec3.wj"), "pub struct Vec3 {\n    pub x: f32,\n}\n").expect("write vec3.wj");
     fs::write(
         root.join("main.wj"),
-        "use math::Vec3\n\npub struct Camera {\n    pub position: Vec3,\n}\n\nfn main() {\n    let c = Camera { position: Vec3 { x: 1.0 } }\n    println(\"${c.position.x}\")\n}\n",
+        "use math::vec3::Vec3\n\npub struct Camera {\n    pub position: Vec3,\n}\n\nfn main() {\n    let c = Camera { position: Vec3 { x: 1.0 } }\n    println(\"${c.position.x}\")\n}\n",
     )
     .expect("write main.wj");
     let out = root.join("gen");

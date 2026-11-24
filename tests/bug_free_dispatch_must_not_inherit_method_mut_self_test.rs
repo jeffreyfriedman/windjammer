@@ -26,7 +26,7 @@ fn free_dispatch_must_not_inherit_method_mut_self() {
 
     std::fs::write(src.join("mod.wj"), "pub mod adapters\npub mod domain\n").unwrap();
     std::fs::write(src.join("adapters").join("mod.wj"), "pub mod http_server\n").unwrap();
-    std::fs::write(src.join("domain").join("mod.wj"), "pub mod app\n").unwrap();
+    std::fs::write(src.join("domain").join("mod.wj"), "pub mod app\npub use app::App\npub use app::Reply\n").unwrap();
 
     std::fs::write(
         src.join("domain").join("app.wj"),
