@@ -29,7 +29,7 @@ pub fn enabled(name: &str) -> bool {
     read(name).is_some()
 }
 
-/// The one enumeration of the environment in this module (the prefix snapshot below goes through it).
+/// The one read of the environment in this module (a name lookup and the prefix snapshot below both go through it).
 /// `wasm32-unknown-unknown` has no environment and `vars_os` panics there, so the browser playground sees none.
 fn all() -> impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)> {
     #[cfg(target_arch = "wasm32")]
@@ -38,13 +38,12 @@ fn all() -> impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)> {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::env::vars_os().collect::<Vec<_>>().into_iter()
+        std::env::vars_os()
     }
 }
 
-/// A name lookup does not enumerate the environment: `var_os` is safe on every target (`vars_os` panics on wasm32).
 fn read(name: &str) -> Option<std::ffi::OsString> {
-    std::env::var_os(name)
+    all().find(|(k, _)| k == name).map(|(_, v)| v)
 }
 
 /// Every variable whose name starts with one of `prefixes`, sorted: what a cache key hashes besides its inputs.
