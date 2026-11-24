@@ -35,16 +35,8 @@ impl CodeGenerator<'_> {
                     if let Some(mod_dir) = self.output_module_dirs().and_then(|dirs| dirs.last().cloned()) {
                         let first_seg = rest.split("::").next().unwrap_or("");
                         if first_seg == mod_dir {
-                            // `crate::<this_module>` IS this module, so the path below it is relative to `self`.
-                            let below = rest.strip_prefix(first_seg).unwrap_or(rest).trim_start_matches("::");
-                            if !below.is_empty() {
-                                if let Some(alias_name) = alias {
-                                    return format!(
-                                        "{}use self::{} as {};\n",
-                                        pub_prefix, below, alias_name
-                                    );
-                                }
-                                return format!("{}use self::{};\n", pub_prefix, below);
+                            if let Some(line) = self_relative_use(pub_prefix, rest, first_seg, alias) {
+                                return line;
                             }
                         }
                     }
@@ -407,4 +399,17 @@ impl CodeGenerator<'_> {
             "super"
         }
     }
+}
+
+/// `crate::<this_module>::X` inside that module's `mod.rs` is `self::X`: the module segment is dropped.
+/// Returns `None` when nothing remains below the module (the path names the module itself).
+fn self_relative_use(pub_prefix: &str, rest: &str, first_seg: &str, alias: Option<&str>) -> Option<String> {
+    let below = rest.strip_prefix(first_seg).unwrap_or(rest).trim_start_matches("::");
+    if below.is_empty() {
+        return None;
+    }
+    Some(match alias {
+        Some(alias_name) => format!("{}use self::{} as {};\n", pub_prefix, below, alias_name),
+        None => format!("{}use self::{};\n", pub_prefix, below),
+    })
 }

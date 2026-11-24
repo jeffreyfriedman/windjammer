@@ -207,7 +207,7 @@
 "src/codegen/rust/function_generation_prepare.rs::prepare_codegen_environment_for_regular_function" = 699
 "src/codegen/rust/function_generation_prepare.rs::refresh_method_registry_from_emitted_formals" = 373
 "src/codegen/rust/function_wrapping_generation.rs::generate_wrapped_function_body" = 383
-"src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 384
+"src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 380
 "src/codegen/rust/ir_call_site.rs::apply_ir_call_site_coercion" = 3777
 "src/codegen/rust/ir_call_site.rs::apply_post_ir_forwarder_owned_outer_and_reuse" = 353
 "src/codegen/rust/ir_call_site.rs::apply_registry_borrow_to_call_arg" = 302
