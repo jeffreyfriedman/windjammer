@@ -21,7 +21,10 @@ const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/nbody.wj", &["vecresolve", "rowview", "placeargs"]),
     ("tests/engine_parity/jit_row_views.wj", &["rowview"]),
     ("bench/interp/strings.wj", &["pushfmt", "lenfast"]),
-    ("bench/interp/closures.wj", &["closureenv", "closurescope", "closurecreate", "closurecopy"]),
+    ("bench/interp/closures.wj", &["scalarpipe", "closurecreate"]),
+    ("tests/engine_parity/closures_compiled.wj", &["closureenv", "closurescope", "closurecreate", "closurecopy"]),
+    ("tests/engine_parity/scalar_pipe_taken.wj", &["scalarpipe"]),
+    ("tests/engine_parity/scalar_pipe_overflow.wj", &["scalarbail"]),
     ("tests/engine_parity/str_fast.wj", &["fmt", "pushstr", "pushfmt"]),
     ("tests/engine_parity/jit_loop_inline.wj", &["inline"]),
     ("tests/engine_parity/map_get_match.wj", &["mapget", "mapins", "unboxed"]),
@@ -86,4 +89,35 @@ fn the_firing_gate_notices_each_disabled_path() {
             assert_eq!((&r.stdout, r.code), (&walker.stdout, walker.code), "{program} under `{mutant}` differs from the walker");
         }
     }
+}
+
+/// The typed scalar pipeline (`scalar_pipe.rs`) is a speculation with a boxed fallback: each program below holds
+/// the exact number of chains it drained typed and of chains that started typed and met an element it hands to the
+/// boxed path (a guard that stops declining, or a bail that stops happening, changes a count). The outputs of the
+/// same programs are held to the walker's by the engine parity corpus.
+#[test]
+fn the_scalar_pipeline_takes_and_declines_exactly_these_chains() {
+    // (program, drained typed, started typed and bailed)
+    const PIPE: &[(&str, u64, u64)] = &[
+        ("tests/engine_parity/scalar_pipe_taken.wj", 9, 0),
+        ("tests/engine_parity/scalar_pipe_effects.wj", 0, 0),
+        ("tests/engine_parity/scalar_pipe_capmut.wj", 5, 0),
+        ("tests/engine_parity/scalar_pipe_overflow.wj", 1, 2),
+        ("tests/engine_parity/scalar_pipe_divzero.wj", 0, 2),
+        ("tests/engine_parity/scalar_pipe_take.wj", 0, 0),
+        ("tests/engine_parity/scalar_pipe_nonscalar.wj", 2, 0),
+        ("tests/engine_parity/scalar_pipe_widths.wj", 2, 2),
+        ("tests/engine_parity/scalar_pipe_sum.wj", 5, 0),
+        ("tests/engine_parity/scalar_pipe_sum_order.wj", 0, 2),
+        ("tests/engine_parity/scalar_pipe_sum_overflow.wj", 1, 1),
+    ];
+    let mut problems = Vec::new();
+    for (program, taken, bailed) in PIPE {
+        let r = run(program, "resolved", None);
+        let got = (count(&r, "scalarpipe").unwrap_or(0), count(&r, "scalarbail").unwrap_or(0));
+        if got != (*taken, *bailed) {
+            problems.push(format!("{program}: (typed drains, bails) = {got:?}, expected {:?}", (taken, bailed)));
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }

@@ -201,7 +201,14 @@ fn register_consumers(r: &mut Registry) {
     });
     r.pure(Kind::Iter, "sum", |it, v, _| {
         let hint = it.type_hint.take();
-        let xs = drain(it, v)?;
+        let s = it_of(it, v)?;
+        // a map/filter chain over integers adds as it produces (scalar_pipe.rs)
+        if hint.as_ref().map_or(true, |h| IntTy::from_type(h).is_some()) {
+            if let Some(r) = crate::interpreter::scalar_pipe::sum(it, &s, hint.as_ref().and_then(IntTy::from_type)) {
+                return Ok(r);
+            }
+        }
+        let xs = it.drain_iter(&s)?;
         let mut acc = match (&hint, xs.first()) {
             (Some(h), _) if type_is_float(h).is_some() => Value::Float(0.0, type_is_float(h).unwrap()),
             (Some(h), _) if IntTy::from_type(h).is_some() => Value::Int(0, IntTy::from_type(h).unwrap()),

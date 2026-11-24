@@ -1,0 +1,8 @@
+// The sum would overflow at the second item, but a closure divides by zero at the fourth: the boxed `sum`
+// runs every closure before it adds, so the division by zero is what the program dies of.
+fn main() {
+    let m: Vec<i32> = [1, 1, 1, 0]
+    println("start")
+    let s: i32 = m.map(|x| 2000000000 / x).sum()
+    println("${s}")
+}

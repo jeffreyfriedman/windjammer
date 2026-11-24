@@ -1,0 +1,21 @@
+// Early exit and bounded pulls are not drains: laziness is unchanged (the closure counter shows how far it ran).
+fn main() {
+    let v: Vec<int> = [1, 2, 3, 4, 5, 6, 7, 8]
+    let mut pulled = 0
+    let first: Vec<int> = v.map(|x| {
+        pulled += 1
+        x * 10
+    }).filter(|x| x % 20 == 0).take(2).collect()
+    println("${first:?} ${pulled}")
+    let a = v.map(|x| x * 3).any(|x| x > 10)
+    let f = v.map(|x| x + 1).find(|x| x % 5 == 0)
+    println("${a} ${f:?}")
+    let one: Vec<int> = v.map(|x| x * x).take(3).collect()
+    println("${one:?}")
+    // a peeked item is lookahead state the typed drain does not model
+    let mut pk = v.map(|x| x * 2).peekable()
+    let p = pk.peek()
+    println("${p:?}")
+    let rest: int = pk.sum()
+    println("${rest}")
+}

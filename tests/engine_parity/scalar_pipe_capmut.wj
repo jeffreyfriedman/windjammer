@@ -1,0 +1,30 @@
+// A captured mutable changed by a stage (and read by another) keeps the boxed path.
+fn main() {
+    let v: Vec<int> = [1, 2, 3, 4, 5]
+    let mut bump = 0
+    let out: Vec<int> = v.map(|x| {
+        bump += 1
+        x + bump
+    }).collect()
+    println("${out:?} ${bump}")
+    let mut limit = 2
+    let n = v.filter(|x| x > limit).count()
+    limit = 4
+    let m = v.filter(|x| x > limit).count()
+    println("${n} ${m}")
+    // read-only captures are typed, but the value read is the one the variable has when the chain runs
+    let mut cut = 1
+    let lazy = v.filter(|x| x > cut).map(|x| x * 10)
+    cut = 3
+    let seen: Vec<int> = lazy.collect()
+    println("${seen:?}")
+    // the last binding of a shadowed name is the captured one
+    let k = 2
+    let k = k * 50
+    let sh: Vec<int> = v.map(|x| x + k).collect()
+    println("${sh:?}")
+    for k in [7] {
+        let inner: Vec<int> = v.map(|x| x + k).collect()
+        println("${inner:?}")
+    }
+}

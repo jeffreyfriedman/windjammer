@@ -1,0 +1,7 @@
+// The sum itself overflows i32 at the second item: the panic is the boxed `sum`'s.
+fn main() {
+    let big: Vec<i32> = [2000000000, 2000000000, 5]
+    println("start")
+    let s: i32 = big.map(|x| x + 0).sum()
+    println("${s}")
+}

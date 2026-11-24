@@ -42,6 +42,7 @@ mod intrinsics;
 pub mod int;
 mod kmap;
 mod iter;
+mod scalar_pipe;
 mod locks;
 mod moves;
 mod native;

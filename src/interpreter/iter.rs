@@ -463,6 +463,10 @@ pub fn clone_iter(s: &Iter) -> Iter {
 impl Interpreter {
     /// Drain an iterator into a vector, refusing to run forever.
     pub(crate) fn drain_iter(&mut self, s: &Iter) -> R<Vec<Value>> {
+        // a map/filter chain of pure integer closures over packed integers: no `Value` per element (scalar_pipe.rs)
+        if let Some((xs, t)) = super::scalar_pipe::drain(self, s) {
+            return Ok(xs.into_iter().map(|x| Value::Int(x as i128, t)).collect());
+        }
         let mut out = Vec::new();
         while let Some(x) = next(self, s)? {
             out.push(x);

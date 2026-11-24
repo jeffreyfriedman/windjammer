@@ -1,0 +1,15 @@
+// Widths: i8/u8/i32/u32 stages keep their own range (overflow stops at the typed width), literals adopt the
+// element width, and an i64 capture next to i32 elements unifies as the boxed path does.
+fn main() {
+    let a: Vec<u8> = [10, 20, 30]
+    let sa: u8 = a.map(|x| x + 5).filter(|x| x > 15).sum()
+    println("${sa}")
+    let b: Vec<i32> = [100, 200, 300]
+    let big: i64 = 4000000000
+    let cb: Vec<i64> = b.map(|x| x * 3).collect()
+    println("${cb:?} ${big}")
+    let c: Vec<i8> = [100, 20, 5]
+    println("start")
+    let sc: i8 = c.map(|x| x * 2).sum()
+    println("${sc}")
+}

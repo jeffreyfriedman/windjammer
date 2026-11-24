@@ -176,6 +176,8 @@ pub struct Interpreter {
     pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Direct-mapped front of `compiled_closures` (slot = body address bits): a loop over an iterator chain calls
     /// its few closures in turn, so a single "called last" entry always missed and paid a hash probe per call.
+    /// Lowered scalar programs of closure bodies by address (`scalar_pipe.rs`); `None` = outside its grammar.
+    pub(crate) scalar_progs: HashMap<usize, Option<Rc<super::scalar_pipe::Prog>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     pub(crate) closure_cache: [Option<(usize, Rc<super::resolved::CompiledClosure>)>; 8],
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
@@ -332,6 +334,7 @@ impl Interpreter {
             engine_resolved: false,
             compiled: HashMap::default(),
             compiled_closures: HashMap::default(),
+            scalar_progs: HashMap::default(),
             closure_cache: Default::default(),
             rstack: Vec::new(),
             jit_enabled: true,
@@ -671,6 +674,10 @@ pub(crate) struct FastHits {
     pub(crate) closurecreate: u64,
     /// Free names of a compiled closure given a copy of their value instead of a reference (`resolved/closure.rs`).
     pub(crate) closurecopy: u64,
+    /// Drains of a `map`/`filter` chain over packed integers without a `Value` per element (`scalar_pipe.rs`).
+    pub(crate) scalarpipe: u64,
+    /// Typed drains that met an element they do not handle (overflow, zero divisor, a non-integer item) and left it to the boxed path.
+    pub(crate) scalarbail: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,
