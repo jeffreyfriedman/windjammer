@@ -782,6 +782,30 @@ mod tests {
         }
     }
 
+    /// A shadowing rebinding derived from a binding that was itself derived from the same name puts `a` into its own
+    /// derived set (`a -> b -> a`). `a`'s own later mentions must not count as "a derived binding is still live"
+    /// (that would keep `a` alive until its own last mention, i.e. never last): the `binding != name` exclusion matters.
+    #[test]
+    fn a_name_derived_from_itself_does_not_borrow_itself() {
+        let src = "fn main() {\n let a = vec![1]\n let b = a.iter()\n let a = b.map(|x| x)\n println(\"${a}\")\n println(\"${a}\")\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program.items.iter().find_map(|i| match i { crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl), _ => None }).unwrap();
+        let body: Vec<&Statement<'_>> = decl.body.to_vec();
+        let c = collect_typed(&[], &body, &BTreeSet::new());
+        assert!(c.derived_from["a"].contains("b") && c.derived_from["b"].contains("a"), "{:?}", c.derived_from);
+        let last_b = c.mentions["b"].iter().map(|m| m.seq).max().unwrap();
+        let last_a = c.mentions["a"].iter().map(|m| m.seq).max().unwrap();
+        assert!(last_a > last_b);
+        // After b's last mention nothing derived from `a` (other than `a` itself) is live, although `a` is mentioned later.
+        assert!(!borrowed_by_later_live_binding(&c, "a", last_b));
+        for seq in 0..=c.seq + 1 {
+            assert_eq!(borrowed_by_later_live_binding(&c, "a", seq), reference_borrowed(&c, "a", seq), "seq {seq}");
+        }
+    }
+
     #[test]
     fn last_textual_read_is_last_use() {
         let m = marks("fn keep(v: Vec<int>) -> Vec<int> { v }\nfn main() {\n let v = vec![1]\n println(\"${v.len()}\")\n let w = keep(v)\n println(\"${w.len()}\")\n}\n");
