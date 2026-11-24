@@ -632,7 +632,7 @@ fn stmt_island(cx: &mut Cx, s: S) -> Option<Code> {
     if matches!(s, Statement::Return { .. }) {
         cx.untyped_return = true;
     }
-    let island = Island::new(cx, &format!("{:?}", s));
+    let island = Island::new(cx, &super::island::ast_text(&s));
     let mut names = Vec::new();
     match s {
         Statement::Let { pattern, .. } => island::pattern_names(pattern, &mut names),

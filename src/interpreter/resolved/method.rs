@@ -80,9 +80,9 @@ fn method_call_generic(
             // only reads when none holds a closure or a call: they keep their slots
             let (places, reads): (Vec<E>, Vec<E>) = arguments.iter().map(|(_, a)| *a).partition(|a| Interpreter::is_place_expr(a));
             if !cx.it.fast_off("argcopy") && reads.iter().all(|a| super::mapfast::simple(a)) {
-                Some(Island::with_copies(cx, &format!("{object:?} {places:?}"), &format!("{reads:?}")))
+                Some(Island::with_copies(cx, &super::island::ast_text(&(object, &places)), &super::island::ast_text(&reads)))
             } else {
-                Some(Island::new(cx, &format!("{:?}", whole)))
+                Some(Island::new(cx, &super::island::ast_text(&whole)))
             }
         }
         (Recv::Value(_), true) => return None,

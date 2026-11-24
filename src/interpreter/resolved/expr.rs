@@ -165,7 +165,7 @@ pub(super) fn expr_arg(cx: &mut Cx, e: E) -> Option<X> {
     if let Some(x) = expr(cx, e) {
         return Some(x.keep_guard());
     }
-    let island = Island::new(cx, &format!("{:?}", e));
+    let island = Island::new(cx, &super::island::ast_text(&e));
     Some(X::V(Box::new(move |it, b| island.run(it, b, |it| it.eval_keep_guard(e)))))
 }
 
@@ -175,7 +175,7 @@ pub(super) fn expr_eval(cx: &mut Cx, e: E) -> Option<X> {
     if let Some(x) = expr(cx, e) {
         return Some(x.clean());
     }
-    let island = Island::new(cx, &format!("{:?}", e));
+    let island = Island::new(cx, &super::island::ast_text(&e));
     Some(X::V(Box::new(move |it, b| island.run(it, b, |it| it.eval(e)))))
 }
 

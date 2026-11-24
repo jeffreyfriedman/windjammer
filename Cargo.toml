@@ -246,6 +246,11 @@ path = "tests/economics_cli.rs"
 name = "engine_parity"
 path = "tests/interpreter_engine_parity_test.rs"
 
+# Closure environments stay exact and path-length independent: cargo test --release --test closure_keys
+[[test]]
+name = "closure_keys"
+path = "tests/interpreter_closure_keys_test.rs"
+
 # Each interpreter fast path fires on its programs: cargo test --release --test fast_paths
 [[test]]
 name = "fast_paths"

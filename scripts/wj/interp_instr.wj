@@ -9,11 +9,14 @@
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --write        record the counts (lower only; --allow-raise to raise,
 //                                                              --raise K1,K2 to raise only those kernels)
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --self-test-write   check that --write refuses inside a git work tree
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --self-test-cwd     check that agent_loop (cold and warm) costs the same
+//                                                              from a 28-character and an 87-character checkout path (< 0.5%)
 //
 // `--write` records a baseline, so it refuses to run in a git work tree or beside a `.wj-cache` (see `write_refusal`):
 // a checkout's untracked files change the counts. Run it from a clean `git archive`. The count also depends on the
-// LENGTH of the working directory's path (about +55K instructions per path character on agent_loop warm: the
-// interpreter Debug-formats and hashes source paths), so `--write` stores the method it ran with next to the rows
+// LENGTH of the working directory's path in interpreters that Debug-format and hash source paths (about +55K
+// instructions per path character on agent_loop warm; fixed by `source_map::with_elided_paths`, held by
+// `--self-test-cwd`), so `--write` stores the method it ran with next to the rows
 // (`<counter>:method`: runs, cwd_chars, home, env) and `--check` says when its own cwd length differs from the recorded one.
 //
 // The counter: callgrind (`valgrind --tool=callgrind`) when valgrind is installed, else the hardware counter of
@@ -245,6 +248,37 @@ fn self_test(c: string, wj: string, cwd: string, seed: string) {
     println("self-test ok: guard fires on a mislabelled warm row (cold ${cold}, warm ${warm})")
 }
 
+// A fresh directory under /tmp whose absolute path is exactly `chars` characters long, holding a copy of the checkout `src`.
+fn copy_checkout_of_length(src: string, chars: int) -> (string, string) {
+    let base = sh_out("mktemp -d /tmp/wjc-XXXXXX")
+    let mut pad = ""
+    while base.len() + 1 + pad.len() < chars {
+        pad = pad + "p"
+    }
+    let dir = base + "/" + pad
+    sh_out("mkdir -p " + quote(dir) + " && cp -R " + quote(src) + "/. " + quote(dir) + "/ && rm -rf " + quote(dir + "/.wj-cache"))
+    (base, dir)
+}
+
+// `--self-test-cwd WJ_BIN`: agent_loop, cold and warm, costs the same (< 0.5%) from a 28-character and an 87-character
+// path: the interpreter must not format or hash source paths per use (it did: +55K instructions per character).
+fn self_test_cwd(c: string, wj: string, cwd: string, seed: string, runs: int) {
+    let expected = fs::read_to_string("${BENCH}/expected/agent_loop.out") ?? ""
+    let (short_base, short) = copy_checkout_of_length(cwd, 28)
+    let (long_base, long) = copy_checkout_of_length(cwd, 87)
+    let (c1, w1) = cold_warm(c, quote(wj) + " run " + quote(short + "/" + AGENT_LOOP), runs, expected, "agent_loop (28 chars)", seed)
+    let (c2, w2) = cold_warm(c, quote(wj) + " run " + quote(long + "/" + AGENT_LOOP), runs, expected, "agent_loop (87 chars)", seed)
+    sh_out("rm -rf " + quote(short_base) + " " + quote(long_base))
+    println("self-test-cwd: cold ${c1} vs ${c2}, warm ${w1} vs ${w2} (${short.len()} vs ${long.len()} chars)")
+    let dc = if c2 > c1 { c2 - c1 } else { c1 - c2 }
+    let dw = if w2 > w1 { w2 - w1 } else { w1 - w2 }
+    if dc * 1000 >= c1 * 5 || dw * 1000 >= w1 * 5 {
+        eprintln("self-test-cwd: the count depends on the path length (cold diff ${dc}, warm diff ${dw}; limit 0.5%)")
+        process.exit(1)
+    }
+    println("self-test-cwd ok: path length moves the count by less than 0.5% (cold ${dc}, warm ${dw})")
+}
+
 fn kernels() -> Vec<string> {
     let mut names: Vec<string> = Vec::new()
     match fs.read_dir(BENCH) {
@@ -364,6 +398,10 @@ fn main() {
         }
     }
     let seed = seed_root(wj, cwd + "/" + STARTUP)
+    if args.contains("--self-test-cwd") {
+        self_test_cwd(c, wj, cwd, seed, runs)
+        return
+    }
     if args.contains("--self-test") {
         self_test(c, wj, cwd, seed)
         return

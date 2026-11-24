@@ -25,7 +25,7 @@ pub fn display_column(column: usize) -> usize {
 }
 
 /// Location in a Windjammer source file
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Location {
     /// Path to the Windjammer file
     pub file: PathBuf,
@@ -33,6 +33,33 @@ pub struct Location {
     pub line: usize,
     /// Column number (1-indexed)  
     pub column: usize,
+}
+
+thread_local! {
+    static ELIDE_PATHS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` with `Location`'s `Debug` printing an empty file path (`file: ""`), everything else as usual. The interpreter
+/// reads the identifiers out of an AST's `Debug` text; the path of the source file is no identifier, and formatting
+/// and hashing it made that text's cost depend on the working directory's length.
+pub fn with_elided_paths<R>(f: impl FnOnce() -> R) -> R {
+    let prev = ELIDE_PATHS.with(|c| c.replace(true));
+    let r = f();
+    ELIDE_PATHS.with(|c| c.set(prev));
+    r
+}
+
+impl std::fmt::Debug for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let elide = ELIDE_PATHS.with(|c| c.get());
+        let mut d = f.debug_struct("Location");
+        if elide {
+            d.field("file", &"");
+        } else {
+            d.field("file", &self.file);
+        }
+        d.field("line", &self.line).field("column", &self.column).finish()
+    }
 }
 
 impl Location {
