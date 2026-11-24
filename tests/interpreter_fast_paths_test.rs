@@ -102,11 +102,14 @@ fn the_scalar_pipeline_takes_and_declines_exactly_these_chains() {
         ("tests/engine_parity/scalar_pipe_taken.wj", 9, 0),
         ("tests/engine_parity/scalar_pipe_effects.wj", 0, 0),
         ("tests/engine_parity/scalar_pipe_capmut.wj", 5, 0),
-        ("tests/engine_parity/scalar_pipe_overflow.wj", 1, 1),
-        ("tests/engine_parity/scalar_pipe_divzero.wj", 0, 1),
+        ("tests/engine_parity/scalar_pipe_overflow.wj", 1, 2),
+        ("tests/engine_parity/scalar_pipe_divzero.wj", 0, 2),
         ("tests/engine_parity/scalar_pipe_take.wj", 0, 0),
         ("tests/engine_parity/scalar_pipe_nonscalar.wj", 2, 0),
-        ("tests/engine_parity/scalar_pipe_widths.wj", 2, 1),
+        ("tests/engine_parity/scalar_pipe_widths.wj", 2, 2),
+        ("tests/engine_parity/scalar_pipe_sum.wj", 5, 0),
+        ("tests/engine_parity/scalar_pipe_sum_order.wj", 0, 2),
+        ("tests/engine_parity/scalar_pipe_sum_overflow.wj", 1, 1),
     ];
     let mut problems = Vec::new();
     for (program, taken, bailed) in PIPE {
