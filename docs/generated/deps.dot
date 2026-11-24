@@ -360,9 +360,9 @@ digraph deps {
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="9"];
   "interpreter" -> "package" [label="4"];
-  "interpreter" -> "parser" [label="144"];
+  "interpreter" -> "parser" [label="145"];
   "interpreter" -> "resolve" [label="15"];
-  "interpreter" -> "source_map" [label="17"];
+  "interpreter" -> "source_map" [label="18"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_classification" [label="1"];
