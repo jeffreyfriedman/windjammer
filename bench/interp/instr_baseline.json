@@ -12,7 +12,7 @@
   "structs": 119282706
  },
  "callgrind:Linux-x86_64:warm": {
-  "agent_loop": 30654461,
+  "agent_loop": 31970080,
   "closures": 41173734,
   "fib30": 102441587,
   "hashmap": 103125883,
