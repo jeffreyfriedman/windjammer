@@ -344,7 +344,9 @@ fn every_machine_code_check_is_load_bearing() {
 /// resolution of a vector after closure code rebinds the reference to it (`vecstale`), and its in-place stores into
 /// a packed vector (`viewidx`: every element written at index 0), and the compiled code's by-value passing of a parameter
 /// that is only reassigned (`paramassign`: always `&mut`), and the receiver's place for a method without `self` that
-/// assigns `self.field` (`implicitself`: by value again).
+/// assigns `self.field` (`implicitself`: by value again), and the lean map helpers (`mapleanfound`: an absent key reported present) and the resolved-cell hit table
+/// (`cellhitstale`: kept after closure code rebinds a reference), and the read views of packed vectors (`readviewshared`: built on a
+/// body someone else shares; `viewreadidx`: every inline read at index 0).
 #[test]
 #[cfg(debug_assertions)]
 fn every_corpus_check_is_load_bearing() {
@@ -358,6 +360,10 @@ fn every_corpus_check_is_load_bearing() {
         ("viewidx", "packed_vecs.wj"),
         ("implicitself", "vp_implicit_self.wj"),
         ("paramassign", "vp_param_reassign.wj"),
+        ("mapleanfound", "jit_map_lean.wj"),
+        ("cellhitstale", "vp_ref_rebind.wj"),
+        ("readviewshared", "jit_vec_view.wj"),
+        ("viewreadidx", "jit_vec_view.wj"),
     ] {
         let p = root.join(file);
         let base = run(&p, "walker", &[], &[]);

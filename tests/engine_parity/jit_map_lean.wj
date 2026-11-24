@@ -1,0 +1,208 @@
+// The lean map helpers of machine-code loops (`jit/rt.rs::lean_map`): a map reached directly or through a plain
+// reference, int keys, scalar values, read and written without the general helper. Each case below is one way
+// the lean path must hand over or see a change: a map behind a `&mut` parameter, a map changed by a statement the
+// closure engine runs (remove, clear, replace), a copy-on-write clone taken mid-loop, a missing key, a duplicate key,
+// negative keys, values of other widths, unsigned values past i64, a string-keyed map, float values.
+use std::collections::HashMap
+
+fn bump(m: &mut HashMap<int, int>, n: int) {
+    let mut i = 0
+    while i < n {
+        let k = (i * 13) % 17
+        let c = match m.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        m.insert(k, c + 1)
+        i += 1
+    }
+}
+
+fn main() {
+    // plain local: lean path, duplicate keys, missing keys on the first touch
+    let mut m: HashMap<int, int> = HashMap::new()
+    let mut i = 0
+    while i < 3000 {
+        let k = (i * 7919) % 101
+        let c = match m.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        m.insert(k, c + 1)
+        i += 1
+    }
+    let mut best = 0
+    let mut j = 0
+    while j < 120 {
+        match m.get(&j) {
+            Some(v) => {
+                if *v > best {
+                    best = *v
+                }
+            }
+            None => {}
+        }
+        j += 1
+    }
+    println("plain ${m.len()} ${best}")
+
+    // a map behind a &mut parameter, called twice (the loop runs in the callee)
+    let mut shared: HashMap<int, int> = HashMap::new()
+    bump(&mut shared, 500)
+    bump(&mut shared, 500)
+    let mut tot = 0
+    let mut q = 0
+    while q < 17 {
+        match shared.get(&q) {
+            Some(v) => { tot += *v }
+            None => {}
+        }
+        q += 1
+    }
+    println("param ${shared.len()} ${tot}")
+
+    // removed and cleared mid-loop by closure-run statements: the next lookup must see it
+    let mut r: HashMap<int, int> = HashMap::new()
+    let mut seen = 0
+    let mut gone = 0
+    let mut n = 0
+    while n < 600 {
+        let k = n % 9
+        match r.get(&k) {
+            Some(v) => { seen += *v }
+            None => { gone += 1 }
+        }
+        r.insert(k, n)
+        if n % 50 == 49 {
+            r.clear()
+        }
+        if n % 7 == 3 {
+            r.remove(&k)
+        }
+        n += 1
+    }
+    println("mutated ${seen} ${gone} ${r.len()}")
+
+    // replaced mid-loop
+    let mut p: HashMap<int, int> = HashMap::new()
+    let mut hits = 0
+    let mut t = 0
+    while t < 400 {
+        match p.get(&(t % 5)) {
+            Some(_) => { hits += 1 }
+            None => {}
+        }
+        p.insert(t % 5, t)
+        if t % 100 == 99 {
+            p = HashMap::new()
+        }
+        t += 1
+    }
+    println("replaced ${hits} ${p.len()}")
+
+    // a clone taken mid-loop keeps its contents (copy-on-write under the insert)
+    let mut live: HashMap<int, int> = HashMap::new()
+    let mut snap: HashMap<int, int> = HashMap::new()
+    let mut s = 0
+    while s < 300 {
+        live.insert(s % 11, s)
+        if s == 150 {
+            snap = live.clone()
+        }
+        s += 1
+    }
+    let mut a = 0
+    match snap.get(&3) {
+        Some(v) => { a = *v }
+        None => {}
+    }
+    let mut b = 0
+    match live.get(&3) {
+        Some(v) => { b = *v }
+        None => {}
+    }
+    println("cow ${snap.len()} ${a} ${b}")
+
+    // negative and large keys (outside any array part), i64 extremes as values
+    let mut w: HashMap<int, int> = HashMap::new()
+    let mut x = 0
+    while x < 200 {
+        let k = (x % 7) - 3
+        let c = match w.get(&k) {
+            Some(v) => *v,
+            None => 9223372036854775000,
+        }
+        w.insert(k, c - 1)
+        w.insert(x * 1000003, c)
+        x += 1
+    }
+    let mut lo = 9223372036854775807
+    let mut y = -3
+    while y < 4 {
+        match w.get(&y) {
+            Some(v) => {
+                if *v < lo {
+                    lo = *v
+                }
+            }
+            None => {}
+        }
+        y += 1
+    }
+    println("neg ${w.len()} ${lo}")
+
+    // other widths: u64 past i64::MAX, i32 values
+    let mut u: HashMap<int, u64> = HashMap::new()
+    let big: u64 = 18446744073709551000
+    let mut z = 0
+    while z < 100 {
+        let c = match u.get(&(z % 4)) {
+            Some(v) => *v,
+            None => big,
+        }
+        u.insert(z % 4, c + 1)
+        z += 1
+    }
+    let mut ut = 0
+    match u.get(&1) {
+        Some(v) => { ut = *v }
+        None => {}
+    }
+    println("u64 ${ut}")
+    let mut small: HashMap<int, i32> = HashMap::new()
+    let mut e = 0
+    while e < 100 {
+        let c = match small.get(&(e % 3)) {
+            Some(v) => *v,
+            None => 0,
+        }
+        small.insert(e % 3, c + 2)
+        e += 1
+    }
+    let mut st = 0
+    match small.get(&2) {
+        Some(v) => { st = *v }
+        None => {}
+    }
+    println("i32 ${st}")
+
+    // string keys and float values: not lean
+    let mut names: HashMap<string, int> = HashMap::new()
+    names.insert("a", 1)
+    let mut f: HashMap<int, float> = HashMap::new()
+    let mut g = 0
+    while g < 50 {
+        let c = match f.get(&(g % 4)) {
+            Some(v) => *v,
+            None => 0.5,
+        }
+        f.insert(g % 4, c + 0.25)
+        g += 1
+    }
+    let mut fv = 0.0
+    match f.get(&2) {
+        Some(v) => { fv = *v }
+        None => {}
+    }
+    println("other ${names.len()} ${fv}")
+}

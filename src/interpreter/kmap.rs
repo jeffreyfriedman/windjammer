@@ -270,7 +270,15 @@ impl KMap {
     pub fn set_int(&mut self, i: i128, t: crate::interpreter::int::IntTy, v: Value) {
         if let Store::Dense { slots, .. } = &mut self.store {
             if let Some(Some((_, old))) = usize::try_from(i).ok().and_then(|n| slots.get_mut(n)) {
-                *old = v;
+                // an integer over an integer: both fields in place (no drop glue for the replaced value)
+                if let (Value::Int(a, at), &Value::Int(b, bt)) = (&mut *old, &v) {
+                    *a = b;
+                    *at = bt;
+                    // an integer owns nothing: no drop glue to run
+                    std::mem::forget(v);
+                } else {
+                    *old = v;
+                }
                 return;
             }
         }

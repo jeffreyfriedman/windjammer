@@ -1,0 +1,174 @@
+// Packed vectors in machine-code loops: the lean `push` (an element appended to the packing without a `Value`) and
+// the inline `v[i]` read through a view (`jit/rt.rs::read_view`, `lower_expr.rs::view_load`). Each case is a way
+// the view must be dropped or never built: growth by push past the capacity, a vector two names reach, a vector
+// someone else shares (copy-on-write under a store), closure-run statements between reads, another element kind
+// in the same view bucket, a width other than the packing's, an unpacked vector, an index past the end (last).
+fn sieve(n: int) -> int {
+    let mut flags: Vec<bool> = Vec::new()
+    let mut k = 0
+    while k < n {
+        flags.push(true)
+        k += 1
+    }
+    let mut count = 0
+    let mut i = 2
+    while i < n {
+        if flags[i] {
+            count += 1
+            let mut j = i * i
+            while j < n {
+                flags[j] = false
+                j += i
+            }
+        }
+        i += 1
+    }
+    count
+}
+
+fn touch(v: &mut Vec<int>, i: int) {
+    v[i] = v[i] + 100
+}
+
+fn main() {
+    println("sieve ${sieve(5000)}")
+
+    // growth by push: the storage moves many times while the same vector is read between pushes
+    let mut grow: Vec<int> = Vec::new()
+    let mut acc = 0
+    let mut g = 0
+    while g < 3000 {
+        grow.push(g * 2)
+        if g > 0 {
+            acc += grow[g - 1]
+        }
+        g += 1
+    }
+    println("grow ${grow.len()} ${acc}")
+
+    // bool and int vectors read in one loop (views keyed by slot and element kind)
+    let mut bs: Vec<bool> = Vec::new()
+    let mut ns: Vec<int> = Vec::new()
+    let mut fs: Vec<float> = Vec::new()
+    let mut p = 0
+    while p < 200 {
+        bs.push(p % 3 == 0)
+        ns.push(p * p)
+        fs.push(p * 0.5)
+        p += 1
+    }
+    let mut t = 0
+    let mut tf = 0.0
+    let mut q = 0
+    while q < 200 {
+        if bs[q] {
+            t += ns[q]
+        }
+        tf += fs[q]
+        q += 1
+    }
+    println("kinds ${t} ${tf}")
+
+    // a vector another function mutates in the loop (the call runs in the closure engine)
+    let mut shared: Vec<int> = Vec::new()
+    let mut s = 0
+    while s < 50 {
+        shared.push(s)
+        s += 1
+    }
+    let mut sum = 0
+    let mut r = 0
+    while r < 50 {
+        sum += shared[r]
+        touch(&mut shared, r)
+        sum += shared[r]
+        r += 1
+    }
+    println("call ${sum}")
+
+    // a clone taken mid-loop shares the storage until a store makes it unique: reads must see the stores
+    let mut a: Vec<bool> = Vec::new()
+    let mut u = 0
+    while u < 100 {
+        a.push(false)
+        u += 1
+    }
+    let snap = a.clone()
+    let ra = &mut a
+    let mut seen = 0
+    let mut w = 0
+    while w < 100 {
+        if a[w] {
+            seen += 1
+        }
+        ra[w] = true
+        if a[w] {
+            seen += 1000
+        }
+        w += 1
+    }
+    let mut old = 0
+    let mut z = 0
+    while z < 100 {
+        if snap[z] {
+            old += 1
+        }
+        z += 1
+    }
+    println("cow ${seen} ${old}")
+
+    // a store right after each push (growth moves the storage under a store view that must have been dropped)
+    let mut ps: Vec<int> = Vec::new()
+    ps.push(0)
+    let mut n = 1
+    while n < 700 {
+        ps.push(n)
+        ps[0] = n
+        n += 1
+    }
+    println("pushstore ${ps[0]} ${ps.len()} ${ps[699]}")
+
+    // another width than the packing's, and an unpacked vector (strings)
+    let mut small: Vec<i32> = Vec::new()
+    let mut m = 0
+    while m < 100 {
+        small.push(m)
+        m += 1
+    }
+    let mut ss = 0
+    let mut mm = 0
+    while mm < 100 {
+        ss += small[mm]
+        mm += 1
+    }
+    let mut words: Vec<string> = Vec::new()
+    let mut x = 0
+    while x < 30 {
+        words.push("w${x}")
+        x += 1
+    }
+    let mut wl = 0
+    let mut y = 0
+    while y < 30 {
+        wl += words[y].len()
+        y += 1
+    }
+    println("other ${ss} ${wl}")
+
+    // an index past the end: the panic comes from the closure engine
+    let mut tail: Vec<bool> = Vec::new()
+    let mut e = 0
+    while e < 10 {
+        tail.push(true)
+        e += 1
+    }
+    let mut c = 0
+    let mut f = 0
+    while f < 12 {
+        if tail[f] {
+            c += 1
+        }
+        f += 1
+    }
+    println("tail ${c}")
+}
