@@ -1277,4 +1277,26 @@ mod tests {
             Some(format!("{:?}", lit(-9)))
         );
     }
+
+    #[test]
+    fn a_demoted_array_is_not_promoted_again_even_when_it_keeps_filling() {
+        let mut m = filled(32);
+        assert!(m.get_mut(&int(3)).is_some());
+        assert_eq!(m.store_kind(), "dense");
+        for i in 32..300 {
+            m.insert(int(i), val(i));
+        }
+        assert_eq!(m.store_kind(), "dense");
+        assert_eq!(m.len(), 300);
+    }
+
+    #[test]
+    fn set_int_of_an_absent_key_of_another_type_keeps_that_key_type() {
+        let mut m = filled(32);
+        m.remove(&int(5));
+        m.set_int(5, IntTy::I32, val(1));
+        assert_ne!(m.store_kind(), "intdense");
+        let k = m.iter().find(|(k, _)| matches!(k.0, Value::Int(5, _))).map(|(k, _)| format!("{:?}", k.0));
+        assert_eq!(k.as_deref(), Some("Int(5, I32)"));
+    }
 }
