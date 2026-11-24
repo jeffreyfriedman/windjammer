@@ -1,0 +1,12 @@
+// A local list of string literals tests a `string` argument with `contains`.
+// expect: true
+// expect: false
+fn known_kind(kind: string) -> bool {
+    let kinds = ["start", "world", "act"]
+    kinds.contains(kind)
+}
+
+fn main() {
+    println("${known_kind("world")}")
+    println("${known_kind("nope")}")
+}

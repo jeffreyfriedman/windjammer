@@ -243,6 +243,7 @@ corpus_tests!(
     for_var_shadows_struct_field,
     field_and_free_fn_same_name,
     option_str_unwrap_or_owned_default,
+    local_string_list_contains_text_arg,
 );
 
 /// Every corpus `.wj` file is registered in `corpus_tests!` exactly once, and every registered name has a file:

@@ -183,7 +183,8 @@ pub fn peel_reference_layer(t: &Type) -> &Type {
 pub fn type_is_string_element_vec(ty: &Type) -> bool {
     let is_string = |t: &Type| matches!(t, Type::String) || matches!(t, Type::Custom(n) if n == "string" || n == "String");
     match ty {
-        Type::Vec(inner) => is_string(inner),
+        // A list literal local (`let kinds = ["a", "b"]`) is typed as an array of its elements; both lower to a `Vec`.
+        Type::Vec(inner) | Type::Array(inner, _) => is_string(inner),
         Type::Parameterized(name, args) if name == "Vec" => args.len() == 1 && is_string(&args[0]),
         Type::Reference(inner) | Type::MutableReference(inner) => type_is_string_element_vec(inner),
         Type::Custom(text) => text
