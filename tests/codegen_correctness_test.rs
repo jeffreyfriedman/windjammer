@@ -251,6 +251,7 @@ corpus_tests!(
     option_vec_some_literal_field,
     let_bound_closure_literal_argument,
     list_literal_takes_expected_vec_type,
+    coalesce_default_list_literal_is_vec,
     condition_const_before_block_is_not_struct_literal,
     index_cast_applies_to_whole_modulo_expression,
     for_var_shadows_struct_field,
