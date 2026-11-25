@@ -58,6 +58,9 @@ pub(super) struct Cx<'a> {
     pub(super) reg: Rc<Reg>,
     /// Loops enclosing the statement being compiled.
     loop_depth: usize,
+    /// Register every statement of the unit, not only those inside loops: a function unit (`jit/osr.rs`
+    /// `enter_body`) resumes in the closures at any statement of the body.
+    record_all: bool,
     /// Locals a `let` declared with a builtin map or set type (`builtin_collection`).
     collections: Vec<usize>,
     /// Compiling a closure body (its closures keep the walker's island: they need the call's type parameters).
@@ -176,6 +179,20 @@ impl Cx<'_> {
     }
 }
 
+/// Can `f` run as one machine-code unit (`jit/osr.rs::enter_body`)? No declared return (the unit drops the
+/// body's tail value, `finish_value` makes the result `Unit` anyway), a loop in the body, and it is not `main`
+/// (called once, never hot).
+fn fn_unit_ok(f: &FuncDef) -> bool {
+    fn loops(list: &[S]) -> bool {
+        list.iter().any(|s| match s {
+            Statement::While { .. } | Statement::For { iterable: Expression::Range { .. }, .. } => true,
+            Statement::If { then_block, else_block, .. } => loops(then_block) || else_block.as_deref().is_some_and(loops),
+            _ => false,
+        })
+    }
+    cfg!(feature = "jit") && f.ret.is_none() && f.name != "main" && loops(f.body)
+}
+
 pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<CompiledFn> {
     if f.is_extern || f.is_async || !f.type_params.is_empty() {
         return None;
@@ -192,7 +209,7 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
     if has_self {
         boxed.insert(0);
     }
-    let unit = Unit { module: f.module, ret: f.ret, self_ty: f.self_ty.clone(), tail_hint: tail_hint(f), closure_body: false };
+    let unit = Unit { module: f.module, ret: f.ret, self_ty: f.self_ty.clone(), tail_hint: tail_hint(f), closure_body: false, record_all: fn_unit_ok(f) };
     fixpoint(it, &unit, boxed, |cx| compile_with(cx, f))
 }
 
@@ -204,6 +221,8 @@ pub(super) struct Unit {
     pub(super) tail_hint: bool,
     /// The unit is a closure body (see `Cx::closure_body`).
     pub(super) closure_body: bool,
+    /// Register every statement of the body (a function that can run as one machine-code unit).
+    pub(super) record_all: bool,
 }
 
 /// Compile with `body` until slot typing and boxing are stable: a conflicting write poisons a typed
@@ -227,6 +246,7 @@ pub(super) fn fixpoint<T>(it: &mut Interpreter, u: &Unit, mut boxed: HashSet<usi
             tail_hint: u.tail_hint,
             reg: Rc::new(Reg::default()),
             loop_depth: 0,
+            record_all: u.record_all,
             collections: Vec::new(),
             closure_body: u.closure_body,
         };
@@ -253,24 +273,52 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
     let param_typed = params.iter().map(|s| cx.slot_ty[*s].is_some()).collect();
     let ret_int = f.ret.and_then(IntTy::from_type).filter(|t| *t != IntTy::Lit);
     let typed_ret = ret_int.filter(|t| small(*t));
+    let site_names: Vec<(&'static str, usize)> = f.params.iter().zip(&params).map(|(p, s)| (p.name.as_str(), *s)).collect();
     let (mut init, tail) = stmt_list(cx, f.body, typed_ret.is_some())?;
     // boxed parameters move into walker slots before the body runs
     let boxed_params: Vec<usize> = params.iter().copied().filter(|s| cx.is_boxed(*s)).collect();
+    let mut prologue: Option<Code> = None;
     if !boxed_params.is_empty() {
         let bp = boxed_params.clone();
-        let prologue: Code = Box::new(move |it, b| {
+        let p: Code = Box::new(move |it, b| {
             for s in &bp {
                 let v = std::mem::replace(&mut it.rstack[b + s], Value::Unit);
                 it.rstack[b + s] = island::boxed(v);
             }
             Ok(Value::Unit)
         });
-        init.insert(0, Step::Code(None, osr::share(prologue)));
+        // a function unit enters after the prologue (its parameters are walker slots by then): the hook runs it
+        if cx.record_all {
+            prologue = Some(p);
+        } else {
+            init.insert(0, Step::Code(None, osr::share(p)));
+        }
     }
     // a panic leaving the function poisons the lock guards its variables hold (the walker's `exit_scope_vars`)
     let top = cx.boxed_in_scope();
     let body = match (typed_ret, tail) {
         (Some(t), Some((loc, Tail::Int(i, u)))) if !cx.untyped_return => Body::I(poisoning_i(typed_seq(init, u, loc, i.into_code()), top), u, t),
+        (_, tail) if cx.record_all => {
+            // the whole body as one machine-code unit once the function is hot (`osr::enter_body`), after the prologue
+            let site = Rc::new(OsrSite::body(f.body, site_names, Rc::downgrade(&cx.reg)));
+            let rest = seq(init, tail.map(|(l, t)| (l, t.code())));
+            Body::V(poisoning(
+                Box::new(move |it, b| {
+                    if let Some(p) = &prologue {
+                        p(it, b)?;
+                    }
+                    if site.armed(it) {
+                        if osr::enter_body(it, b, &site)? {
+                            return Ok(Value::Unit);
+                        }
+                    } else {
+                        site.tick();
+                    }
+                    rest(it, b)
+                }),
+                top,
+            ))
+        }
         (_, tail) => Body::V(poisoning(seq(init, tail.map(|(l, t)| (l, t.code()))), top)),
     };
     let scalar = cx.slot_ty.iter().all(|t| t.is_some());
@@ -405,7 +453,7 @@ fn stmt_list(cx: &mut Cx, list: &'static [S], guards: bool) -> Option<(Init, Opt
             Some(g) => steps.push(g),
             None => {
                 let c = osr::share(stmt(cx, s)?);
-                if cx.loop_depth > 0 {
+                if cx.loop_depth > 0 || cx.record_all {
                     cx.reg.record_stmt(s, &c);
                 }
                 steps.push(Step::Code(stmt_loc(s), c))
@@ -424,7 +472,7 @@ fn stmt_list(cx: &mut Cx, list: &'static [S], guards: bool) -> Option<(Init, Opt
     };
     // inside a loop the tail is shared with the registry (its value is never used there)
     let tail = match tail {
-        t if cx.loop_depth == 0 => t,
+        t if cx.loop_depth == 0 && !cx.record_all => t,
         t => {
             let raw = t.is_raw();
             let c = osr::share(t.code());
@@ -492,7 +540,7 @@ pub(super) fn block_x(cx: &mut Cx, list: &'static [S]) -> Option<X> {
         let raw = tail.as_ref().is_some_and(|(_, t)| t.is_raw());
         (seq(init, tail.map(|(l, t)| (l, t.code()))), raw)
     });
-    if cx.loop_depth > 0 {
+    if cx.loop_depth > 0 || cx.record_all {
         cx.reg.record_block(list, BlockInfo { poison: cx.boxed_in_scope(), clear: scope_clear(cx) });
     }
     let r = r.and_then(|(c, raw)| Some((scoped(cx, Some(c))?, raw)));
@@ -643,7 +691,7 @@ fn stmt_island(cx: &mut Cx, s: S) -> Option<Code> {
     if let (Statement::Let { pattern: Pattern::Identifier(_) | Pattern::MutBinding(_), type_, .. }, [(_, slot)]) = (s, declares.as_slice()) {
         cx.note_collection(Some(*slot), type_.as_ref());
     }
-    if let (Statement::Let { pattern: Pattern::Identifier(_) | Pattern::MutBinding(_), .. }, [(_, slot)], true) = (s, declares.as_slice(), cx.loop_depth > 0) {
+    if let (Statement::Let { pattern: Pattern::Identifier(_) | Pattern::MutBinding(_), .. }, [(_, slot)], true) = (s, declares.as_slice(), cx.loop_depth > 0 || cx.record_all) {
         cx.reg.record_let(s, *slot);
     }
     let island = island.declaring(declares);
@@ -661,7 +709,7 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
             };
             let v = expr::expr(cx, value)?;
             let code = if v.is_raw() { raw_let(cx, name, type_.as_ref(), v) } else { let_stmt(cx, name, type_.as_ref(), v) };
-            if let (Some(n), true) = (name, cx.loop_depth > 0) {
+            if let (Some(n), true) = (name, cx.loop_depth > 0 || cx.record_all) {
                 cx.reg.record_let(s, cx.local(n)?);
             }
             match type_ {

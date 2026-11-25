@@ -109,6 +109,8 @@ impl Reg {
 /// One `while` loop of compiled code: the locals visible at it, its hotness and its machine code.
 pub(crate) struct OsrSite {
     pub(crate) stmt: S,
+    /// A function unit's site: the function body (`stmt` is its first statement, `names` its parameters).
+    pub(crate) body: Option<&'static [S]>,
     /// Locals visible at the loop, in declaration order (a later entry shadows an earlier one).
     pub(crate) names: Vec<(&'static str, usize)>,
     /// The function's registry (owned by `Interpreter::osr_regs`; the codes in it own this site).
@@ -124,6 +126,7 @@ impl OsrSite {
     pub(crate) fn new(stmt: S, names: Vec<(&'static str, usize)>, reg: Weak<Reg>) -> OsrSite {
         OsrSite {
             stmt,
+            body: None,
             names,
             reg,
             hits: Cell::new(0),
@@ -131,6 +134,11 @@ impl OsrSite {
             #[cfg(feature = "jit")]
             units: RefCell::new(Default::default()),
         }
+    }
+
+    /// The site of a function body (`jit/osr.rs::enter_body`): armed after `jit_loop_hot` calls.
+    pub(crate) fn body(body: &'static [S], params: Vec<(&'static str, usize)>, reg: Weak<Reg>) -> OsrSite {
+        OsrSite { body: Some(body), ..OsrSite::new(body[0], params, reg) }
     }
 
     /// One more iteration ran in the closure engine.
@@ -167,8 +175,13 @@ pub(crate) fn enter_for(_: &mut Interpreter, _: usize, _: &OsrSite, _: i128, _: 
     Ok(None)
 }
 
+#[cfg(not(feature = "jit"))]
+pub(crate) fn enter_body(_: &mut Interpreter, _: usize, _: &OsrSite) -> R<bool> {
+    Ok(false)
+}
+
 #[cfg(feature = "jit")]
-pub(crate) use super::jit::osr::{enter, enter_for};
+pub(crate) use super::jit::osr::{enter, enter_body, enter_for};
 
 /// Release the locals of a finished block as `scoped` does (`compile.rs`).
 pub(crate) fn close_block<T>(it: &mut Interpreter, b: usize, info: Option<&BlockInfo>, r: R<T>) -> R<T> {

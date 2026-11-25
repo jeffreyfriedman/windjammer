@@ -90,7 +90,7 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
         }
     }
     free.reverse();
-    let unit = Unit { module, ret: None, self_ty, tail_hint: false, closure_body: true };
+    let unit = Unit { module, ret: None, self_ty, tail_hint: false, closure_body: true, record_all: false };
     // environment names are boxed (their slots are the environment's). A parameter is boxed only
     // when the body needs its walker slot (islands, borrows, captures); a plain one is given plain
     // values only: a call passing a reference to it (an `iter_mut` item) runs in the walker

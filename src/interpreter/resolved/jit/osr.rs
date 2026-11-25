@@ -70,6 +70,11 @@ pub(crate) struct Units {
 
 fn debug(it: &Interpreter, site: &OsrSite, what: &str) {
     if it.jit_debug {
+        if site.body.is_some() {
+            let at = loc(site.stmt).map(|l| format!("{}:{}", l.file.display(), l.line)).unwrap_or_default();
+            eprintln!("[jit] fn {at}: {what}");
+            return;
+        }
         let (Statement::While { condition: head, .. } | Statement::For { iterable: head, .. }) = site.stmt else { return };
         let at = crate::interpreter::eval_expr::expr_loc(head).map(|l| format!("{}:{}", l.file.display(), l.line)).unwrap_or_default();
         eprintln!("[jit] loop {at}: {what}");
@@ -91,6 +96,55 @@ pub(crate) fn enter(it: &mut Interpreter, b: usize, site: &OsrSite) -> R<bool> {
         close_body(it, b, &reg, site.stmt);
     }
     Ok(true)
+}
+
+/// Try a whole function body's machine code (a function unit: no declared return, a loop in the body). The call's
+/// frame is real and its parameters are bound (the caller is the body's own code, after the boxed-parameter
+/// prologue). `Ok(true)`: the body ran to its end (or failed/returned as the closure engine would have: `Err`);
+/// `Ok(false)`: nothing ran.
+pub(crate) fn enter_body(it: &mut Interpreter, b: usize, site: &OsrSite) -> R<bool> {
+    if it.fast_off("fnunit") || params_alias(it, b, site) {
+        site.cool();
+        return Ok(false);
+    }
+    let Some((reg, unit)) = unit_for(it, b, site, None) else { return Ok(false) };
+    let Some((exit, buf, raised)) = execute(it, b, site, &reg, &unit, &[]) else { return Ok(false) };
+    it.fast.fnunit += 1;
+    let r = resume(it, b, &reg, &unit.plan.exits[exit].path, &buf, raised);
+    unit.give_back(buf);
+    r?;
+    Ok(true)
+}
+
+/// Do two parameters name the same cell (`f(&mut v, &mut v)`)? The innermost cell of each reference chain (any
+/// path) is compared; a cell that cannot be inspected counts as shared.
+fn params_alias(it: &Interpreter, b: usize, site: &OsrSite) -> bool {
+    let mut seen: [usize; 4] = [0; 4];
+    let mut n = 0;
+    for (_, slot) in &site.names {
+        let Value::Ref(p) = &it.rstack[b + slot] else { continue };
+        let mut cell = p.slot.clone();
+        loop {
+            let next = match cell.try_borrow() {
+                Ok(g) => match &*g {
+                    Value::Ref(q) => q.slot.clone(),
+                    _ => break,
+                },
+                Err(_) => return true,
+            };
+            cell = next;
+        }
+        let at = Rc::as_ptr(&cell) as usize;
+        if seen[..n].contains(&at) {
+            return true;
+        }
+        if n == seen.len() {
+            return true;
+        }
+        seen[n] = at;
+        n += 1;
+    }
+    false
 }
 
 /// The machine code stopped at the loop head: the last iteration's body locals are still in their slots (each
@@ -264,6 +318,10 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     }
     if !e.planned {
         it.fallback.jitexit += 1;
+        if it.jit_debug && unit.unplanned.get() < 3 {
+            let at = e.path.last().and_then(|l| l.list.get(l.idx)).and_then(|s| loc(s)).map(|l| format!("{}:{}", l.file.display(), l.line)).unwrap_or_default();
+            eprintln!("[jit] failed check at {at}");
+        }
         let n = unit.unplanned.get() + 1;
         unit.unplanned.set(n);
         if n >= MAX_UNPLANNED {
@@ -379,6 +437,9 @@ fn classify_is(v: &Value, kind: Option<SlotKind>, c: &Class) -> bool {
 
 /// The locals the loop names (its own `let`s shadow them inside; that is resolved when lowering).
 fn collect(site: &OsrSite) -> Vec<(&'static str, usize)> {
+    if site.body.is_some() {
+        return site.names.clone(); // a function unit's locals at entry are its parameters
+    }
     let mut names = Vec::new();
     stmt_names(site.stmt, &mut names);
     let mut out: Vec<(&'static str, usize)> = Vec::new();
@@ -443,7 +504,7 @@ fn compile(it: &mut Interpreter, site: &OsrSite, reg: &Reg, refs: &[(&'static st
         let mut ctx = module.make_context();
         ctx.func.signature = lower::signature(ptr, module.target_config().default_call_conv);
         let mut fctx = FunctionBuilderContext::new();
-        let plan = lower::lower(&mut ctx.func, &mut fctx, it, site.stmt, reg, &refs, ptr)?;
+        let plan = lower::lower(&mut ctx.func, &mut fctx, it, site.body.map_or(lower::Root::Loop(site.stmt), lower::Root::Body), reg, &refs, ptr)?;
         let id = module.declare_anonymous_function(&ctx.func.signature).map_err(|e| format!("{e:?}"))?;
         module.define_function(id, &mut ctx).map_err(|e| format!("cranelift: {e:?}"))?;
         module.clear_context(&mut ctx);

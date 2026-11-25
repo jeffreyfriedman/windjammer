@@ -1,0 +1,40 @@
+// A function unit keeps its row views for ONE contiguous run: a closure-run statement between the loops (`let b =
+// bodies[0]`, an `Rc` clone that shares the element) must drop them, so the second loop's stores do not write through
+// a view into the element `b` now shares. `b` keeps the value the first loop left.
+struct B {
+    x: f64,
+    v: f64,
+}
+
+fn step(bodies: Vec<B>, out: Vec<f64>, dt: f64) {
+    let mut i = 0
+    while i < bodies.len() {
+        bodies[i].v += dt
+        bodies[i].x += bodies[i].v * dt
+        i += 1
+    }
+    let b = bodies[0]
+    let mut j = 0
+    while j < bodies.len() {
+        bodies[j].v += dt
+        bodies[j].x += bodies[j].v * dt
+        j += 1
+    }
+    out.push(b.v)
+}
+
+fn main() {
+    let mut bodies: Vec<B> = Vec::new()
+    let mut q = 0
+    while q < 4 {
+        bodies.push(B { x: q as f64, v: 0.5 })
+        q += 1
+    }
+    let mut out: Vec<f64> = Vec::new()
+    let mut s = 0
+    while s < 300 {
+        step(bodies, out, 0.01)
+        s += 1
+    }
+    println("${out[0]} ${out[1]} ${out[299]} ${bodies[0].v} ${bodies[3].x}")
+}
