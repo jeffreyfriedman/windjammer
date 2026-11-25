@@ -61,24 +61,20 @@ impl SignatureRegistry {
         if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) { bucket.insert(pos, name.to_string()); }
     }
 
-    /// The one key any layer registers as `{Type}::{suffix}` (a bare method name with no receiver type), or `None`
-    /// when there are two. The candidate set is every layer's (this file's, the project's, the std library's), never
-    /// the first layer's alone: a user `push` must not answer for `Vec::push` because the std homonym sits on a lower
-    /// layer, and the answer must not depend on which files were registered first. Fails closed: two keys are two
-    /// candidates even when they may name one function (`ui::Panel::width`, `crate::ui::Panel::width`). Of the std
-    /// library, only the builtin value types count (`Vec`, `String`, maps, `Option`...): a receiver whose type is not
-    /// inferred yet may be one of them (`let mut seen = Vec::new()`), not a runtime module's type (`Timer::reset`).
+    /// The one `{Type}::{suffix}` a bare method name (no receiver type) can name, or `None` when it is ambiguous: the
+    /// nearest layer that registers the name must hold exactly one key, and no layer may hold the method on a builtin
+    /// value type (`Vec`, `String`, maps, `Option`...). A receiver whose type is not inferred yet may be one of those
+    /// (`let mut seen = Vec::new()`), so a user `Column::contains` or `CallStack::push` never answers for
+    /// `Vec::contains` / `Vec::push`, wherever the std homonym sits. Runtime module types (`Timer::reset`) do not veto.
     pub fn find_unique_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
-        let std = Self::stdlib();
-        let counts = |key: &str| {
-            let owner = key.rsplit_once("::").map_or("", |(o, _)| o.rsplit("::").next().unwrap_or(o));
-            !std.signatures.contains_key(key)
-                || crate::type_classification::is_stdlib_container(owner)
-                || matches!(owner, "String" | "str" | "string")
-        };
-        let mut candidates = self.signatures_for_method_name(suffix).filter(|(key, _)| counts(key));
-        let (_, only) = candidates.next()?;
-        candidates.next().is_none().then_some(only)
+        let nearest = self.layers().find_map(|reg| reg.method_index.get(suffix).filter(|k| !k.is_empty()).map(|k| (reg, k)));
+        let (reg, keys) = nearest?;
+        let [only] = keys.as_slice() else { return None };
+        let builtin_homonym = self.signatures_for_method_name(suffix).any(|(key, _)| key != only && key_is_builtin_type_method(key));
+        if builtin_homonym {
+            return None;
+        }
+        reg.signatures.get(only)
     }
 
     /// The signature a file registers for its own definition `name` (its analysis, kept by `keep_own_definitions`):
@@ -265,4 +261,10 @@ impl SignatureRegistry {
             .into_iter()
             .find_map(|key| self.signature_declared_at(&key).map(|sig| (key, sig)))
     }
+}
+
+/// `Vec::contains`, `String::push`, `HashMap::get`: a method of a builtin value type (not of a runtime module's type).
+fn key_is_builtin_type_method(key: &str) -> bool {
+    let owner = key.rsplit_once("::").map_or("", |(o, _)| o.rsplit("::").next().unwrap_or(o));
+    crate::type_classification::is_stdlib_container(owner) || matches!(owner, "String" | "str" | "string")
 }
