@@ -152,7 +152,7 @@ fn host_bridge(t: &RunTarget) -> Result<Option<(PathBuf, Vec<crate::interpreter:
     if rust.is_empty() {
         return Ok(None);
     }
-    let files = crate::interpreter::loader::program_files(&t.entry).map_err(|e| e.message)?;
+    let files = crate::interpreter::loader::program_files(&t.entry, None).map_err(|e| e.message)?;
     if !files.iter().any(|f| std::fs::read_to_string(&f.file).is_ok_and(|s| s.contains("extern"))) {
         return Ok(None);
     }
@@ -169,7 +169,7 @@ fn host_bridge(t: &RunTarget) -> Result<Option<(PathBuf, Vec<crate::interpreter:
 /// surface (ADR-0031). `Err` is a failed host build.
 fn crate_host(t: &RunTarget) -> Result<Option<crate::interpreter::crate_host::CrateHost>, String> {
     let Some(root) = t.project_root.clone() else { return Ok(None) };
-    let files = crate::interpreter::loader::program_files(&t.entry).map_err(|e| e.message)?;
+    let files = crate::interpreter::loader::program_files(&t.entry, None).map_err(|e| e.message)?;
     let texts: Vec<String> = files.iter().filter_map(|f| std::fs::read_to_string(&f.file).ok()).collect();
     let p = super::crate_host_build::ensure(&root, &texts, &mut |m| eprintln!("{}", m))?;
     Ok(p.map(super::crate_host_build::Prepared::into_host))

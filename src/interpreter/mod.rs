@@ -22,6 +22,7 @@ mod call;
 mod coerce;
 pub mod crate_host;
 pub mod compiled_facts;
+pub mod parse_share;
 mod defaults;
 pub mod deps;
 pub mod engine;

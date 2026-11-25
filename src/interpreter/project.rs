@@ -33,7 +33,8 @@ fn semantic_at(msg: String, loc: Option<&crate::source_map::Location>) -> Runtim
 }
 
 /// Parse every file (parse errors name the file, like the compiler's).
-pub fn parse_files(files: &[SourceFile]) -> Result<Vec<LoadedFile>, RuntimeError> {
+/// With `share`, the parse of a file text seen before in this run is reused (`parse_share.rs`).
+pub fn parse_files(files: &[SourceFile], share: Option<&super::parse_share::ParseShare>) -> Result<Vec<LoadedFile>, RuntimeError> {
     let sources: Vec<String> = files
         .iter()
         .map(|f| {
@@ -41,15 +42,18 @@ pub fn parse_files(files: &[SourceFile]) -> Result<Vec<LoadedFile>, RuntimeError
                 .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", f.file.display(), e)))
         })
         .collect::<Result<_, _>>()?;
-    let parse = |f: &SourceFile, src: &str, renames: &HashMap<String, String>| {
-        super::loader::parse_source_renaming(src, &f.file.to_string_lossy(), renames).map_err(|e| {
-            RuntimeError::new(ErrorKind::Semantic, format!("parse error in {}: {}", f.file.display(), e))
-        })
+    let parse = |f: &SourceFile, src: &str, renames: &HashMap<String, String>| -> Result<&'static Program<'static>, RuntimeError> {
+        let name = f.file.to_string_lossy();
+        let parsed = match share {
+            Some(s) => s.parse(src, &name, renames),
+            None => super::loader::parse_source_renaming(src, &name, renames).map(|p| &*Box::leak(Box::new(p))),
+        };
+        parsed.map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("parse error in {}: {}", f.file.display(), e)))
     };
     let mut loaded: Vec<LoadedFile> = Vec::with_capacity(files.len());
     for (f, src) in files.iter().zip(&sources) {
         let program = parse(f, src, &HashMap::new())?;
-        loaded.push(LoadedFile { module_path: f.module_path.clone(), file: f.file.clone(), program: Box::leak(Box::new(program)) });
+        loaded.push(LoadedFile { module_path: f.module_path.clone(), file: f.file.clone(), program });
     }
     // Types are keyed by name in the interpreter. Same-name *private* structs of different modules are
     // legal Rust; give each a distinct name inside the files that can see it, then re-parse those files.
@@ -57,7 +61,7 @@ pub fn parse_files(files: &[SourceFile]) -> Result<Vec<LoadedFile>, RuntimeError
     for (i, r) in renames.iter().enumerate() {
         if !r.is_empty() {
             let program = parse(&files[i], &sources[i], r)?;
-            loaded[i].program = Box::leak(Box::new(program));
+            loaded[i].program = program;
         }
     }
     Ok(loaded)
@@ -100,7 +104,7 @@ fn private_struct_renames(files: &[LoadedFile]) -> Vec<HashMap<String, String>> 
 }
 
 /// Files reachable from a loose script through `use` / `mod` (a script does not own its directory).
-pub fn script_sources(entry: &Path) -> Result<Vec<LoadedFile>, RuntimeError> {
+pub fn script_sources(entry: &Path, share: Option<&super::parse_share::ParseShare>) -> Result<Vec<LoadedFile>, RuntimeError> {
     let root = entry.parent().map(Path::to_path_buf).unwrap_or_default();
     // a module is found next to the script, else in the project root (the manifest's directory) or its `src/`, as `wj check`
     // and the reference say: a runner in `tools/` or a test in `tests/` imports the root's modules (no folder name assumed)
@@ -112,7 +116,7 @@ pub fn script_sources(entry: &Path) -> Result<Vec<LoadedFile>, RuntimeError> {
             }
         }
     }
-    let first = parse_files(&[SourceFile { module_path: Vec::new(), file: entry.to_path_buf() }])?;
+    let first = parse_files(&[SourceFile { module_path: Vec::new(), file: entry.to_path_buf() }], share)?;
     let mut out: Vec<LoadedFile> = first;
     let mut seen: HashSet<Vec<String>> = HashSet::from([Vec::new()]);
     let mut i = 0;
@@ -133,7 +137,7 @@ pub fn script_sources(entry: &Path) -> Result<Vec<LoadedFile>, RuntimeError> {
                     break;
                 };
                 seen.insert(prefix.clone());
-                out.extend(parse_files(&[SourceFile { module_path: prefix, file }])?);
+                out.extend(parse_files(&[SourceFile { module_path: prefix, file }], share)?);
             }
         }
         i += 1;
