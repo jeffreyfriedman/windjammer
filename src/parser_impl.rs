@@ -253,7 +253,7 @@ impl Parser {
             .filter_map(|t| match &t.token {
                 Token::Invalid(m) => Some(format!(
                     "Lexical error: {} (at line {}, column {})",
-                    m, t.line, t.column
+                    m, t.src_line, t.src_column
                 )),
                 _ => None,
             })
@@ -461,6 +461,12 @@ impl Parser {
                 line: t.line,
                 column: t.column,
             })
+    }
+
+    /// The (line, column) a user reads in the source for the current token: tokens inside `${..}` carry keyed
+    /// `line`/`column` (unique per interpolation, not positions), so diagnostics read `src_line`/`src_column`.
+    pub(crate) fn current_src_position(&self) -> Option<(usize, usize)> {
+        self.tokens.get(self.position).map(|t| (t.src_line, t.src_column))
     }
 
     pub(crate) fn advance(&mut self) {

@@ -39,7 +39,7 @@ impl IntInference {
                                         .unwrap_or("?");
                                     self.errors.push(format!(
                                         "{}:{}:{}: Type conflict: must be {:?} ({}) but was {:?}",
-                                        file_path, expr_id.line, expr_id.col, int_ty, reason, other
+                                        file_path, expr_id.line, crate::source_map::display_column(expr_id.col), int_ty, reason, other
                                     ));
                                 }
                                 // else: Safe cast - silently allow it
@@ -80,7 +80,7 @@ impl IntInference {
                                         .unwrap_or("?");
                                     self.errors.push(format!(
                                         "{}:{}:{}: Type mismatch {}: {:?} vs {:?} ({})",
-                                        file_path, id1.line, id1.col, reason, a, b, reason
+                                        file_path, id1.line, crate::source_map::display_column(id1.col), reason, a, b, reason
                                     ));
                                     continue;
                                 };
