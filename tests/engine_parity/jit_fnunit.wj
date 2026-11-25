@@ -1,0 +1,243 @@
+// Function units: a unit-returning function with loops runs as one machine-code unit once it is hot. Every guard the
+// unit has to keep: parameters mutated in place, a `&mut` scalar the caller sees, the same Vec passed twice, a recursive
+// callee, an early `return` in the glue and in a loop, a callee reading a const, call arguments with side effects,
+// shadowed names, `let b = bodies[i]` (a physical clone while it lives), a callee called from a loop and from a closure,
+// and a typed-return callee (stays on the boxed path).
+const SCALE: int = 3
+
+struct B {
+    x: f64,
+    v: f64,
+    n: int,
+}
+
+fn step(bodies: Vec<B>, dt: f64) {
+    let n = bodies.len()
+    let mut i = 0
+    while i < n {
+        let mut j = i + 1
+        while j < n {
+            let d = bodies[i].x - bodies[j].x
+            bodies[i].v -= d * dt
+            bodies[j].v += d * dt
+            j += 1
+        }
+        i += 1
+    }
+    let k = 0
+    let mut m = k
+    while m < n {
+        bodies[m].x += dt * bodies[m].v
+        bodies[m].n += SCALE
+        m += 1
+    }
+}
+
+// the clone of an element lives across the second loop: no view may be built while it is shared
+fn step_clone(bodies: Vec<B>, dt: f64) {
+    let n = bodies.len()
+    let mut i = 0
+    while i < n {
+        let b = bodies[i]
+        let mut j = 0
+        while j < n {
+            bodies[j].v += (b.x - bodies[j].x) * dt
+            j += 1
+        }
+        i += 1
+    }
+    let mut m = 0
+    while m < n {
+        bodies[m].x += dt * bodies[m].v
+        m += 1
+    }
+}
+
+// a `&mut` scalar parameter: the caller's variable is the place
+fn bump(total: int, xs: Vec<int>) {
+    let mut i = 0
+    while i < xs.len() {
+        total += xs[i]
+        i += 1
+    }
+    let mut j = 0
+    while j < 3 {
+        total += 1
+        j += 1
+    }
+}
+
+// the same vec passed as both parameters
+fn mix(a: Vec<int>, b: Vec<int>) {
+    let mut i = 0
+    while i < a.len() {
+        a[i] = (a[i] + b[i]) % 1000 + 1
+        i += 1
+    }
+    let mut j = 0
+    while j < b.len() {
+        b[j] = (b[j] + 1) % 1000
+        j += 1
+    }
+}
+
+// early return in the glue and inside a loop
+fn early(xs: Vec<int>, stop: int) {
+    let mut i = 0
+    while i < xs.len() {
+        xs[i] += 1
+        i += 1
+    }
+    if stop == 1 {
+        return
+    }
+    let mut j = 0
+    while j < xs.len() {
+        if xs[j] > 1000 {
+            return
+        }
+        xs[j] += 2
+        j += 1
+    }
+}
+
+// a recursive callee with loops
+fn rec(depth: int, xs: Vec<int>) {
+    let mut i = 0
+    while i < xs.len() {
+        xs[i] += depth
+        i += 1
+    }
+    if depth > 0 {
+        rec(depth - 1, xs)
+    }
+    let mut j = 0
+    while j < xs.len() {
+        xs[j] += 1
+        j += 1
+    }
+}
+
+// shadowed names between the loops
+fn shadow(xs: Vec<int>) {
+    let t = 1
+    let mut i = 0
+    while i < xs.len() {
+        xs[i] += t
+        i += 1
+    }
+    let t = 10
+    let mut j = 0
+    while j < xs.len() {
+        xs[j] += t
+        j += 1
+    }
+}
+
+// a call with a side effect in the argument list, between two loops
+fn tick(log: Vec<int>, v: int) -> int {
+    log.push(v)
+    v
+}
+
+fn glue(xs: Vec<int>, log: Vec<int>) {
+    let mut i = 0
+    while i < xs.len() {
+        xs[i] += 1
+        i += 1
+    }
+    xs.push(tick(log, 1) + tick(log, 2))
+    let mut j = 0
+    while j < xs.len() {
+        xs[j] += 1
+        j += 1
+    }
+}
+
+// typed return: not a function unit
+fn sum(xs: Vec<int>) -> int {
+    let mut s = 0
+    let mut i = 0
+    while i < xs.len() {
+        s += xs[i]
+        i += 1
+    }
+    s
+}
+
+fn main() {
+    let mut bodies: Vec<B> = Vec::new()
+    let mut q = 0
+    while q < 5 {
+        bodies.push(B { x: q as f64, v: 0.0, n: 0 })
+        q += 1
+    }
+    let mut s = 0
+    while s < 400 {
+        step(bodies, 0.01)
+        s += 1
+    }
+    let mut c: Vec<B> = Vec::new()
+    let mut q2 = 0
+    while q2 < 4 {
+        c.push(B { x: q2 as f64 * 2.0, v: 1.0, n: 0 })
+        q2 += 1
+    }
+    let mut s2 = 0
+    while s2 < 400 {
+        step_clone(c, 0.001)
+        s2 += 1
+    }
+    let mut total = 7
+    let xs: Vec<int> = [1, 2, 3, 4]
+    let mut s3 = 0
+    while s3 < 400 {
+        bump(total, xs)
+        s3 += 1
+    }
+    let mut same: Vec<int> = [1, 2, 3]
+    let mut s4 = 0
+    while s4 < 400 {
+        mix(same, same)
+        s4 += 1
+    }
+    let mut e: Vec<int> = [0, 0, 0]
+    let mut s5 = 0
+    while s5 < 400 {
+        early(e, s5 % 2)
+        s5 += 1
+    }
+    let mut r: Vec<int> = [0, 0]
+    let mut s6 = 0
+    while s6 < 300 {
+        rec(2, r)
+        s6 += 1
+    }
+    let mut sh: Vec<int> = [0, 0, 0]
+    let mut s7 = 0
+    while s7 < 400 {
+        shadow(sh)
+        s7 += 1
+    }
+    let mut g: Vec<int> = [0]
+    let mut log: Vec<int> = Vec::new()
+    let mut s8 = 0
+    while s8 < 300 {
+        glue(g, log)
+        if g.len() > 20 {
+            g = [0]
+        }
+        s8 += 1
+    }
+    let mut bs: Vec<int> = [1, 1]
+    let f = |n: int| {
+        let mut k = 0
+        while k < n {
+            shadow(bs)
+            k += 1
+        }
+    }
+    f(300)
+    println("${bodies[0].x} ${bodies[4].v} ${bodies[2].n} ${c[1].x} ${c[3].v}")
+    println("${total} ${same[0]} ${same[2]} ${e[0]} ${e[2]} ${r[0]} ${r[1]} ${sh[1]} ${g.len()} ${log.len()} ${bs[0]} ${sum(xs)}")
+}

@@ -195,12 +195,19 @@ pub(crate) fn signature(ptr: CTy, call_conv: cranelift_codegen::isa::CallConv) -
     sig
 }
 
-/// Lower `site`'s loop with the locals it names (`refs`: name, slot, class at entry) into `func`.
+/// What a unit is the machine code of: a `while` / range `for` statement, or a whole function body.
+#[derive(Clone, Copy)]
+pub(crate) enum Root {
+    Loop(S),
+    Body(&'static [S]),
+}
+
+/// Lower `root` with the locals it names (`refs`: name, slot, class at entry) into `func`.
 pub(crate) fn lower(
     func: &mut Function,
     fctx: &mut FunctionBuilderContext,
     it: &mut Interpreter,
-    stmt: S,
+    root: Root,
     reg: &Reg,
     refs: &[(&'static str, usize, Class)],
     ptr: CTy,
@@ -233,8 +240,8 @@ pub(crate) fn lower(
         open_joins: 0,
         natives: 0,
         row_shapes: Vec::new(),
-        unit_label: match stmt {
-            Statement::While { label, .. } | Statement::For { label, .. } => label.as_deref(),
+        unit_label: match root {
+            Root::Loop(Statement::While { label, .. } | Statement::For { label, .. }) => label.as_deref(),
             _ => None,
         },
     };
@@ -262,9 +269,10 @@ pub(crate) fn lower(
         };
         lo.scopes[0].push((name, bind));
     }
-    let (ok, counter) = match stmt {
-        Statement::While { condition, body, .. } => (lo.unit_loop(condition, body).is_some(), None),
-        Statement::For { pattern, body, .. } => {
+    let (ok, counter) = match root {
+        Root::Body(list) => (lo.unit_body(list).is_some(), None),
+        Root::Loop(Statement::While { condition, body, .. }) => (lo.unit_loop(condition, body).is_some(), None),
+        Root::Loop(stmt @ Statement::For { pattern, body, .. }) => {
             let ty = match refs.last() {
                 Some((_, _, Class::Scalar(Ty::Int(t)))) => *t,
                 _ => return Err("no counter type".into()),
@@ -523,6 +531,44 @@ impl Lo<'_, '_> {
             self.bail_if(fl);
         }
         r
+    }
+
+    /// A function unit: the whole body, from its first statement to its end. The body list has no registered block
+    /// scope (`leave_compiled` releases the frame), but every statement has its code and a location; the end is a
+    /// planned exit that resumes after the last statement, and writes back only what outlives the call (the
+    /// parameters: a `&mut` one is the caller's place), not the body's own `let`s.
+    fn unit_body(&mut self, list: &'static [S]) -> Option<()> {
+        let ok = list.iter().all(|s| self.reg.code(s).is_some() && loc(s).is_some());
+        if !ok {
+            self.refused(|| "a function body the closure engine cannot resume in (an island or no location)".into());
+            return None;
+        }
+        self.scopes.push(Vec::new());
+        let mut ended = false;
+        for (i, s) in list.iter().enumerate() {
+            self.path.push(Level { list, idx: i, for_: None });
+            self.stmt_exit.push(None);
+            let r = self.stmt(s);
+            self.stmt_exit.pop();
+            self.path.pop();
+            if r? {
+                ended = true;
+                break;
+            }
+        }
+        if !ended {
+            self.path.push(Level { list, idx: list.len(), for_: None });
+            let id = self.new_exit(true);
+            let e = &mut self.exits[id];
+            e.spills.retain(|sp| !sp.fresh);
+            e.structs.retain(|sp| !sp.fresh);
+            let blk = self.b.create_block();
+            self.b.ins().jump(blk, &[]);
+            self.pending.push((blk, id));
+            self.path.pop();
+        }
+        self.scopes.pop();
+        Some(())
     }
 
     fn unit_loop(&mut self, cond: E, body: &'static [S]) -> Option<()> {

@@ -1,0 +1,29 @@
+// A function unit that traps (division by zero in the first loop): the closure engine re-runs the failing statement, so the panic, its location,
+// the backtrace and the locals of the failing frame are the walker's.
+fn pass(xs: Vec<int>, calls: Vec<int>) {
+    let c = calls[0]
+    let mut i = 0
+    while i < xs.len() {
+        xs[i] = (xs[i] + 1 + 7 / (299 - c)) % 1000
+        i += 1
+    }
+    let z = 1000000 / (c + 1)
+    xs[0] = z % 1000
+    let mut j = 0
+    while j < xs.len() {
+        xs[j] = (xs[j] + 1) % 1000
+        j += 1
+    }
+    calls[0] = c + 1
+}
+
+fn main() {
+    let mut xs: Vec<int> = [0, 0, 0]
+    let mut calls: Vec<int> = [0]
+    let mut k = 0
+    while k < 400 {
+        pass(xs, calls)
+        k += 1
+    }
+    println("${xs[0]} ${xs[2]} ${calls[0]}")
+}
