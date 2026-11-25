@@ -17,7 +17,7 @@ pub struct Dependencies {
 }
 
 /// `with_dev`: the entry is a test, which also sees the project's `[dev-dependencies]` (not a dependency's).
-pub fn dependency_sources(entry: &Path, with_dev: bool) -> Result<Dependencies, RuntimeError> {
+pub fn dependency_sources(entry: &Path, with_dev: bool, share: Option<&super::parse_share::ParseShare>) -> Result<Dependencies, RuntimeError> {
     let Some(root) = crate::module_system::project::find_manifest_dir(entry) else {
         return Ok(Dependencies::default());
     };
@@ -54,7 +54,7 @@ pub fn dependency_sources(entry: &Path, with_dev: bool) -> Result<Dependencies, 
                 }),
             }
             .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("dependency `{}`: {}", n.name, e)))?;
-            out.push((n.crate_name(), parse_files(&files)?));
+            out.push((n.crate_name(), parse_files(&files, share)?));
         }
     }
     Ok(Dependencies { windjammer: out, rust })
@@ -81,7 +81,7 @@ mod tests {
         write(r, "a/build/Cargo.toml", "[package]\nname = \"a\"\n");
         write(r, "b/wj.toml", "[package]\nname = \"b\"\n\n[lib]\n");
         write(r, "b/src/lib.wj", "pub fn g() -> int { 1 }\n");
-        let deps = dependency_sources(&r.join("app/src/main.wj"), false).unwrap();
+        let deps = dependency_sources(&r.join("app/src/main.wj"), false, None).unwrap();
         let mut names: Vec<&str> = deps.windjammer.iter().map(|(n, _)| n.as_str()).collect();
         names.sort();
         assert_eq!(names, ["wj_a", "wj_b"]);

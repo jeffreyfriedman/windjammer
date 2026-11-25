@@ -279,6 +279,8 @@ pub struct Interpreter {
     pub(crate) lit_widths_by_program: HashMap<usize, super::compiled_facts::LitWidths>,
     /// Widths shared with the other tests of this run (`WidthShare`); `None` outside the test runner.
     pub(crate) width_share: Option<std::sync::Arc<super::compiled_facts::WidthShare>>,
+    /// Parsed files shared with the other tests of this run (`ParseShare`); `None` outside the test runner.
+    pub(crate) parse_share: Option<std::sync::Arc<super::parse_share::ParseShare>>,
     /// Give unsuffixed literals the solver's widths (a host may turn it off).
     pub(crate) literal_widths_on: bool,
     /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
@@ -399,6 +401,7 @@ impl Interpreter {
             lit_widths: Vec::new(),
             lit_widths_by_program: HashMap::new(),
             width_share: None,
+            parse_share: None,
             literal_widths_on: true,
             type_hint: None,
             retained: Vec::new(),

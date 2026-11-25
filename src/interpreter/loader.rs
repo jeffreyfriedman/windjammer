@@ -40,18 +40,18 @@ pub fn parse_source_renaming(
 }
 
 /// The files of the program whose entry is `entry` (entry first), with their module paths.
-pub fn program_files(entry: &Path) -> Result<Vec<super::project::LoadedFile>, RuntimeError> {
+pub fn program_files(entry: &Path, share: Option<&super::parse_share::ParseShare>) -> Result<Vec<super::project::LoadedFile>, RuntimeError> {
     use crate::module_system::project;
     let project_root = project::find_manifest_dir(entry);
     let is_crate_root = entry.file_name().is_some_and(|n| n == "main.wj" || n == "lib.wj")
         || project_root.as_deref().is_some_and(|r| project::bin_targets(r).iter().any(|b| same_file(&b.entry, entry)));
     if !is_crate_root {
-        return super::project::script_sources(entry);
+        return super::project::script_sources(entry, share);
     }
     let root = project::source_root_for(entry, project_root.as_deref());
     let files = crate::module_system::sources::program_sources(&root, entry)
         .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", root.display(), e)))?;
-    super::project::parse_files(&files)
+    super::project::parse_files(&files, share)
 }
 
 /// The program a test file runs in, and the module path of the file inside it.
@@ -60,7 +60,7 @@ pub fn program_files(entry: &Path) -> Result<Vec<super::project::LoadedFile>, Ru
 /// against the whole project, exactly as `wj run` and the compiled `wj test` see it, so `use crate::a::P`
 /// reaches sibling modules. The source root is `<project>/src` when it exists, else the project directory
 /// (the same layout `module_system::project` uses). A file outside any project is a script.
-pub fn test_program_files(file: &Path) -> Result<(Vec<super::project::LoadedFile>, Vec<String>, PathBuf), RuntimeError> {
+pub fn test_program_files(file: &Path, share: Option<&super::parse_share::ParseShare>) -> Result<(Vec<super::project::LoadedFile>, Vec<String>, PathBuf), RuntimeError> {
     use crate::module_system::{project, sources::SourceFile};
     let file = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
     let crate_entry = project::find_manifest_dir(&file).and_then(|proj| {
@@ -68,7 +68,7 @@ pub fn test_program_files(file: &Path) -> Result<(Vec<super::project::LoadedFile
         ["lib.wj", "main.wj", "mod.wj"].iter().map(|n| root.join(n)).find(|e| e.is_file()).map(|e| (root, e))
     });
     let Some((root, entry)) = crate_entry.filter(|(_, e)| !same_file(e, &file)) else {
-        return Ok((program_files(&file)?, Vec::new(), file));
+        return Ok((program_files(&file, share)?, Vec::new(), file));
     };
     let mut sources = crate::module_system::sources::program_sources(&root, &entry)
         .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", root.display(), e)))?;
@@ -88,7 +88,7 @@ pub fn test_program_files(file: &Path) -> Result<(Vec<super::project::LoadedFile
             path
         }
     };
-    Ok((super::project::parse_files(&sources)?, module_path, entry))
+    Ok((super::project::parse_files(&sources, share)?, module_path, entry))
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -100,15 +100,15 @@ impl Interpreter {
     /// every module in it is loaded (like the compiled build); a loose script loads what it `use`s.
     /// Names are bound by the compiler's resolver either way (`project.rs`).
     pub fn load_program_at(&mut self, entry: &Path) -> Result<(), RuntimeError> {
-        let files = program_files(entry)?;
-        let deps = super::deps::dependency_sources(entry, false)?;
+        let files = program_files(entry, None)?;
+        let deps = super::deps::dependency_sources(entry, false, None)?;
         self.load_sources(files, deps.windjammer, deps.rust)
     }
 
     /// Load the program a test file runs in (see [`test_program_files`]); returns the file's module path.
     pub fn load_test_program(&mut self, file: &Path) -> Result<Vec<String>, RuntimeError> {
-        let (files, module_path, entry) = test_program_files(file)?;
-        let deps = super::deps::dependency_sources(&entry, true)?;
+        let (files, module_path, entry) = test_program_files(file, self.parse_share.as_deref())?;
+        let deps = super::deps::dependency_sources(&entry, true, self.parse_share.as_deref())?;
         self.load_sources(files, deps.windjammer, deps.rust)?;
         Ok(module_path)
     }
