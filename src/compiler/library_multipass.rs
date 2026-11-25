@@ -415,7 +415,7 @@ pub(crate) fn build_library_multipass(
     // Merge same-crate `.wj.meta` AFTER dependency filtering. Do not drop again —
     // a second `drop_dependency_signatures_for_local_types` would delete bare
     // `Type::method` keys from defining-module metas (cross-file &str).
-    crate::metadata::merge_wj_meta_signatures_from_dir(&src_base, &cache_root, &mut global_registry);
+    crate::metadata::merge_wj_meta_signatures_for_crate_build(&src_base, &cache_root, &mut global_registry);
     let mut global_float_signatures: HashMap<
         String,
         (
@@ -623,48 +623,14 @@ pub(crate) fn build_library_multipass(
     profile_phase(&report, "Step 3 total", step3_start);
 
     let reexports_start = Instant::now();
-    // Collect `pub use` re-exports from every file first so `use super::*` / `use crate::...::*`
-    // can resolve struct field types (glob has no explicit type path).
-    let mut module_re_exports: HashMap<String, HashMap<String, String>> = HashMap::new();
-    for (i, (file, _source)) in sources.iter().enumerate() {
-        let program = &parsed_programs[i];
-        let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
-            .unwrap_or_default();
-        crate::type_inference::struct_field_registry::merge_module_reexports_from_items(
-            &program.items,
-            &file_module,
-            &global_struct_fields,
-            &struct_defining_module_paths,
-            &mut module_re_exports,
-        );
-        if crate::type_inference::struct_field_registry::debug_struct_import_trace()
-            && file.to_string_lossy().contains("dialogue")
-        {
-            eprintln!(
-                "=== WJ_DEBUG: file={} file_module_path={:?}",
-                file.display(),
-                file_module
-            );
-        }
-    }
-
-    if crate::type_inference::struct_field_registry::debug_struct_import_trace() {
-        eprintln!("=== GLOBAL MODULE_RE_EXPORTS (post pre-pass) ===");
-        let mut mods: Vec<_> = module_re_exports.keys().cloned().collect();
-        mods.sort();
-        for m in &mods {
-            if !m.contains("dialogue") && !m.is_empty() {
-                continue;
-            }
-            let exports = &module_re_exports[m];
-            eprintln!("  module {:?}: {} exports", m, exports.len());
-            for (name, key) in exports {
-                if name.contains("Dialogue") {
-                    eprintln!("    {} → {}", name, key);
-                }
-            }
-        }
-    }
+    let mut global_struct_fields = global_struct_fields;
+    let module_re_exports = super::module_reexports::collect_module_reexports(
+        &sources,
+        &parsed_programs,
+        &src_base,
+        &mut global_struct_fields,
+        &struct_defining_module_paths,
+    );
 
     // Step 4A: Unified numeric inference (parallel per-file constraint collection + single solve)
     let step4a_start = Instant::now();
@@ -1868,6 +1834,7 @@ fn keep_own_definitions(
 }
 
 type FieldTypes = HashMap<String, HashMap<String, crate::parser::ast::types::Type>>;
+
 
 /// Field and variant-payload types of every file of the library (an enum declared in another module types
 /// `Shape::Sphere(0.5)`), over the merged struct fields; the first declaration of a name is kept.
