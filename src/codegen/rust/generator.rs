@@ -2831,11 +2831,9 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         let base = name.rsplit("::").next().unwrap_or(name.as_str());
-        self.signature_registry.runtime_type_is_non_clone(base)
-            || self
-                .global_signature_registry
-                .as_ref()
-                .is_some_and(|g| g.runtime_type_is_non_clone(base))
+        !self.type_is_declared_in_crate(base)
+            && (self.signature_registry.runtime_type_is_non_clone(base)
+                || self.global_signature_registry.as_ref().is_some_and(|g| g.runtime_type_is_non_clone(base)))
     }
 
     /// Binding whose resolved type is a scanned runtime non-`Clone` struct.

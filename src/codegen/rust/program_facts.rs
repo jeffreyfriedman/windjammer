@@ -8,6 +8,8 @@ use super::CodeGenerator;
 /// Facts and flags consumed while emitting one program.
 #[derive(Default)]
 pub(crate) struct IdiomScratch {
+    /// Every struct and enum name the crate declares (all modules): a runtime type of the same name is not that type.
+    pub(crate) crate_user_type_names: HashSet<String>,
     /// `(type, trait)` pairs the user implements by hand; the auto-derive must not also derive them (E0119).
     pub(crate) user_trait_impls: HashSet<(String, String)>,
     /// Let-bound closures of the current function that are only called / passed to free functions.

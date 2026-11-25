@@ -1300,7 +1300,7 @@ pub(crate) fn build_library_multipass(
             codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
             codegen.merge_function_emitted_mut_arg_indices(&accumulated_emitted_mut_arg_indices);
             codegen.set_copy_types_registry((*global_copy_structs).clone());
-            codegen.set_crate_partial_eq_types(crate_partial_eq_types.clone());
+            codegen.set_crate_decl_facts(crate_partial_eq_types.clone());
             codegen.set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
             codegen.set_non_copy_types_registry((*global_non_copy_types_arc).clone());
             codegen.set_global_struct_field_types((*global_struct_fields).clone());

@@ -123,6 +123,16 @@ impl<'ast> CodeGenerator<'ast> {
             .and_then(|fields| fields.get(field).cloned())
     }
 
+    /// The type a tuple literal stores for `e`: a Copy payload bound by reference (`match &x { V(r) => (r, 0.0) }`)
+    /// is stored by value (`(*r, 0.0)`).
+    fn tuple_element_type(&self, e: &Expression<'ast>) -> Option<Type> {
+        let ty = self.infer_expression_type(e)?;
+        match (&ty, e) {
+            (Type::Reference(inner), Expression::Identifier { name, .. }) if self.borrowed_iterator_vars.contains(name) && self.is_type_copy(inner) => Some((**inner).clone()),
+            _ => Some(ty),
+        }
+    }
+
     /// Try to infer the Type of an expression from local variable tracking and function parameters.
     pub(in crate::codegen::rust) fn infer_expression_type(
         &self,
@@ -736,7 +746,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Tuple { elements, .. } => {
                 let mut tys = Vec::with_capacity(elements.len());
                 for e in elements {
-                    tys.push(self.infer_expression_type(e)?);
+                    tys.push(self.tuple_element_type(e)?);
                 }
                 Some(Type::Tuple(tys))
             }

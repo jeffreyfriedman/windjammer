@@ -99,6 +99,23 @@ impl<'ast> CodeGenerator<'ast> {
         (self.idiom.expected_tuple_slots.take().or(list_ctx.clone()).or(return_tuple_types).or(call_arg_tuple_types), list_ctx)
     }
 
+    /// `e` is a bare binding of a Copy type bound by reference (a payload bound through a by-reference match) emitted as `name`, placed in a slot that is not declared a reference: it needs a deref.
+    fn copy_binding_is_reference_in_value_slot(&self, e: &Expression<'ast>, emitted: &str, slot: Option<&Type>) -> bool {
+        let Expression::Identifier { name, .. } = e else { return false };
+        if emitted != name || slot.is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_))) {
+            return false;
+        }
+        // a name in `borrowed_iterator_vars` is bound by reference whatever type the payload is recorded with
+        self.borrowed_iterator_vars.contains(name)
+            && self.local_var_types.get(name).is_some_and(|t| {
+                let inner = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                self.is_type_copy(inner) && !crate::codegen::rust::string_utilities::type_is_owned_string(inner)
+            })
+    }
+
     pub(in crate::codegen::rust) fn generate_tuple(
         &mut self,
         elements: &[&Expression<'ast>],
@@ -315,6 +332,10 @@ impl<'ast> CodeGenerator<'ast> {
                         );
                         if !is_copy {
                             s = format!("{}.clone()", s);
+                        } else if self.copy_binding_is_reference_in_value_slot(e, &s, tuple_slot_types.as_deref().and_then(|t| t.get(i))) {
+                            // A Copy payload bound by `match &place { V(r) => (r, 0.0) }` is a `&f32`: the tuple slot
+                            // holds the value.
+                            s = format!("*{s}");
                         }
                     } else if !self.suppress_borrowed_clone {
                         // Also clone non-Copy field accesses through references
