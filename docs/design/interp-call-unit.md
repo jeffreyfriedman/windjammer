@@ -17,7 +17,7 @@ sketch in interp-struct-vec-loops.md section 6 in three places, each of which re
    runs, by the same functions the closure engine calls (`fill_frame`, `run_compiled_at`). Every exit of the callee
    unit is finished inside that real frame by the existing `osr::level`, on the native stack *above* the suspended
    caller. The caller never sees a callee exit. It sees one of two outcomes, exactly the contract of `rt::run_stmt`:
-   *continue* or *leave after this statement with `raised`*. The obstacle that stopped P3 (SOUNDNESS-p3.md: "the exit
+   *continue* or *leave after this statement with `raised`*. The obstacle that stopped P3 ([interp-soundness/p3.md](interp-soundness/p3.md): "the exit
    must resume inside the callee, in a callee frame that does not exist yet") does not arise, because the frame
    exists.
 2. **The caller's views never survive a call implicitly.** `call_unit` clears every caller view and resolved cell
@@ -118,7 +118,7 @@ parameter passed to `run_body`. For a function-unit body, `run_body` calls a new
 (compile.rs:301-321): the boxed-parameter prologue, the `OsrSite`, the `rest` code and the poisoning slots. The
 `Body::V` closure becomes `move |it, b| fn_unit_run(it, b, &fu, None)`, so the closure engine and `call_unit` run the
 same function, and the order *prologue, then hook, then rest* stays one piece of code (the M5 survivor review in
-SOUNDNESS-fnunit2.md depends on it). `fn_unit_run` passes the handoff to `osr::enter_body` and on to `execute`,
+[interp-soundness/fnunit2.md](interp-soundness/fnunit2.md) depends on it). `fn_unit_run` passes the handoff to `osr::enter_body` and on to `execute`,
 which adopts the offers right before calling the unit and fills `back` at the end exit (section 2.3). On every other
 path (not armed, `params_alias` refused, `unit_for` refused, a live-in of another type, deopt in `bind_params`, an
 error in `enter_compiled`) the handoff is ignored and `call_unit` drops it.
@@ -225,7 +225,7 @@ asserts that it equals the adopted table, so the whole test corpus checks the ar
 2. **A parameter aliasing a caller local the caller keeps using** (`let r = &mut v` in the caller, then `f(v)`, then
    `r[0].x` natively). The caller's views of `r` and `v` are both cleared at the call. After it, `v`'s view may be
    parked. `r`'s next access rebuilds. Two views of one cell are the same memory and are cleared together
-   (SOUNDNESS-fnunit2.md, M2), so a parked `v` and a rebuilt `r` are consistent.
+   ([interp-soundness/fnunit2.md](interp-soundness/fnunit2.md), M2), so a parked `v` and a rebuilt `r` are consistent.
 3. **A by-value copy of the passed vector alive during the call:** `f(v, v)` with one `&mut` and one by-value
    parameter, or a caller's `let c = v` (closure-run, it clears everything, and `fill` then fails on the shared body).
    Closed by `strong_count == 1` at adoption. Without the check, the adopted view writes in place into the body the
@@ -388,7 +388,7 @@ loops, JIT differential and fast-path tests, and the step's mutants killed.
   - `handoffkey` (drop `READ_VIEW`: killed by 16);
   - `handbackearly` (hand back at every exit: killed by 17);
   - `handoffguard` (no `ptr_eq`: expected to be killed by 6; if it survives, prove equivalence or pin it with a
-    refusal counter, as M2 was in SOUNDNESS-fnunit2.md).
+    refusal counter, as M2 was in [interp-soundness/fnunit2.md](interp-soundness/fnunit2.md)).
 - Perf: `rowhandoff` about `callunit - 1` on nbody, and the `rows::fill` call count per run (callgrind calls) drops
   from about 20,000 to about 2 at 1x. Projection: a further 900 to 1,300 Ir/step, so **about 9,300 to 10,000 Ir/step**
   after step 2.
@@ -408,7 +408,7 @@ Keep the last `(sig, Rc<Unit>)` on the `CallRun`, check it with `sig_is`, and sk
 | A4 | The lowering never rebinds a slot that holds a `Ref` (`Lo::assign` refuses a `Bind::Handle` identifier target, lower_expr.rs:678-681: verified for `assign`; to check for `let` shadowing of a parameter slot) | read `Lo::native`'s `let` arm with `reg.let_slot` |
 | A5 | `it.cur` after a native call equals the closure engine's (`Site::call` marks the callee, as the closure does) | parity 2 compares backtraces |
 | A6 | The eight view-clear sites are all the sites (`grep "clear_rows\|views = Default"` in jit/, as of 529cda57f) | `Ctx::clear_views()` makes it one site; a source-level test fails on any other assignment to `views` or `rows[..].key` |
-| A7 | `map` lean cells (`SOUNDNESS-maplean.md`) need no handoff and are per `Ctx` | read lower_map.rs; v1 never offers them |
+| A7 | `map` lean cells ([interp-soundness/maplean.md](interp-soundness/maplean.md)) need no handoff and are per `Ctx` | read lower_map.rs; v1 never offers them |
 | A8 | The projections in section 9 | `interp_instr.wj --marginal` on the PC after 2a and after 2b |
 | A9 | `Shape == Shape` is enough for a row view built under one plan to serve another (same name, field names, `Option<Ty>` per field, `copy`) | rows.rs `fill` validates exactly these; parity 1 under the debug `fill` re-check |
 | A10 | Cranelift compiling a callee unit during a caller run (inside `unit_for`) does not move the caller's code (new functions get new memory) | already exercised today through `run_stmt`; keep parity 8 |

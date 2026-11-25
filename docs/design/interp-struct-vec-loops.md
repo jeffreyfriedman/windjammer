@@ -51,7 +51,7 @@ Where a saving is projected, the projection is the attribution report's own, and
 | Refusal | the step loop (line 76 of the 10x kernel) is refused: its body has a user-function call and `step += 1`, and the call would run in the closures | same, JIT debug counters |
 | Entry count | 400,002 `rows::fill` calls at 10x (= OSR entries; 2 per `advance` call) | same |
 | Node ratio | 14.2x at 100x | same, "Why node wins" |
-| Older entry cost | about 2,170 Ir per entry, cold at 1x; halving entries then bounded at 6-7% of cold nbody | SOUNDNESS-fnunit.md |
+| Older entry cost | about 2,170 Ir per entry, cold at 1x; halving entries then bounded at 6-7% of cold nbody | [interp-soundness/fnunit.md](interp-soundness/fnunit.md) |
 
 The attribution report ranks three improvements for nbody and gives each a bound:
 
@@ -61,7 +61,7 @@ The attribution report ranks three improvements for nbody and gives each a bound
 
 It also bounds halving the entries at about 15% at 10x.
 
-The row cache is stopped for a structural reason (SOUNDNESS-rowcache.md, REPORT-rowcache.md):
+The row cache is stopped for a structural reason ([interp-soundness/rowcache.md](interp-soundness/rowcache.md), REPORT-rowcache.md):
 
 - A view holds the raw addresses of each element's `StructVal::fields` and relies on each element `Rc` being
   unique.
@@ -71,7 +71,7 @@ The row cache is stopped for a structural reason (SOUNDNESS-rowcache.md, REPORT-
 - ABA has no sound key without new static mutable state, which the static_state ratchet in `tests/architecture.rs`
   forbids.
 
-Inlining a *mutating* callee (P3, SOUNDNESS-p3.md) is stopped for a different reason. A failed check in iteration k
+Inlining a *mutating* callee (P3, [interp-soundness/p3.md](interp-soundness/p3.md)) is stopped for a different reason. A failed check in iteration k
 has already committed k-1 iterations of stores, so the exit must resume inside the callee, in a callee frame that
 does not exist yet.
 
@@ -200,12 +200,12 @@ Everything below already exists for loop units, so a function-unit exit is an or
 
 Two points to verify in step 0: whether `reg.block(f.body)` is registered (`close_block` at the body level must not
 duplicate what `leave_compiled` does), and whether the statement codes of a top-level body statement are registered
-when the statement is not inside a loop. SOUNDNESS-fnunit.md notes that `record_stmt`/`record_let`/`record_block`
+when the statement is not inside a loop. [interp-soundness/fnunit.md](interp-soundness/fnunit.md) notes that `record_stmt`/`record_let`/`record_block`
 run only at `loop_depth > 0`. The function unit needs them at depth 0 as well, for the statements of the body.
 
 ### Compared with the tail-chained loop unit
 
-The tail-chained unit (SOUNDNESS-fnunit.md) enters at the first loop's head and continues past its end. It needs a
+The tail-chained unit ([interp-soundness/fnunit.md](interp-soundness/fnunit.md)) enters at the first loop's head and continues past its end. It needs a
 new `osr_skip` protocol in the block runner and an `end` bound on `Level`. The function unit enters at statement 0
 and runs to the end of the list. `level` already runs "the rest of the list", so neither addition is needed. The
 function unit is the smaller change and the more general one.
@@ -220,7 +220,7 @@ improvement 1, risk note).
 ### Guards that look redundant, and what holds them
 
 Three properties of the shipped function unit were first recorded as prose only; each now has a test or a proof
-(SOUNDNESS-fnunit2.md, "Survivor review"). The unit enters after the boxed-parameter prologue (a unit entered before it
+([interp-soundness/fnunit2.md](interp-soundness/fnunit2.md), "Survivor review"). The unit enters after the boxed-parameter prologue (a unit entered before it
 fails `engine_parity/jit_fnunit_boxed_params.wj` and `jit_fnunit_param_writes.wj`). Aliased parameters are refused
 (`fast_paths`: `function_units_refuse_aliased_parameters` holds `fnunit` at 0 for `jit_fnunit_alias.wj`); the refusal is
 defensive, because every view is dropped by any write helper and both names reach the same memory. The end exit writes
@@ -512,7 +512,7 @@ Rung 5 is the shape that the attribution report credits for node's 14.2x lead at
 
 ### What not to do
 
-- **No mutation-epoch or generation cache across closure-engine code.** SOUNDNESS-rowcache.md shows why: element
+- **No mutation-epoch or generation cache across closure-engine code.** [interp-soundness/rowcache.md](interp-soundness/rowcache.md) shows why: element
   sharing is invisible to the body, and the region between entries has no hook.
 - **No `Rc` or `Weak` hold on a vector to key a cache**: either one defeats `Rc::get_mut`, so `fill` itself
   refuses. **No global counter** either: the static_state ratchet forbids it.

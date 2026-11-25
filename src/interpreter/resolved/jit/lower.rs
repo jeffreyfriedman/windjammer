@@ -94,7 +94,7 @@ pub(crate) struct Spill {
     pub(crate) fresh: bool,
 }
 
-/// What the analysis pass learned about one statement loop (keyed by the address of its body; `hoist` in SOUNDNESS-hoist.md).
+/// What the analysis pass learned about one statement loop (keyed by the address of its body; `hoist` in docs/design/interp-soundness/hoist.md).
 #[derive(Default)]
 pub(crate) struct LoopInfo {
     /// Some helper that can clear views or mutate vec/struct storage is called inside it.
@@ -140,7 +140,7 @@ pub(super) struct HIdx {
 }
 
 /// Helpers that never clear a row view or mutate vec/struct storage.
-// index_set is deliberately absent and adding it is an EQUIVALENT mutant (SOUNDNESS-hoist.md 7): whole-element stores
+// index_set is deliberately absent and adding it is an EQUIVALENT mutant (docs/design/interp-soundness/hoist.md 7): whole-element stores
 // are closure-run statements (run_stmt, the disqualified case), and the stores that do call it (narrow-scalar and packed
 // slow paths) only clear row keys (tables stay allocated) of vecs that are never row vecs, so a hoisted loop stays valid.
 pub(super) const SAFE_CALLS: [&str; 9] = ["index_get", "index_field_get", "field_get", "len", "map_get", "int_op", "fmod", "round", "row_build"];
@@ -265,7 +265,7 @@ pub(crate) enum Root {
 
 /// Lower `root` with the locals it names (`refs`: name, slot, class at entry) into `func`. A first pass lowers it as
 /// always and records what each statement loop does (`LoopInfo`); when a loop with row accesses can run without any
-/// view-clearing helper (SOUNDNESS-hoist.md), a second pass lowers the unit again with that loop versioned (a fast
+/// view-clearing helper (docs/design/interp-soundness/hoist.md), a second pass lowers the unit again with that loop versioned (a fast
 /// copy that checks the views once, a slow copy that is the first pass's code). If the second pass fails, the first
 /// pass's function is kept.
 pub(crate) fn lower(
