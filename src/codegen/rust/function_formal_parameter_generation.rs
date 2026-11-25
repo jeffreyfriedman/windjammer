@@ -191,11 +191,11 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                         || (self
                             .global_signature_for_function(func)
-                            .and_then(|sig| sig.param_types.get(param_idx))
+                            .and_then(|sig| sig.param_types.get(sig_formal_slot(func, sig, param_idx)))
                             .is_some_and(|t| matches!(t, Type::MutableReference(_)))
                             || matches!(
                                 self.global_signature_for_function(func)
-                                    .and_then(|sig| sig.param_ownership.get(param_idx)),
+                                    .and_then(|sig| sig.param_ownership.get(sig_formal_slot(func, sig, param_idx))),
                                 Some(OwnershipMode::MutBorrowed)
                             ));
                     let type_str = if mut_borrow_formal {
@@ -282,11 +282,11 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     let mut_borrow_formal = (self
                         .global_signature_for_function(func)
-                        .and_then(|sig| sig.param_types.get(param_idx))
+                        .and_then(|sig| sig.param_types.get(sig_formal_slot(func, sig, param_idx)))
                         .is_some_and(|t| matches!(t, Type::MutableReference(_)))
                         || matches!(
                             self.global_signature_for_function(func)
-                                .and_then(|sig| sig.param_ownership.get(param_idx)),
+                                .and_then(|sig| sig.param_ownership.get(sig_formal_slot(func, sig, param_idx))),
                             Some(OwnershipMode::MutBorrowed)
                         ))
                         && !self.param_has_forward_ref_keep_owned(
@@ -1666,7 +1666,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 .or_else(|| self.get_signature_with_global(&func.name).cloned());
                             let registry_ownership = registry_sig
                                 .as_ref()
-                                .and_then(|sig| sig.param_ownership.get(param_idx).copied());
+                                .and_then(|sig| sig.param_ownership.get(sig_formal_slot(func, sig, param_idx)).copied());
                             let registry_stale_engine_owned = registry_sig.as_ref().is_some_and(|sig| {
                                 crate::codegen::rust::signature_promotion::param_is_stale_engine_owned_stub(
                                     sig, param_idx,
@@ -2876,7 +2876,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         } else {
                                         let registry_str_ref = self
                                             .get_signature_with_global(&func.name)
-                                            .and_then(|sig| sig.param_types.get(param_idx))
+                                            .and_then(|sig| sig.param_types.get(sig_formal_slot(func, sig, param_idx)))
                                             .is_some_and(|ty| {
                                                 matches!(
                                                     ty,
@@ -2889,7 +2889,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             });
                                         let registry_string_ref = self
                                             .get_signature_with_global(&func.name)
-                                            .and_then(|sig| sig.param_types.get(param_idx))
+                                            .and_then(|sig| sig.param_types.get(sig_formal_slot(func, sig, param_idx)))
                                             .is_some_and(|ty| {
                                                 crate::codegen::rust::string_utilities::param_is_rust_string_ref(ty)
                                             });
@@ -4003,4 +4003,13 @@ impl<'ast> CodeGenerator<'ast> {
         }
         analyzed.mutated_parameters.contains(param_name)
     }
+}
+
+
+/// Index of declared parameter `param_idx` in a registry signature. An implicit `self` (used, not declared) owns
+/// slot 0 of the signature but is not in `func.parameters`, so every declared formal sits one slot later; reading
+/// slot `param_idx` handed the first formal the receiver's `&mut` (`Option<T>` param emitted as `&mut Option<T>`).
+fn sig_formal_slot(func: &FunctionDecl<'_>, sig: &crate::analyzer::FunctionSignature, param_idx: usize) -> usize {
+    let declares_self = func.parameters.iter().any(|p| p.name == "self");
+    param_idx + usize::from(sig.has_self_receiver_slot() && !declares_self)
 }
