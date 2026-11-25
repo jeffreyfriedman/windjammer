@@ -24,6 +24,9 @@ pub fn phase(name: &str) {
     let _ = name;
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::env::{self, vars_os};
+
 /// True when the diagnostics variable is set to any value.
 pub fn enabled(name: &str) -> bool {
     read(name).is_some()
@@ -38,7 +41,7 @@ fn all() -> impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)> {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::env::vars_os()
+        vars_os()
     }
 }
 
@@ -55,7 +58,7 @@ fn read(name: &str) -> Option<std::ffi::OsString> {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::env::var_os(name)
+        env::var_os(name)
     }
 }
 
@@ -141,7 +144,7 @@ mod tests {
     #[test]
     fn a_name_lookup_agrees_with_a_scan_of_the_environment() {
         // `var_os` and the scan name the same variable (the first of that name), set or unset; a name no variable can have is unset
-        for (k, _) in std::env::vars_os().take(64) {
+        for (k, _) in all().take(64) {
             let Some(k) = k.to_str() else { continue };
             if k.is_empty() || k.contains('=') {
                 continue;
