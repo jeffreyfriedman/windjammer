@@ -422,13 +422,25 @@ mod tests {
         assert!(f.literal_widths.len() == 3 && f.literal_widths.values().all(|w| *w == BaseType::I64), "{:?}", f.literal_widths);
     }
 
-    /// A value passed to a call the walk cannot type is opaque: its class (and the class of its elements) stays
-    /// with the legacy deciders instead of taking the default (a class a use fixed keeps its width: see
-    /// `unresolved_callee_argument_keeps_fixed_width`).
+    /// A value passed to a call the walk cannot type is opaque. A scalar whose width nothing fixed (`3`) stays with
+    /// the legacy deciders instead of taking the default: the formal may be any width. Since 63c2c7932 an opaque
+    /// class is held only while its own variable is defaulted, and a container has no width of its own, so the
+    /// literals inside `[1, 2]` take the `int` default (`_i64`), the same as a literal beside a use that fixed
+    /// the class. The recorded goldens depend on that (`Some(3).unwrap_or(0)`, `vec![(1, "a")]` then `unzip`
+    /// into `Vec<i64>`: the legacy `i32` there is wrong Rust).
     #[test]
     fn values_passed_to_unknown_calls_are_not_published() {
-        let f = facts("pub fn f() {\n    let v = [1, 2]\n    mystery(v, 3)\n}\n", "f");
+        let f = facts("pub fn f() {\n    mystery(3)\n}\n", "f");
         assert!(f.literal_widths.is_empty(), "{:?}", f.literal_widths);
+    }
+
+    /// The elements of a container passed to an unknown call take the `int` default (see above); the scalar
+    /// argument beside it is still not published.
+    #[test]
+    fn container_literals_passed_to_unknown_calls_take_the_default() {
+        let f = facts("pub fn f() {\n    let v = [1, 2]\n    mystery(v, 3)\n}\n", "f");
+        assert_eq!(f.literal_widths.len(), 2, "{:?}", f.literal_widths);
+        assert!(f.literal_widths.values().all(|w| *w == BaseType::I64), "{:?}", f.literal_widths);
     }
 
     /// `let a = f(k * 2)` with `f` unresolved and `k` declared `int`: the literal is an `int` like `k`.
