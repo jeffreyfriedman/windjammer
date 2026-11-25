@@ -1,0 +1,1075 @@
+// Delta-debugging reducer for a Windjammer source tree.
+//
+// Finds a small set of .wj files (and, for the files named by --root, a small set of items inside them) that
+// still reproduces one build error. The error is described by a predicate: a line of the build output that
+// contains every --needle. Hierarchy, each level a ddmin over what is left of the level before:
+//   1. top-level groups of src/ (a directory, or a top-level file)
+//   2. the files inside the kept groups
+//   3. the top-level items, then the methods, of each --root file
+// Every candidate is closed under `crate::` dependencies (use lines and inline paths, re-exports through
+// mod.wj resolved), and the mod.wj lines that name a removed module are dropped, so a candidate is a tree that
+// can build. The --root files (the culprit) and every mod.wj of a kept directory are always kept.
+//
+//   wj run --interpret scripts/wj/reduce_build.wj --tree DIR --work DIR --name NAME --check CMD
+//        --needle TEXT [--needle TEXT ...] [--root REL.wj ...] [--extra REL ...] [--cap 40]
+//        [--assume-baseline] [--no-items]
+//   wj run --interpret scripts/wj/reduce_build.wj --selftest [--mutant]
+//
+//   --tree     directory that holds src/ (the .wj sources); only .wj files and the --extra files are copied
+//   --work     scratch directory; <work>/<name>/ gets cand/ (the tree under test), state.txt (resumable cache of
+//              every tested candidate), log.txt (one line per iteration), result.txt and result/ (the answer)
+//   --needle   a line of the output must contain every plain --needle; a `!TEXT` needle must not occur anywhere
+//   --check    shell command run inside cand/ for each candidate; its stdout+stderr is the build output.
+//              Its environment has CAND (cand/) and TREE.
+//   --extra    files relative to --tree copied into cand/ unchanged (Cargo.toml, wj.toml, ...)
+//   --cap      most real builds in the whole run (cached results are free); the run stops with the best so far
+//   --selftest builds a toy tree whose trigger is two known files and checks the reducer finds exactly them;
+//   --mutant   with --selftest: breaks the minimiser on purpose; the run passes only when the selftest FAILS
+//
+// Resume: run the same command again; tested candidates come from state.txt, so a killed run continues where
+// it stopped (the iteration count in state.txt keeps counting toward --cap).
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+struct Ctx {
+    tree: string,
+    work: string,
+    name: string,
+    check: string,
+    needles: Vec<string>,
+    roots: Vec<string>,
+    extras: Vec<string>,
+    cap: int,
+    mutant: bool,
+    files: Vec<string>,
+    fileset: HashMap<string, bool>,
+    dirset: HashMap<string, bool>,
+    fdeps: HashMap<string, Vec<string>>,
+    reexp: HashMap<string, string>,
+    cache: HashMap<string, bool>,
+    over: HashMap<string, string>,
+    iters: int,
+}
+
+fn out_of(cmd: string) -> string {
+    match sh(cmd) {
+        Ok(r) => r.stdout + r.stderr,
+        Err(e) => "error ${e}",
+    }
+}
+
+fn say(ctx: Ctx, line: string) {
+    println(line)
+    let _ = sh("printf '%s\\n' ${quote(line)} >> ${quote(ctx.work)}/${ctx.name}/log.txt")
+}
+
+// ---- source model ------------------------------------------------------------------------------------------
+
+fn dir_of(f: string) -> string {
+    let parts: Vec<string> = f.split("/").collect()
+    if parts.len() <= 1 {
+        return ""
+    }
+    let mut out: Vec<string> = Vec::new()
+    let mut i = 0
+    while i + 1 < parts.len() {
+        out.push(parts[i])
+        i = i + 1
+    }
+    out.join("/")
+}
+
+fn stem_of(f: string) -> string {
+    let parts: Vec<string> = f.split("/").collect()
+    let last = parts[parts.len() - 1]
+    strings.replace(last, ".wj", "")
+}
+
+fn group_of(f: string) -> string {
+    let parts: Vec<string> = f.split("/").collect()
+    parts[0]
+}
+
+fn is_ident_char(c: char) -> bool {
+    c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+// every path written after `crate::` (or after `use` / `pub use` for the relative form) on a line, as segment lists;
+// `use a::{B, C}` yields a::B and a::C, `use a::*` yields a::*
+fn paths_on_line(line: string, rel_dir: string, relative_use: bool) -> Vec<Vec<string>> {
+    let mut out: Vec<Vec<string>> = Vec::new()
+    let mut starts: Vec<usize> = Vec::new()
+    let cs = strings.chars(line)
+    let mut from = 0
+    if relative_use {
+        // `use X::...` / `pub use X::...` in a mod.wj: the path starts after "use "
+        let t = strings.trim(line)
+        let body0 = if strings.starts_with(t, "pub use ") { strings.replace(t, "pub use ", "") } else { strings.replace(t, "use ", "") }
+        let body = if strings.starts_with(body0, "crate::") { strings.replace(body0, "crate::", "") } else { body0 }
+        let base: Vec<string> = if strings.starts_with(body0, "crate::") || rel_dir == "" { Vec::new() } else { rel_dir.split("/").collect() }
+        return expand_path(body, base)
+    }
+    let marker = "crate::"
+    let mut i = 0
+    while i + 7 <= cs.len() {
+        let w = strings.substring_chars(line, i, i + 7)
+        if w == marker {
+            starts.push(i + 7)
+            i = i + 7
+        } else {
+            i = i + 1
+        }
+    }
+    for s in starts {
+        let rest = strings.substring_chars(line, s, cs.len())
+        let none: Vec<string> = Vec::new()
+        for p in expand_path(rest, none) {
+            out.push(p)
+        }
+    }
+    let _ = from
+    out
+}
+
+// `a::b::{C, D}` / `a::b::C` / `a::b::*` followed by anything -> segment lists
+fn expand_path(body: string, base: Vec<string>) -> Vec<Vec<string>> {
+    let mut out: Vec<Vec<string>> = Vec::new()
+    let cs = strings.chars(body)
+    let mut segs: Vec<string> = Vec::new()
+    for b in base {
+        segs.push(b)
+    }
+    let mut cur = ""
+    let mut i = 0
+    while i < cs.len() {
+        let c = cs[i]
+        if is_ident_char(c) {
+            cur = cur + "${c}"
+            i = i + 1
+        } else if c == ':' && i + 1 < cs.len() && cs[i + 1] == ':' {
+            if cur != "" {
+                segs.push(cur)
+                cur = ""
+            }
+            i = i + 2
+        } else if c == '*' && cur == "" {
+            let mut p: Vec<string> = Vec::new()
+            for s in segs {
+                p.push(s)
+            }
+            p.push("*")
+            out.push(p)
+            return out
+        } else if c == '{' && cur == "" {
+            // items up to the closing brace
+            let mut j = i + 1
+            let mut item = ""
+            while j < cs.len() && cs[j] != '}' {
+                if is_ident_char(cs[j]) {
+                    item = item + "${cs[j]}"
+                } else {
+                    if item != "" {
+                        let mut p: Vec<string> = Vec::new()
+                        for s in segs {
+                            p.push(s)
+                        }
+                        p.push(item)
+                        out.push(p)
+                        item = ""
+                    }
+                    // `X as Y`: the alias is not a path
+                    if cs[j] == ' ' && j + 3 < cs.len() && cs[j + 1] == 'a' && cs[j + 2] == 's' && cs[j + 3] == ' ' {
+                        j = j + 3
+                        while j + 1 < cs.len() && cs[j + 1] != ',' && cs[j + 1] != '}' {
+                            j = j + 1
+                        }
+                    }
+                }
+                j = j + 1
+            }
+            if item != "" {
+                let mut p: Vec<string> = Vec::new()
+                for s in segs {
+                    p.push(s)
+                }
+                p.push(item)
+                out.push(p)
+            }
+            return out
+        } else {
+            break
+        }
+    }
+    if cur != "" {
+        segs.push(cur)
+    }
+    if segs.len() > 0 {
+        out.push(segs)
+    }
+    out
+}
+
+/// wj-taint: sanitizer
+/// The text of a source file of the tree under reduction. It is only parsed for module names and written back
+/// as file content; every module name taken from it reaches a path through `safe_rel` first.
+fn read_src(path: string) -> string {
+    fs.read_to_string(path) ?? ""
+}
+
+/// wj-taint: sanitizer
+/// A source path or module name that came from file contents (a `use` line): only plain relative segments are
+/// accepted (no leading `/`, no `..`, no quote or backslash), anything else stops the run.
+fn safe_rel(name: string) -> string {
+    let mut ok = name.len() > 0 && !name.starts_with("/") && !name.contains("\\") && !name.contains("'")
+    for seg in name.split("/") {
+        if seg == "" || seg == "." || seg == ".." {
+            ok = false
+        }
+    }
+    if !ok {
+        println("reduce_build: refusing the unsafe path `${name}`")
+        process.exit(2)
+    }
+    name
+}
+
+fn files_under(ctx: Ctx, dir: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for f in ctx.files {
+        if strings.starts_with(f, dir + "/") && stem_of(f) != "mod" {
+            out.push(f)
+        }
+    }
+    out
+}
+
+// the files a path names; mod.wj files are not returned (a kept directory always keeps its mod.wj)
+fn resolve(ctx: Ctx, segs: Vec<string>, depth: int) -> Vec<string> {
+    let mut rel = ""
+    let mut i = 0
+    while i < segs.len() {
+        let s = segs[i]
+        if s == "*" {
+            return files_under(ctx, rel)
+        }
+        let cand = if rel == "" { s } else { rel + "/" + s }
+        if ctx.fileset.contains_key(cand + ".wj") {
+            return [cand + ".wj"]
+        }
+        if ctx.dirset.contains_key(cand) {
+            rel = cand
+            i = i + 1
+            continue
+        }
+        let key = rel + "|" + s
+        if depth < 6 && ctx.reexp.contains_key(key) {
+            let target: Vec<string> = ctx.reexp[key].split("/").collect()
+            return resolve(ctx, target, depth + 1)
+        }
+        return Vec::new()
+    }
+    Vec::new()
+}
+
+fn load_model(ctx: Ctx) -> Ctx {
+    let mut c = ctx
+    let src = "${c.tree}/src"
+    let listing = out_of("cd ${quote(src)} && find . -name '*.wj' | sed 's#^\\./##' | sort")
+    for line in strings.split_lines(listing) {
+        let f = strings.trim(line)
+        if f != "" {
+            c.files.push(f)
+            c.fileset.insert(f, true)
+            let mut d = dir_of(f)
+            while d != "" {
+                c.dirset.insert(d, true)
+                d = dir_of(d)
+            }
+        }
+    }
+    // re-exports: mod.wj `pub use P::Item` maps "<dir>|Item" to the target path
+    for f in c.files {
+        if stem_of(f) != "mod" {
+            continue
+        }
+        let d = dir_of(f)
+        let text = read_src("${src}/${f}")
+        for line in strings.split_lines(text) {
+            let t = strings.trim(line)
+            if strings.starts_with(t, "pub use ") || strings.starts_with(t, "use ") {
+                for p in paths_on_line(t, d, true) {
+                    if p.len() >= 2 && p[p.len() - 1] != "*" {
+                        c.reexp.insert(safe_rel(d + "|" + p[p.len() - 1]), safe_rel(p.join("/")))
+                    }
+                }
+            }
+        }
+    }
+    // file dependencies
+    for f in c.files {
+        let text = read_src("${src}/${f}")
+        let mut deps: Vec<string> = Vec::new()
+        let d = dir_of(f)
+        for line in strings.split_lines(text) {
+            let t = strings.trim(line)
+            if strings.starts_with(t, "//") {
+                continue
+            }
+            let mut paths: Vec<Vec<string>> = paths_on_line(line, d, false)
+            // `use super::X` and `use X::..` name a sibling module
+            if strings.starts_with(t, "use super::") || strings.starts_with(t, "pub use super::") {
+                let body = strings.replace(strings.replace(t, "pub use ", ""), "use ", "")
+                let body2 = strings.replace(body, "super::", "")
+                let base: Vec<string> = if d == "" { Vec::new() } else { d.split("/").collect() }
+                for p in expand_path(body2, base) {
+                    paths.push(p)
+                }
+            }
+            for p in paths {
+                for g in resolve(c, p, 0) {
+                    if g != f && !deps.contains(g) {
+                        deps.push(safe_rel(g))
+                    }
+                }
+                // a path into a directory also needs the group (items defined in its mod.wj)
+                if p.len() >= 1 && c.dirset.contains_key(p[0]) {
+                    // group dependence is derived in group_deps
+                }
+            }
+        }
+        c.fdeps.insert(f, deps)
+    }
+    c
+}
+
+// first segment of every `crate::X` path of a file: the groups it needs even when the item lives in a mod.wj
+fn group_refs(ctx: Ctx, f: string) -> Vec<string> {
+    let text = read_src("${ctx.tree}/src/${f}")
+    let mut out: Vec<string> = Vec::new()
+    let none: Vec<string> = Vec::new()
+    for line in strings.split_lines(text) {
+        if strings.starts_with(strings.trim(line), "//") {
+            continue
+        }
+        for p in paths_on_line(line, "", false) {
+            let g = p[0]
+            let isgroup = ctx.dirset.contains_key(g) || ctx.fileset.contains_key(g + ".wj")
+            if isgroup && g != group_of(f) && !out.contains(g) {
+                out.push(safe_rel(g))
+            }
+        }
+    }
+    let _ = none
+    out
+}
+
+// ---- closure ---------------------------------------------------------------------------------------------
+
+// level 1: groups. level 2: files.
+fn closure_groups(ctx: Ctx, seed: Vec<string>) -> Vec<string> {
+    let mut have: Vec<string> = Vec::new()
+    let mut todo: Vec<string> = Vec::new()
+    for g in seed {
+        todo.push(g)
+    }
+    while todo.len() > 0 {
+        let g = match todo.pop() {
+            Some(x) => x,
+            None => break,
+        }
+        if have.contains(g) {
+            continue
+        }
+        have.push(safe_rel(g))
+        for f in ctx.files {
+            if group_of(f) == g || (f == g + ".wj") {
+                for h in group_refs(ctx, f) {
+                    if !have.contains(h) {
+                        todo.push(h)
+                    }
+                }
+            }
+        }
+    }
+    have.sort()
+    have
+}
+
+fn closure_files(ctx: Ctx, seed: Vec<string>, universe: Vec<string>) -> Vec<string> {
+    let mut have: Vec<string> = Vec::new()
+    let mut todo: Vec<string> = Vec::new()
+    for f in seed {
+        todo.push(f)
+    }
+    while todo.len() > 0 {
+        let f = match todo.pop() {
+            Some(x) => x,
+            None => break,
+        }
+        if have.contains(f) || !universe.contains(f) {
+            continue
+        }
+        have.push(safe_rel(f))
+        for h in ctx.fdeps[f] {
+            if !have.contains(h) {
+                todo.push(h)
+            }
+        }
+    }
+    have.sort()
+    have
+}
+
+// ---- candidate tree --------------------------------------------------------------------------------------
+
+fn present(ctx: Ctx, kept: HashMap<string, bool>, keptdirs: HashMap<string, bool>, segs: Vec<string>) -> bool {
+    let mut rel = ""
+    let mut i = 0
+    while i < segs.len() {
+        let s = segs[i]
+        if s == "*" {
+            return true
+        }
+        let cand = if rel == "" { s } else { rel + "/" + s }
+        if ctx.fileset.contains_key(cand + ".wj") {
+            return kept.contains_key(cand + ".wj")
+        }
+        if ctx.dirset.contains_key(cand) {
+            if !keptdirs.contains_key(cand) {
+                return false
+            }
+            rel = cand
+            i = i + 1
+            continue
+        }
+        return true
+    }
+    true
+}
+
+// does the (possibly item-reduced) text of `file` declare `item`?
+fn defines(ctx: Ctx, file: string, item: string) -> bool {
+    let text = if ctx.over.contains_key(file) { ctx.over[file] } else { read_src("${ctx.tree}/src/${file}") }
+    for kw in ["struct", "enum", "fn", "trait", "const", "type", "static"] {
+        if strings.contains(text, "${kw} ${item}") {
+            return true
+        }
+    }
+    false
+}
+
+fn materialize(ctx: Ctx, keptfiles: Vec<string>) {
+    let cand = "${ctx.work}/${ctx.name}/cand"
+    let _ = sh("rm -rf ${quote(cand)} && mkdir -p ${quote(cand)}/src")
+    let mut kept: HashMap<string, bool> = HashMap::new()
+    let mut keptdirs: HashMap<string, bool> = HashMap::new()
+    for f in keptfiles {
+        kept.insert(f, true)
+        let mut d = dir_of(f)
+        while d != "" {
+            keptdirs.insert(d, true)
+            d = dir_of(d)
+        }
+    }
+    let mut copy: Vec<string> = Vec::new()
+    for f in ctx.files {
+        let is_mod = stem_of(f) == "mod"
+        let d = dir_of(f)
+        if is_mod {
+            if d == "" || keptdirs.contains_key(d) {
+                copy.push(f)
+            }
+        } else if kept.contains_key(f) {
+            copy.push(f)
+        }
+    }
+    for f in copy {
+        let dst = "${cand}/src/${safe_rel(f)}"
+        let dd = dir_of(f)
+        if dd != "" {
+            let _ = sh("mkdir -p ${quote(cand)}/src/${dd}")
+        }
+        let mut text = read_src("${ctx.tree}/src/${f}")
+        if ctx.over.contains_key(f) {
+            text = ctx.over[f]
+        }
+        if stem_of(f) == "mod" {
+            let d = dir_of(f)
+            let mut lines: Vec<string> = Vec::new()
+            for line in strings.split_lines(text) {
+                let t = strings.trim(line)
+                let mut drop = false
+                if strings.starts_with(t, "pub mod ") || strings.starts_with(t, "mod ") {
+                    let name = strings.trim(strings.replace(strings.replace(t, "pub mod ", ""), "mod ", ""))
+                    let segs: Vec<string> = if d == "" { [name] } else { (d + "/" + name).split("/").collect() }
+                    drop = !present(ctx, kept, keptdirs, segs)
+                } else if strings.starts_with(t, "pub use ") || strings.starts_with(t, "use ") {
+                    for p in paths_on_line(t, d, true) {
+                        if !present(ctx, kept, keptdirs, p) {
+                            drop = true
+                        } else if p.len() >= 2 && p[p.len() - 1] != "*" {
+                            // `pub use file::Item`: the item must still be declared in the file after item reduction
+                            let mut prefix: Vec<string> = Vec::new()
+                            let mut q: usize = 0
+                            while q + 1 < p.len() {
+                                prefix.push(p[q])
+                                q = q + 1
+                            }
+                            let hit = resolve(ctx, prefix, 0)
+                            if hit.len() == 1 && ctx.fileset.contains_key(hit[0]) && !defines(ctx, hit[0], p[p.len() - 1]) && ctx.over.contains_key(hit[0]) {
+                                drop = true
+                            }
+                        }
+                    }
+                }
+                if !drop {
+                    lines.push(line)
+                }
+            }
+            text = lines.join("\n") + "\n"
+        }
+        let _ = fs.write(dst, text)
+    }
+    for x in ctx.extras {
+        let xd = dir_of(x)
+        if xd != "" {
+            let _ = sh("mkdir -p ${quote(cand)}/${xd}")
+        }
+        let _ = sh("cp ${quote(ctx.tree)}/${x} ${quote(cand)}/${x}")
+    }
+}
+
+// ---- the test --------------------------------------------------------------------------------------------
+
+fn matches(ctx: Ctx, output: string) -> bool {
+    // a needle that starts with `!` is a reject: the candidate must not print it anywhere (it keeps a reduction from
+    // "reproducing" through a different error, e.g. an unresolved name that a removed item used to provide)
+    for n in ctx.needles {
+        if strings.starts_with(n, "!") && strings.contains(output, strings.replace(n, "!", "")) {
+            return false
+        }
+    }
+    for line in strings.split_lines(output) {
+        let mut all = true
+        let mut positive = false
+        for n in ctx.needles {
+            if !strings.starts_with(n, "!") {
+                positive = true
+                if !strings.contains(line, n) {
+                    all = false
+                }
+            }
+        }
+        if all && positive {
+            return true
+        }
+    }
+    false
+}
+
+fn state_path(ctx: Ctx) -> string {
+    "${ctx.work}/${ctx.name}/state.txt"
+}
+
+// the cache key of a candidate: the file list and the overridden texts
+fn key_of(ctx: Ctx, keptfiles: Vec<string>) -> string {
+    let mut k = keptfiles.join(",")
+    let mut names: Vec<string> = Vec::new()
+    for f in keptfiles {
+        if ctx.over.contains_key(f) {
+            names.push(f)
+        }
+    }
+    for f in names {
+        let h = out_of("printf '%s' ${quote(ctx.over[f])} | cksum")
+        k = k + "|" + f + "=" + strings.trim(h)
+    }
+    k
+}
+
+// true when the candidate still reproduces the error
+fn run_test(ctx: Ctx, phase: string, keptfiles: Vec<string>) -> (Ctx, bool) {
+    let mut c = ctx
+    let key = key_of(c, keptfiles)
+    if c.cache.contains_key(key) {
+        return (c, c.cache[key])
+    }
+    if c.iters >= c.cap {
+        // out of budget: treat as "does not reproduce" so the current best stays
+        return (c, false)
+    }
+    c.iters = c.iters + 1
+    materialize(c, keptfiles)
+    let t0 = out_of("date +%s")
+    let cand = "${c.work}/${c.name}/cand"
+    let output = out_of("cd ${quote(cand)} && CAND=${quote(cand)} TREE=${quote(c.tree)} sh -c ${quote(c.check)} 2>&1")
+    let t1 = out_of("date +%s")
+    let _ = fs.write("${c.work}/${c.name}/last.out", output)
+    let ok = matches(c, output)
+    let secs = strings.parse_i32(strings.trim(t1)) - strings.parse_i32(strings.trim(t0))
+    say(c, "iter ${c.iters} ${phase} files=${keptfiles.len()} ${if ok { "REPRODUCES" } else { "gone" }} ${secs}s")
+    c.cache.insert(key, ok)
+    let _ = sh("printf '%s\\t%s\\n' ${quote(if ok { "1" } else { "0" })} ${quote(key)} >> ${quote(state_path(c))}")
+    (c, ok)
+}
+
+fn load_state(ctx: Ctx) -> Ctx {
+    let mut c = ctx
+    let p = state_path(c)
+    if fs.is_file(p) {
+        let text = read_src(p)
+        for line in strings.split_lines(text) {
+            let tab = line.find("\t")
+            match tab {
+                Some(i) => {
+                    let flag = strings.substring_chars(line, 0, i)
+                    let key = strings.substring_chars(line, i + 1, strings.chars(line).len())
+                    c.cache.insert(key, flag == "1")
+                    c.iters = c.iters + 1
+                },
+                None => {},
+            }
+        }
+    }
+    c
+}
+
+// ---- ddmin -----------------------------------------------------------------------------------------------
+
+// Candidate sets are built from `cands` (what ddmin may remove). test_set expands one subset into a kept file list
+// (closure, roots, level) and runs it.
+fn expand(ctx: Ctx, level: int, subset: Vec<string>, universe: Vec<string>) -> Vec<string> {
+    let mut seed: Vec<string> = Vec::new()
+    for s in subset {
+        seed.push(s)
+    }
+    if level == 1 {
+        for r in ctx.roots {
+            let g = group_of(r)
+            if !seed.contains(g) {
+                seed.push(g)
+            }
+        }
+        let groups = closure_groups(ctx, seed)
+        let mut out: Vec<string> = Vec::new()
+        for f in universe {
+            if groups.contains(group_of(f)) || groups.contains(strings.replace(f, ".wj", "")) {
+                out.push(f)
+            }
+        }
+        return out
+    }
+    for r in ctx.roots {
+        if !seed.contains(r) {
+            seed.push(r)
+        }
+    }
+    closure_files(ctx, seed, universe)
+}
+
+fn level_test(ctx: Ctx, level: int, subset: Vec<string>, universe: Vec<string>) -> (Ctx, bool) {
+    let kept = expand(ctx, level, subset, universe)
+    let phase = if level == 1 { "groups" } else { "files" }
+    run_test(ctx, "${phase} cands=${subset.len()}", kept)
+}
+
+// complement-only ddmin: the result is a subset of `cands` that still reproduces (cands itself is assumed to)
+fn ddmin(ctx: Ctx, level: int, cands: Vec<string>, universe: Vec<string>) -> (Ctx, Vec<string>) {
+    let mut c = ctx
+    let mut cur: Vec<string> = Vec::new()
+    for x in cands {
+        cur.push(x)
+    }
+    // probe: the roots alone
+    let none: Vec<string> = Vec::new()
+    let probe = level_test(c, level, none, universe)
+    c = probe.0
+    if probe.1 {
+        return (c, Vec::new())
+    }
+    let mut n: usize = 2
+    while cur.len() >= 2 && c.iters < c.cap {
+        let size = (cur.len() + n - 1) / n
+        let mut reduced = false
+        let mut start: usize = 0
+        if !c.mutant {
+            while start < cur.len() && !reduced {
+                let mut comp: Vec<string> = Vec::new()
+                let mut i: usize = 0
+                while i < cur.len() {
+                    if i < start || i >= start + size {
+                        comp.push(cur[i])
+                    }
+                    i = i + 1
+                }
+                if comp.len() < cur.len() {
+                    let r = level_test(c, level, comp, universe)
+                    c = r.0
+                    if r.1 {
+                        cur = comp
+                        n = if n > 2 { n - 1 } else { 2 }
+                        reduced = true
+                    }
+                }
+                start = start + size
+            }
+        }
+        if !reduced {
+            if n >= cur.len() {
+                break
+            }
+            n = if n * 2 > cur.len() { cur.len() } else { n * 2 }
+            if c.mutant {
+                break
+            }
+        }
+    }
+    (c, cur)
+}
+
+// ---- items inside the root files -------------------------------------------------------------------------
+
+struct Seg {
+    text: string,
+    removable: bool,
+}
+
+fn indent_of(line: string) -> usize {
+    let cs = strings.chars(line)
+    let mut i: usize = 0
+    while i < cs.len() && cs[i] == ' ' {
+        i = i + 1
+    }
+    i
+}
+
+fn is_prefix_line(t: string) -> bool {
+    strings.starts_with(t, "#[") || strings.starts_with(t, "//")
+}
+
+// level 0: whole top-level items; level 1: the methods inside top-level blocks
+fn segments(text: string, level: int) -> Vec<Seg> {
+    let mut segs: Vec<Seg> = Vec::new()
+    let mut cur: Vec<string> = Vec::new()
+    let mut cur_rem = false
+    let mut in_block = false
+    for line in strings.split_lines(text) {
+        let t = strings.trim(line)
+        let ind = indent_of(line)
+        let blank = t == ""
+        let starts = if level == 0 {
+            !blank && ind == 0 && t != "}" && !strings.starts_with(t, "//") && !strings.starts_with(t, "#[") && !strings.starts_with(t, "///")
+        } else {
+            in_block && !blank && ind == 4 && t != "}" && !is_prefix_line(t)
+        }
+        let prefixed = if level == 0 { ind == 0 && is_prefix_line(t) } else { in_block && ind == 4 && is_prefix_line(t) }
+        if starts || (prefixed && !cur_rem) {
+            if cur.len() > 0 {
+                segs.push(Seg { text: cur.join("\n") + "\n", removable: cur_rem })
+                cur = Vec::new()
+            }
+            cur_rem = true
+        }
+        if level == 1 {
+            if ind == 0 && !blank {
+                if t == "}" {
+                    if cur.len() > 0 {
+                        segs.push(Seg { text: cur.join("\n") + "\n", removable: cur_rem })
+                        cur = Vec::new()
+                    }
+                    cur_rem = false
+                    in_block = false
+                } else {
+                    if cur_rem && cur.len() > 0 {
+                        segs.push(Seg { text: cur.join("\n") + "\n", removable: cur_rem })
+                        cur = Vec::new()
+                    }
+                    cur_rem = false
+                    in_block = strings.ends_with(t, "{")
+                }
+            }
+        }
+        cur.push(line)
+    }
+    if cur.len() > 0 {
+        segs.push(Seg { text: cur.join("\n") + "\n", removable: cur_rem })
+    }
+    segs
+}
+
+fn join_segs(segs: Vec<Seg>, drop: Vec<usize>) -> string {
+    let mut out = ""
+    let mut i: usize = 0
+    while i < segs.len() {
+        if !drop.contains(i) {
+            out = out + segs[i].text
+        }
+        i = i + 1
+    }
+    out
+}
+
+fn reduce_items(ctx: Ctx, keptfiles: Vec<string>, file: string, level: int) -> Ctx {
+    let mut c = ctx
+    let base = if c.over.contains_key(file) { c.over[file] } else { read_src("${c.tree}/src/${file}") }
+    let segs = segments(base, level)
+    let mut idx: Vec<usize> = Vec::new()
+    let mut i: usize = 0
+    while i < segs.len() {
+        if segs[i].removable {
+            idx.push(i)
+        }
+        i = i + 1
+    }
+    // ddmin over removable segment indices: keep set `cur`; the dropped ones are idx minus cur
+    let mut cur: Vec<usize> = Vec::new()
+    for x in idx {
+        cur.push(x)
+    }
+    let mut n: usize = 2
+    while cur.len() >= 1 && c.iters < c.cap {
+        let size = (cur.len() + n - 1) / n
+        let mut reduced = false
+        let mut start: usize = 0
+        while start < cur.len() && !reduced {
+            // try dropping cur[start..start+size] as well
+            let mut keepnow: Vec<usize> = Vec::new()
+            let mut dropped: Vec<usize> = Vec::new()
+            let mut j: usize = 0
+            while j < idx.len() {
+                keepnow.push(idx[j])
+                j = j + 1
+            }
+            let mut k: usize = 0
+            let mut nextcur: Vec<usize> = Vec::new()
+            while k < cur.len() {
+                if k >= start && k < start + size {
+                    dropped.push(cur[k])
+                } else {
+                    nextcur.push(cur[k])
+                }
+                k = k + 1
+            }
+            let mut alldrop: Vec<usize> = Vec::new()
+            for x in idx {
+                if !nextcur.contains(x) {
+                    alldrop.push(x)
+                }
+            }
+            let saved = c.over
+            c.over.insert(file, join_segs(segs, alldrop))
+            let r = run_test(c, "items(${file}) kept=${nextcur.len()}", keptfiles)
+            c = r.0
+            if r.1 {
+                cur = nextcur
+                n = if n > 2 { n - 1 } else { 2 }
+                reduced = true
+            } else {
+                c.over = saved
+            }
+            start = start + size
+        }
+        if !reduced {
+            if n >= cur.len() {
+                break
+            }
+            n = if n * 2 > cur.len() { cur.len() } else { n * 2 }
+        }
+    }
+    // leave the best text installed
+    let mut alldrop: Vec<usize> = Vec::new()
+    for x in idx {
+        if !cur.contains(x) {
+            alldrop.push(x)
+        }
+    }
+    c.over.insert(file, join_segs(segs, alldrop))
+    c
+}
+
+// ---- driver ----------------------------------------------------------------------------------------------
+
+fn arg_after(args: Vec<string>, flag: string, default: string) -> string {
+    let mut i: usize = 0
+    while i + 1 < args.len() {
+        if args[i] == flag {
+            return args[i + 1]
+        }
+        i = i + 1
+    }
+    default
+}
+
+fn args_after(args: Vec<string>, flag: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i: usize = 0
+    while i + 1 < args.len() {
+        if args[i] == flag {
+            out.push(args[i + 1])
+        }
+        i = i + 1
+    }
+    out
+}
+
+fn reduce(ctx: Ctx, assume_baseline: bool, items: bool) -> (Ctx, Vec<string>) {
+    let mut c = load_model(ctx)
+    let _ = sh("mkdir -p ${quote(c.work)}/${c.name}")
+    c = load_state(c)
+    say(c, "reduce ${c.name}: ${c.files.len()} files, cap ${c.cap}, ${c.iters} builds already in state")
+    let mut all: Vec<string> = Vec::new()
+    for f in c.files {
+        if stem_of(f) != "mod" {
+            all.push(f)
+        }
+    }
+    if !assume_baseline {
+        let b = run_test(c, "baseline", all)
+        c = b.0
+        if !b.1 {
+            say(c, "baseline does not reproduce the error: nothing to reduce (check the needles)")
+            return (c, all)
+        }
+    }
+    // level 1: groups
+    let mut groups: Vec<string> = Vec::new()
+    for f in all {
+        let g = if dir_of(f) == "" { strings.replace(f, ".wj", "") } else { group_of(f) }
+        if !groups.contains(g) {
+            groups.push(g)
+        }
+    }
+    let r1 = ddmin(c, 1, groups, all)
+    c = r1.0
+    let kept1 = expand(c, 1, r1.1, all)
+    say(c, "level 1 done: ${kept1.len()} files in ${closure_groups(c, r1.1).len()} groups")
+    // level 2: files
+    let r2 = ddmin(c, 2, kept1, kept1)
+    c = r2.0
+    let kept2 = expand(c, 2, r2.1, kept1)
+    say(c, "level 2 done: ${kept2.len()} files")
+    // level 3: items of the root files
+    if items {
+        for rf in c.roots {
+            c = reduce_items(c, kept2, rf, 0)
+            c = reduce_items(c, kept2, rf, 1)
+        }
+    }
+    (c, kept2)
+}
+
+fn save_result(ctx: Ctx, kept: Vec<string>) {
+    let _ = fs.write("${ctx.work}/${ctx.name}/result.txt", kept.join("\n") + "\n")
+    materialize(ctx, kept)
+    let r = "${ctx.work}/${ctx.name}/result"
+    let _ = sh("rm -rf ${quote(r)} && cp -R ${quote(ctx.work)}/${ctx.name}/cand ${quote(r)}")
+    say(ctx, "result: ${kept.len()} files, builds used ${ctx.iters}; tree in ${r}")
+}
+
+fn new_ctx(tree: string, work: string, name: string, check: string, needles: Vec<string>, roots: Vec<string>, extras: Vec<string>, cap: int, mutant: bool) -> Ctx {
+    Ctx {
+        tree: tree, work: work, name: name, check: check, needles: needles, roots: roots, extras: extras,
+        cap: cap, mutant: mutant, files: Vec::new(), fileset: HashMap::new(), dirset: HashMap::new(),
+        fdeps: HashMap::new(), reexp: HashMap::new(), cache: HashMap::new(), over: HashMap::new(), iters: 0,
+    }
+}
+
+// ---- selftest --------------------------------------------------------------------------------------------
+
+// toy tree: 10 modules in src/ and a directory d/; the "build" fails with ERROR-REPRO only when m3 holds TRIGA
+// and d/y holds TRIGB; m3 uses m1, d/y uses m5 (so the minimum is {m3, d/y, m1, m5}); a missing used module
+// prints `unresolved` instead, like rustc would stop at an unresolved import
+fn make_toy(dir: string) {
+    let _ = sh("rm -rf ${quote(dir)} && mkdir -p ${quote(dir)}/tree/src/d")
+    let mut modl = ""
+    let mut i = 0
+    while i < 10 {
+        modl = modl + "pub mod m${i}\n"
+        let body = if i == 3 { "use crate::m1::One\nfn junk_a() {}\nfn trig_a() {} // TRIGA\nfn junk_b() {}\n" } else if i == 1 { "pub struct One {}\n" } else if i == 5 { "pub struct Five {}\n" } else { "fn f${i}() {}\n" }
+        let _ = fs.write("${dir}/tree/src/m${i}.wj", body)
+        i = i + 1
+    }
+    modl = modl + "pub mod d\n"
+    let _ = fs.write("${dir}/tree/src/mod.wj", modl)
+    let _ = fs.write("${dir}/tree/src/d/mod.wj", "pub mod x\npub mod y\npub mod z\npub use x::PubX\n")
+    let _ = fs.write("${dir}/tree/src/d/x.wj", "pub struct PubX {}\n")
+    let _ = fs.write("${dir}/tree/src/d/y.wj", "use crate::m5::Five\n// TRIGB\n")
+    let _ = fs.write("${dir}/tree/src/d/z.wj", "use crate::d::PubX\nfn z() {}\n")
+    let chk = "for f in $(find src -name '*.wj'); do for m in $(grep -ho 'crate::[a-z0-9]*' $f | sed 's/crate:://'); do [ -e src/$m.wj ] || [ -d src/$m ] || { echo unresolved $m; exit 1; }; done; done; grep -q TRIGA src/m3.wj 2>/dev/null && grep -q TRIGB src/d/y.wj 2>/dev/null && echo ERROR-REPRO-HERE; exit 0"
+    let _ = fs.write("${dir}/check.sh", chk + "\n")
+}
+
+fn selftest(mutant: bool) -> bool {
+    let tmp = strings.trim(out_of("mktemp -d /tmp/wj-reduce-selftest.XXXXXX"))
+    make_toy(tmp)
+    let check = "sh ${tmp}/check.sh"
+    let needles: Vec<string> = ["ERROR-REPRO-HERE"]
+    let none: Vec<string> = Vec::new()
+    // A: no roots, the reducer must find the 2-file trigger plus its dependencies, nothing else
+    let ca = new_ctx("${tmp}/tree", "${tmp}/work", "a", check, needles, none, none, 40, mutant)
+    let ra = reduce(ca, false, false)
+    let gotf: Vec<string> = ra.1
+    let expect_a = "d/y.wj,m1.wj,m3.wj,m5.wj"
+    let mut sorted: Vec<string> = Vec::new()
+    for f in gotf {
+        sorted.push(f)
+    }
+    sorted.sort()
+    let ok_a = sorted.join(",") == expect_a
+    println("selftest A: got ${sorted.join(",")} expected ${expect_a}: ${if ok_a { "ok" } else { "FAIL" }} (${ra.0.iters} builds)")
+    // B: with m3 as the root, the items of m3 shrink to the one that carries the trigger comment
+    let roots: Vec<string> = ["m3.wj"]
+    let cb = new_ctx("${tmp}/tree", "${tmp}/work", "b", check, needles, roots, none, 40, mutant)
+    let rb = reduce(cb, true, true)
+    let txt = if rb.0.over.contains_key("m3.wj") { rb.0.over["m3.wj"] } else { "" }
+    let ok_b = !strings.contains(txt, "junk_a") && !strings.contains(txt, "junk_b") && strings.contains(txt, "TRIGA")
+    println("selftest B: m3 items after reduction: ${strings.replace(txt, "\n", " / ")}: ${if ok_b { "ok" } else { "FAIL" }}")
+    // C: resume. The same run again costs no build
+    let cc = new_ctx("${tmp}/tree", "${tmp}/work", "a", check, needles, none, none, 40, mutant)
+    let before = ra.0.iters
+    let rc = reduce(cc, false, false)
+    let ok_c = rc.0.iters == before
+    println("selftest C: resumed run used ${rc.0.iters - before} new builds: ${if ok_c { "ok" } else { "FAIL" }}")
+    let _ = sh("rm -rf ${quote(tmp)}")
+    ok_a && ok_b && ok_c
+}
+
+fn main() {
+    let args = env::args()
+    let mutant = args.contains("--mutant")
+    if args.contains("--selftest") {
+        let ok = selftest(mutant)
+        if mutant {
+            if ok {
+                println("MUTATION CHECK FAILED: the broken minimiser passed the selftest")
+                process.exit(1)
+            }
+            println("mutation check ok: the broken minimiser fails the selftest")
+            return
+        }
+        if !ok {
+            println("SELFTEST FAILED")
+            process.exit(1)
+        }
+        println("selftest ok")
+        return
+    }
+    let tree = arg_after(args, "--tree", "")
+    let work = arg_after(args, "--work", "")
+    let name = arg_after(args, "--name", "run")
+    let check = arg_after(args, "--check", "")
+    let needles = args_after(args, "--needle")
+    if tree == "" || work == "" || check == "" || needles.len() == 0 {
+        println("usage: reduce_build.wj --tree DIR --work DIR --name NAME --check CMD --needle TEXT [--root REL.wj] [--extra REL] [--cap 40] [--assume-baseline] [--no-items] | --selftest [--mutant]")
+        process.exit(2)
+    }
+    let cap = strings.parse_i32(arg_after(args, "--cap", "40"))
+    let ctx = new_ctx(tree, work, name, check, needles, args_after(args, "--root"), args_after(args, "--extra"), cap as int, false)
+    let r = reduce(ctx, args.contains("--assume-baseline"), !args.contains("--no-items"))
+    save_result(r.0, r.1)
+}
