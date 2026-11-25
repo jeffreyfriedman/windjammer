@@ -53,6 +53,43 @@ fn mutate(src: &str, rng: &mut Rng) -> String {
     out
 }
 
+const SAMPLE_SEED: u64 = 0xC0FF_EE00_1234_5678;
+
+/// FNV-1a over the path, started from `seed`: a stable hash that does not depend on which other files exist.
+fn path_hash(seed: u64, path: &str) -> u64 {
+    path.bytes().fold(seed ^ 0xcbf2_9ce4_8422_2325, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3))
+}
+
+/// The `n` files with the smallest path hash. A file is in or out by its own path, so adding or removing an unrelated
+/// file changes the sample by at most that one file (sorting by path and truncating shifts every later file).
+fn stable_sample(mut files: Vec<(String, String)>, seed: u64, n: usize) -> Vec<(String, String)> {
+    files.sort_by_key(|(name, _)| (path_hash(seed, name), name.clone()));
+    files.truncate(n);
+    files
+}
+
+/// The broken variants of one file: generated from the file's own path, so they never depend on which other files exist.
+fn mutants_of(name: &str, src: &str) -> Vec<String> {
+    let mut rng = Rng(path_hash(SAMPLE_SEED, name) | 1);
+    (0..6).map(|_| mutate(src, &mut rng)).collect()
+}
+
+#[test]
+fn sample_and_mutants_do_not_depend_on_other_files() {
+    let src = "fn main() {\n    let value = compute(1, 2)\n    print(value)\n}\n";
+    let alone = mutants_of("a/one.wj", src);
+    let _ = mutants_of("b/two.wj", src); // a neighbour processed in between changes nothing
+    assert_eq!(alone, mutants_of("a/one.wj", src));
+    assert_ne!(alone, mutants_of("b/two.wj", src), "the generator ignores the path: every file would get the same mutations");
+    let corpus = |extra: &[&str]| -> Vec<(String, String)> {
+        (0..400).map(|i| format!("f{i}.wj")).chain(extra.iter().map(|s| s.to_string())).map(|n| (n, String::new())).collect()
+    };
+    let names = |c| -> BTreeSet<String> { stable_sample(c, SAMPLE_SEED, 150).into_iter().map(|f| f.0).collect() };
+    let (base, grown) = (names(corpus(&[])), names(corpus(&["a_new.wj", "z_new.wj"])));
+    assert_eq!(base.len(), 150);
+    assert!(base.difference(&grown).count() <= 2, "two added files displaced more than two sampled files");
+}
+
 #[test]
 fn every_parse_error_is_located_inside_the_source() {
     let mut files: Vec<_> = repo_wj_files()
@@ -60,15 +97,13 @@ fn every_parse_error_is_located_inside_the_source() {
         .filter_map(|p| std::fs::read_to_string(&p).ok().map(|s| (rel(&p), s)))
         .filter(|(_, s)| s.len() < 3000 && parse(s).is_ok())
         .collect();
-    files.sort();
-    files.truncate(150);
+    files = stable_sample(files, SAMPLE_SEED, 150);
     assert!(files.len() >= 50, "corpus too small: {}", files.len());
-    let mut rng = Rng(0xC0FF_EE00_1234_5678);
     let (mut errors, mut bad) = (0usize, Vec::new());
     let mut panics = BTreeSet::new();
     for (name, src) in &files {
-        for _ in 0..6 {
-            let m = mutate(src, &mut rng);
+        // One generator per file, seeded by the file's path: adding or removing another file never changes this file's mutations.
+        for m in mutants_of(name, src) {
             match parse(&m) {
                 Ok(()) => {}
                 Err(e) if e == "PANIC" => {
