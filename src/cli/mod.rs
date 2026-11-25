@@ -3,6 +3,7 @@
 // This module provides the implementation for all CLI subcommands.
 
 pub mod add;
+pub mod clean_generated;
 pub mod agent_wrap;
 pub mod stdin_text;
 pub mod build;

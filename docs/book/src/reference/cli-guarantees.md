@@ -212,8 +212,10 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj version --json` | Machine-readable output | tested |
 | `wj clean --older-than-hours` | With --tmp: only directories older than this many hours | tested |
 | `wj clean --sidecars` | Only remove legacy `*.wj.meta` sidecars next to sources under the current directory | tested |
+| `wj clean --generated` | Remove the project's generated gen/ and build/ directories, never one that holds tracked files (dry run unless --yes) | tested |
+| `wj check --no-ignore` | Check every .wj file under the path, including generated and git-ignored directories that wj check leaves out by default | tested |
 | `wj clean --tmp` | Remove stale `wj-*` scratch directories from the OS temp dir (dry run unless --yes) | tested |
-| `wj clean --yes` | Actually remove what --tmp lists | tested |
+| `wj clean --yes` | Actually remove what --tmp or --generated lists | tested |
 | `wj rust-surface` | Generate the signature surface of a Rust crate dependency (ADR-0026) from its source | tested |
 | `wj rust-surface --all-pub` | Every public free function that maps (the default) | tested |
 | `wj rust-surface --fn` | Only these functions (repeatable); the cache copy always has every function | tested |

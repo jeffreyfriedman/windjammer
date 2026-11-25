@@ -154,7 +154,7 @@ fn add_missing_mut(path: &Path, check: bool, docs: bool) -> Result<(usize, usize
     let checked = if has_wj {
         crate::check::local_mutability(path)?
     } else {
-        crate::check::Checked { report: crate::diagnostics::Report::new("check", Vec::new()), sources: Default::default() }
+        crate::check::Checked { report: crate::diagnostics::Report::new("check", Vec::new()), scope: Default::default(), sources: Default::default() }
     };
     let outcome = crate::check::apply_fixes(&checked.report.diagnostics, &checked.sources, !check)?;
     for f in &outcome.files_skipped {

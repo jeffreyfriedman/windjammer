@@ -103,24 +103,14 @@ fn format_file(path: &Path, check: bool) -> Result<bool> {
     Ok(true)
 }
 
-/// Recursively gather `.wj` files, skipping build output and hidden directories.
+/// The `.wj` files to format: a file itself, or the project's own sources under a directory (generated and ignored
+/// directories are left out, `check::scope`).
 fn collect_wj_files(path: &Path, out: &mut Vec<PathBuf>) {
     if path.is_file() {
         out.push(path.to_path_buf());
         return;
     }
-    let Ok(rd) = fs::read_dir(path) else { return };
-    for entry in rd.flatten() {
-        let p = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
-        if p.is_dir() {
-            if !name.starts_with('.') && name != "target" && name != "build" && name != "node_modules" {
-                collect_wj_files(&p, out);
-            }
-        } else if p.extension().is_some_and(|e| e == "wj") {
-            out.push(p);
-        }
-    }
+    out.extend(crate::check::files::collect(path).unwrap_or_default());
 }
 
 /// Options from the nearest `wj.toml` at or above `dir`; defaults when none exists.

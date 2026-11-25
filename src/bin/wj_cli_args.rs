@@ -595,6 +595,11 @@ pub enum Commands {
         /// first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command
         #[arg(long, value_name = "FORMAT", value_parser = ["human", "agent"])]
         error_format: Option<String>,
+
+        /// Check every `.wj` file under the path, including generated (`gen/`, `build/`, ...) and git-ignored
+        /// directories that `wj check` leaves out by default
+        #[arg(long)]
+        no_ignore: bool,
     },
 
     /// Add a dependency to wj.toml
@@ -849,11 +854,15 @@ pub enum Commands {
         #[arg(long)]
         tmp: bool,
 
+        /// Remove the project's generated `gen/` and `build/` directories, never one that holds tracked files (dry run unless --yes)
+        #[arg(long)]
+        generated: bool,
+
         /// With --tmp: only directories older than this many hours
         #[arg(long, default_value_t = 6)]
         older_than_hours: u64,
 
-        /// With --tmp: actually delete (default is a dry run)
+        /// With --tmp or --generated: actually delete (default is a dry run)
         #[arg(long)]
         yes: bool,
     },

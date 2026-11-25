@@ -162,7 +162,7 @@ digraph deps {
   "check" -> "lexer" [label="9"];
   "check" -> "linter" [label="3"];
   "check" -> "metadata" [label="6"];
-  "check" -> "module_system" [label="5"];
+  "check" -> "module_system" [label="6"];
   "check" -> "package" [label="9"];
   "check" -> "parser" [label="77"];
   "check" -> "parser_impl" [label="1"];
@@ -178,13 +178,13 @@ digraph deps {
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="48"];
   "cli" -> "cargo_toml" [label="5"];
-  "cli" -> "check" [label="34"];
+  "cli" -> "check" [label="36"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="4"];
   "cli" -> "compiler_config" [label="6"];
   "cli" -> "config" [label="4"];
   "cli" -> "debug_env" [label="7"];
-  "cli" -> "diagnostics" [label="39"];
+  "cli" -> "diagnostics" [label="41"];
   "cli" -> "ejector" [label="2"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
@@ -196,7 +196,7 @@ digraph deps {
   "cli" -> "linter" [label="5"];
   "cli" -> "mem_report" [label="1"];
   "cli" -> "metadata" [label="1"];
-  "cli" -> "module_system" [label="13"];
+  "cli" -> "module_system" [label="14"];
   "cli" -> "optimizer" [label="1"];
   "cli" -> "package" [label="20"];
   "cli" -> "parser" [label="9"];
@@ -453,7 +453,7 @@ digraph deps {
   "test_runner" -> "build_utils" [label="2"];
   "test_runner" -> "cargo_cache" [label="4"];
   "test_runner" -> "cargo_toml" [label="3"];
-  "test_runner" -> "check" [label="3"];
+  "test_runner" -> "check" [label="4"];
   "test_runner" -> "compiler_config" [label="1"];
   "test_runner" -> "config" [label="5"];
   "test_runner" -> "diagnostics" [label="1"];

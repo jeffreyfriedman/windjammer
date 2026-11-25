@@ -367,8 +367,8 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }
-        Commands::Check { path, json, watch, fix, error_format } => {
-            windjammer::cli::check::execute(path.as_deref(), json, watch, fix, output_of(error_format.as_deref()).format)?
+        Commands::Check { path, json, watch, fix, error_format, no_ignore } => {
+            windjammer::cli::check::execute(path.as_deref(), json, watch, fix, output_of(error_format.as_deref()).format, no_ignore)?
         }
         Commands::Add {
             package,
@@ -426,8 +426,8 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
         Commands::Eject(a) => windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?,
-        Commands::Clean { all, sidecars, tmp, older_than_hours, yes } => {
-            windjammer::cli::clean::execute(all, sidecars, tmp, older_than_hours, yes)?;
+        Commands::Clean { all, sidecars, tmp, generated, older_than_hours, yes } => {
+            windjammer::cli::clean::execute(all, sidecars, tmp, generated, older_than_hours, yes)?;
         }
         Commands::Cache { action } => match action {
             CacheCommand::Path { verify } => windjammer::cli::cache::execute_path(verify)?,
