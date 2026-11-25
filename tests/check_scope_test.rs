@@ -169,7 +169,8 @@ fn the_build_the_widths_gate_reads_never_contains_a_stale_generated_directory() 
     let stale = "pub fn f() { let a: u64 = 1; let b: i64 = 2; let _ = a < b; }\n";
     let d = project(&[
         ("wj.toml", MANIFEST),
-        ("src/x.wj", "pub fn f() -> int {\n    1\n}\n"),
+        ("lib.wj", "pub mod x;\n"),
+        ("x.wj", "pub fn f() -> int {\n    1\n}\n"),
         ("gen/mod.rs", "pub mod x;\n"),
         ("gen/x.rs", stale),
         ("build/mod.rs", "pub mod x;\n"),
