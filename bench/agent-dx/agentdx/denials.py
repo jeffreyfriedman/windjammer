@@ -184,19 +184,38 @@ EXIT_MARK = re.compile(r"\[exit (\d+)\]|(?:^|\n)exit status: (\d+)\s*$|^Exit cod
 FAIL_MARK = re.compile(r"(?m)^\s*(error(\[\w+\])?:|.*\bpanicked at\b|.*could not compile|.*Compilation failed|Traceback \(most recent call last\))")
 
 
-def result_shows_success(text, is_error=False, piped=False):
-    """True when a Bash tool RESULT shows a run that worked, whatever the command's textual shape (`| head`, `2>/dev/null`,
-    `; echo "[exit $?]"`): not an error result, no non-zero `[exit N]` / `exit status: N` / `Exit code N`, no compiler or panic
-    marker, and either some output or (no pipe or redirect to hide it) an empty one."""
+CODED_FAIL = re.compile(r"(?m)(\berror\[[A-Z]*\d+\]|\berror\s+(?:WJ|E)\d+\b|^\s*error:.*\[(?:WJ|E)\d+\]|could not compile|Compilation failed|^Error: not running|the build stops before generating code)")
+RUN_CMD = re.compile(r"\bwj\s+(?:run|test)\b|(?:^|[\s;&|])\./|--stdin")
+
+
+def runs_program(cmd):
+    """True when the command RUNS the built program (wj run/test, ./main, ./build/..., --stdin...): its exit status and its own `error:` or
+    panic lines are the PROGRAM's behaviour (a spec-mandated `exit 1` after error lines is a correct run), not evidence that the compile failed."""
+    return bool(RUN_CMD.search(cmd or ""))
+
+
+def result_shows_success(text, is_error=False, piped=False, runs=False):
+    """True when a Bash tool RESULT shows a build or run that worked, whatever the command's textual shape (`| head`, `2>/dev/null`,
+    `; echo "[exit $?]"`). Never a success: an error result, a denied call, a CODED compiler diagnostic (`error[E0308]`, `error WJ0012:`,
+    `error: ... [WJ0035]`, `could not compile`, `Error: not running`). For a command that only builds/checks, a non-zero exit mark, an
+    uncoded `error:` line or a panic also fails it; for a command that RUNS the program (`runs=True`) they do not (the program compiled,
+    and its exit status is its own: the two error-exit tasks end every correct run with status 1). Needs some output, or no pipe or
+    redirect to hide an empty one."""
     text = text or ""
-    if is_error or classify_text(text) in ("dont-ask", "permission"):
+    # Claude Code marks any non-zero exit as an error result, so for a command that RUNS the program is_error is just its exit status.
+    if (is_error and not runs) or text.lstrip().startswith("<tool_use_error>") or classify_text(text) in ("dont-ask", "permission"):
         return False
-    for m in EXIT_MARK.finditer(text):
-        if next(g for g in m.groups() if g is not None) != "0":
+    if CODED_FAIL.search(text):
+        return False
+    if not runs:
+        for m in EXIT_MARK.finditer(text):
+            if next(g for g in m.groups() if g is not None) != "0":
+                return False
+        if FAIL_MARK.search(text):
             return False
-    if FAIL_MARK.search(text):
-        return False
-    return bool(text.strip()) or not piped
+    body = EXIT_MARK.sub("", text).strip()
+    nonzero = any(next(g for g in m.groups() if g is not None) != "0" for m in EXIT_MARK.finditer(text))
+    return bool(body) or (not piped and not nonzero)
 
 
 def stream_compiled_ok(stream_text):
@@ -224,7 +243,7 @@ def stream_compiled_ok(stream_text):
                 cmd = uses[c["tool_use_id"]]
                 if not any(w in VERIFY_WORDS for w in sub_commands(cmd)):
                     continue
-                if result_shows_success(_text_of(c.get("content")), bool(c.get("is_error")), bool(re.search(r"[|>]", cmd))):
+                if result_shows_success(_text_of(c.get("content")), bool(c.get("is_error")), bool(re.search(r"[|>]", cmd)), runs=runs_program(cmd)):
                     ok = True
     return ok
 
