@@ -132,6 +132,7 @@ corpus_tests!(
     shadow_param_vec_mutated,
     shadow_param_nested_scopes,
     shadow_param_nested_blocks,
+    shadow_param_closure_param,
     closure_capture_mutation,
     closure_to_fn_param,
     let_else,

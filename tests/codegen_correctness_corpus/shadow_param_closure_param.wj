@@ -1,0 +1,17 @@
+// A closure parameter and a `let` inside the closure both shadow the function parameter `xs`; the push changes the
+// closure's own vector, so `k` keeps borrowing its argument and the caller's `v` needs no `mut`.
+// expect: k 1 2
+// expect: main 2
+fn k(xs: Vec<int>) {
+    let f = |xs: Vec<int>| {
+        let mut xs = xs
+        xs.push(1)
+        xs.len()
+    }
+    println("k ${f(Vec::new())} ${xs.len()}")
+}
+fn main() {
+    let v = [1, 2]
+    k(v)
+    println("main ${v.len()}")
+}

@@ -374,7 +374,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Collect variable names bound by a pattern (e.g. `Some(search)` → `["search"]`).
-    pub(crate) fn collect_pattern_bindings(pattern: &crate::parser::Pattern) -> Vec<String> {
+    fn collect_pattern_bindings(pattern: &crate::parser::Pattern) -> Vec<String> {
         let mut names = Vec::new();
         Self::collect_pattern_bindings_inner(pattern, &mut names);
         names
