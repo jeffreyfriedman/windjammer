@@ -41,8 +41,8 @@ fn grow(v: Vec<int>) -> int {
     v[0] * 100000 * 100000
 }
 
-fn first_f(v: Vec<f32>) -> f32 {
-    v[0]
+fn first_f(v: Vec<f32>) -> float {
+    v[0] as float
 }
 
 fn main() {
@@ -119,7 +119,7 @@ fn main() {
     let mut f = Vec::new()
     f.push(0.1)
     f.push(0.2)
-    println("f32 ${first_f(f) as float} ${f[0]}")
+    println("f32 ${first_f(f)} ${f[0]}")
     // after the call the caller keeps pushing and calling
     a.push(99)
     println("after ${at_i64(a, 100)} ${sum(a)}")
