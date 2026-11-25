@@ -513,6 +513,16 @@ process::run_with_args("echo", [name])"#.to_string()),
             rust_codes: vec![],
             maturity: GuaranteeMaturity::HighConfidence,
         });
+        self.register(WjErrorCode {
+            code: "WJ0202".to_string(),
+            title: "Loop changes the collection it iterates".to_string(),
+            explanation: "A `for` loop over a collection changes that collection in its body (`push`, `pop`, `clear`, `remove`, `sort`, an assignment to `v` or `v[i]`, `&mut v`). `wj run` walks a snapshot and does not see the change; a compiled build keeps the collection borrowed for the whole loop and rustc rejects it.".to_string(),
+            causes: vec!["`for n in names { names.push(n) }`".to_string()],
+            solutions: vec!["Collect the changes in a second list (or the indexes to change) and apply them after the loop".to_string(), "Loop over `0..v.len()` and index `v` when the body has to change it".to_string(), "Write `for p in v.clone()` when the loop should see a snapshot".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
     }
 
     /// ADR-0002: explicit `let mut` (WJ0051).

@@ -1,0 +1,35 @@
+// expect: none
+struct Particle {
+    x: int,
+}
+
+fn fresh() -> Vec<int> {
+    [1, 2]
+}
+
+fn main() {
+    let mut v = [1, 2, 3]
+    let mut w = [0]
+    let mut ps = [Particle { x: 1 }]
+    // a snapshot, an index loop, reads, another vector, the loop variable's fields
+    for p in v.clone() {
+        v.push(p)
+    }
+    for i in 0..v.len() {
+        v[i] = v[i] + 1
+    }
+    for p in &v {
+        w.push(*p)
+    }
+    for p in &ps {
+        w.push(p.x)
+    }
+    // a different binding with the same name
+    for p in &v {
+        let mut v = [*p]
+        v.push(1)
+    }
+    let mut u = fresh()
+    u.push(4)
+    println("${v.len()} ${w.len()} ${ps.len()} ${u.len()}")
+}

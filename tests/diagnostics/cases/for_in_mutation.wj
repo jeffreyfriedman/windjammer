@@ -1,0 +1,8 @@
+// expect: WJ0202
+fn main() {
+    let mut names = [1, 2, 3]
+    for n in &names {
+        names.push(*n)
+    }
+    println("${names.len()}")
+}

@@ -18,6 +18,7 @@ pub(crate) mod nested_mod_items;
 pub(crate) mod field_enum_borrow;
 mod field_moves;
 mod forbidden_patterns;
+pub mod for_in_mutation;
 mod function_analysis;
 mod generic_analysis;
 mod module_analysis;
@@ -449,7 +450,9 @@ pub fn forbidden_rust_patterns(program: &Program<'_>) -> Result<(), String> {
     forbidden_patterns::check_forbidden_rust_patterns(program)?;
     arena_escape::gate(program)?;
     // ADR-0004: every task is waited on (WJ0190); `wj check` reports it with a fix (check/tasks.rs)
-    task_structure::gate(program)
+    task_structure::gate(program)?;
+    // WJ0202: a `for` loop must not change what it iterates; `wj check` reports it with spans (check/loop_mutation.rs)
+    for_in_mutation::gate(program)
 }
 
 #[cfg(test)]

@@ -1,0 +1,67 @@
+// expect: WJ0202
+struct Bag {
+    items: Vec<int>,
+}
+
+impl Bag {
+    fn grow(self) {
+        for x in &self.items {
+            self.items.push(1)
+//~@13+18 ERROR WJ0202 `self.items.push(..)` changes `self.items` while the loop over `self.items` is running
+        }
+    }
+}
+
+fn by_value() {
+    let mut v = [1, 2, 3]
+    for p in v {
+        v.push(p)
+//~@9+9 ERROR WJ0202 `v.push(..)` changes `v` while the loop over `v` is running
+    }
+}
+
+fn by_reference() {
+    let mut v = [1, 2, 3]
+    for p in &v {
+        v.remove(0)
+//~@9+11 ERROR WJ0202 `v.remove(..)` changes `v`
+    }
+}
+
+fn assign_element() {
+    let mut v = [1, 2, 3]
+    for p in &v {
+        v[0] = *p
+//~@9+9 ERROR WJ0202 changes an element of `v`
+    }
+}
+
+fn in_a_closure() {
+    let mut v = [1, 2, 3]
+    for p in &v {
+        let f = || v.push(1)
+//~@20+9 ERROR WJ0202 `v.push(..)` changes `v`
+        f()
+    }
+}
+
+fn nested_loops() {
+    let mut v = [1, 2, 3]
+    let mut w = [4]
+    for a in &v {
+        for b in &w {
+            v.push(*b)
+//~@13+10 ERROR WJ0202 `v.push(..)` changes `v`
+            w.push(*a)
+//~@13+10 ERROR WJ0202 `w.push(..)` changes `w`
+        }
+    }
+}
+
+fn replaced() {
+    let mut v = [1, 2, 3]
+    for p in &v {
+        v = [*p]
+//~@9+8 ERROR WJ0202 replaces `v`
+    }
+}
