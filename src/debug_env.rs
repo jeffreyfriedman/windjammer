@@ -42,8 +42,21 @@ fn all() -> impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)> {
     }
 }
 
+/// One variable by name. This is `getenv` (`var_os`): it compares names in place and copies only the value found. It is
+/// not `all().find(..)`: that copies EVERY variable (names and values, so the length of `PWD` and `OLDPWD`, hence the
+/// checkout path, too) per call, and these switches are read thousands of times per run (about 6% of a cold `wj run`
+/// of the agent-loop kernel, and the last per-character cost of the working directory's path in `--self-test-cwd`).
+/// The first variable of that name wins in both.
 fn read(name: &str) -> Option<std::ffi::OsString> {
-    all().find(|(k, _)| k == name).map(|(_, v)| v)
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = name;
+        None
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::var_os(name)
+    }
 }
 
 /// Every variable whose name starts with one of `prefixes`, sorted: what a cache key hashes besides its inputs.
@@ -118,5 +131,28 @@ pub fn count(stage: Stage) {
     let Some(path) = read("WJ_STAGE_COUNTERS") else { return };
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(f, "{}", stage.name());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_name_lookup_agrees_with_a_scan_of_the_environment() {
+        // `var_os` and the scan name the same variable (the first of that name), set or unset; a name no variable can have is unset
+        for (k, _) in std::env::vars_os().take(64) {
+            let Some(k) = k.to_str() else { continue };
+            if k.is_empty() || k.contains('=') {
+                continue;
+            }
+            assert_eq!(read(k), all().find(|(n, _)| n == k).map(|(_, v)| v), "{k}");
+            assert!(enabled(k));
+        }
+        assert_eq!(read("WJ_DEBUG_NO_SUCH_SWITCH_X"), None);
+        assert!(!enabled("WJ_DEBUG_NO_SUCH_SWITCH_X"));
+        assert_eq!(read("A=B"), None);
+        assert_eq!(read(""), None);
+        assert_eq!(read("a\0b"), None);
     }
 }
