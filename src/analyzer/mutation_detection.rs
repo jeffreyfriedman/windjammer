@@ -115,9 +115,14 @@ impl<'ast> Analyzer<'ast> {
                         return true;
                     }
                 }
-                Statement::Let { value, .. } => {
+                Statement::Let { pattern, value, .. } => {
+                    // The initializer still sees the outer `name`; a `let` that binds `name` again
+                    // declares a NEW binding, so the rest of this block mutates that one, not ours.
                     if self.has_mutable_method_call(name, value, registry, param_type_hint) {
                         return true;
+                    }
+                    if Self::collect_pattern_bindings(pattern).iter().any(|b| b == name) {
+                        return false;
                     }
                 }
                 Statement::Return {

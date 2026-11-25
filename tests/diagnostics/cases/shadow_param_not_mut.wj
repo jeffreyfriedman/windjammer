@@ -1,0 +1,14 @@
+// expect: WJ0051
+// A shadowing `let` without `mut` that is then pushed to: the diagnostic names the shadow binding,
+// never the parameter `ps` (which is not changed).
+// oracle: check
+fn f(ps: Vec<int>) {
+    let ps = ps
+    ps.push(1)
+//~@5+2 ERROR WJ0051 `ps` is changed
+}
+
+fn main() {
+    let v = [1]
+    f(v)
+}

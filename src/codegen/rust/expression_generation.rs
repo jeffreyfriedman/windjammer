@@ -945,7 +945,7 @@ impl<'ast> CodeGenerator<'ast> {
                 statements: stmts,
                 is_unsafe,
                 ..
-            } => self.generate_block_expr(stmts, *is_unsafe),
+            } => self.generate_block_expr_scoped(stmts, *is_unsafe),
         }
     }
 

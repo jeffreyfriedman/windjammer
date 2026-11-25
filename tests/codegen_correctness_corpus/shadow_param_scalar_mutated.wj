@@ -1,0 +1,12 @@
+// The mutation of a shadowing `let mut n` belongs to the shadow, not to the scalar parameter `n`
+// (the parameter used to be inferred `&mut`, which the call `f2(3)` cannot satisfy).
+// expect: 7
+fn f2(n: int) {
+    let mut n = n * 2
+    n += 1
+    println("${n}")
+}
+
+fn main() {
+    f2(3)
+}

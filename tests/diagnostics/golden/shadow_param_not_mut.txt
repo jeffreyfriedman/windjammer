@@ -1,0 +1,13 @@
+error[WJ0051]: `ps` is changed but is not declared `mut`
+  --> shadow_param_not_mut.wj:7:5
+  |
+7 |     ps.push(1)
+  |     ^^ `push` changes `ps` here
+  :::  shadow_param_not_mut.wj:6:9
+  |
+6 |     let ps = ps
+  |         -- declared without `mut`
+  = help: declare it with `mut ps`
+  = note: local bindings are immutable unless declared `mut` (ADR-0002); `wj fix` adds every missing `mut`
+  = fix (auto-fixable): declare `ps` as `mut`
+  = explain: wj explain WJ0051

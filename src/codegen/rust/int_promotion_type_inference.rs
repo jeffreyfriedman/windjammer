@@ -917,12 +917,12 @@ impl<'ast> CodeGenerator<'ast> {
                     self.current_function_body.iter().copied().collect()
                 };
             if let Some(rhs) = Self::find_let_rhs_in_stmts(&body, bound_name) {
-                if let Some(t) = self.u32_width_from_expr_for_while_peer(rhs) {
+                if let Some(t) = self.u32_width_from_expr_for_while_peer(rhs, Some(rhs)) {
                     *peer = Some(t);
                     return;
                 }
             }
-            if let Some(t) = self.u32_width_from_expr_for_while_peer(bound) {
+            if let Some(t) = self.u32_width_from_expr_for_while_peer(bound, None) {
                 *peer = Some(t);
             }
         }
@@ -930,7 +930,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// P3.578 / P3.348: walk an expression for a concrete `u32` width (param, local,
     /// `pixel_count() -> u32`, or binary with a u32 operand + untyped int lit).
-    fn u32_width_from_expr_for_while_peer(&self, expr: &Expression<'ast>) -> Option<Type> {
+    fn u32_width_from_expr_for_while_peer(&self, expr: &Expression<'ast>, scope: Option<&Expression<'ast>>) -> Option<Type> {
         match expr {
             Expression::Identifier { name, .. } => {
                 if self.local_var_types.get(name.as_str()).is_some_and(|t| {
@@ -951,14 +951,14 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         self.current_function_body.iter().copied().collect()
                     };
-                if let Some(rhs) = Self::find_let_rhs_in_stmts(&body, name) {
-                    return self.u32_width_from_expr_for_while_peer(rhs);
+                if let Some(rhs) = Self::find_let_rhs_scoped(&body, name, scope) {
+                    return self.u32_width_from_expr_for_while_peer(rhs, Some(rhs));
                 }
                 None
             }
             Expression::Binary { left, right, .. } => {
-                let l = self.u32_width_from_expr_for_while_peer(left);
-                let r = self.u32_width_from_expr_for_while_peer(right);
+                let l = self.u32_width_from_expr_for_while_peer(left, scope);
+                let r = self.u32_width_from_expr_for_while_peer(right, scope);
                 let untyped_lit = |e: &Expression| {
                     matches!(
                         e,
@@ -1385,7 +1385,7 @@ impl<'ast> CodeGenerator<'ast> {
                             } else {
                                 self.current_function_body.iter().copied().collect()
                             };
-                        if let Some(ty) = self.int_width_type_from_assign_rhs(value, &full) {
+                        if let Some(ty) = self.int_width_type_from_assign_rhs(value, &full, None) {
                             *peer = Some(ty);
                         }
                     }
@@ -1418,7 +1418,7 @@ impl<'ast> CodeGenerator<'ast> {
     fn int_width_type_from_assign_rhs(
         &self,
         value: &Expression<'ast>,
-        body: &[&crate::parser::Statement<'ast>],
+        body: &[&crate::parser::Statement<'ast>], scope: Option<&Expression<'ast>>,
     ) -> Option<Type> {
         if let Some(ty) = self.concrete_u32_or_i32_width(value) {
             return Some(ty);
@@ -1439,8 +1439,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // `best_count = count` where `let count = counts[i]` with `counts: Vec<u32>`.
         if let Expression::Identifier { name, .. } = value {
-            if let Some(rhs) = Self::find_let_rhs_in_stmts(body, name) {
-                return self.int_width_type_from_assign_rhs(rhs, body);
+            if let Some(rhs) = Self::find_let_rhs_scoped(body, name, scope) {
+                return self.int_width_type_from_assign_rhs(rhs, body, Some(rhs));
             }
             if let Some(ty) = self.local_var_types.get(name.as_str()) {
                 return Self::parser_type_as_u32_or_i32_peer(ty)
@@ -1506,7 +1506,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn find_let_rhs_in_stmts<'b>(
+    pub(super) fn find_let_rhs_in_stmts<'b>(
         stmts: &[&'b crate::parser::Statement<'ast>],
         name: &str,
     ) -> Option<&'b Expression<'ast>> {

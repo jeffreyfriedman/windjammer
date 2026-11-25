@@ -24,6 +24,8 @@ pub mod auto_super_type_imports;
 pub mod backend;
 pub mod binary_expression_generation;
 pub mod block_generation;
+mod param_shadow_scope;
+mod let_scope_lookup;
 pub mod call_expression_generation;
 pub mod call_signature_resolution;
 pub mod call_site_borrow;

@@ -23,7 +23,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         if !undeclared {
             return;
         }
-        if let Some(&var) = self.param_vars.get(name) {
+        if let Some(var) = self.param_var(name) {
             self.cs.add_because(
                 Constraint::OwnershipIs(var, OwnedType::Owned),
                 origin("OWN-OPAQUE-RECEIVER", format!("`{name}.{method}(..)` calls a method no declaration describes"), location),

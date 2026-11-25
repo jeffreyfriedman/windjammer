@@ -437,7 +437,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     // A local in scope (`let kept = headers`) takes the requirement too; its `let` flow
                     // edge carries it back to the parameter, as for OWN-RETURNED.
                     let local = self.scopes.iter().rev().find_map(|s| s.get(name)).copied().filter(|_| self.let_aliases.contains(name));
-                    if let Some(var) = local.or_else(|| self.param_vars.get(name).copied()) {
+                    if let Some(var) = local.or_else(|| self.param_var(name)) {
                         self.cs.add_because(
                             Constraint::OwnershipIs(var, OwnedType::Owned),
                             origin(
@@ -655,7 +655,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let Some(root) = self.root_identifier(object) else {
             return;
         };
-        if let Some(&var) = self.param_vars.get(&root) {
+        if let Some(var) = self.param_var(&root) {
             let r = self.fresh_region();
             self.cs.add_because(
                 Constraint::OwnershipIs(var, OwnedType::MutRef(r)),
@@ -929,7 +929,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// (or a Copy-seeded parameter) borrows the root parameter.
     fn emit_read_field_ref(&mut self, object: &Expression<'ast>, expr: &Expression<'ast>) {
         if let Some(name) = self.root_identifier(object) {
-            if let Some(&var) = self.param_vars.get(&name) {
+            if let Some(var) = self.param_var(&name) {
                 let readonly_borrow = self
                     .analyzed
                     .inferred_ownership
@@ -1206,7 +1206,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let mut field_vars = Vec::new();
                 for elem in elements {
                     if let Expression::Identifier { name, .. } = elem {
-                        if let Some(&var) = self.param_vars.get(name) {
+                        if let Some(var) = self.param_var(name) {
                             self.cs.add_because(
                                 Constraint::OwnershipIs(var, OwnedType::Owned),
                                 origin(
@@ -1326,7 +1326,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// element (`self.items = volume`) is moved there, so it is owned, exactly like `push(volume)`.
     fn emit_stored_by_assignment(&mut self, target: &Expression<'ast>, value: &Expression<'ast>) {
         let (Expression::FieldAccess { .. } | Expression::Index { .. }, Expression::Identifier { name, location }) = (target, value) else { return };
-        if let Some(&var) = self.param_vars.get(name) {
+        if let Some(var) = self.param_var(name) {
             self.cs.add_because(
                 Constraint::OwnershipIs(var, OwnedType::Owned),
                 origin("OWN-STORED", format!("`{}` is moved into a field or element by assignment", name), location),
@@ -1341,7 +1341,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                 let root_name = self.root_identifier(object);
                 if let Some(name) = root_name {
-                    if let Some(&var) = self.param_vars.get(&name) {
+                    if let Some(var) = self.param_var(&name) {
                         let r = self.fresh_region();
                         self.cs.add_because(
                             Constraint::OwnershipIs(var, OwnedType::MutRef(r)),
@@ -1355,7 +1355,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 }
             }
             Expression::Identifier { name, .. } => {
-                if let Some(&var) = self.param_vars.get(name) {
+                if let Some(var) = self.param_var(name) {
                     let r = self.fresh_region();
                     self.cs.add_because(
                         Constraint::OwnershipIs(var, OwnedType::MutRef(r)),
@@ -1460,7 +1460,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             };
             if let Expression::FieldAccess { object, .. } = value {
                 if let Some(name) = self.root_identifier(object) {
-                    if let Some(&var) = self.param_vars.get(&name) {
+                    if let Some(var) = self.param_var(&name) {
                         self.cs.add_because(
                             Constraint::OwnershipIs(var, OwnedType::Owned),
                             origin(

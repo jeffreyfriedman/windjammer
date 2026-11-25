@@ -1,0 +1,18 @@
+// A `push` on a shadowing `let mut ps` is not a change of the parameter `ps`: the caller's `b` stays immutable.
+// expect: 0
+// expect: 1
+struct P {
+    x: f64,
+}
+
+fn f2(ps: Vec<P>) {
+    let mut ps: Vec<P> = Vec::new()
+    ps.push(P { x: 1.0 })
+    println("${ps.len()}")
+}
+
+fn main() {
+    let b: Vec<P> = Vec::new()
+    println("${b.len()}")
+    f2(b)
+}
