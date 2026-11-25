@@ -141,6 +141,17 @@ pub(crate) fn view_key(slot: usize, t: Ty) -> i64 {
 /// store through it would not have made it unique, so only reads may use it (a store compares the key exactly).
 pub(crate) const READ_VIEW: i64 = 1 << 11;
 
+/// Element types an inline push stores as their bits: what `view_elem` takes, and every integer width the packing holds as
+/// an `i64` (all but `u64`/`usize`/`i128`/`u128`, which are never packed; `Packed::Int` holds the value itself).
+pub(crate) fn push_elem(t: Ty) -> Option<i64> {
+    use crate::interpreter::int::IntTy;
+    match t {
+        Ty::Int(IntTy::U64 | IntTy::Usize | IntTy::I128 | IntTy::U128) => None,
+        Ty::Int(_) => Some(8),
+        t => view_elem(t),
+    }
+}
+
 /// Element types machine code can store into a packed vector as their bits: a bool (one byte), an
 /// `i64` (the packing's own width, so no normalization) and a float.
 pub(crate) fn view_elem(t: Ty) -> Option<i64> {
@@ -514,7 +525,7 @@ unsafe fn arm_push(c: *mut Ctx, slot: i64, xt: i64) {
         return;
     }
     let Some(t) = from_code(xt) else { return };
-    if view_elem(t).is_none() {
+    if push_elem(t).is_none() {
         return;
     }
     let got = unsafe {
@@ -524,7 +535,7 @@ unsafe fn arm_push(c: *mut Ctx, slot: i64, xt: i64) {
             cache.take();
             match (p, t) {
                 (Packed::Bool(v), Ty::Bool) => Some((v.as_mut_ptr() as i64, v.len(), v.capacity(), v as *mut Vec<bool> as i64, 1)),
-                (Packed::Int(v, w), Ty::Int(u)) if *w == u && u == crate::interpreter::int::IntTy::I64 => {
+                (Packed::Int(v, w), Ty::Int(u)) if *w == u => {
                     Some((v.as_mut_ptr() as i64, v.len(), v.capacity(), v as *mut Vec<i64> as i64, 2))
                 }
                 (Packed::Float(v, w), Ty::Flt(u)) if *w == u => Some((v.as_mut_ptr() as i64, v.len(), v.capacity(), v as *mut Vec<f64> as i64, 3)),

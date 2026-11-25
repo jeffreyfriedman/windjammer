@@ -18,7 +18,7 @@ elements `[len, plen)` are initialised in spare capacity.
   `pptr + plen*size`, `plen += 1`, count `pushinl`. Otherwise call the helper (a normal `rt::push`).
 * Arming: only `rt::push` arms. After it has pushed through the existing code (so the body is the unique, packed one,
   `Rc::make_mut` done, `cache` dropped), it re-reads the body; if that is `Packed` with EXACTLY the pushed element type
-  (bool, `i64`, float: `view_elem`; every other width stays on the old path) it fills the record from the new buffer.
+  (bool, float, or an integer width the packing holds as an `i64`: `push_elem`; `u64`/`usize`/`i128`/`u128` are never packed and stay on the old path) it fills the record from the new buffer.
 * Flush = `Vec::set_len(plen)` of `pvec` (by `pkind`) and `pk = 0`, counted `pushflush` when it does work. Idempotent.
 
 ## 1. Where the pending length lives and when it is flushed
@@ -76,9 +76,9 @@ cleared first, so nothing can point at the old buffer. A first push to an empty 
 through the helper's general path and arms only if the result is packed with the pushed type.
 
 ## 5. Element-type guards
-Arming requires the body packing's element type equal to the pushed value's type (`Packed::Bool`/`Int(_, I64)`/
+Arming requires the body packing's element type equal to the pushed value's type (`Packed::Bool`/`Int(_, w)`/
 `Float` against `Ty::Bool`/`Ty::Int(I64)`/`Ty::Flt`), the same test as `lean_push`, and a key that includes the type. A
-float into an int vector, an `i32` into an `i64` vector or an unpacked vector never arms and never hits (key differs),
+float into an int vector, an `i32` into an `i64`-typed packing (or a literal-typed int into a suffixed one) or an unpacked vector never arms and never hits (key differs),
 so they take the old code, which may unpack. A bool is stored as `x != 0` (one byte of 0/1: a valid `bool`).
 
 ## 6. Traps and limits

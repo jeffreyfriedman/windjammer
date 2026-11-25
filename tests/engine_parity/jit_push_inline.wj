@@ -229,6 +229,48 @@ fn main() {
 
     println("sieve ${sieve(20000)}")
 
+    // a read view built by one inner loop is live when the next inner loop pushes (one unit run: the outer loop)
+    let one: int = 1
+    let mut vv: Vec<int> = Vec::new()
+    vv.push(one)
+    let mut rep: int = 0
+    let mut sv: int = 0
+    while rep < 6 {
+        let mut a1: int = 0
+        while a1 < vv.len() {
+            sv += vv[a1]
+            vv[a1] = vv[a1] + 1
+            a1 += 1
+        }
+        let mut a2: int = 0
+        while a2 < 700 {
+            vv.push(a2)
+            a2 += 1
+        }
+        rep += 1
+    }
+    println("reps ${sv} ${vv.len()} ${vv[vv.len() - 1]}")
+
+    // the push loop runs again after statements that changed the vector (pop, clear): a stale record must not survive them
+    let mut cy: Vec<int> = Vec::new()
+    let mut cyc = 0
+    let mut keep = 0
+    while cyc < 12 {
+        let mut f = 0
+        while f < 40 {
+            cy.push(cyc * 100 + f)
+            f += 1
+        }
+        cy.pop()
+        cy.pop()
+        if cyc % 3 == 2 {
+            cy.clear()
+        }
+        keep += cy.len()
+        cyc += 1
+    }
+    println("cycle ${keep} ${cy.len()}")
+
     // an overflow after pushes in the same loop: the panic comes from the closure engine, last
     let mut ov: Vec<int> = Vec::new()
     let mut big_n = 9223372036854775000

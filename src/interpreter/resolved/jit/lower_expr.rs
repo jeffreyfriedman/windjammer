@@ -495,7 +495,7 @@ impl Lo<'_, '_> {
         let x = self.expr(arg)?;
         let bits = self.to_bits(x.v, x.ty);
         let inline = self.pushfunnel && self.loops.last().is_some_and(|l| l.push_ok) && !self.it.fast_off("pushinl");
-        let size = if inline { rt::view_elem(x.ty) } else { None };
+        let size = if inline { rt::push_elem(x.ty) } else { None };
         let s = self.k(slot as i64);
         let Some(size) = size else {
             let t = self.k(code(x.ty));
