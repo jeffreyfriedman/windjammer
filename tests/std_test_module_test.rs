@@ -76,19 +76,25 @@ fn some_int() -> int? {{
     Some(7)
 }}
 
-fn passing() {{
+fn pass_comparisons() {{
     assert_gt(3, 2)
     assert_lt(2, 3)
     assert_ge(3, 3)
     assert_ge(4, 3)
     assert_le(3, 3)
     assert_le(2, 3)
+    assert_in_range(5, 0, 10)
+}}
+
+fn pass_approx() {{
     assert_approx_eq(1.0, 1.0004, 0.001)
     let a: f32 = 1.0
     let b: f32 = 1.0004
     let e: f32 = 0.001
     assert_approx_eq(a, b, e)
-    assert_in_range(5, 0, 10)
+}}
+
+fn pass_option_result() {{
     let s = assert_some(some_int())
     assert_eq(s, 7)
     assert_none(no_int())
@@ -96,23 +102,45 @@ fn passing() {{
     assert_eq(o, 5)
     let m = assert_err(parse("nope"))
     assert_eq(m, "bad")
+}}
+
+fn pass_strings() {{
     assert_contains("hello world", "o w")
-    let xs = [1, 2, 3]
-    assert_contains(xs, 3)
     assert_starts_with("hello", "he")
     assert_ends_with("hello", "llo")
+}}
+
+fn pass_collections() {{
+    let xs = [1, 2, 3]
+    assert_contains(xs, 3)
     let empty: Vec<int> = []
     assert_empty(empty)
     assert_not_empty(xs)
     assert_length(xs, 3)
-    println("all passed")
 }}
 
 fn main() {{
     let args = env::args()
     let which = args[1]
-    if which == "pass" {{
-        passing()
+    if which == "pass_comparisons" {{
+        pass_comparisons()
+        println("all passed")
+    }}
+    if which == "pass_approx" {{
+        pass_approx()
+        println("all passed")
+    }}
+    if which == "pass_option_result" {{
+        pass_option_result()
+        println("all passed")
+    }}
+    if which == "pass_strings" {{
+        pass_strings()
+        println("all passed")
+    }}
+    if which == "pass_collections" {{
+        pass_collections()
+        println("all passed")
     }}
 {arms}}}
 "#
@@ -145,12 +173,16 @@ fn panic_message(stderr: &str) -> String {
 fn every_assertion_passes_and_fails_with_the_same_message_in_both_modes() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("prog.wj"), program()).unwrap();
-    for mode in ["--interpret", "--compiled"] {
-        let o = run(&dir, mode, "pass");
-        let (out, err) = (String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
-        assert!(o.status.success() && out.trim() == "all passed", "{mode}: the passing cases must pass\n{out}\n{err}");
-    }
     let mut report = Vec::new();
+    for group in ["pass_comparisons", "pass_approx", "pass_option_result", "pass_strings", "pass_collections"] {
+        for mode in ["--interpret", "--compiled"] {
+            let o = run(&dir, mode, group);
+            let (out, err) = (String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+            if !(o.status.success() && out.trim() == "all passed") {
+                report.push(format!("{group} {mode}: the passing assertions must pass\n{out}\n{err}"));
+            }
+        }
+    }
     for (case, _, want) in FAILING {
         for mode in ["--interpret", "--compiled"] {
             let o = run(&dir, mode, case);
