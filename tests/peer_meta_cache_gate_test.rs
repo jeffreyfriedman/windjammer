@@ -215,7 +215,8 @@ fn a_peer_entry_made_stale_by_a_source_edit_is_ignored() {
 
 #[test]
 fn a_manifest_less_tree_emits_the_same_in_two_locations() {
-    // No manifest: entries live under <cache root>/meta keyed by the tree's content, never its path.
+    // No manifest: entries live under <cache root>/meta keyed by the entry file's module closure (the files it can reach), never
+    // by the path. Two entry files (chain.wj, layout.wj) give two entries; building both in a second location must add none.
     let d = tempfile::tempdir().unwrap();
     let cache = d.path().join("cache");
     let mut outs = Vec::new();
@@ -232,7 +233,7 @@ fn a_manifest_less_tree_emits_the_same_in_two_locations() {
     assert_eq!(outs[0], outs[1], "the same tree emitted different Rust in two locations");
     let meta = cache.join("meta");
     let keys: Vec<_> = std::fs::read_dir(&meta).expect("entries under <cache root>/meta").flatten().collect();
-    assert_eq!(keys.len(), 1, "two locations of one tree must share one cache key");
+    assert_eq!(keys.len(), 2, "one cache key per entry file's module closure, the same in every location (4 builds, 2 locations)");
     let clean = clean_probe(d.path());
     assert_eq!(outs[0], clean, "an unreached peer changed a manifest-less build");
 }
