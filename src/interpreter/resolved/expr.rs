@@ -451,7 +451,24 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
             .enumerate()
             .map(|(i, e)| match mutated.get(i) {
                 Some(true) if Interpreter::is_place_expr(e) => Some(X::V(super::place::arg(cx, e)?)),
-                _ => expr_arg(cx, e),
+                _ => {
+                    let serve = !mutated.get(i).copied().unwrap_or(false)
+                        && f.params.get(i).is_some_and(|p| is_vec_f64(&p.type_))
+                        && !cx.it.fast_off("vecretag");
+                    match (serve, e) {
+                        (true, Expression::Identifier { name, .. }) if cx.local(name).is_some() => {
+                            let slot = cx.local(name)?;
+                            let boxed = cx.is_boxed(slot);
+                            let x = expr_arg(cx, e)?;
+                            match (x, boxed) {
+                                (X::Slot(s), false) => Some(retag_arg(s)),
+                                (x, true) => Some(retag_boxed_arg(slot, x)),
+                                (x, _) => Some(x),
+                            }
+                        }
+                        _ => expr_arg(cx, e),
+                    }
+                }
             })
             .collect::<Option<_>>()?;
         if places {
@@ -512,6 +529,51 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
         }
         Ok(Value::Unit)
     })))
+}
+
+/// `Vec<f64>` / `Vec<float>`: the parameter types `retag_arg` serves.
+fn is_vec_f64(t: &Type) -> bool {
+    match t {
+        Type::Vec(inner) => type_is_float(inner) == Some(FloatTy::F64),
+        Type::Parameterized(n, args) if n == "Vec" && args.len() == 1 => type_is_float(&args[0]) == Some(FloatTy::F64),
+        _ => false,
+    }
+}
+
+/// The argument `v` (a plain local) of a `Vec<f64>` parameter. Binding the parameter coerces a vector whose
+/// first element is an untyped float literal by rebuilding it, so a local filled with `push(1.0)` was rebuilt
+/// at every call (O(n) each). Retag the LOCAL once instead: its slot gets a body with the same bits tagged
+/// `f64`, which `coerce` then passes through. Soundness: `docs/design/interp-soundness/vecretag.md`.
+fn retag_arg(s: usize) -> X {
+    X::V(Box::new(move |it, b| {
+        if let Value::Vec(rc) = &it.rstack[b + s] {
+            if let Some(body) = rc.retagged_f64() {
+                it.fast.vecretag += 1;
+                it.rstack[b + s] = Value::Vec(Rc::new(body));
+            }
+        }
+        Ok(it.rstack[b + s].clone())
+    }))
+}
+
+/// `retag_arg` for a boxed local: the retag is made in its walker cell (only when the cell holds the vector itself,
+/// not a reference to another place), then the argument is read as `read_boxed_arg` reads it.
+fn retag_boxed_arg(slot: usize, read: X) -> X {
+    let read = read.code();
+    X::V(Box::new(move |it, b| {
+        let new = match &it.rstack[b + slot] {
+            Value::Ref(p) if p.path.is_empty() => match &*p.slot.borrow() {
+                Value::Vec(rc) => rc.retagged_f64(),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let (Some(body), Value::Ref(p)) = (new, &it.rstack[b + slot]) {
+            it.fast.vecretag += 1;
+            *p.slot.borrow_mut() = Value::Vec(Rc::new(body));
+        }
+        read(it, b)
+    }))
 }
 
 /// A call site of a module function.

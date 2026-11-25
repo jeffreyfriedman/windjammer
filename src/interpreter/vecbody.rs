@@ -143,6 +143,26 @@ impl VecBody {
         }
     }
 
+    /// The same elements with every untyped float literal tagged `f64` (same bits), for a vector about to
+    /// be coerced to `Vec<f64>`; `None` when no element is an untyped float literal or a non-float is present.
+    /// See `docs/design/interp-soundness/vecretag.md`.
+    pub fn retagged_f64(&self) -> Option<VecBody> {
+        match self {
+            VecBody::Packed(Packed::Float(v, FloatTy::Lit), _) => Some(VecBody::Packed(Packed::Float(v.clone(), FloatTy::F64), OnceCell::new())),
+            VecBody::Values(v) if matches!(v.first(), Some(Value::Float(_, FloatTy::Lit))) => {
+                let mut out = Vec::with_capacity(v.len());
+                for x in v {
+                    match x {
+                        Value::Float(f, FloatTy::Lit | FloatTy::F64) => out.push(Value::Float(*f, FloatTy::F64)),
+                        _ => return None,
+                    }
+                }
+                Some(VecBody::Values(out))
+            }
+            _ => None,
+        }
+    }
+
     /// The packed scalars, if the body is packed.
     pub fn packed(&self) -> Option<&Packed> {
         match self {
