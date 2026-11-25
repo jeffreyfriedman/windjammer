@@ -10676,7 +10676,7 @@
     "kind": "stdlib",
     "module": "std::test::mod",
     "name": "assert_none",
-    "signature": "fn assert_none<T: Debug>(value: T?)",
+    "signature": "fn assert_none<T: Debug>(value: Option<T>)",
     "source": "std/test/mod.wj",
     "summary": "/ Assert that an Option is None",
     "tags": [
@@ -10709,7 +10709,7 @@
     "kind": "stdlib",
     "module": "std::test::mod",
     "name": "assert_some",
-    "signature": "fn assert_some<T>(value: T?) -> T",
+    "signature": "fn assert_some<T>(value: Option<T>) -> T",
     "source": "std/test/mod.wj",
     "summary": "/ Assert that an Option is Some and return the value",
     "tags": [
