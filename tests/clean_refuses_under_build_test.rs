@@ -42,7 +42,9 @@ fn spawn_holder(dir: &Path) -> Child {
 }
 
 fn wj(dir: &Path, args: &[&str]) -> Command {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_wj"));
+    // the binary under test, named at run time when a gate publishes a private copy (see installed_sandbox::real_wj)
+    let bin = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string());
+    let mut c = Command::new(bin);
     c.args(args).current_dir(dir).env_clear().env("HOME", dir.join("home")).env("WJ_CARGO_TARGET_ROOT", dir.join("cache")).env("NO_COLOR", "1");
     c
 }

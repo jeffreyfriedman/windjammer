@@ -9,8 +9,15 @@ pub fn in_dir<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
     windjammer::test_utils::in_dir(dir, f)
 }
 
+/// The directory the check caches key on for `target`: its project (the nearest ancestor with a `wj.toml`), else its
+/// parent. Named in `CheckOptions::cwd`, so no test changes the process's working directory.
+fn project_dir(target: &Path) -> std::path::PathBuf {
+    let start = if target.is_dir() { target } else { target.parent().unwrap_or(target) };
+    start.ancestors().find(|a| a.join("wj.toml").is_file()).unwrap_or(start).to_path_buf()
+}
+
 pub fn report(target: &Path, use_cache: bool) -> Report {
-    check_path(target, &CheckOptions { use_cache }).expect("check runs").report
+    check_path(target, &CheckOptions { use_cache, cwd: Some(project_dir(target)) }).expect("check runs").report
 }
 
 pub fn diags(r: &Report) -> String {

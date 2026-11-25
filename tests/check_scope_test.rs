@@ -75,7 +75,7 @@ fn a_directory_of_stale_copies_is_neither_counted_nor_checked() {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, "fn broken( {\n").unwrap();
     }
-    let checked = windjammer::check::check_path(d.path(), &windjammer::check::CheckOptions { use_cache: false }).unwrap();
+    let checked = windjammer::check::check_path(d.path(), &windjammer::check::CheckOptions::new(false)).unwrap();
     assert_eq!(checked.report.summary.files_checked, 1);
     assert_eq!(checked.report.summary.errors, 0);
     assert_eq!(checked.scope.skipped, 60);

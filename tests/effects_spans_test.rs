@@ -52,7 +52,7 @@ fn effect_diagnostics_have_well_formed_spans() {
         }
         let file = dir.path().join("main.wj");
         fs::write(&file, c.source).unwrap();
-        let checked = check_path(dir.path(), &CheckOptions { use_cache: false }).unwrap();
+        let checked = check_path(dir.path(), &CheckOptions::new(false)).unwrap();
         let mine: Vec<_> = checked.report.diagnostics.iter().filter(|d| d.code == c.code).collect();
         if mine.is_empty() {
             problems.push(format!("case {i}: no {} reported: {:?}", c.code, checked.report.diagnostics.iter().map(|d| d.code.clone()).collect::<Vec<_>>()));

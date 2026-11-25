@@ -146,11 +146,13 @@ pub fn hold_cwd() -> CwdGuard {
     CwdGuard(Some(guard))
 }
 
-/// Run `f` with `dir` as the working directory the check caches key on. The process's own working directory is never
-/// changed (it is process-wide: a chdir pulls it from under every concurrent test, and a child process spawned
-/// meanwhile inherits a directory that is deleted a moment later: "Current directory is invalid"). The override is
-/// per thread; the lock still serializes with tests that watch a process-wide store (`hold_cwd`).
+/// Run `f` for a test whose checks key on the project directory `dir` (named in `CheckOptions::cwd`, e.g. by
+/// `tests/common/check_cache/support.rs::report`). The process's own working directory is never changed (it is
+/// process-wide: a chdir pulls it from under every concurrent test, and a child process spawned meanwhile inherits a
+/// directory that is deleted a moment later: "Current directory is invalid"). Holds the shared-store lock (`hold_cwd`)
+/// so tests that watch a process-wide store are not disturbed.
 pub fn in_dir<T>(dir: &std::path::Path, f: impl FnOnce() -> T) -> T {
+    debug_assert!(dir.is_dir(), "in_dir: {} is not a directory", dir.display());
     let _g = hold_cwd();
-    crate::check::ambient::with_cwd(dir, f)
+    f()
 }
