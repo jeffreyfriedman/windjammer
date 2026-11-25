@@ -1,0 +1,20 @@
+// A large Vec<float> built from float literals, passed by value to a function that only reads it, many times.
+fn get(v: Vec<float>, i: int) -> float {
+    v[i as usize]
+}
+
+fn main() {
+    let mut v: Vec<float> = Vec::new()
+    let mut k = 0
+    while k < 100000 {
+        v.push(1.5)
+        k += 1
+    }
+    let mut s = 0.0
+    let mut c = 0
+    while c < 200 {
+        s += get(v, c)
+        c += 1
+    }
+    println("${(s * 2.0) as int}")
+}

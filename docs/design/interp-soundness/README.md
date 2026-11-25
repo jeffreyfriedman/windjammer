@@ -35,3 +35,4 @@ Rules:
 | [widthshare.md](widthshare.md) | A literal-width answer shared between the tests of one `wj test --interpret` run equals a fresh analysis of the same parsed file | `WidthShare` in `src/interpreter/compiled_facts.rs`; `run_specs_shared` in `src/interpreter/runner.rs` | `tests/interpreter_widthshare_test.rs`; counter `widthshare` | implemented |
 
 The per-test repetition of analyze_program in `wj test --interpret` was found by profiling real ecosystem packages (59-77% of their Ir): profile real code, not only bench kernels, to find the next wins.
+| [vecretag.md](vecretag.md) | A local literal vector (float or integer) is retagged to the formal element type once at a `Vec<f64>` call so binding does not rebuild it per call; the slot gets a new body, never an in-place change | `retag_arg`, `is_vec_f64` in `src/interpreter/resolved/expr.rs`; `retagged_f64` in `src/interpreter/vecbody.rs` | `tests/engine_parity/vec_retag*.wj`; counter `vecretag` | implemented |

@@ -1,0 +1,15 @@
+// A local vector of untyped integer literals with one that does not fit the `Vec<i8>` parameter: the call raises the
+// generic coercion's range error (the retag declines), never wraps (docs/design/interp-soundness/vecretag.md).
+fn at(v: Vec<i8>, i: int) -> i8 {
+    v[i as usize]
+}
+
+fn main() {
+    let mut v = Vec::new()
+    v.push(1)
+    v.push(2)
+    let big = 200
+    v.push(big)
+    println("before")
+    println("${at(v, 0)}")
+}

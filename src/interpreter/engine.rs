@@ -708,6 +708,9 @@ pub(crate) struct FastHits {
     /// Versioned loops (hoisted row views) entered through the fast copy, and through the slow copy (a view could not be built).
     pub(crate) hoisted: u64,
     pub(crate) hoistfail: u64,
+    /// A local `Vec<float>` of untyped float literals retagged `f64` once at a call whose parameter is `Vec<f64>`
+    /// (`resolved/expr.rs::retag_arg`), so later calls do not rebuild it.
+    pub(crate) vecretag: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,

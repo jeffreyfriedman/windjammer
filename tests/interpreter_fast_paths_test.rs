@@ -15,6 +15,8 @@ const WJ: &str = env!("CARGO_BIN_EXE_wj");
 /// (program, the fast paths it must take).
 const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/structs.wj", &["inline"]),
+    ("bench/interp/vecpass.wj", &["vecretag"]),
+    ("tests/engine_parity/vec_retag.wj", &["vecretag"]),
     ("bench/interp/hashmap.wj", &["mapjit", "mapleanget", "mapleanins", "mapleantyped"]),
     ("tests/engine_parity/kmap_intdense_sweep.wj", &["mapleanget", "mapleanins", "mapleantyped"]),
     ("tests/engine_parity/jit_map_lean.wj", &["mapleanget", "mapleanins"]),
@@ -99,6 +101,21 @@ fn the_firing_gate_notices_each_disabled_path() {
             let r = run(program, "resolved", Some(&mutant));
             assert_eq!((&r.stdout, r.code), (&walker.stdout, walker.code), "{program} under `{mutant}` differs from the walker");
         }
+    }
+}
+
+/// The call-site retag (`resolved/expr.rs::retag_arg`) retags a LOCAL once: a thousand calls with the same local are
+/// one retag, not a thousand (docs/design/interp-soundness/vecretag.md). Exact counts of `vecretag` per program.
+#[test]
+fn the_vector_retag_happens_once_per_local() {
+    const RETAG: &[(&str, u64)] = &[
+        ("bench/interp/vecpass.wj", 1),
+        ("tests/engine_parity/vec_retag.wj", 4),
+        ("tests/engine_parity/vec_retag_int.wj", 2),
+    ];
+    for (program, want) in RETAG {
+        let r = run(program, "resolved", None);
+        assert_eq!(count(&r, "vecretag"), Some(*want), "{program}: {:?}", r.counts);
     }
 }
 
