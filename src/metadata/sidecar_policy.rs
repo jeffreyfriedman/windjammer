@@ -49,9 +49,8 @@ pub(super) fn merge_root(
     if scoped {
         super::PEER_SCOPE.with(|c| *c.borrow_mut() = Some(PeerScope::new(root, None, cache_root)));
     }
-    let meta_root = crate_metadata::meta_cache_root(root, cache_root);
-    if meta_root.exists() {
-        merge_wj_meta_signatures_from_dir_inner(&meta_root, Some(cache_root), registry, copy_structs, all_struct_fields);
+    for meta in crate_metadata::cache_merge_roots(root, cache_root) {
+        merge_wj_meta_signatures_from_dir_inner(&meta, Some(cache_root), registry, copy_structs, all_struct_fields);
     }
     merge_wj_meta_signatures_from_dir_inner(root, Some(cache_root), registry, copy_structs, all_struct_fields);
     if scoped {
@@ -119,7 +118,7 @@ impl PeerScope {
         let base = crate_metadata::peer_source_base(source_root);
         let mut scope = PeerScope { base, reached: None };
         if let Some(seed) = uses {
-            scope.reached = Some(scope.close_over_peers(seed, &crate_metadata::meta_cache_root(source_root, cache_root), cache_root));
+            scope.reached = Some(scope.close_over_peers(seed, crate_metadata::peer_metas(source_root, cache_root), cache_root));
         }
         scope
     }
@@ -128,11 +127,9 @@ impl PeerScope {
     fn close_over_peers(
         &self,
         mut reached: std::collections::BTreeSet<String>,
-        meta_root: &Path,
+        mut metas: Vec<PathBuf>,
         cache_root: &Path,
     ) -> std::collections::BTreeSet<String> {
-        let mut metas = Vec::new();
-        collect_metas(meta_root, 0, &mut metas);
         metas.sort();
         let mut done = vec![false; metas.len()];
         loop {
@@ -170,18 +167,3 @@ impl PeerScope {
     }
 }
 
-fn collect_metas(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
-    if depth > 12 {
-        return;
-    }
-    crate::metadata::scan_stats::dir_listed();
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
-    for e in rd.flatten() {
-        let p = e.path();
-        if p.is_dir() {
-            collect_metas(&p, depth + 1, out);
-        } else if p.to_string_lossy().ends_with(".wj.meta") {
-            out.push(p);
-        }
-    }
-}

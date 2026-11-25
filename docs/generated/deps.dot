@@ -161,7 +161,7 @@ digraph deps {
   "check" -> "ir" [label="36"];
   "check" -> "lexer" [label="9"];
   "check" -> "linter" [label="3"];
-  "check" -> "metadata" [label="6"];
+  "check" -> "metadata" [label="7"];
   "check" -> "module_system" [label="5"];
   "check" -> "package" [label="9"];
   "check" -> "parser" [label="77"];
@@ -274,7 +274,7 @@ digraph deps {
   "compiler" -> "lexer" [label="4"];
   "compiler" -> "linter" [label="2"];
   "compiler" -> "mem_report" [label="10"];
-  "compiler" -> "metadata" [label="51"];
+  "compiler" -> "metadata" [label="52"];
   "compiler" -> "module_system" [label="3"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];

@@ -319,6 +319,10 @@ pub fn invalidate_meta_cache_on_compiler_change(src_base: &Path, cache_root: &Pa
             meta_root.display()
         );
     }
+    // a manifest-less program keeps one entry per module file
+    for entry in crate::metadata::peer_meta_entries(src_base, cache_root) {
+        let _ = std::fs::remove_file(entry);
+    }
     true
 }
 
