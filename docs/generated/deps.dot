@@ -251,7 +251,7 @@ digraph deps {
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="4"];
   "codegen" -> "source_map" [label="9"];
-  "codegen" -> "stdlib_surface" [label="9"];
+  "codegen" -> "stdlib_surface" [label="11"];
   "codegen" -> "test_utils" [label="7"];
   "codegen" -> "type_classification" [label="255"];
   "codegen" -> "type_inference" [label="63"];
@@ -477,6 +477,7 @@ digraph deps {
   "type_inference" -> "parser" [label="56"];
   "type_inference" -> "parser_impl" [label="2"];
   "type_inference" -> "source_map" [label="1"];
+  "type_inference" -> "stdlib_surface" [label="1"];
   "type_inference" -> "type_classification" [label="20"];
   "type_inference" -> "type_display" [label="1"];
   "type_registry" -> "parser" [label="1"];
