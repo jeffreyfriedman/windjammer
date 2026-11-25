@@ -560,6 +560,13 @@ impl Lo<'_, '_> {
             self.path.push(Level { list, idx: list.len(), for_: None });
             let id = self.new_exit(true);
             let e = &mut self.exits[id];
+            // Why dropping the `fresh` spills is sound, and why keeping the parameter ones is only defensive (the
+            // survivor mutants M1/M1s clear both and no program differs): what machine code holds in registers is a
+            // scalar or a struct local whose home is (a) a plain slot of this frame, which `leave_compiled` truncates
+            // right after, or (b) a boxed cell created by the boxed-parameter prologue or a body `let`, which only
+            // this frame names: a closure literal in the body refuses the unit (`unit_body`/`native`), and a
+            // `&mut` parameter (a `Value::Ref` chain) classifies `Opaque` and is reached through helpers, never held
+            // in a register. Invariant relied on: the unit never holds a caller-visible place in a register.
             e.spills.retain(|sp| !sp.fresh);
             e.structs.retain(|sp| !sp.fresh);
             let blk = self.b.create_block();

@@ -23,6 +23,8 @@ const CASES: &[(&str, &[&str])] = &[
     ("tests/engine_parity/jit_vec_view.wj", &["packed", "packedread", "packedstore"]),
     ("bench/interp/nbody.wj", &["vecresolve", "rowview", "placeargs", "fnunit"]),
     ("tests/engine_parity/jit_fnunit.wj", &["fnunit"]),
+    ("tests/engine_parity/jit_fnunit_boxed_params.wj", &["fnunit"]),
+    ("tests/engine_parity/jit_fnunit_param_writes.wj", &["fnunit"]),
     ("tests/engine_parity/jit_row_views.wj", &["rowview"]),
     ("bench/interp/strings.wj", &["pushfmt", "lenfast", "lencmp"]),
     ("tests/engine_parity/len_cmp_cond.wj", &["lencmp"]),
@@ -126,6 +128,18 @@ fn the_scalar_pipeline_takes_and_declines_exactly_these_chains() {
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+/// A function unit refuses a call whose parameters name the same cell (`osr::enter_body`, `params_alias`): a program that
+/// only makes aliased calls never counts `fnunit`. The refusal is defensive (the unit would be correct: both names reach the
+/// same memory and every view is dropped by a write helper), so the output cannot show it; this count does.
+#[test]
+fn function_units_refuse_aliased_parameters() {
+    let program = "tests/engine_parity/jit_fnunit_alias.wj";
+    let r = run(program, "resolved", None);
+    assert_eq!(count(&r, "fnunit").unwrap_or(u64::MAX), 0, "{program}: an aliased call entered a function unit: {:?}", r.counts);
+    let w = run(program, "walker", None);
+    assert_eq!((&r.stdout, r.code), (&w.stdout, w.code), "{program} differs from the walker");
 }
 
 /// The lean map helpers (`jit/rt.rs::lean_map`) serve integer-keyed maps only: a program whose maps have string keys

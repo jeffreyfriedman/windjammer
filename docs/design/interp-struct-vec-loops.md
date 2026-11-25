@@ -217,6 +217,16 @@ and the views built in the pair loop are still valid in the `k` loop because onl
 The attribution report bounds halving entries at about 15% of marginal at 10x (interp-loss-attribution.md,
 improvement 1, risk note).
 
+### Guards that look redundant, and what holds them
+
+Three properties of the shipped function unit were first recorded as prose only; each now has a test or a proof
+(SOUNDNESS-fnunit2.md, "Survivor review"). The unit enters after the boxed-parameter prologue (a unit entered before it
+fails `engine_parity/jit_fnunit_boxed_params.wj` and `jit_fnunit_param_writes.wj`). Aliased parameters are refused
+(`fast_paths`: `function_units_refuse_aliased_parameters` holds `fnunit` at 0 for `jit_fnunit_alias.wj`); the refusal is
+defensive, because every view is dropped by any write helper and both names reach the same memory. The end exit writes
+back no spill: a register-held scalar or struct is a plain slot of the dying frame or a cell only that frame can name
+(a closure literal anywhere in the body refuses the unit), and a `&mut` parameter is `Opaque`, reached through helpers.
+
 ## 6. Question 2, continued: the native call, and the step loop
 
 ### `rt::call_unit`

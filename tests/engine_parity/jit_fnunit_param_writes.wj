@@ -1,0 +1,52 @@
+// Function units whose parameters are written by machine code and read by the caller after the unit's end: a `&mut` scalar,
+// a `&mut` struct's fields, a scalar written after the last loop. The end exit keeps no register state the caller needs
+// (see SOUNDNESS-fnunit2 / `lower.rs::unit_body`): the output equals the walker's.
+struct P {
+    x: int,
+    n: int,
+}
+
+// native writes to a `&mut` scalar parameter and to a `&mut` struct parameter's fields, read by the caller after the unit's end
+fn acc(total: int, p: P, xs: Vec<int>) {
+    let mut i = 0
+    while i < xs.len() {
+        total += xs[i]
+        p.x += xs[i]
+        p.n += 1
+        i += 1
+    }
+    total = total * 2
+    p.x = p.x + 1
+}
+
+// the last native statement after the loop writes a scalar parameter only
+fn tail_only(total: int, xs: Vec<int>) {
+    let mut i = 0
+    while i < xs.len() {
+        xs[i] += 1
+        i += 1
+    }
+    total = total + xs.len()
+}
+
+fn main() {
+    let mut xs = [1, 2, 3, 4]
+    let mut t = 10
+    let mut p = P { x: 100, n: 0 }
+    let mut k = 0
+    while k < 600 {
+        acc(t, p, xs)
+        k += 1
+        if t > 1000000 {
+            t = 0
+        }
+    }
+    println("${t} ${p.x} ${p.n}")
+    let mut u = 5
+    let mut r = 0
+    while r < 600 {
+        tail_only(u, xs)
+        r += 1
+    }
+    println("${u} ${xs[0]}")
+}

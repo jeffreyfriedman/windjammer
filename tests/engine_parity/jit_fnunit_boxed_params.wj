@@ -1,0 +1,40 @@
+// Function units whose parameters are boxed by the walker (a `&mut` scalar, a closure capture, an address taken):
+// the unit must enter after the boxed-parameter prologue, so the parameter slots classify as place cells.
+fn sum_into(total: int, xs: Vec<int>) {
+    let mut i = 0
+    while i < xs.len() {
+        total += xs[i]
+        i += 1
+    }
+}
+
+fn captured(base: int, xs: Vec<int>) {
+    let add = |v: int| v + base
+    let mut i = 0
+    while i < xs.len() {
+        xs[i] = xs[i] + 1
+        i += 1
+    }
+    let mut j = 0
+    while j < xs.len() {
+        xs[j] = add(xs[j])
+        j += 1
+    }
+}
+
+fn main() {
+    let mut xs = [1, 2, 3, 4]
+    let mut t = 0
+    let mut k = 0
+    while k < 600 {
+        sum_into(t, xs)
+        k += 1
+    }
+    println("${t}")
+    let mut c = 0
+    while c < 600 {
+        captured(c % 7, xs)
+        c += 1
+    }
+    println("${xs[0]} ${xs[3]}")
+}

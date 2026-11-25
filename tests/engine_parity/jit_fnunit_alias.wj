@@ -1,0 +1,135 @@
+// Function units refuse aliased parameters (`osr::enter_body`, `params_alias`): the same Vec bound to two parameters, with a push
+// through one name, element stores through one and reads through the other, packed and row-view shapes. The output equals the
+// walker's, and the fast-path gate holds `fnunit` at 0 here (interpreter_fast_paths_test).
+struct R {
+    a: int,
+    b: int,
+}
+
+// the same vec as both parameters: a push through one name changes the length the other loop reads
+fn grow(a: Vec<int>, b: Vec<int>) {
+    let mut i = 0
+    while i < a.len() {
+        if i < 3 {
+            b.push(i + 100)
+        }
+        a[i] = (a[i] + b[0]) % 1000
+        i += 1
+    }
+}
+
+// element stores through one name, reads through the other, within one machine-code run
+fn rows(p: Vec<R>, q: Vec<R>) {
+    let mut i = 0
+    while i < p.len() {
+        p[i].a = (p[i].a + 1) % 1000
+        q[i].b = (q[i].b + p[i].a) % 1000
+        p[i].b = (q[i].b + q[i].a) % 1000
+        i += 1
+    }
+    let mut j = 0
+    while j < q.len() {
+        q[j].a = (q[j].a + p[j].b) % 1000
+        j += 1
+    }
+}
+
+fn pk(a: Vec<int>, b: Vec<int>) {
+    let mut i = 0
+    while i < a.len() {
+        a[i] = a[i] * 2 % 1000
+        b[i] = (b[i] + a[i]) % 1000
+        a[i] = (a[i] + b[i]) % 1000
+        i += 1
+    }
+}
+
+fn pushrows(p: Vec<R>, q: Vec<R>) {
+    let mut i = 0
+    while i < 6 {
+        p.push(R { a: i, b: i * 2 })
+        q[0].a = (q[0].a + p[i].b) % 1000
+        p[0].b = (p[0].b + q[i].a) % 1000
+        i += 1
+    }
+    let mut j = 0
+    while j < p.len() {
+        q[j].a = (q[j].a + p[p.len() - 1 - j].b) % 1000
+        j += 1
+    }
+}
+
+fn floats(a: Vec<f64>, b: Vec<f64>) {
+    let mut i = 0
+    while i < a.len() {
+        a[i] = a[i] * 1.5 + b[a.len() - 1 - i]
+        b[i] = a[i] - b[i]
+        i += 1
+    }
+    b.push(a[0])
+    a[0] = b[b.len() - 1] + a.len() as f64
+}
+
+fn bytes(a: Vec<u8>, b: Vec<u8>) {
+    let mut i = 0
+    while i < a.len() {
+        a[i] = (a[i] + b[i] % 7) % 200
+        i += 1
+    }
+    b.push(a[0])
+    let mut j = 0
+    while j < a.len() {
+        b[j] = a[j] + 1
+        j += 1
+    }
+}
+
+
+
+fn main() {
+    let mut v = [1, 2, 3]
+    let mut k = 0
+    while k < 300 {
+        grow(v, v)
+        if v.len() > 40 {
+            v = [1, 2, 3]
+        }
+        k += 1
+    }
+    println("${v.len()} ${v[0]}")
+    let mut w = [R { a: 1, b: 2 }, R { a: 3, b: 4 }, R { a: 5, b: 6 }]
+    let mut m = 0
+    while m < 300 {
+        rows(w, w)
+        m += 1
+    }
+    println("${w[0].a} ${w[0].b} ${w[2].a} ${w[2].b}")
+    let mut u = [1, 2, 3, 4]
+    let mut n = 0
+    while n < 300 {
+        pk(u, u)
+        n += 1
+    }
+    println("${u[0]} ${u[1]} ${u[3]}")
+    let mut w2: Vec<R> = [R { a: 1, b: 2 }]
+    let mut c = 0
+    while c < 4 {
+        pushrows(w2, w2)
+        c += 1
+    }
+    println("${w2.len()} ${w2[0].a} ${w2[0].b} ${w2[w2.len() - 1].a}")
+    let mut fl: Vec<f64> = [1.0, 2.0, 3.0]
+    let mut e = 0
+    while e < 20 {
+        floats(fl, fl)
+        e += 1
+    }
+    println("${fl.len()} ${fl[0]} ${fl[1]}")
+    let mut by: Vec<u8> = [1, 2, 3]
+    let mut f = 0
+    while f < 20 {
+        bytes(by, by)
+        f += 1
+    }
+    println("${by.len()} ${by[0]} ${by[1]}")
+}

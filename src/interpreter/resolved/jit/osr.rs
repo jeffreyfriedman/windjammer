@@ -118,6 +118,12 @@ pub(crate) fn enter_body(it: &mut Interpreter, b: usize, site: &OsrSite) -> R<bo
 
 /// Do two parameters name the same cell (`f(&mut v, &mut v)`)? The innermost cell of each reference chain (any
 /// path) is compared; a cell that cannot be inspected counts as shared.
+///
+/// Defensive, not load-bearing for the output (survivor mutant M2: without it no program differs, see
+/// `engine_parity/jit_fnunit_alias.wj`): two views of one vec reach the same memory, and every helper that can move or
+/// resize it (`push`, `index_set`, `field_set`, closure-run statements) clears ALL of the run's views, not one slot's.
+/// It stays so a future per-name view cache cannot silently go stale; `interpreter_fast_paths_test::
+/// function_units_refuse_aliased_parameters` fails when it is removed.
 fn params_alias(it: &Interpreter, b: usize, site: &OsrSite) -> bool {
     let mut seen: [usize; 4] = [0; 4];
     let mut n = 0;

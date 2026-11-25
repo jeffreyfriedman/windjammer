@@ -304,6 +304,9 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
             let rest = seq(init, tail.map(|(l, t)| (l, t.code())));
             Body::V(poisoning(
                 Box::new(move |it, b| {
+                    // The prologue (boxing of parameters) must run BEFORE the unit is entered: a unit entered first
+                    // sees raw values for boxed names and loses their cells (jit_fnunit_param_writes.wj and
+                    // jit_fnunit_boxed_params.wj fail without this order).
                     if let Some(p) = &prologue {
                         p(it, b)?;
                     }
