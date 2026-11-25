@@ -527,14 +527,14 @@ impl Lo<'_, '_> {
         }
         let n = self.b.ins().iadd_imm(plen, 1);
         self.b.ins().store(flags, n, self.ctx, rt::PLEN);
-        let c = self.b.ins().load(types::I64, flags, self.ctx, rt::PUSH_INL);
-        let c = self.b.ins().iadd_imm(c, 1);
-        self.b.ins().store(flags, c, self.ctx, rt::PUSH_INL);
         self.b.ins().jump(join, &[]);
         self.b.switch_to_block(slow);
         self.b.seal_block(slow);
         let t = self.k(code(x.ty) | rt::ARM_PUSH);
+        // `rt::push` flushes the pending length itself (no flush check emitted before this call)
+        let funnel = std::mem::replace(&mut self.pushfunnel, false);
         self.call("push", rt::push as *const () as usize, &[s, bits, t], false, true);
+        self.pushfunnel = funnel;
         self.b.ins().jump(join, &[]);
         self.b.switch_to_block(join);
         self.b.seal_block(join);

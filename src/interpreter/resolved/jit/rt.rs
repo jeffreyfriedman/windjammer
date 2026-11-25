@@ -67,7 +67,8 @@ pub(crate) struct Ctx {
     pub(crate) pcap: i64,
     pub(crate) pvec: i64,
     pub(crate) pkind: i64,
-    /// Inline pushes made / flushes that wrote a length (added to `FastHits` when the unit leaves).
+    /// Inline pushes made (counted at each flush as the pending length minus the vector's own) / flushes that wrote a
+    /// length (added to `FastHits` when the unit leaves).
     pub(crate) push_inl: i64,
     pub(crate) push_flush: i64,
 }
@@ -89,6 +90,12 @@ impl Ctx {
         // below `plen` was written inside `pcap`.
         unsafe {
             let n = self.plen as usize;
+            let old = match self.pkind {
+                1 => (*(self.pvec as *mut Vec<bool>)).len(),
+                2 => (*(self.pvec as *mut Vec<i64>)).len(),
+                _ => (*(self.pvec as *mut Vec<f64>)).len(),
+            };
+            self.push_inl += (n - old) as i64;
             match self.pkind {
                 1 => (*(self.pvec as *mut Vec<bool>)).set_len(n),
                 2 => (*(self.pvec as *mut Vec<i64>)).set_len(n),
@@ -129,7 +136,6 @@ pub(crate) const PK: i32 = std::mem::offset_of!(Ctx, pk) as i32;
 pub(crate) const PPTR: i32 = std::mem::offset_of!(Ctx, pptr) as i32;
 pub(crate) const PLEN: i32 = std::mem::offset_of!(Ctx, plen) as i32;
 pub(crate) const PCAP: i32 = std::mem::offset_of!(Ctx, pcap) as i32;
-pub(crate) const PUSH_INL: i32 = std::mem::offset_of!(Ctx, push_inl) as i32;
 pub(crate) const FOUND: i32 = std::mem::offset_of!(Ctx, found) as i32;
 
 /// The key of a view: the local's slot and the stored element type (never 0).
@@ -468,6 +474,8 @@ fn lean_push(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, x: i64, xt: i64)
 pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) -> i64 {
     // an inline-push site (`ARM_PUSH`) asks for the record to be armed; any other push never does (its unit has no flush before calls)
     let (arm, xt) = (xt & ARM_PUSH != 0, xt & !ARM_PUSH);
+    // the inline site's own call emits no flush check: the pending length is written here, before anything reads the vector
+    unsafe { (*c).flush_push() };
     // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
     // a push may move a packed vector's storage
     unsafe {

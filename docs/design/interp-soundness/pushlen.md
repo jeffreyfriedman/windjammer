@@ -19,7 +19,8 @@ elements `[len, plen)` are initialised in spare capacity.
 * Arming: only `rt::push` arms. After it has pushed through the existing code (so the body is the unique, packed one,
   `Rc::make_mut` done, `cache` dropped), it re-reads the body; if that is `Packed` with EXACTLY the pushed element type
   (bool, float, or an integer width the packing holds as an `i64`: `push_elem`; `u64`/`usize`/`i128`/`u128` are never packed and stay on the old path) it fills the record from the new buffer.
-* Flush = `Vec::set_len(plen)` of `pvec` (by `pkind`) and `pk = 0`, counted `pushflush` when it does work. Idempotent.
+* Flush = `Vec::set_len(plen)` of `pvec` (by `pkind`) and `pk = 0`, counted `pushflush` when it does work; `pushinl`
+  is counted there too (pending length minus the vector's own). Idempotent.
 
 ## 1. Where the pending length lives and when it is flushed
 It lives in `Ctx`, in memory, never across a Rust call. The invariant: **armed implies no Rust code has run since arming**
@@ -29,9 +30,9 @@ only two kinds of place where Rust code can run:
 1. EVERY helper call. `Lo::call` (src/interpreter/resolved/jit/lower.rs) is the only `call_indirect` emitter of a unit
    (the one other `call` in `jit/mod.rs` is the pure-integer function compiler, which has no `Ctx` and no vectors). In a
    unit that has an eligible push site, it emits `if ctx.pk != 0 { rt::flush_push(ctx) }` immediately before the
-   call. That covers `len`, `index_get`, `index_set`, `index_field_*`, `map_*`, `run_stmt` (every closure-run statement,
-   so also panics raised by them and anything that reads or clones the vector), the slow `rt::push` itself (it needs the
-   real length), `int_op`, and calls that enter other units (they run inside `run_stmt` or a helper).
+   call. The slow `rt::push` call of an inline site is the one exception: it flushes first itself (it needs the real
+   length) so that site emits no check. The funnel covers `len`, `index_get`, `index_set`, `index_field_*`, `map_*`, `run_stmt` (every closure-run statement,
+   so also panics raised by them and anything that reads or clones the vector), `int_op`, and calls that enter other units (they run inside `run_stmt` or a helper).
 2. EVERY unit exit. A unit has many exits (planned loop exit, `break`/`return` exits, unplanned failed-check exits,
    `bail_if` after a failed helper, arithmetic overflow traps, a stack/step refusal, the end of a function unit) but they
    all return from the compiled function `unit.f` to ONE place, `execute` in osr.rs, which flushes right after the call and
