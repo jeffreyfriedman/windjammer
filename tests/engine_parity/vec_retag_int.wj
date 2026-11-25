@@ -37,6 +37,10 @@ fn sum(v: Vec<int>) -> int {
     s
 }
 
+fn grow(v: Vec<int>) -> int {
+    v[0] * 100000 * 100000
+}
+
 fn first_f(v: Vec<f32>) -> f32 {
     v[0]
 }
@@ -56,6 +60,14 @@ fn main() {
         c += 1
     }
     println("i64 ${total} ${a.len()} ${sum(a)}")
+    // arithmetic in the callee runs at the formal's width (i64: no 32-bit overflow)
+    let mut big = Vec::new()
+    let mut m = 0
+    while m < 4 {
+        big.push(m + 50000)
+        m += 1
+    }
+    println("wide ${grow(big)} ${grow(big)}")
     // the caller keeps another name for the same vector: it is not changed by the call
     let keep = Keep { items: a }
     let z = at_i64(a, 3)
@@ -107,7 +119,7 @@ fn main() {
     let mut f = Vec::new()
     f.push(0.1)
     f.push(0.2)
-    println("f32 ${first_f(f)} ${f[0]}")
+    println("f32 ${first_f(f) as float} ${f[0]}")
     // after the call the caller keeps pushing and calling
     a.push(99)
     println("after ${at_i64(a, 100)} ${sum(a)}")
