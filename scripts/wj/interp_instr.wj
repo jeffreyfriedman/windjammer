@@ -18,7 +18,7 @@
 // `--write` records a baseline, so it refuses to run in a git work tree or beside a `.wj-cache` (see `write_refusal`):
 // a checkout's untracked files change the counts. Run it from a clean `git archive`. The counts do not depend on the
 // length of the working directory's path (the interpreter once Debug-formatted source paths, about +55K instructions per
-// path character on agent_loop warm; fixed by `source_map::with_elided_paths` and held by `--self-test-cwd`), and
+// path character on agent_loop warm; fixed by `source_map::elided_debug` and held by `--self-test-cwd`), and
 // `--write` still stores the method it ran with next to the rows (`<counter>:method`: runs, cwd_chars, home, env).
 //
 // Effects (ADR-0021): this script declares no `extern` items. Its `--write` guard (inside_git_tree, method_json) uses the

@@ -35,23 +35,22 @@ pub struct Location {
     pub column: usize,
 }
 
-thread_local! {
-    static ELIDE_PATHS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
+/// The `Formatter` precision that asks `Location`'s `Debug` to print an empty file path (`file: ""`). Derived `Debug`
+/// passes the formatter (and so its precision) to every child unchanged, so the request reaches each `Location` in an
+/// AST with no global state; integers, strings and unit variants ignore precision, floats print 7 decimals (a number
+/// is no identifier). Use `elided_debug`; 7 is above the length of `false`, which `bool`'s `Debug` pads to precision.
+pub const ELIDE_PATH_PRECISION: usize = 7;
 
-/// Run `f` with `Location`'s `Debug` printing an empty file path (`file: ""`), everything else as usual. The interpreter
-/// reads the identifiers out of an AST's `Debug` text; the path of the source file is no identifier, and formatting
-/// and hashing it made that text's cost depend on the working directory's length.
-pub fn with_elided_paths<R>(f: impl FnOnce() -> R) -> R {
-    let prev = ELIDE_PATHS.with(|c| c.replace(true));
-    let r = f();
-    ELIDE_PATHS.with(|c| c.set(prev));
-    r
+/// `format!("{:?}")` of `x` with every `Location`'s file path left out. The interpreter reads the identifiers out of an
+/// AST's `Debug` text; the path of the source file is no identifier, and formatting and hashing it made that text's
+/// cost depend on the working directory's length.
+pub fn elided_debug(x: &dyn std::fmt::Debug) -> String {
+    format!("{:.7?}", x)
 }
 
 impl std::fmt::Debug for Location {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let elide = ELIDE_PATHS.with(|c| c.get());
+        let elide = f.precision() == Some(ELIDE_PATH_PRECISION);
         let mut d = f.debug_struct("Location");
         if elide {
             d.field("file", &"");
