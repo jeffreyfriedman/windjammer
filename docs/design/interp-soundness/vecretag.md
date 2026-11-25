@@ -2,27 +2,37 @@
 status: current
 last_verified: 57637b4f6b6d
 ---
-# Soundness: retagging a local float vector at a `Vec<f64>` call (`retag_arg`, resolved/expr.rs)
+# Soundness: retagging a local literal vector at a `Vec<f64>` / `Vec<iN>` call (`retag_arg`, resolved/expr.rs)
 
 ## What was slow
 Binding a parameter coerces the argument to the declared type. `coerce` (src/interpreter/coerce.rs) rebuilds a `Vec`
 whose FIRST element is an untyped literal (`needs_coerce`): a new `Vec<Value>` with every element coerced, O(n) per call,
-and the caller's vector is untouched, so the next call rebuilds it again. A vector filled with `v.push(1.0)` holds untyped
-float literals (`FloatTy::Lit`; packed bodies carry the tag once: `Packed::Float(_, Lit)`), so every call of a function
+and the caller's vector is untouched, so the next call rebuilds it again. A vector filled with `v.push(1.0)` (or `v.push(k)` for an untyped integer `k`) holds untyped
+float (integer) literals (`FloatTy::Lit`; packed bodies carry the tag once: `Packed::Float(_, Lit)`), so every call of a function
 taking it by value paid the rebuild, while a vector of typed floats, or one held in a struct field (the field is not coerced
 at the call), paid nothing. It is neither a deep copy of an `Rc` target nor a copy-on-write: the body is never cloned by the
 call, it is rebuilt by the coercion.
 
 ## The change
-When a module-function call site passes a plain unboxed local (`X::Slot`) to a parameter declared `Vec<f64>`/`Vec<float>`,
-the site first runs `retag_arg`: if the local's body is a packed `Float(_, Lit)` vector, or an unpacked one whose elements are
-all `Float(_, Lit | F64)` led by a `Lit`, the LOCAL's slot is replaced by a new `Rc` body with the same bits tagged `F64`
-(`VecBody::retagged_f64`, src/interpreter/vecbody.rs). Binding then finds no literal to coerce. Counter: `vecretag`.
+When a module-function call site passes a plain local (unboxed: `X::Slot`; boxed: the walker cell that holds the vector
+itself, not a reference to another place) to a parameter declared `Vec<f64>`/`Vec<float>` or `Vec<iN>`/`Vec<uN>`/`Vec<int>`
+(`vec_retag`), and the callee does not mutate that parameter, the site first runs `retag_arg`: if the local's body holds
+untyped literals of that family, the LOCAL's slot is replaced by a NEW body (`VecBody::retagged`,
+src/interpreter/vecbody.rs) with the same values tagged with the formal's element type. Binding then finds no literal to
+coerce, and every later call with the same local is free. Counter: `vecretag` (one per retagged local, not per call).
+Not served, left to the generic coercion: `Vec<f32>` (rounds), a nested vector, a field or element place as the argument,
+a mutated parameter (its argument is a place: `place::arg`), a vector with any element that is not a literal of the
+family or the formal's own width.
 
 ## Why it is observationally the generic path
-1. Values. A `Lit` float coerced to `f64` is `Float(f, F64)` with the same `f`: the coercion the callee would have applied
-   is exactly the one applied to the local. The `f32` target is NOT served (it rounds), nor is any other element type, nor
-   a nested vector, nor an argument that is not a plain local.
+1. Values. A `Lit` float coerced to `f64` is `Float(f, F64)` with the same `f`; a `Lit` integer coerced to width `t` is
+   `Int(n, t)` with the same `n`: the coercion the callee would have applied (`coerce`, src/interpreter/coerce.rs) is exactly
+   the one applied to the local. Integer RANGE: the retag is made only when `t.fits(n)` for EVERY `Lit` element; otherwise
+   it declines and the generic coercion runs and raises its own `literal out of range` error (a `u8` formal with 300, a
+   negative into an unsigned, an `i8` with 200, an `i16` with 40000: `vec_retag_int_range_*.wj`), so nothing wraps and the
+   error is the same one. The literal `-1` for a 64-bit unsigned formal (which the generic path wraps) is outside `fits`
+   and also stays on the generic path. `Vec<f32>` is NOT served (it rounds); a `Lit` float in an integer vector, or the
+   reverse, is not served.
 2. The caller's later reads. The only difference visible in the caller is the tag of elements read back (`F64` where it
    was `Lit`). An untyped literal adopts the other operand's width in arithmetic (`ops.rs`: `Lit` takes the other side's
    type); an `F64` element keeps `f64`. A program that passes the local to a `Vec<f64>` parameter has typed that local
@@ -42,6 +52,6 @@ all `Float(_, Lit | F64)` led by a `Lit`, the LOCAL's slot is replaced by a new 
    unpacks once: a cost, not a semantic change.
 
 ## Tests
-`tests/engine_parity/vec_retag.wj` (walker vs resolved; read-only callee with the caller pushing between calls, a mutating
+`tests/engine_parity/vec_retag.wj`, `vec_retag_int.wj` (a thousand calls: one retag), `vec_retag_int_range_*.wj` (walker vs resolved; read-only callee with the caller pushing between calls, a mutating
 callee, return, struct store, `f(v, v)`, recursion, method, `Vec<f32>`, nested, closure capture); counter `vecretag` in
 `tests/interpreter_fast_paths_test.rs`; kernel `bench/interp/vecpass.wj`.

@@ -26,6 +26,14 @@ pub enum VecBody {
     Packed(Packed, OnceCell<Vec<Value>>),
 }
 
+/// The element type a `Vec<..>` parameter asks for, when `VecBody::retagged` serves it: `f64` and the integer widths
+/// (not `f32`: it rounds, so it keeps the generic coercion).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Retag {
+    F64,
+    Int(IntTy),
+}
+
 fn int_packable(t: IntTy) -> bool {
     !matches!(t, IntTy::U64 | IntTy::Usize | IntTy::I128 | IntTy::U128)
 }
@@ -143,17 +151,41 @@ impl VecBody {
         }
     }
 
-    /// The same elements with every untyped float literal tagged `f64` (same bits), for a vector about to
-    /// be coerced to `Vec<f64>`; `None` when no element is an untyped float literal or a non-float is present.
-    /// See `docs/design/interp-soundness/vecretag.md`.
-    pub fn retagged_f64(&self) -> Option<VecBody> {
-        match self {
-            VecBody::Packed(Packed::Float(v, FloatTy::Lit), _) => Some(VecBody::Packed(Packed::Float(v.clone(), FloatTy::F64), OnceCell::new())),
-            VecBody::Values(v) if matches!(v.first(), Some(Value::Float(_, FloatTy::Lit))) => {
+    /// The same elements with every untyped literal tagged as the element type `to` of the `Vec<..>` parameter the
+    /// vector is about to be coerced to (same values, new tags), as a NEW body. `None`: no element is an untyped
+    /// literal of that family, a non-scalar or another width is present, or an integer literal does not fit `to`
+    /// (the generic coercion then runs, and raises its range error). See `docs/design/interp-soundness/vecretag.md`.
+    pub fn retagged(&self, to: Retag) -> Option<VecBody> {
+        match (self, to) {
+            (VecBody::Packed(Packed::Float(v, FloatTy::Lit), _), Retag::F64) => {
+                Some(VecBody::Packed(Packed::Float(v.clone(), FloatTy::F64), OnceCell::new()))
+            }
+            (VecBody::Packed(Packed::Int(v, IntTy::Lit), _), Retag::Int(t)) => {
+                if !v.iter().all(|x| t.fits(*x as i128)) {
+                    return None;
+                }
+                Some(if int_packable(t) {
+                    VecBody::Packed(Packed::Int(v.clone(), t), OnceCell::new())
+                } else {
+                    VecBody::Values(v.iter().map(|x| Value::Int(*x as i128, t)).collect())
+                })
+            }
+            (VecBody::Values(v), Retag::F64) if matches!(v.first(), Some(Value::Float(_, FloatTy::Lit))) => {
                 let mut out = Vec::with_capacity(v.len());
                 for x in v {
                     match x {
                         Value::Float(f, FloatTy::Lit | FloatTy::F64) => out.push(Value::Float(*f, FloatTy::F64)),
+                        _ => return None,
+                    }
+                }
+                Some(VecBody::Values(out))
+            }
+            (VecBody::Values(v), Retag::Int(t)) if matches!(v.first(), Some(Value::Int(_, IntTy::Lit))) => {
+                let mut out = Vec::with_capacity(v.len());
+                for x in v {
+                    match x {
+                        Value::Int(n, IntTy::Lit) if t.fits(*n) => out.push(Value::Int(*n, t)),
+                        Value::Int(n, u) if *u == t => out.push(Value::Int(*n, t)),
                         _ => return None,
                     }
                 }
