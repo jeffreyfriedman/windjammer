@@ -67,7 +67,7 @@ fn test_parse_command_rejects_unknown_subcommand() {
     let config = MigrateConfig::defaults()
     match parse_command(args, config) {
         Ok(_) => assert(false, "expected usage error"),
-        Err(e) => assert_str_contains(e, "list"),
+        Err(e) => assert_contains(e, "list"),
     }
 }
 
@@ -120,7 +120,7 @@ fn test_parse_apply_requires_url_when_unset() {
     let config = MigrateConfig::defaults()
     match parse_apply(args, config) {
         Ok(_) => assert(false, "expected missing url error"),
-        Err(e) => assert_str_contains(e, "url"),
+        Err(e) => assert_contains(e, "url"),
     }
 }
 

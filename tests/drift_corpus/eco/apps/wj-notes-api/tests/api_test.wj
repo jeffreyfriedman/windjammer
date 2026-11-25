@@ -29,7 +29,7 @@ fn test_get_notes_empty_returns_json_array() {
     let store = NoteStore::new()
     let reply = handle_request("GET", "/notes", "", store)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "[")
+    assert_contains(reply.body, "[")
 }
 
 fn test_post_creates_note_with_201() {
@@ -37,9 +37,9 @@ fn test_post_creates_note_with_201() {
     let body = "{\"title\":\"hello\",\"body\":\"world\"}"
     let reply = handle_request("POST", "/notes", body, store)
     assert_eq(reply.status, 201)
-    assert_str_contains(reply.body, "hello")
-    assert_str_contains(reply.body, "world")
-    assert_str_contains(reply.content_type, "application/json")
+    assert_contains(reply.body, "hello")
+    assert_contains(reply.body, "world")
+    assert_contains(reply.content_type, "application/json")
 }
 
 fn test_post_sets_location_header() {
@@ -54,8 +54,8 @@ fn test_post_sets_location_header() {
         "{\"title\":\"hello\",\"body\":\"world\"}",
     )
     assert_eq(reply.status, 201)
-    assert_str_contains(reply.extra_headers, "Location:")
-    assert_str_contains(reply.extra_headers, "http://localhost:8080/notes/1")
+    assert_contains(reply.extra_headers, "Location:")
+    assert_contains(reply.extra_headers, "http://localhost:8080/notes/1")
 }
 
 fn test_post_includes_uuid_and_created_at() {
@@ -70,9 +70,9 @@ fn test_post_includes_uuid_and_created_at() {
         "{\"title\":\"hello\",\"body\":\"world\"}",
     )
     assert_eq(reply.status, 201)
-    assert_str_contains(reply.body, "\"uid\"")
-    assert_str_contains(reply.body, "\"created_at\"")
-    assert_str_contains(reply.body, "2023")
+    assert_contains(reply.body, "\"uid\"")
+    assert_contains(reply.body, "\"created_at\"")
+    assert_contains(reply.body, "2023")
 }
 
 fn test_post_includes_slugified_title() {
@@ -87,21 +87,21 @@ fn test_post_includes_slugified_title() {
         "{\"title\":\"Hello World!\",\"body\":\"body\"}",
     )
     assert_eq(reply.status, 201)
-    assert_str_contains(reply.body, "\"slug\":\"hello-world\"")
+    assert_contains(reply.body, "\"slug\":\"hello-world\"")
 }
 
 fn test_post_rejects_empty_title() {
     let store = NoteStore::new()
     let reply = handle_request("POST", "/notes", "{\"title\":\"\",\"body\":\"world\"}", store)
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "title")
+    assert_contains(reply.body, "title")
 }
 
 fn test_post_rejects_empty_body() {
     let store = NoteStore::new()
     let reply = handle_request("POST", "/notes", "{\"title\":\"hello\",\"body\":\"\"}", store)
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "body")
+    assert_contains(reply.body, "body")
 }
 
 fn test_post_rejects_title_over_max_len() {
@@ -118,14 +118,14 @@ fn test_post_rejects_title_over_max_len() {
         "{\"title\":\"too-long\",\"body\":\"ok\"}",
     )
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "title")
+    assert_contains(reply.body, "title")
 }
 
 fn test_health_sets_json_content_type() {
     let store = NoteStore::new()
     let reply = handle_request("GET", "/health", "", store)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.content_type, "application/json")
+    assert_contains(reply.content_type, "application/json")
 }
 
 fn test_get_note_by_id() {
@@ -133,8 +133,8 @@ fn test_get_note_by_id() {
     let _ = store.create("item", "detail", 200, 10_000, 0)
     let reply = handle_request("GET", "/notes/1", "", store)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "item")
-    assert_str_contains(reply.body, "detail")
+    assert_contains(reply.body, "item")
+    assert_contains(reply.body, "detail")
 }
 
 fn test_get_missing_note_returns_404() {
@@ -149,8 +149,8 @@ fn test_put_updates_note() {
     let body = "{\"title\":\"new\",\"body\":\"y\"}"
     let reply = handle_request("PUT", "/notes/1", body, store)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "new")
-    assert_str_contains(reply.body, "y")
+    assert_contains(reply.body, "new")
+    assert_contains(reply.body, "y")
 }
 
 fn test_delete_note_returns_204() {
@@ -177,7 +177,7 @@ fn test_health_returns_ok() {
     let store = NoteStore::new()
     let reply = handle_request("GET", "/health", "", store)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "ok")
+    assert_contains(reply.body, "ok")
 }
 
 fn test_router_matches_note_id() {
@@ -185,7 +185,7 @@ fn test_router_matches_note_id() {
     let _ = store.create("via-router", "body", 200, 10_000, 0)
     let reply = handle_request("GET", "/notes/1", "", store)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "via-router")
+    assert_contains(reply.body, "via-router")
 }
 
 fn test_cors_origin_on_json_response() {
@@ -209,25 +209,25 @@ fn test_rate_limit_returns_429() {
     let _ = app.handle("GET", "/notes", "", "", "client-a", 1000, "")
     let third = app.handle("GET", "/notes", "", "", "client-a", 1000, "")
     assert_eq(third.status, 429)
-    assert_str_contains(third.extra_headers, "Retry-After")
+    assert_contains(third.extra_headers, "Retry-After")
 }
 
 fn test_security_headers_on_response() {
     let mut app = NotesApp::new(default_config(), NoteStore::new())
     let reply = app.handle("GET", "/notes", "", "", "client", 0, "")
-    assert_str_contains(reply.extra_headers, "X-Frame-Options")
-    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
+    assert_contains(reply.extra_headers, "X-Frame-Options")
+    assert_contains(reply.extra_headers, "X-Content-Type-Options")
 }
 
 fn test_format_access_log_line() {
     let line = format_access_log("GET", "/health", 200)
-    assert_str_contains(line, "[notes]")
-    assert_str_contains(line, "GET")
-    assert_str_contains(line, "/health")
-    assert_str_contains(line, "200")
+    assert_contains(line, "[notes]")
+    assert_contains(line, "GET")
+    assert_contains(line, "/health")
+    assert_contains(line, "200")
     let err_line = format_access_log("POST", "/notes", 400)
-    assert_str_contains(err_line, "[notes]")
-    assert_str_contains(err_line, "400")
+    assert_contains(err_line, "[notes]")
+    assert_contains(err_line, "400")
 }
 
 fn test_gzip_when_accepted() {
@@ -235,7 +235,7 @@ fn test_gzip_when_accepted() {
     let reply = app.handle("GET", "/health", "", "gzip", "", 0, "")
     assert_eq(reply.content_encoding, "gzip")
     match gzip_decode_body(reply.body) {
-        Ok(plain) => assert_str_contains(plain, "ok"),
+        Ok(plain) => assert_contains(plain, "ok"),
         Err(_) => assert(false, "gzip decode"),
     }
 }
@@ -244,22 +244,22 @@ fn test_no_gzip_without_accept_encoding() {
     let mut app = NotesApp::new(default_config(), NoteStore::new())
     let reply = app.handle("GET", "/health", "", "", "", 0, "")
     assert_eq(reply.content_encoding, "")
-    assert_str_contains(reply.body, "ok")
+    assert_contains(reply.body, "ok")
 }
 
 fn test_welcome_page_uses_html_content_type() {
     let mut app = NotesApp::new(default_config(), NoteStore::new())
     let reply = app.handle("GET", "/", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.content_type, "text/html")
+    assert_contains(reply.content_type, "text/html")
 }
 
 fn test_welcome_page_uses_template() {
     let mut app = NotesApp::new(default_config(), NoteStore::new())
     let reply = app.handle("GET", "/", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "<h1>")
-    assert_str_contains(reply.body, "wj-notes-api")
+    assert_contains(reply.body, "<h1>")
+    assert_contains(reply.body, "wj-notes-api")
     assert(!strings.contains(reply.body, "{{"), "placeholders filled")
 }
 
@@ -270,7 +270,7 @@ fn test_list_notes_limit_query_param() {
     let _ = app.handle("POST", "/notes", "", "", "", 0, "{\"title\":\"t\",\"body\":\"b\"}")
     let reply = app.handle("GET", "/notes?limit=2", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "\"id\":")
+    assert_contains(reply.body, "\"id\":")
     // HashMap list order is unstable — assert count, not specific ids.
     let parts = strings.split(reply.body, "\"title\"")
     assert_eq(parts.len(), 3)
@@ -291,7 +291,7 @@ fn test_list_notes_pretty_query_param() {
     let pretty = app.handle("GET", "/notes?pretty=1", "", "", "", 0, "")
     assert_eq(compact.status, 200)
     assert_eq(pretty.status, 200)
-    assert_str_contains(pretty.body, "\n")
+    assert_contains(pretty.body, "\n")
     assert(strings.len(pretty.body) > strings.len(compact.body), "pretty body longer")
 }
 
@@ -317,7 +317,7 @@ fn test_list_notes_q_filters_by_regex() {
     )
     let reply = app.handle("GET", "/notes?q=needle", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "beta")
+    assert_contains(reply.body, "beta")
     assert(!strings.contains(reply.body, "alpha"), "unmatched note excluded")
 }
 
@@ -325,7 +325,7 @@ fn test_list_notes_invalid_q_returns_400() {
     let mut app = NotesApp::new(default_config(), NoteStore::new())
     let reply = app.handle("GET", "/notes?q=(", "", "", "", 0, "")
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "error")
+    assert_contains(reply.body, "error")
 }
 
 fn test_get_note_sets_etag_header() {
@@ -341,7 +341,7 @@ fn test_get_note_sets_etag_header() {
     )
     let reply = app.handle_if_none_match("GET", "/notes/1", "", "", "", 0, "", "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.extra_headers, "ETag:")
+    assert_contains(reply.extra_headers, "ETag:")
 }
 
 fn test_get_note_if_none_match_returns_304() {
@@ -362,7 +362,7 @@ fn test_get_note_if_none_match_returns_304() {
     let second = app.handle_if_none_match("GET", "/notes/1", "", "", "", 0, "", etag)
     assert_eq(second.status, 304)
     assert_eq(second.body, "")
-    assert_str_contains(second.extra_headers, "ETag:")
+    assert_contains(second.extra_headers, "ETag:")
 }
 
 fn test_get_note_encoding_base64() {
@@ -378,12 +378,12 @@ fn test_get_note_encoding_base64() {
     )
     let reply = app.handle("GET", "/notes/1?encoding=base64", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.content_type, "text/plain")
+    assert_contains(reply.content_type, "text/plain")
     assert(!strings.contains(reply.body, "\"title\""), "payload encoded")
     match decode_note_export(reply.body) {
         Ok(text) => {
-            assert_str_contains(text, "hello")
-            assert_str_contains(text, "world")
+            assert_contains(text, "hello")
+            assert_contains(text, "world")
         },
         Err(_) => assert(false, "base64 decode"),
     }

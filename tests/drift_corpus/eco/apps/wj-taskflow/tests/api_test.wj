@@ -36,7 +36,7 @@ fn signed_in(app: Taskflow, name: string) -> string {
 fn test_health_is_open() {
     let reply = call(app(), "GET", "/health", "", "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "ok")
+    assert_contains(reply.body, "ok")
 }
 
 @test
@@ -49,7 +49,7 @@ fn test_unknown_route_and_method() {
 fn test_register_never_returns_the_password_hash() {
     let reply = register(app(), "ann")
     assert_eq(reply.status, 201)
-    assert_str_contains(reply.body, "\"username\":\"ann\"")
+    assert_contains(reply.body, "\"username\":\"ann\"")
     assert(!reply.body.contains("hash"), "no hash in response")
     assert(!reply.body.contains("pass-ann"), "no password in response")
 }
@@ -91,7 +91,7 @@ fn test_me_requires_a_valid_bearer_token() {
     let token = signed_in(a, "ann")
     let ok = call(a, "GET", "/api/v1/auth/me", "Bearer ${token}", "")
     assert_eq(ok.status, 200)
-    assert_str_contains(ok.body, "\"username\":\"ann\"")
+    assert_contains(ok.body, "\"username\":\"ann\"")
     assert_eq(call(a, "GET", "/api/v1/auth/me", "", "").status, 401)
     assert_eq(call(a, "GET", "/api/v1/auth/me", "Bearer garbage", "").status, 401)
     assert_eq(call(a, "GET", "/api/v1/auth/me", "Bearer ${token}x", "").status, 401)
@@ -111,10 +111,10 @@ fn test_project_lifecycle() {
     let tok = "Bearer ${signed_in(a, "ann")}"
     let created = call(a, "POST", "/api/v1/projects", tok, "{\"name\":\"Alpha\",\"description\":\"first\"}")
     assert_eq(created.status, 201)
-    assert_str_contains(created.body, "\"name\":\"Alpha\"")
+    assert_contains(created.body, "\"name\":\"Alpha\"")
     let listed = call(a, "GET", "/api/v1/projects", tok, "")
     assert_eq(listed.status, 200)
-    assert_str_contains(listed.body, "Alpha")
+    assert_contains(listed.body, "Alpha")
     assert_eq(call(a, "GET", "/api/v1/projects/1", tok, "").status, 200)
     assert_eq(call(a, "GET", "/api/v1/projects/99", tok, "").status, 404)
     assert_eq(call(a, "GET", "/api/v1/projects/abc", tok, "").status, 404)
@@ -179,12 +179,12 @@ fn test_task_lifecycle_and_defaults() {
     call(a, "POST", "/api/v1/projects", tok, "{\"name\":\"Alpha\"}")
     let created = call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"Write docs\"}")
     assert_eq(created.status, 201)
-    assert_str_contains(created.body, "\"status\":\"todo\"")
-    assert_str_contains(created.body, "\"priority\":\"medium\"")
+    assert_contains(created.body, "\"status\":\"todo\"")
+    assert_contains(created.body, "\"priority\":\"medium\"")
     let patched = call(a, "PATCH", "/api/v1/tasks/1", tok, "{\"status\":\"in_progress\",\"priority\":\"high\"}")
     assert_eq(patched.status, 200)
-    assert_str_contains(patched.body, "\"status\":\"in_progress\"")
-    assert_str_contains(patched.body, "\"title\":\"Write docs\"")
+    assert_contains(patched.body, "\"status\":\"in_progress\"")
+    assert_contains(patched.body, "\"title\":\"Write docs\"")
     assert_eq(call(a, "GET", "/api/v1/tasks/1", tok, "").status, 200)
     assert_eq(call(a, "DELETE", "/api/v1/tasks/1", tok, "").status, 204)
     assert_eq(call(a, "GET", "/api/v1/tasks/1", tok, "").status, 404)
@@ -211,13 +211,13 @@ fn test_list_filters_by_query_string() {
     call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"Write docs\"}")
     call(a, "PATCH", "/api/v1/tasks/2", tok, "{\"status\":\"done\"}")
     let high = call(a, "GET", "/api/v1/projects/1/tasks?priority=high", tok, "")
-    assert_str_contains(high.body, "Fix crash")
+    assert_contains(high.body, "Fix crash")
     assert(!high.body.contains("Write docs"), "priority filter")
     let done = call(a, "GET", "/api/v1/projects/1/tasks?status=done", tok, "")
-    assert_str_contains(done.body, "Write docs")
+    assert_contains(done.body, "Write docs")
     assert(!done.body.contains("Fix crash"), "status filter")
     let found = call(a, "GET", "/api/v1/projects/1/tasks?q=CRASH", tok, "")
-    assert_str_contains(found.body, "Fix crash")
+    assert_contains(found.body, "Fix crash")
 }
 
 @test
@@ -231,7 +231,7 @@ fn test_assignment_requires_a_project_member() {
     call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":2,\"role\":\"member\"}")
     let ok = call(a, "POST", "/api/v1/tasks/1/assign", ann, "{\"user_id\":2}")
     assert_eq(ok.status, 200)
-    assert_str_contains(ok.body, "\"assigned_to\":2")
+    assert_contains(ok.body, "\"assigned_to\":2")
 }
 
 @test
@@ -246,7 +246,7 @@ fn test_rate_limit_returns_429_with_retry_after() {
     assert_eq(a.handle("GET", "/health", "", "k1", 1002, "").status, 200)
     let limited = a.handle("GET", "/health", "", "k1", 1003, "")
     assert_eq(limited.status, 429)
-    assert_str_contains(limited.headers, "Retry-After")
+    assert_contains(limited.headers, "Retry-After")
     // other clients are unaffected, and the window resets
     assert_eq(a.handle("GET", "/health", "", "k2", 1004, "").status, 200)
     assert_eq(a.handle("GET", "/health", "", "k1", 61001, "").status, 200)
@@ -266,8 +266,8 @@ fn test_acceptance_team_workflow() {
     assert_eq(call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":3,\"role\":\"viewer\"}").status, 200)
 
     // everyone sees the project, outsiders do not
-    assert_str_contains(call(a, "GET", "/api/v1/projects", bob, "").body, "Launch")
-    assert_str_contains(call(a, "GET", "/api/v1/projects", cat, "").body, "Launch")
+    assert_contains(call(a, "GET", "/api/v1/projects", bob, "").body, "Launch")
+    assert_contains(call(a, "GET", "/api/v1/projects", cat, "").body, "Launch")
 
     // bob files and works tasks, ann assigns one to him
     assert_eq(call(a, "POST", "/api/v1/projects/1/tasks", bob, "{\"title\":\"Write release notes\",\"priority\":\"low\"}").status, 201)
@@ -278,14 +278,14 @@ fn test_acceptance_team_workflow() {
     // cat can read and filter but not change anything
     let urgent = call(a, "GET", "/api/v1/projects/1/tasks?priority=critical&status=in_progress&assigned_to=2", cat, "")
     assert_eq(urgent.status, 200)
-    assert_str_contains(urgent.body, "Fix login crash")
+    assert_contains(urgent.body, "Fix login crash")
     assert(!urgent.body.contains("release notes"), "filters combine with AND")
     assert_eq(call(a, "PATCH", "/api/v1/tasks/2", cat, "{\"status\":\"done\"}").status, 403)
 
     // finishing work, then ann removes one task and the whole project
     assert_eq(call(a, "PATCH", "/api/v1/tasks/2", bob, "{\"status\":\"done\"}").status, 200)
     let done = call(a, "GET", "/api/v1/projects/1/tasks?status=done", ann, "")
-    assert_str_contains(done.body, "Fix login crash")
+    assert_contains(done.body, "Fix login crash")
     assert_eq(call(a, "DELETE", "/api/v1/tasks/1", bob, "").status, 204)
     assert_eq(call(a, "DELETE", "/api/v1/projects/1", ann, "").status, 204)
 

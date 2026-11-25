@@ -316,6 +316,10 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
             out.text = fix_trailing_returns(&name_of(file), out.text);
             out.text = surface_fix_options(out.text);
             out.text = crate::linter::redundant_as_str::fix(&out.text);
+            // one `std::test` module: removed assertion spellings become the canonical names
+            let (renamed, n) = crate::stdlib_surface::removed_names::fix(&out.text);
+            out.text = renamed;
+            conc_rewrites += n;
             out
         };
         summary.skipped += out.skipped_count();

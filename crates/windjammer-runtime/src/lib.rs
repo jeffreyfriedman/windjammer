@@ -88,7 +88,6 @@ pub mod subprocess;
 pub mod sync;
 pub mod test;
 pub mod test_output;
-pub mod testing;
 pub mod task;
 pub mod thread;
 pub mod time;
@@ -109,5 +108,4 @@ pub use log_mod::LogLevel;
 // Prelude for common imports
 pub mod prelude {
     pub use crate::marker::PhantomData;
-    pub use crate::testing::*;
 }

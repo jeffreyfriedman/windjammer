@@ -21,12 +21,12 @@ fn test_to_json_flat_scalars() {
     let yaml = "name: alice\nage: 30\nactive: true\n"
     match to_json(yaml) {
         Ok(json) => {
-            assert_str_contains(json, "\"name\"")
-            assert_str_contains(json, "\"alice\"")
-            assert_str_contains(json, "\"age\"")
-            assert_str_contains(json, "30")
-            assert_str_contains(json, "\"active\"")
-            assert_str_contains(json, "true")
+            assert_contains(json, "\"name\"")
+            assert_contains(json, "\"alice\"")
+            assert_contains(json, "\"age\"")
+            assert_contains(json, "30")
+            assert_contains(json, "\"active\"")
+            assert_contains(json, "true")
         },
         Err(_) => assert(false, "parse failed"),
     }
@@ -36,7 +36,7 @@ fn test_to_json_flat_scalars() {
 fn test_to_json_quoted_string() {
     let yaml = "msg: \"hello: world\"\n"
     match to_json(yaml) {
-        Ok(json) => assert_str_contains(json, "hello: world"),
+        Ok(json) => assert_contains(json, "hello: world"),
         Err(_) => assert(false, "parse failed"),
     }
 }
@@ -88,9 +88,9 @@ fn test_list_to_json() {
     let yaml = "tags:\n  - red\n  - blue\n"
     match to_json(yaml) {
         Ok(json) => {
-            assert_str_contains(json, "\"tags\"")
-            assert_str_contains(json, "red")
-            assert_str_contains(json, "blue")
+            assert_contains(json, "\"tags\"")
+            assert_contains(json, "red")
+            assert_contains(json, "blue")
         },
         Err(_) => assert(false, "parse failed"),
     }
@@ -109,7 +109,7 @@ fn test_comments_ignored() {
 fn test_null_scalar() {
     let yaml = "x: null\n"
     match to_json(yaml) {
-        Ok(json) => assert_str_contains(json, "null"),
+        Ok(json) => assert_contains(json, "null"),
         Err(_) => assert(false, "parse failed"),
     }
 }

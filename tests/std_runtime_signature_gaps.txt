@@ -16,9 +16,5 @@ process::execute#ret
 process::run#arity
 # assertions are lowered to macros by the compiler (src/codegen/rust/macro_conversion.rs); the runtime function takes a message
 test::assert#arity
-test::assert_contains#p0
-testing::assert#arity
-testing::assert_eq#arity
-testing::assert_ne#arity
 # declaration `parse(text, format) -> Result<DateTime, string>`, runtime `parse(text) -> Result<i64, String>` (an RFC 3339 parser)
 time::parse#arity

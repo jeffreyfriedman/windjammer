@@ -30,8 +30,8 @@ fn test_redirect_server_informational_status() {
 
 fn test_format_body_uses_json_util_pretty() {
     let out = format_body("{\"a\":1}")
-    assert_str_contains(out, "a")
-    assert_str_contains(out, "1")
+    assert_contains(out, "a")
+    assert_contains(out, "1")
 }
 
 fn test_format_body_falls_back_to_raw_text() {
@@ -43,15 +43,15 @@ fn test_format_fetch_result_includes_status_and_body() {
     use crate::domain::format_fetch_result
     let out = format_fetch_result(200, "{\"ok\":true}")
     assert(out.len() > 0, "non-empty")
-    assert_str_contains(out, "200")
-    assert_str_contains(out, "ok")
+    assert_contains(out, "200")
+    assert_contains(out, "ok")
 }
 
 fn test_format_fetch_error_message() {
     use crate::domain::format_fetch_error
     let msg = format_fetch_error(404, "not found")
-    assert_str_contains(msg, "404")
-    assert_str_contains(msg, "not found")
+    assert_contains(msg, "404")
+    assert_contains(msg, "not found")
 }
 
 fn test_resolve_fetch_output_stdout_without_file() {
@@ -59,8 +59,8 @@ fn test_resolve_fetch_output_stdout_without_file() {
     match resolve_fetch_output(200, "{\"ok\":true}", "", false) {
         Ok(pair) => {
             assert_eq(pair.0, "")
-            assert_str_contains(pair.1, "HTTP 200")
-            assert_str_contains(pair.1, "ok")
+            assert_contains(pair.1, "HTTP 200")
+            assert_contains(pair.1, "ok")
         },
         Err(_) => assert(false, "expected Ok"),
     }
@@ -70,9 +70,9 @@ fn test_resolve_fetch_output_file_and_message() {
     use crate::domain::resolve_fetch_output
     match resolve_fetch_output(201, "{\"saved\":true}", "out.json", false) {
         Ok(pair) => {
-            assert_str_contains(pair.0, "saved")
-            assert_str_contains(pair.1, "HTTP 201")
-            assert_str_contains(pair.1, "written to out.json")
+            assert_contains(pair.0, "saved")
+            assert_contains(pair.1, "HTTP 201")
+            assert_contains(pair.1, "written to out.json")
         },
         Err(_) => assert(false, "expected Ok"),
     }
@@ -83,7 +83,7 @@ fn test_resolve_fetch_output_silent_body_only() {
     match resolve_fetch_output(200, "{\"ok\":true}", "", true) {
         Ok(pair) => {
             assert_eq(pair.0, "")
-            assert_str_contains(pair.1, "ok")
+            assert_contains(pair.1, "ok")
             assert(!str_contains(pair.1, "HTTP"), "silent omits status line")
         },
         Err(_) => assert(false, "expected Ok"),

@@ -13,7 +13,7 @@ use std::csv
 use std::subprocess
 use std::strings
 use std::random
-use std::testing
+use std::test
 use std::env
 
 fn main() {

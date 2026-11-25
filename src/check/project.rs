@@ -5,7 +5,7 @@ use crate::ir::stdlib_tables::StdlibTables;
 use super::front::Parsed;
 use super::locate::Locator;
 use super::semantic::{self, FileInput, Index};
-use crate::diagnostics::{convert, Diagnostic, SourceIndex};
+use crate::diagnostics::{convert, Applicability, Diagnostic, Edit, Fix, SourceIndex};
 use crate::resolve::{self, DefKind, DiagnosticKind, ParsedFile, Reason, Res};
 use std::collections::HashMap;
 use std::path::Path;
@@ -283,6 +283,23 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
                     out.push(d.with_help(format!("declare `mod {head}`, import it with `use`, or add `{head}` to [dependencies] in wj.toml")));
                 }
             }
+            // `use std::test::*` then a removed assertion spelling: the canonical name is known exactly
+            Res::Unresolved(Reason::External(path))
+                if c.kind == resolve::CallKind::Free
+                    && path.starts_with("std::test")
+                    && crate::stdlib_surface::removed_names::replacement(&c.callee).is_some() =>
+            {
+                let new = crate::stdlib_surface::removed_names::replacement(&c.callee).unwrap_or_default();
+                let mut d = Diagnostic::error("WJ0002", format!("cannot find function `{}` in `std::test`", c.callee));
+                if let Some(sp) = span_for(&c.location, &c.callee) {
+                    d = d.at(sp.clone().with_label("removed from std::test")).with_fix(Fix {
+                        description: format!("rename to `{new}`"),
+                        applicability: Applicability::MachineApplicable,
+                        edits: vec![Edit { span: crate::diagnostics::Span { label: None, ..sp }, replacement: new.to_string() }],
+                    });
+                }
+                out.push(d.with_help(format!("`{}` was removed from `std::test`: use `{new}`", c.callee)));
+            }
             // Language intrinsics (`debug`, `todo`, ...) are provided by the compiler, not the program.
             Res::Unresolved(Reason::NotFound(_))
                 if c.kind == resolve::CallKind::Free
@@ -304,9 +321,22 @@ pub(super) fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<S
                     .map(|n| (crate::fuzzy_matcher::levenshtein_distance(&c.callee, n), n))
                     .filter(|(dist, _)| *dist <= (c.callee.len() / 3).clamp(1, 3))
                     .min_by_key(|(dist, n)| (*dist, (*n).clone()));
-                d = match best {
-                    Some((_, n)) => d.with_help(format!("a function with a similar name exists: `{n}`")),
-                    None => d.with_help("define it, or import it with `use`"),
+                // a removed `std::test` spelling: the canonical name is known exactly (shared with `wj fix`)
+                let removed = crate::stdlib_surface::removed_names::replacement(&c.callee);
+                d = match (removed, best) {
+                    (Some(new), _) => {
+                        let mut d = d.with_help(format!("`{}` was removed from `std::test`: use `{new}`", c.callee));
+                        if let Some(sp) = span_for(&c.location, &c.callee) {
+                            d = d.with_fix(Fix {
+                                description: format!("rename to `{new}`"),
+                                applicability: Applicability::MachineApplicable,
+                                edits: vec![Edit { span: crate::diagnostics::Span { label: None, ..sp }, replacement: new.to_string() }],
+                            });
+                        }
+                        d
+                    }
+                    (None, Some((_, n))) => d.with_help(format!("a function with a similar name exists: `{n}`")),
+                    (None, None) => d.with_help("define it, or import it with `use`"),
                 };
                 out.push(d);
             }

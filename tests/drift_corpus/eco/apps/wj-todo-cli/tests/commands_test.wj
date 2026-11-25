@@ -230,7 +230,7 @@ fn test_parse_edit_requires_title() {
     args.push("1")
     match parse_command(args) {
         Ok(_) => assert(false, "edit without title must fail"),
-        Err(msg) => assert_str_contains(msg, "edit"),
+        Err(msg) => assert_contains(msg, "edit"),
     }
 }
 

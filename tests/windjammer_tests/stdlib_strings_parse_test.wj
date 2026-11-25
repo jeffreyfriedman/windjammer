@@ -25,8 +25,8 @@ pub fn test_parse_i32_signed_and_trim() {
 }
 
 pub fn test_parse_f32_decimal() {
-    assert_approx(strings.parse_f32("3.14"), 3.14, 0.001)
-    assert_approx(strings.parse_f32("-2.5"), -2.5, 0.001)
+    assert_approx_eq(strings.parse_f32("3.14"), 3.14, 0.001)
+    assert_approx_eq(strings.parse_f32("-2.5"), -2.5, 0.001)
 }
 
 pub fn test_parse_bool() {

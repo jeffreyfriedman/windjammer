@@ -56,8 +56,8 @@ fn test_commands_require_authentication() {
     let out = h.receive(c, "{\"kind\":\"join\",\"room\":\"general\"}", 0)
     let mine = to_conn(out, c)
     assert_eq(mine.len(), 1)
-    assert_str_contains(mine[0], "\"kind\":\"error\"")
-    assert_str_contains(mine[0], "authenticate")
+    assert_contains(mine[0], "\"kind\":\"error\"")
+    assert_contains(mine[0], "authenticate")
 }
 
 @test
@@ -65,7 +65,7 @@ fn test_bad_token_is_rejected() {
     let mut h = hub()
     let c = h.connect(0)
     let out = h.receive(c, "{\"kind\":\"auth\",\"token\":\"nonsense\"}", 0)
-    assert_str_contains(to_conn(out, c)[0], "\"kind\":\"error\"")
+    assert_contains(to_conn(out, c)[0], "\"kind\":\"error\"")
 }
 
 @test
@@ -74,7 +74,7 @@ fn test_token_signed_with_another_secret_is_rejected() {
     let c = h.connect(0)
     let forged = token_with("some-other-secret-some-other-secret", "mallory")
     let out = h.receive(c, "{\"kind\":\"auth\",\"token\":\"${forged}\"}", 0)
-    assert_str_contains(to_conn(out, c)[0], "\"kind\":\"error\"")
+    assert_contains(to_conn(out, c)[0], "\"kind\":\"error\"")
 }
 
 @test
@@ -82,9 +82,9 @@ fn test_malformed_frames_get_an_error_not_a_crash() {
     let mut h = hub()
     let c = login(h, "ann")
     let out = h.receive(c, "not json", 0)
-    assert_str_contains(to_conn(out, c)[0], "invalid frame")
+    assert_contains(to_conn(out, c)[0], "invalid frame")
     let unknown = h.receive(c, "{\"kind\":\"dance\"}", 0)
-    assert_str_contains(to_conn(unknown, c)[0], "unknown")
+    assert_contains(to_conn(unknown, c)[0], "unknown")
 }
 
 @test
@@ -100,8 +100,8 @@ fn test_say_reaches_everyone_in_the_room_including_sender() {
     assert_eq(to_conn(out, ann).len(), 1)
     assert_eq(to_conn(out, bob).len(), 1)
     assert_eq(to_conn(out, cat).len(), 0)
-    assert_str_contains(to_conn(out, bob)[0], "\"from\":\"ann\"")
-    assert_str_contains(to_conn(out, bob)[0], "\"text\":\"hello\"")
+    assert_contains(to_conn(out, bob)[0], "\"from\":\"ann\"")
+    assert_contains(to_conn(out, bob)[0], "\"text\":\"hello\"")
 }
 
 @test
@@ -109,13 +109,13 @@ fn test_say_requires_membership_and_nonempty_bounded_text() {
     let mut h = hub()
     let ann = login(h, "ann")
     let outside = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"hi\"}", 1)
-    assert_str_contains(to_conn(outside, ann)[0], "not in room")
+    assert_contains(to_conn(outside, ann)[0], "not in room")
     h.receive(ann, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
     let empty = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"\"}", 1)
-    assert_str_contains(to_conn(empty, ann)[0], "\"kind\":\"error\"")
+    assert_contains(to_conn(empty, ann)[0], "\"kind\":\"error\"")
     let long_text = "x".repeat(3000)
     let big = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"${long_text}\"}", 1)
-    assert_str_contains(to_conn(big, ann)[0], "too long")
+    assert_contains(to_conn(big, ann)[0], "too long")
 }
 
 @test
@@ -127,12 +127,12 @@ fn test_join_announces_presence_to_the_room() {
     let out = h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 2)
     let to_ann = to_conn(out, ann)
     assert_eq(to_ann.len(), 1)
-    assert_str_contains(to_ann[0], "\"kind\":\"presence\"")
-    assert_str_contains(to_ann[0], "bob")
+    assert_contains(to_ann[0], "\"kind\":\"presence\"")
+    assert_contains(to_ann[0], "bob")
     // the joiner sees the full member list
     let to_bob = to_conn(out, bob)
-    assert_str_contains(to_bob[0], "ann")
-    assert_str_contains(to_bob[0], "bob")
+    assert_contains(to_bob[0], "ann")
+    assert_contains(to_bob[0], "bob")
 }
 
 @test
@@ -143,13 +143,13 @@ fn test_leave_and_disconnect_notify_remaining_members() {
     h.receive(ann, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
     h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
     let left = h.receive(bob, "{\"kind\":\"leave\",\"room\":\"general\"}", 2)
-    assert_str_contains(to_conn(left, ann)[0], "\"kind\":\"presence\"")
+    assert_contains(to_conn(left, ann)[0], "\"kind\":\"presence\"")
     // after leaving, bob no longer receives room traffic
     let out = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"anyone?\"}", 3)
     assert_eq(to_conn(out, bob).len(), 0)
     h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 4)
     let gone = h.disconnect(bob)
-    assert_str_contains(to_conn(gone, ann)[0], "\"kind\":\"presence\"")
+    assert_contains(to_conn(gone, ann)[0], "\"kind\":\"presence\"")
 }
 
 @test
@@ -160,10 +160,10 @@ fn test_direct_messages_reach_only_the_target() {
     let cat = login(h, "cat")
     let out = h.receive(ann, "{\"kind\":\"dm\",\"to\":\"bob\",\"text\":\"psst\"}", 1)
     assert_eq(to_conn(out, bob).len(), 1)
-    assert_str_contains(to_conn(out, bob)[0], "\"kind\":\"dm\"")
+    assert_contains(to_conn(out, bob)[0], "\"kind\":\"dm\"")
     assert_eq(to_conn(out, cat).len(), 0)
     // the sender gets a delivery receipt, not an error
-    assert_str_contains(to_conn(out, ann)[0], "\"kind\":\"ok\"")
+    assert_contains(to_conn(out, ann)[0], "\"kind\":\"ok\"")
 }
 
 @test
@@ -171,7 +171,7 @@ fn test_direct_message_to_offline_user_is_an_error() {
     let mut h = hub()
     let ann = login(h, "ann")
     let out = h.receive(ann, "{\"kind\":\"dm\",\"to\":\"ghost\",\"text\":\"hi\"}", 1)
-    assert_str_contains(to_conn(out, ann)[0], "offline")
+    assert_contains(to_conn(out, ann)[0], "offline")
 }
 
 @test
@@ -187,7 +187,7 @@ fn test_history_replays_recent_room_messages_in_order() {
     let out = h.receive(bob, "{\"kind\":\"history\",\"room\":\"general\",\"limit\":2}", 6)
     let mine = to_conn(out, bob)
     assert_eq(mine.len(), 1)
-    assert_str_contains(mine[0], "\"kind\":\"history\"")
+    assert_contains(mine[0], "\"kind\":\"history\"")
     assert(!mine[0].contains("one"), "limit keeps only the latest two")
     let two_at = mine[0].find("two").unwrap()
     let three_at = mine[0].find("three").unwrap()
@@ -225,14 +225,14 @@ fn test_rate_limit_blocks_floods_per_user() {
     h.receive(bob, "{\"kind\":\"join\",\"room\":\"r\"}", 1)
     let say = "{\"kind\":\"say\",\"room\":\"r\",\"text\":\"spam\"}"
     // join already used one slot for ann: two more messages fit, the third is refused
-    assert_str_contains(to_conn(h.receive(ann, say, 2), ann)[0], "\"kind\":\"message\"")
-    assert_str_contains(to_conn(h.receive(ann, say, 3), ann)[0], "\"kind\":\"message\"")
+    assert_contains(to_conn(h.receive(ann, say, 2), ann)[0], "\"kind\":\"message\"")
+    assert_contains(to_conn(h.receive(ann, say, 3), ann)[0], "\"kind\":\"message\"")
     let refused = h.receive(ann, say, 4)
-    assert_str_contains(to_conn(refused, ann)[0], "rate limit")
+    assert_contains(to_conn(refused, ann)[0], "rate limit")
     assert_eq(to_conn(refused, bob).len(), 0)
     // another user is unaffected, and the window reopens
-    assert_str_contains(to_conn(h.receive(bob, say, 5), bob)[0], "\"kind\":\"message\"")
-    assert_str_contains(to_conn(h.receive(ann, say, 20000), ann)[0], "\"kind\":\"message\"")
+    assert_contains(to_conn(h.receive(bob, say, 5), bob)[0], "\"kind\":\"message\"")
+    assert_contains(to_conn(h.receive(ann, say, 20000), ann)[0], "\"kind\":\"message\"")
 }
 
 @test
@@ -258,7 +258,7 @@ fn test_username_can_only_be_online_once_per_connection_replace() {
     h.receive(first, "{\"kind\":\"join\",\"room\":\"r\"}", 1)
     let second = h.connect(2)
     let out = h.receive(second, auth_frame("ann"), 2)
-    assert_str_contains(to_conn(out, first)[0], "signed in elsewhere")
+    assert_contains(to_conn(out, first)[0], "signed in elsewhere")
     let bob = login(h, "bob")
     let dm = h.receive(bob, "{\"kind\":\"dm\",\"to\":\"ann\",\"text\":\"hi\"}", 3)
     assert_eq(to_conn(dm, second).len(), 1)

@@ -22,16 +22,16 @@ fn sample_applied() -> Vec<int> {
 
 fn test_format_status_result_none_applied_all_pending() {
     let msg = format_status_result(Vec::new(), sample_pending())
-    assert_str_contains(msg, "applied: (none)")
-    assert_str_contains(msg, "pending:")
-    assert_str_contains(msg, "1")
-    assert_str_contains(msg, "2")
+    assert_contains(msg, "applied: (none)")
+    assert_contains(msg, "pending:")
+    assert_contains(msg, "1")
+    assert_contains(msg, "2")
 }
 
 fn test_format_status_result_all_applied() {
     let msg = format_status_result(sample_applied(), Vec::new())
-    assert_str_contains(msg, "pending: (none)")
-    assert_str_contains(msg, "1")
+    assert_contains(msg, "pending: (none)")
+    assert_contains(msg, "1")
 }
 
 fn test_status_version_helpers() {

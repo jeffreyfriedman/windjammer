@@ -8,7 +8,7 @@ fn test_health_returns_ok_json() {
     let mut app = WebhookApp::new("secret")
     let reply = app.handle("GET", "/health", "", "", "", "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "ok")
+    assert_contains(reply.body, "ok")
 }
 
 fn test_post_webhook_rejects_bad_token() {
@@ -23,11 +23,11 @@ fn test_post_webhook_accepts_token_and_lists_event() {
     let body = "{\"event\":\"ping\",\"id\":\"evt-1\"}"
     let reply = app.handle("POST", "/webhook", "", "secret", "", body)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "ping")
+    assert_contains(reply.body, "ping")
     let listed = app.handle("GET", "/events", "", "", "", "")
     assert_eq(listed.status, 200)
-    assert_str_contains(listed.body, "ping")
-    assert_str_contains(listed.body, "evt-1")
+    assert_contains(listed.body, "ping")
+    assert_contains(listed.body, "evt-1")
 }
 
 fn test_post_webhook_invalid_json_returns_400() {
@@ -42,7 +42,7 @@ fn test_post_webhook_accepts_hmac_signature() {
     let sig = signature_for("secret", "{\"event\":\"order.created\",\"id\":\"42\"}")
     let reply = app.handle("POST", "/webhook", "", "", sig, body)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "order.created")
+    assert_contains(reply.body, "order.created")
 }
 
 fn test_signature_for_matches_rfc_4231_case_2() {
@@ -110,8 +110,8 @@ fn test_security_headers_on_health() {
     let mut app = WebhookApp::new("secret")
     let reply = app.handle("GET", "/health", "", "", "", "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.extra_headers, "X-Frame-Options")
-    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
+    assert_contains(reply.extra_headers, "X-Frame-Options")
+    assert_contains(reply.extra_headers, "X-Content-Type-Options")
 }
 
 fn test_cors_preflight_allowed_origin() {
@@ -119,7 +119,7 @@ fn test_cors_preflight_allowed_origin() {
     let reply = app.handle("OPTIONS", "/webhook", "http://localhost:3000", "", "", "")
     assert_eq(reply.status, 204)
     assert_eq(reply.allow_origin, "http://localhost:3000")
-    assert_str_contains(reply.extra_headers, "X-Frame-Options")
+    assert_contains(reply.extra_headers, "X-Frame-Options")
 }
 
 fn test_cors_preflight_rejects_unknown_origin() {
@@ -133,7 +133,7 @@ fn test_post_webhook_rejects_empty_event() {
     let body = "{\"event\":\"\",\"id\":\"1\"}"
     let reply = app.handle("POST", "/webhook", "", "secret", "", body)
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "event")
+    assert_contains(reply.body, "event")
 }
 
 fn test_post_webhook_rejects_oversized_event() {
@@ -143,7 +143,7 @@ fn test_post_webhook_rejects_oversized_event() {
     let body = "{\"event\":\"this-is-way-too-long\",\"id\":\"1\"}"
     let reply = app.handle("POST", "/webhook", "", "secret", "", body)
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "event")
+    assert_contains(reply.body, "event")
 }
 
 fn config_with_cors() -> WebhookConfig {

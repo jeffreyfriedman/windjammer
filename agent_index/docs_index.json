@@ -10524,7 +10524,18 @@
     "name": "assert",
     "signature": "fn assert(condition: bool)",
     "source": "std/test/mod.wj",
-    "summary": "Windjammer Testing Framework Standard library for writing tests in pure Windjammer Assertion functions / Assert that a condition is true",
+    "summary": "Windjammer Testing Framework Standard library for writing tests in pure Windjammer `std::test` is the one assertion module. `assert`, `assert_eq` and `assert_ne",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
+    "name": "assert_approx_eq",
+    "signature": "fn assert_approx_eq<T: Float>(left: T, right: T, epsilon: T)",
+    "source": "std/test/mod.wj",
+    "summary": "/ Assert that two floats (both f32 or both f64) differ by at most epsilon; a NaN never passes",
     "tags": [
       "fn"
     ]
@@ -10535,7 +10546,7 @@
     "name": "assert_contains",
     "signature": "fn assert_contains(string: string, substring: string)",
     "source": "std/test/mod.wj",
-    "summary": "/ Assert that a string contains a substring",
+    "summary": "/ Assert that a string contains a substring (a list also works: `assert_contains(xs, x)`)",
     "tags": [
       "fn"
     ]
@@ -10576,10 +10587,10 @@
   {
     "kind": "stdlib",
     "module": "std::test::mod",
-    "name": "assert_gt",
-    "signature": "fn assert_gt<T>(actual: T, expected: T)",
+    "name": "assert_err",
+    "signature": "fn assert_err<T: Debug, E>(value: Result<T, E>) -> E",
     "source": "std/test/mod.wj",
-    "summary": "/ Assert that actual > expected",
+    "summary": "/ Assert that a Result is Err and return the error",
     "tags": [
       "fn"
     ]
@@ -10587,10 +10598,43 @@
   {
     "kind": "stdlib",
     "module": "std::test::mod",
-    "name": "assert_gte",
-    "signature": "fn assert_gte<T>(actual: T, expected: T)",
+    "name": "assert_ge",
+    "signature": "fn assert_ge<T: PartialOrd + Debug>(left: T, right: T)",
     "source": "std/test/mod.wj",
-    "summary": "/ Assert that actual >= expected",
+    "summary": "/ Assert that left >= right",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
+    "name": "assert_gt",
+    "signature": "fn assert_gt<T: PartialOrd + Debug>(left: T, right: T)",
+    "source": "std/test/mod.wj",
+    "summary": "/ Assert that left > right",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
+    "name": "assert_in_range",
+    "signature": "fn assert_in_range<T: PartialOrd + Debug>(value: T, min: T, max: T)",
+    "source": "std/test/mod.wj",
+    "summary": "/ Assert that a value is within an inclusive range",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
+    "name": "assert_le",
+    "signature": "fn assert_le<T: PartialOrd + Debug>(left: T, right: T)",
+    "source": "std/test/mod.wj",
+    "summary": "/ Assert that left <= right",
     "tags": [
       "fn"
     ]
@@ -10610,31 +10654,9 @@
     "kind": "stdlib",
     "module": "std::test::mod",
     "name": "assert_lt",
-    "signature": "fn assert_lt<T>(actual: T, expected: T)",
+    "signature": "fn assert_lt<T: PartialOrd + Debug>(left: T, right: T)",
     "source": "std/test/mod.wj",
-    "summary": "/ Assert that actual < expected",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::test::mod",
-    "name": "assert_lte",
-    "signature": "fn assert_lte<T>(actual: T, expected: T)",
-    "source": "std/test/mod.wj",
-    "summary": "/ Assert that actual <= expected",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::test::mod",
-    "name": "assert_msg",
-    "signature": "fn assert_msg(condition: bool, message: string)",
-    "source": "std/test/mod.wj",
-    "summary": "/ Assert that a condition is true with a custom message",
+    "summary": "/ Assert that left < right",
     "tags": [
       "fn"
     ]
@@ -10653,6 +10675,17 @@
   {
     "kind": "stdlib",
     "module": "std::test::mod",
+    "name": "assert_none",
+    "signature": "fn assert_none<T: Debug>(value: T?)",
+    "source": "std/test/mod.wj",
+    "summary": "/ Assert that an Option is None",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
     "name": "assert_not_empty",
     "signature": "fn assert_not_empty<T>(collection: Vec<T>)",
     "source": "std/test/mod.wj",
@@ -10664,10 +10697,43 @@
   {
     "kind": "stdlib",
     "module": "std::test::mod",
+    "name": "assert_ok",
+    "signature": "fn assert_ok<T, E: Debug>(value: Result<T, E>) -> T",
+    "source": "std/test/mod.wj",
+    "summary": "/ Assert that a Result is Ok and return the value",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
+    "name": "assert_some",
+    "signature": "fn assert_some<T>(value: T?) -> T",
+    "source": "std/test/mod.wj",
+    "summary": "/ Assert that an Option is Some and return the value",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
     "name": "assert_starts_with",
     "signature": "fn assert_starts_with(string: string, prefix: string)",
     "source": "std/test/mod.wj",
     "summary": "/ Assert that a string starts with a prefix",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::test::mod",
+    "name": "fail",
+    "signature": "fn fail(message: string)",
+    "source": "std/test/mod.wj",
+    "summary": "/ Explicitly fail a test",
     "tags": [
       "fn"
     ]
@@ -10690,160 +10756,6 @@
     "signature": "fn hello() -> string",
     "source": "std/test_simple.wj",
     "summary": "Minimal test module",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert",
-    "signature": "fn assert(condition: bool)",
-    "source": "std/testing.wj",
-    "summary": "std/testing - Testing utilities and assertions Simple testing framework for Windjammer Assert that a condition is true",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_approx_eq",
-    "signature": "fn assert_approx_eq(left: float, right: float, epsilon: float)",
-    "source": "std/testing.wj",
-    "summary": "Assert that two floats are approximately equal",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_eq",
-    "signature": "fn assert_eq<T: PartialEq + Debug>(left: T, right: T)",
-    "source": "std/testing.wj",
-    "summary": "Assert equality",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_err",
-    "signature": "fn assert_err<T, E>(value: Result<T, E>) -> E",
-    "source": "std/testing.wj",
-    "summary": "Assert that value is Err",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_ge",
-    "signature": "fn assert_ge<T: PartialOrd + Debug>(left: T, right: T)",
-    "source": "std/testing.wj",
-    "summary": "Assert that a value is greater than or equal to another",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_gt",
-    "signature": "fn assert_gt<T: PartialOrd + Debug>(left: T, right: T)",
-    "source": "std/testing.wj",
-    "summary": "Assert that a value is greater than another",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_le",
-    "signature": "fn assert_le<T: PartialOrd + Debug>(left: T, right: T)",
-    "source": "std/testing.wj",
-    "summary": "Assert that a value is less than or equal to another",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_lt",
-    "signature": "fn assert_lt<T: PartialOrd + Debug>(left: T, right: T)",
-    "source": "std/testing.wj",
-    "summary": "Assert that a value is less than another",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_ne",
-    "signature": "fn assert_ne<T: PartialEq + Debug>(left: T, right: T)",
-    "source": "std/testing.wj",
-    "summary": "Assert inequality",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_none",
-    "signature": "fn assert_none<T>(value: Option<T>)",
-    "source": "std/testing.wj",
-    "summary": "Assert that value is None",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_ok",
-    "signature": "fn assert_ok<T, E: Debug>(value: Result<T, E>) -> T",
-    "source": "std/testing.wj",
-    "summary": "Assert that value is Ok",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_some",
-    "signature": "fn assert_some<T>(value: Option<T>) -> T",
-    "source": "std/testing.wj",
-    "summary": "Assert that value is Some",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "assert_with_message",
-    "signature": "fn assert_with_message(condition: bool, message: string)",
-    "source": "std/testing.wj",
-    "summary": "Assert with custom message",
-    "tags": [
-      "fn"
-    ]
-  },
-  {
-    "kind": "stdlib",
-    "module": "std::testing",
-    "name": "fail",
-    "signature": "fn fail(message: string)",
-    "source": "std/testing.wj",
-    "summary": "Explicitly fail a test",
     "tags": [
       "fn"
     ]

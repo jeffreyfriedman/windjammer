@@ -34,41 +34,6 @@ pub fn register(r: &mut Registry) {
     // language intrinsics (`crate::intrinsics::Intrinsic`), evaluated in `interpreter/intrinsics.rs`.
     r.func("format", |it, a| Ok(Value::str(it.format_args(&a)?)));
 
-    // ----- std::test assertions -----
-    fn cmp_assert(it: &mut Interpreter, a: &[Value], name: &str, ok: fn(std::cmp::Ordering) -> bool) -> R {
-        let (x, y) = (arg(a, 0, name)?, arg(a, 1, name)?);
-        if ok(x.structural_cmp(&y)) {
-            return Ok(Value::Unit);
-        }
-        let (l, rr) = (it.debug_string(&x)?, it.debug_string(&y)?);
-        let extra = if a.len() > 2 { format!(": {}", it.format_args(&a[2..])?) } else { String::new() };
-        Err(panic_ctl(format!("{} failed{}\n  left: {}\n right: {}", name, extra, l, rr)))
-    }
-    r.func("assert_gt", |it, a| cmp_assert(it, &a, "assert_gt", |o| o == std::cmp::Ordering::Greater));
-    r.func("assert_lt", |it, a| cmp_assert(it, &a, "assert_lt", |o| o == std::cmp::Ordering::Less));
-    r.func("assert_gte", |it, a| cmp_assert(it, &a, "assert_gte", |o| o != std::cmp::Ordering::Less));
-    r.func("assert_lte", |it, a| cmp_assert(it, &a, "assert_lte", |o| o != std::cmp::Ordering::Greater));
-    r.func("assert_true", |_, a| {
-        if matches!(arg(&a, 0, "assert_true")?, Value::Bool(true)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_true failed")) }
-    });
-    r.func("assert_false", |_, a| {
-        if matches!(arg(&a, 0, "assert_false")?, Value::Bool(false)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_false failed")) }
-    });
-    r.func("assert_empty", |it, a| {
-        if it.to_items(arg(&a, 0, "assert_empty")?)?.is_empty() { Ok(Value::Unit) } else { Err(panic_ctl("assert_empty failed")) }
-    });
-    r.func("assert_not_empty", |it, a| {
-        if !it.to_items(arg(&a, 0, "assert_not_empty")?)?.is_empty() { Ok(Value::Unit) } else { Err(panic_ctl("assert_not_empty failed")) }
-    });
-    r.func("assert_in_range", |_, a| {
-        let (x, lo, hi) = (arg(&a, 0, "assert_in_range")?, arg(&a, 1, "assert_in_range")?, arg(&a, 2, "assert_in_range")?);
-        if x.structural_cmp(&lo) != std::cmp::Ordering::Less && x.structural_cmp(&hi) != std::cmp::Ordering::Greater {
-            Ok(Value::Unit)
-        } else {
-            Err(panic_ctl("assert_in_range failed"))
-        }
-    });
-
     // ----- constructors -----
     r.func("Some", |_, a| Ok(Value::some(arg(&a, 0, "Some")?)));
     r.func("Ok", |_, a| Ok(Value::ok(a.first().cloned().map(super::super::place::deref_value).transpose()?.unwrap_or(Value::Unit))));

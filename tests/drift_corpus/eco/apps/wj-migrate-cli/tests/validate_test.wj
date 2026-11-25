@@ -28,7 +28,7 @@ fn test_run_validate_rejects_duplicate_version() {
     }
     match run_validate(root) {
         Ok(_) => assert(false, "duplicate versions must fail"),
-        Err(msg) => assert_str_contains(msg, "duplicate"),
+        Err(msg) => assert_contains(msg, "duplicate"),
     }
     teardown_dir("/tmp/wj-migrate-cli-validate-dup")
 }

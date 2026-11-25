@@ -10,7 +10,7 @@ fn test_health_returns_ok() {
     let mut app = ProxyApp::new(default_config())
     let reply = app.handle_local("GET", "/health", "", "", "", 0)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "ok")
+    assert_contains(reply.body, "ok")
 }
 
 fn test_logs_endpoint_lists_entries() {
@@ -19,8 +19,8 @@ fn test_logs_endpoint_lists_entries() {
     let _ = app.complete_proxy("GET", "/v1/ping", "client-a", forward, 1000)
     let listed = app.handle_local("GET", "/logs", "", "", "", 1001)
     assert_eq(listed.status, 200)
-    assert_str_contains(listed.body, "/v1/ping")
-    assert_str_contains(listed.body, "client-a")
+    assert_contains(listed.body, "/v1/ping")
+    assert_contains(listed.body, "client-a")
 }
 
 fn test_proxy_forwards_upstream_status_and_body() {
@@ -43,17 +43,17 @@ fn test_rate_limit_blocks_after_quota() {
     assert_eq(r2.status, 200)
     let r3 = app.complete_proxy("GET", "/v1/c", "client-c", forward, 0)
     assert_eq(r3.status, 429)
-    assert_str_contains(r3.body, "rate limit")
-    assert_str_contains(r3.extra_headers, "Retry-After")
-    assert_str_contains(r3.extra_headers, "X-RateLimit-Limit")
+    assert_contains(r3.body, "rate limit")
+    assert_contains(r3.extra_headers, "Retry-After")
+    assert_contains(r3.extra_headers, "X-RateLimit-Limit")
 }
 
 fn test_security_headers_on_health() {
     let mut app = ProxyApp::new(default_config())
     let reply = app.handle_local("GET", "/health", "", "", "", 0)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.extra_headers, "X-Frame-Options")
-    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
+    assert_contains(reply.extra_headers, "X-Frame-Options")
+    assert_contains(reply.extra_headers, "X-Content-Type-Options")
 }
 
 fn test_security_headers_on_proxy_success() {
@@ -61,7 +61,7 @@ fn test_security_headers_on_proxy_success() {
     let forward = ForwardResult { status: 200, body: "ok" }
     let reply = app.complete_proxy("GET", "/v1/x", "client-d", forward, 5000)
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.extra_headers, "X-Frame-Options")
+    assert_contains(reply.extra_headers, "X-Frame-Options")
 }
 
 fn test_unknown_path_returns_404() {
@@ -88,10 +88,10 @@ fn test_delete_logs_clears_entries() {
     let _ = app.complete_proxy("GET", "/v1/a", "client-z", forward, 1000)
     let cleared = app.handle_local("DELETE", "/logs", "", "", "", 1001)
     assert_eq(cleared.status, 200)
-    assert_str_contains(cleared.body, "cleared")
+    assert_contains(cleared.body, "cleared")
     let listed = app.handle_local("GET", "/logs", "", "", "", 1002)
     assert_eq(listed.status, 200)
-    assert_str_contains(listed.body, "[]")
+    assert_contains(listed.body, "[]")
 }
 
 fn test_delete_logs_returns_cleared_count() {
@@ -100,7 +100,7 @@ fn test_delete_logs_returns_cleared_count() {
     let _ = app.complete_proxy("GET", "/v1/x", "c1", forward, 0)
     let _ = app.complete_proxy("GET", "/v1/y", "c2", forward, 1)
     let reply = app.handle_local("DELETE", "/logs", "", "", "", 2)
-    assert_str_contains(reply.body, "\"cleared\":2")
+    assert_contains(reply.body, "\"cleared\":2")
 }
 
 fn test_log_max_trims_oldest_entries() {
@@ -113,8 +113,8 @@ fn test_log_max_trims_oldest_entries() {
     let _ = app.complete_proxy("GET", "/v1/c", "c3", forward, 2)
     let listed = app.handle_local("GET", "/logs", "", "", "", 3)
     assert_eq(listed.status, 200)
-    assert_str_contains(listed.body, "/v1/b")
-    assert_str_contains(listed.body, "/v1/c")
+    assert_contains(listed.body, "/v1/b")
+    assert_contains(listed.body, "/v1/c")
     assert(!strings.contains(listed.body, "/v1/a"), "oldest entry should be trimmed")
 }
 
@@ -151,8 +151,8 @@ fn test_put_proxy_records_method_in_logs() {
     assert_eq(reply.status, 201)
     assert_eq(reply.body, "created")
     let listed = app.handle_local("GET", "/logs", "", "", "", 3001)
-    assert_str_contains(listed.body, "PUT")
-    assert_str_contains(listed.body, "/v1/item")
+    assert_contains(listed.body, "PUT")
+    assert_contains(listed.body, "/v1/item")
 }
 
 fn test_delete_proxy_records_method_in_logs() {
@@ -161,8 +161,8 @@ fn test_delete_proxy_records_method_in_logs() {
     let reply = app.complete_proxy("DELETE", "/v1/item", "client-del", forward, 4000)
     assert_eq(reply.status, 204)
     let listed = app.handle_local("GET", "/logs", "", "", "", 4001)
-    assert_str_contains(listed.body, "DELETE")
-    assert_str_contains(listed.body, "/v1/item")
+    assert_contains(listed.body, "DELETE")
+    assert_contains(listed.body, "/v1/item")
 }
 
 fn test_log_max_zero_keeps_all_entries() {
@@ -174,9 +174,9 @@ fn test_log_max_zero_keeps_all_entries() {
     let _ = app.complete_proxy("GET", "/v1/b", "c2", forward, 1)
     let _ = app.complete_proxy("GET", "/v1/c", "c3", forward, 2)
     let listed = app.handle_local("GET", "/logs", "", "", "", 3)
-    assert_str_contains(listed.body, "/v1/a")
-    assert_str_contains(listed.body, "/v1/b")
-    assert_str_contains(listed.body, "/v1/c")
+    assert_contains(listed.body, "/v1/a")
+    assert_contains(listed.body, "/v1/b")
+    assert_contains(listed.body, "/v1/c")
 }
 
 fn default_config() -> ProxyConfig {

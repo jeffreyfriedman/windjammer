@@ -16,5 +16,5 @@ impl Grid {
 
 pub fn test_diagonal_multiplier_matches_f32_context() {
     let g = Grid { cells: vec![10.0] }
-    assert_approx(g.diagonal_cost(0, 0) as f64, 14.14, 0.02)
+    assert_approx_eq(g.diagonal_cost(0, 0) as f64, 14.14, 0.02)
 }

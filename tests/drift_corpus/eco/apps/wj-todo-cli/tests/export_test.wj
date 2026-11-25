@@ -22,9 +22,9 @@ fn test_todos_to_json_includes_fields() {
     })
     match todos_to_json(todos) {
         Ok(text) => {
-            assert_str_contains(text, "task")
-            assert_str_contains(text, "id")
-            assert_str_contains(text, "[")
+            assert_contains(text, "task")
+            assert_contains(text, "id")
+            assert_contains(text, "[")
         },
         Err(_) => assert(false, "json encode"),
     }
@@ -84,6 +84,6 @@ fn test_todos_from_json_roundtrip() {
 fn test_todos_from_json_rejects_non_array() {
     match todos_from_json("{}") {
         Ok(_) => assert(false, "object must fail"),
-        Err(msg) => assert_str_contains(msg, "array"),
+        Err(msg) => assert_contains(msg, "array"),
     }
 }

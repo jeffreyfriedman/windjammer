@@ -1,4 +1,4 @@
-//! `std::yaml`, `std::compress`, `std::jwt`, password hashing, `std::testing` assertions,
+//! `std::yaml`, `std::compress`, `std::jwt`, password hashing,
 //! `std::async` sleeps and `std::sync` shared ints. Same crates and semantics as `windjammer-runtime`.
 
 use super::*;
@@ -215,89 +215,6 @@ pub fn register(r: &mut Registry) {
     });
     let _ = opt_str;
 
-    // std::testing
-    r.func("testing::assert", |_, a| {
-        if matches!(arg(&a, 0, "assert")?, Value::Bool(true)) {
-            Ok(Value::Unit)
-        } else {
-            Err(panic_ctl("Assertion failed"))
-        }
-    });
-    r.func("testing::assert_with_message", |it, a| {
-        if matches!(arg(&a, 0, "assert_with_message")?, Value::Bool(true)) {
-            Ok(Value::Unit)
-        } else {
-            Err(panic_ctl(it.display_string(&arg(&a, 1, "assert_with_message")?)?))
-        }
-    });
-    r.func("testing::fail", |it, a| Err(panic_ctl(it.display_string(&arg(&a, 0, "fail")?)?)));
-    r.func("testing::assert_approx_eq", |it, a| {
-        let (l, rr, e) = (arg_f64(&a, 0, "assert_approx_eq")?, arg_f64(&a, 1, "assert_approx_eq")?, arg_f64(&a, 2, "assert_approx_eq")?);
-        let d = if l > rr { l - rr } else { rr - l };
-        if d > e {
-            let (fl, fr, fe) = (
-                it.display_string(&Value::float(l))?,
-                it.display_string(&Value::float(rr))?,
-                it.display_string(&Value::float(e))?,
-            );
-            return Err(panic_ctl(format!("Assertion failed: {fl} not approximately equal to {fr} (epsilon: {fe})")));
-        }
-        Ok(Value::Unit)
-    });
-
-    r.func("testing::assert_some", |it, a| match arg(&a, 0, "assert_some")?.as_option() {
-        Some(Some(v)) => Ok(v.clone()),
-        _ => {
-            let _ = it;
-            Err(panic_ctl("Expected Some, got None"))
-        }
-    });
-    r.func("testing::assert_none", |it, a| {
-        let v = arg(&a, 0, "assert_none")?;
-        match v.as_option() {
-            Some(None) => Ok(Value::Unit),
-            _ => Err(panic_ctl(format!("Expected None, got {}", it.debug_string(&v)?))),
-        }
-    });
-    r.func("testing::assert_ok", |it, a| {
-        let v = arg(&a, 0, "assert_ok")?;
-        match &v {
-            Value::Enum(e) if &*e.ty == "Result" => match (&e.payload, e.idx) {
-                (Payload::Tuple(p), 0) => Ok(p[0].clone()),
-                (Payload::Tuple(p), _) => Err(panic_ctl(format!("Expected Ok, got Err({})", it.debug_string(&p[0])?))),
-                _ => Err(semantic("malformed Result")),
-            },
-            _ => Err(semantic("assert_ok needs a Result")),
-        }
-    });
-    r.func("testing::assert_err", |_, a| {
-        let v = arg(&a, 0, "assert_err")?;
-        match &v {
-            Value::Enum(e) if &*e.ty == "Result" => match (&e.payload, e.idx) {
-                (Payload::Tuple(p), 1) => Ok(p[0].clone()),
-                _ => Err(panic_ctl("Expected Err, got Ok")),
-            },
-            _ => Err(semantic("assert_err needs a Result")),
-        }
-    });
-    macro_rules! cmp_assert {
-        ($path:literal, $ok:expr, $op:literal) => {
-            r.func($path, |it, a| {
-                let (l, rr) = (arg(&a, 0, $path)?, arg(&a, 1, $path)?);
-                let ord = l.structural_cmp(&rr);
-                if $ok(ord) {
-                    Ok(Value::Unit)
-                } else {
-                    Err(panic_ctl(format!("Assertion failed: {} {} {}", it.debug_string(&l)?, $op, it.debug_string(&rr)?)))
-                }
-            });
-        };
-    }
-    use std::cmp::Ordering as O;
-    cmp_assert!("testing::assert_gt", |o| o == O::Greater, ">");
-    cmp_assert!("testing::assert_lt", |o| o == O::Less, "<");
-    cmp_assert!("testing::assert_ge", |o| o != O::Less, ">=");
-    cmp_assert!("testing::assert_le", |o| o != O::Greater, "<=");
     r.func("cli::args", |it, _| {
         let mut v = vec![Value::str("wj-interpreted")];
         v.extend(it.args.iter().cloned().map(Value::str));

@@ -22,8 +22,8 @@ fn test_basic_assertions() {
     assert_ne(x, y);
     assert_gt(x, y);
     assert_lt(y, x);
-    assert_gte(x, 10);
-    assert_lte(y, 5);
+    assert_ge(x, 10);
+    assert_le(y, 5);
 }
 
 @test
@@ -279,12 +279,12 @@ fn test_player_damage(damage: int, expected_health: int) {
 @test
 fn test_player_movement() {
     let mut player = Player::new();
-    assert_approx(player.position_x, 0.0, 0.001);
-    assert_approx(player.position_y, 0.0, 0.001);
+    assert_approx_eq(player.position_x, 0.0, 0.001);
+    assert_approx_eq(player.position_y, 0.0, 0.001);
     
     player.move_to(10.5, 20.3);
-    assert_approx(player.position_x, 10.5, 0.001);
-    assert_approx(player.position_y, 20.3, 0.001);
+    assert_approx_eq(player.position_x, 10.5, 0.001);
+    assert_approx_eq(player.position_y, 20.3, 0.001);
 }
 
 @test
@@ -313,7 +313,7 @@ fn test_player_death() {
 // Summary: This file demonstrates:
 // ============================================================================
 // ✅ Basic assertions (assert_eq, assert_gt, etc.)
-// ✅ Advanced assertions (assert_contains, assert_approx, etc.)
+// ✅ Advanced assertions (assert_contains, assert_approx_eq, etc.)
 // ✅ Parameterized tests (@test_cases)
 // ✅ Property-based testing (manual property checks)
 // ✅ Design-by-contract (requires, ensures, invariant)

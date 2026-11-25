@@ -8,6 +8,6 @@ fn sign(x: int) -> string {
 }
 
 pub fn test_sign_labels() {
-    assert_str_contains(sign(3), "positive")
-    assert_str_contains(sign(-1), "negative")
+    assert_contains(sign(3), "positive")
+    assert_contains(sign(-1), "negative")
 }

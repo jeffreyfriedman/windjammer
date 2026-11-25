@@ -154,7 +154,7 @@ digraph deps {
   "check" -> "codegen" [label="2"];
   "check" -> "compiler_config" [label="3"];
   "check" -> "debug_env" [label="29"];
-  "check" -> "diagnostics" [label="40"];
+  "check" -> "diagnostics" [label="42"];
   "check" -> "embedded_assets" [label="4"];
   "check" -> "fuzzy_matcher" [label="5"];
   "check" -> "intrinsics" [label="2"];
@@ -169,7 +169,7 @@ digraph deps {
   "check" -> "program_analysis" [label="12"];
   "check" -> "resolve" [label="5"];
   "check" -> "source_map" [label="7"];
-  "check" -> "stdlib_surface" [label="4"];
+  "check" -> "stdlib_surface" [label="9"];
   "check" -> "test_module_gate" [label="1"];
   "check" -> "type_classification" [label="18"];
   "check" -> "typing" [label="7"];
@@ -202,6 +202,7 @@ digraph deps {
   "cli" -> "parser" [label="9"];
   "cli" -> "reduce" [label="1"];
   "cli" -> "source_map" [label="6"];
+  "cli" -> "stdlib_surface" [label="1"];
   "cli" -> "test_runner" [label="1"];
   "cli" -> "toolchain" [label="3"];
   "cli" -> "wjsl" [label="1"];
@@ -364,7 +365,7 @@ digraph deps {
   "interpreter" -> "package" [label="4"];
   "interpreter" -> "parser" [label="145"];
   "interpreter" -> "resolve" [label="15"];
-  "interpreter" -> "source_map" [label="18"];
+  "interpreter" -> "source_map" [label="20"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_classification" [label="1"];

@@ -8,8 +8,8 @@ fn test_post_webhook_emits_to_event_bus() {
 
     let drained = app.handle("GET", "/bus/drain", "", "", "", "")
     assert_eq(drained.status, 200)
-    assert_str_contains(drained.body, "order.created")
-    assert_str_contains(drained.body, "99")
+    assert_contains(drained.body, "order.created")
+    assert_contains(drained.body, "99")
 }
 
 fn test_bus_drain_is_empty_after_first_drain() {
@@ -19,5 +19,5 @@ fn test_bus_drain_is_empty_after_first_drain() {
     app.handle("GET", "/bus/drain", "", "", "", "")
     let again = app.handle("GET", "/bus/drain", "", "", "", "")
     assert_eq(again.status, 200)
-    assert_str_contains(again.body, "[]")
+    assert_contains(again.body, "[]")
 }

@@ -73,10 +73,6 @@
       "path": "std/path.wj"
     },
     {
-      "module": "testing",
-      "path": "std/testing.wj"
-    },
-    {
       "module": "async",
       "path": "std/async.wj"
     },

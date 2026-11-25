@@ -23,7 +23,7 @@ Ownership, clones, integer widths (IR solver), how a backend prints a call.
 None (layer `support`).
 
 ## Entry points
-`enumerable::lookup`, `enumerable::METHODS`. `lowering::LoweringTable::from_declarations`, `LoweringTable::row`, `Row::select` (the first rule whose guards hold). `std_functions::exists(module, name)`: the functions each std module provides in some engine (generated table `std_functions_table.rs`, gate tests/std_functions_surface_test.rs), used by `check::std_calls` (WJ0002 for `strings.index_of`).
+`enumerable::lookup`, `enumerable::METHODS`. `lowering::LoweringTable::from_declarations`, `LoweringTable::row`, `Row::select` (the first rule whose guards hold). `std_functions::exists(module, name)`: the functions each std module provides in some engine (generated table `std_functions_table.rs`, gate tests/std_functions_surface_test.rs), used by `check::std_calls` (WJ0002 for `strings.index_of`). `removed_names::{replacement, fix}`: the removed `std::test` spellings and the one canonical name of each (and `(range).reversed()` -> `.rev()`), the single table behind `wj fix` and the machine-applicable fixes of `wj check --fix`.
 
 ## Tests
-Unit tests in `enumerable.rs`; `tests/enumerable_surface_test.rs`; `tests/std_lowering_table_test.rs` (G1, G4-G6, G8), `tests/std_row_examples_test.rs` (G3), `tests/portable_emit_golden_test.rs` (G2); conformance programs `tests/conformance_programs/16x_coll_*.wj`.
+Unit tests in `enumerable.rs`; `tests/enumerable_surface_test.rs`; `tests/std_test_module_test.rs` (the `std::test` set in both modes, the renames); `tests/std_lowering_table_test.rs` (G1, G4-G6, G8), `tests/std_row_examples_test.rs` (G3), `tests/portable_emit_golden_test.rs` (G2); conformance programs `tests/conformance_programs/16x_coll_*.wj`.

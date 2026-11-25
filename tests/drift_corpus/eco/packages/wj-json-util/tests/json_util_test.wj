@@ -20,8 +20,8 @@ use std::strings
 
 fn test_pretty_indents_valid_json() {
     let out = pretty("{\"a\":1}")
-    assert_str_contains(out, "\n")
-    assert_str_contains(out, "\"a\"")
+    assert_contains(out, "\n")
+    assert_contains(out, "\"a\"")
 }
 
 fn test_pretty_returns_raw_when_invalid() {
@@ -70,9 +70,9 @@ fn test_path_get_str_none_for_non_string() {
 fn test_merge_overlays_object_keys_shallow() {
     match merge("{\"a\":1,\"b\":2}", "{\"b\":9,\"c\":3}") {
         Ok(out) => {
-            assert_str_contains(out, "\"a\":1")
-            assert_str_contains(out, "\"b\":9")
-            assert_str_contains(out, "\"c\":3")
+            assert_contains(out, "\"a\":1")
+            assert_contains(out, "\"b\":9")
+            assert_contains(out, "\"c\":3")
         },
         Err(_) => assert(false, "merge shallow failed"),
     }
@@ -81,8 +81,8 @@ fn test_merge_overlays_object_keys_shallow() {
 fn test_merge_deep_merges_nested_objects() {
     match merge("{\"user\":{\"name\":\"Ada\",\"age\":1}}", "{\"user\":{\"age\":2}}") {
         Ok(out) => {
-            assert_str_contains(out, "\"name\":\"Ada\"")
-            assert_str_contains(out, "\"age\":2")
+            assert_contains(out, "\"name\":\"Ada\"")
+            assert_contains(out, "\"age\":2")
         },
         Err(_) => assert(false, "merge deep failed"),
     }
@@ -98,8 +98,8 @@ fn test_merge_errors_when_not_objects() {
 fn test_path_set_updates_existing_leaf() {
     match path_set("{\"a\":1,\"b\":2}", "b", "9") {
         Ok(out) => {
-            assert_str_contains(out, "\"a\":1")
-            assert_str_contains(out, "\"b\":9")
+            assert_contains(out, "\"a\":1")
+            assert_contains(out, "\"b\":9")
         },
         Err(_) => assert(false, "path_set existing leaf"),
     }
@@ -161,7 +161,7 @@ fn test_is_valid() {
 fn test_compact_minifies() {
     let out = compact("{\n  \"a\": 1\n}")
     assert(!strings.contains(out, "\n"), "no newlines")
-    assert_str_contains(out, "\"a\"")
+    assert_contains(out, "\"a\"")
 }
 
 fn test_path_exists() {

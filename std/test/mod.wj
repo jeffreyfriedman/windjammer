@@ -1,5 +1,9 @@
 // Windjammer Testing Framework
 // Standard library for writing tests in pure Windjammer
+//
+// `std::test` is the one assertion module. `assert`, `assert_eq` and `assert_ne` are intrinsics
+// (`assert(cond, "why")`, `assert_eq(a, b, "why")`); everything else is declared here.
+// Every assertion panics with the same message when interpreted and when compiled.
 
 // Assertion functions
 
@@ -10,94 +14,138 @@ pub fn assert(condition: bool) {
     }
 }
 
-/// Assert that a condition is true with a custom message
-pub fn assert_msg(condition: bool, message: string) {
-    if !condition {
-        panic("Assertion failed: " + message)
-    }
-}
-
 /// Assert that two values are equal
 pub fn assert_eq<T>(actual: T, expected: T) {
     if actual != expected {
-        panic("Assertion failed: expected " + format!("{}", expected) + ", got " + format!("{}", actual))
+        panic("Assertion failed: ${actual:?} != ${expected:?}")
     }
 }
 
 /// Assert that two values are not equal
 pub fn assert_ne<T>(actual: T, expected: T) {
     if actual == expected {
-        panic("Assertion failed: values should not be equal: " + format!("{}", actual))
+        panic("Assertion failed: ${actual:?} == ${expected:?}")
     }
 }
 
-/// Assert that actual > expected
-pub fn assert_gt<T>(actual: T, expected: T) {
-    if actual <= expected {
-        panic("Assertion failed: " + format!("{}", actual) + " is not greater than " + format!("{}", expected))
+/// Explicitly fail a test
+pub fn fail(message: string) {
+    panic("Test failed: ${message}")
+}
+
+/// Assert that left > right
+pub fn assert_gt<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left > right) {
+        panic("assertion failed: left > right\n  left: ${left:?}\n right: ${right:?}")
     }
 }
 
-/// Assert that actual < expected
-pub fn assert_lt<T>(actual: T, expected: T) {
-    if actual >= expected {
-        panic("Assertion failed: " + format!("{}", actual) + " is not less than " + format!("{}", expected))
+/// Assert that left < right
+pub fn assert_lt<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left < right) {
+        panic("assertion failed: left < right\n  left: ${left:?}\n right: ${right:?}")
     }
 }
 
-/// Assert that actual >= expected
-pub fn assert_gte<T>(actual: T, expected: T) {
-    if actual < expected {
-        panic("Assertion failed: " + format!("{}", actual) + " is not greater than or equal to " + format!("{}", expected))
+/// Assert that left >= right
+pub fn assert_ge<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left >= right) {
+        panic("assertion failed: left >= right\n  left: ${left:?}\n right: ${right:?}")
     }
 }
 
-/// Assert that actual <= expected
-pub fn assert_lte<T>(actual: T, expected: T) {
-    if actual > expected {
-        panic("Assertion failed: " + format!("{}", actual) + " is not less than or equal to " + format!("{}", expected))
+/// Assert that left <= right
+pub fn assert_le<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left <= right) {
+        panic("assertion failed: left <= right\n  left: ${left:?}\n right: ${right:?}")
     }
 }
 
-/// Assert that a string contains a substring
+/// Assert that two floats (both f32 or both f64) differ by at most epsilon; a NaN never passes
+pub fn assert_approx_eq<T: Float>(left: T, right: T, epsilon: T) {
+    let diff = if left > right { left - right } else { right - left }
+    if !(diff <= epsilon) {
+        panic("assertion failed: values not approximately equal\n  left: ${left}\n  right: ${right}\n  epsilon: ${epsilon}\n  diff: ${diff}")
+    }
+}
+
+/// Assert that a value is within an inclusive range
+pub fn assert_in_range<T: PartialOrd + Debug>(value: T, min: T, max: T) {
+    if value < min || value > max {
+        panic("assertion failed: value not in range\n  value: ${value:?}\n  min: ${min:?}\n  max: ${max:?}")
+    }
+}
+
+/// Assert that an Option is Some and return the value
+pub fn assert_some<T>(value: Option<T>) -> T {
+    match value {
+        Some(v) => v,
+        None => panic("assertion failed: expected Some, got None")
+    }
+}
+
+/// Assert that an Option is None
+pub fn assert_none<T: Debug>(value: Option<T>) {
+    match value {
+        Some(v) => panic("assertion failed: expected None, got Some(${v:?})"),
+        None => {}
+    }
+}
+
+/// Assert that a Result is Ok and return the value
+pub fn assert_ok<T, E: Debug>(value: Result<T, E>) -> T {
+    match value {
+        Ok(v) => v,
+        Err(e) => panic("assertion failed: expected Ok, got Err(${e:?})")
+    }
+}
+
+/// Assert that a Result is Err and return the error
+pub fn assert_err<T: Debug, E>(value: Result<T, E>) -> E {
+    match value {
+        Ok(v) => panic("assertion failed: expected Err, got Ok(${v:?})"),
+        Err(e) => e
+    }
+}
+
+/// Assert that a string contains a substring (a list also works: `assert_contains(xs, x)`)
 pub fn assert_contains(string: string, substring: string) {
     if !string.contains(substring) {
-        panic("Assertion failed: \"" + string + "\" does not contain \"" + substring + "\"")
+        panic("assertion failed: string does not contain substring\n  string: ${string:?}\n  substring: ${substring:?}")
     }
 }
 
 /// Assert that a string starts with a prefix
 pub fn assert_starts_with(string: string, prefix: string) {
     if !string.starts_with(prefix) {
-        panic("Assertion failed: \"" + string + "\" does not start with \"" + prefix + "\"")
+        panic("assertion failed: string does not start with prefix\n  string: ${string:?}\n  prefix: ${prefix:?}")
     }
 }
 
 /// Assert that a string ends with a suffix
 pub fn assert_ends_with(string: string, suffix: string) {
     if !string.ends_with(suffix) {
-        panic("Assertion failed: \"" + string + "\" does not end with \"" + suffix + "\"")
+        panic("assertion failed: string does not end with suffix\n  string: ${string:?}\n  suffix: ${suffix:?}")
     }
 }
 
 /// Assert that a collection is empty
 pub fn assert_empty<T>(collection: Vec<T>) {
-    if collection.len() > 0 {
-        panic("Assertion failed: collection is not empty (length: " + format!("{}", collection.len()) + ")")
+    if collection.len() != 0 {
+        panic("assertion failed: expected empty, got length ${collection.len()}")
     }
 }
 
 /// Assert that a collection is not empty
 pub fn assert_not_empty<T>(collection: Vec<T>) {
     if collection.len() == 0 {
-        panic("Assertion failed: collection is empty")
+        panic("assertion failed: expected non-empty, got length 0")
     }
 }
 
 /// Assert that a collection has a specific length
 pub fn assert_length<T>(collection: Vec<T>, expected: int) {
     if collection.len() != expected {
-        panic("Assertion failed: expected length " + format!("{}", expected) + ", got " + format!("{}", collection.len()))
+        panic("assertion failed: length mismatch\n  expected: ${expected}\n  actual: ${collection.len()}")
     }
 }
-

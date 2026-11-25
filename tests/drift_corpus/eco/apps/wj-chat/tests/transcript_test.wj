@@ -48,7 +48,7 @@ fn test_transcript_close_notifies_the_room() {
     lines.push("close 2")
     let out = run_transcript(config(), script(lines))
     let last: Vec<string> = out.lines().collect()
-    assert_str_contains(last[last.len() - 1], "-> 1 {\"kind\":\"presence\"")
+    assert_contains(last[last.len() - 1], "-> 1 {\"kind\":\"presence\"")
 }
 
 @test
@@ -59,9 +59,9 @@ fn test_transcript_reports_bad_lines_without_stopping() {
     lines.push("9 {\"kind\":\"pong\"}")
     lines.push("1 {\"kind\":\"join\",\"room\":\"r\"}")
     let out = run_transcript(config(), script(lines))
-    assert_str_contains(out, "line 2: expected")
-    assert_str_contains(out, "line 3: unknown connection 9")
-    assert_str_contains(out, "-> 1 {\"kind\":\"error\"")
+    assert_contains(out, "line 2: expected")
+    assert_contains(out, "line 3: unknown connection 9")
+    assert_contains(out, "-> 1 {\"kind\":\"error\"")
 }
 
 // Acceptance: a golden transcript, byte for byte.

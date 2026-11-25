@@ -73,15 +73,15 @@ fn test_health_returns_ok() {
     let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/health", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "ok")
-    assert_str_contains(reply.content_type, "application/json")
+    assert_contains(reply.body, "ok")
+    assert_contains(reply.content_type, "application/json")
 }
 
 fn test_health_accepts_path_without_leading_slash() {
     let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "health", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "ok")
+    assert_contains(reply.body, "ok")
 }
 
 fn test_register_accepts_trailing_slash_via_router() {
@@ -98,16 +98,16 @@ fn test_register_accepts_trailing_slash_via_router() {
         "{\"username\":\"slashuser\",\"password\":\"password1\"}",
     )
     assert_eq(reply.status, 201)
-    assert_str_contains(reply.body, "slashuser")
-    assert_str_contains(reply.content_type, "application/json")
+    assert_contains(reply.body, "slashuser")
+    assert_contains(reply.content_type, "application/json")
 }
 
 fn test_welcome_page_uses_html_content_type() {
     let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "<html")
-    assert_str_contains(reply.content_type, "text/html")
+    assert_contains(reply.body, "<html")
+    assert_contains(reply.content_type, "text/html")
 }
 
 fn test_format_access_log_line() {
@@ -131,7 +131,7 @@ fn test_register_rejects_empty_username() {
         "{\"username\":\"\",\"password\":\"password1\"}",
     )
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "username")
+    assert_contains(reply.body, "username")
 }
 
 fn test_register_slugifies_username() {
@@ -148,7 +148,7 @@ fn test_register_slugifies_username() {
         "{\"username\":\"Carl User\",\"password\":\"password1\"}",
     )
     assert_eq(reply.status, 201)
-    assert_str_contains(reply.body, "\"username\":\"carl-user\"")
+    assert_contains(reply.body, "\"username\":\"carl-user\"")
     assert(!strings.contains(reply.body, "Carl User"), "raw display name not stored")
 }
 
@@ -166,7 +166,7 @@ fn test_login_accepts_display_name_matching_slug() {
         "{\"username\":\"Hello World\",\"password\":\"password1\"}",
     )
     assert_eq(reg.status, 201)
-    assert_str_contains(reg.body, "hello-world")
+    assert_contains(reg.body, "hello-world")
     let login = app.handle(
         "POST",
         "/login",
@@ -196,7 +196,7 @@ fn test_register_rejects_username_that_slugifies_empty() {
         "{\"username\":\"!!!\",\"password\":\"password1\"}",
     )
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "username")
+    assert_contains(reply.body, "username")
 }
 
 fn test_register_rejects_short_password() {
@@ -213,7 +213,7 @@ fn test_register_rejects_short_password() {
         "{\"username\":\"shortpw\",\"password\":\"short\"}",
     )
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "password")
+    assert_contains(reply.body, "password")
 }
 
 fn test_register_rejects_long_username() {
@@ -222,7 +222,7 @@ fn test_register_rejects_long_username() {
     let body = "{\"username\":\"${long_name}\",\"password\":\"password1\"}"
     let reply = app.handle("POST", "/register", "", "", "", "", "", 0, body)
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "username")
+    assert_contains(reply.body, "username")
 }
 
 fn test_login_rejects_empty_password() {
@@ -250,16 +250,16 @@ fn test_login_rejects_empty_password() {
         "{\"username\":\"emptypw\",\"password\":\"\"}",
     )
     assert_eq(reply.status, 400)
-    assert_str_contains(reply.body, "password")
+    assert_contains(reply.body, "password")
 }
 
 fn test_security_headers_on_json_response() {
     let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/health", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.extra_headers, "X-Frame-Options")
-    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
-    assert_str_contains(reply.extra_headers, "Referrer-Policy")
+    assert_contains(reply.extra_headers, "X-Frame-Options")
+    assert_contains(reply.extra_headers, "X-Content-Type-Options")
+    assert_contains(reply.extra_headers, "Referrer-Policy")
 }
 
 fn test_security_headers_on_options_preflight() {
@@ -276,8 +276,8 @@ fn test_security_headers_on_options_preflight() {
         "",
     )
     assert_eq(reply.status, 204)
-    assert_str_contains(reply.extra_headers, "X-Frame-Options")
-    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
+    assert_contains(reply.extra_headers, "X-Frame-Options")
+    assert_contains(reply.extra_headers, "X-Content-Type-Options")
 }
 
 fn test_rate_limit_includes_security_headers() {
@@ -319,8 +319,8 @@ fn test_rate_limit_includes_security_headers() {
         "{\"username\":\"secuser\",\"password\":\"password1\"}",
     )
     assert_eq(blocked.status, 429)
-    assert_str_contains(blocked.extra_headers, "Retry-After")
-    assert_str_contains(blocked.extra_headers, "X-Frame-Options")
+    assert_contains(blocked.extra_headers, "Retry-After")
+    assert_contains(blocked.extra_headers, "X-Frame-Options")
 }
 
 fn test_register_and_login_returns_jwt() {
@@ -337,8 +337,8 @@ fn test_register_and_login_returns_jwt() {
         "{\"username\":\"ada\",\"password\":\"secret123\"}",
     )
     assert_eq(reg.status, 201)
-    assert_str_contains(reg.body, "\"id\"")
-    assert_str_contains(reg.body, "ada")
+    assert_contains(reg.body, "\"id\"")
+    assert_contains(reg.body, "ada")
     let login = app.handle(
         "POST",
         "/login",
@@ -351,7 +351,7 @@ fn test_register_and_login_returns_jwt() {
         "{\"username\":\"ada\",\"password\":\"secret123\"}",
     )
     assert_eq(login.status, 200)
-    assert_str_contains(login.body, "token")
+    assert_contains(login.body, "token")
 }
 
 fn test_register_assigns_uuid_v7_id() {
@@ -440,12 +440,12 @@ fn test_me_returns_profile_after_login() {
     let auth = "Bearer ${token}"
     let me = app.handle("GET", "/me", "", "", auth, "", "", 0, "")
     assert_eq(me.status, 200)
-    assert_str_contains(me.body, "carl")
-    assert_str_contains(me.body, user_id)
-    assert_str_contains(me.body, "\"tenant\":\"default\"")
-    assert_str_contains(me.body, "\"expires_at\":\"")
-    assert_str_contains(me.body, "T")
-    assert_str_contains(me.body, "Z")
+    assert_contains(me.body, "carl")
+    assert_contains(me.body, user_id)
+    assert_contains(me.body, "\"tenant\":\"default\"")
+    assert_contains(me.body, "\"expires_at\":\"")
+    assert_contains(me.body, "T")
+    assert_contains(me.body, "Z")
 }
 
 fn test_me_expires_at_is_rfc3339_from_ttl() {
@@ -480,7 +480,7 @@ fn test_me_expires_at_is_rfc3339_from_ttl() {
     assert_eq(me.status, 200)
     let expires = json_string_field(me.body, "expires_at")
     assert(strings.len(expires) >= 20, "expires_at present")
-    assert_str_contains(expires, "T")
+    assert_contains(expires, "T")
     assert(strings.ends_with(expires, "Z"), "Zulu offset")
 }
 
@@ -513,8 +513,8 @@ fn test_me_returns_configured_tenant_slug() {
     let auth = "Bearer ${token}"
     let me = app.handle("GET", "/me", "", "", auth, "", "", 0, "")
     assert_eq(me.status, 200)
-    assert_str_contains(me.body, "\"tenant\":\"acme\"")
-    assert_str_contains(me.body, "tenantuser")
+    assert_contains(me.body, "\"tenant\":\"acme\"")
+    assert_contains(me.body, "tenantuser")
 }
 
 fn test_login_sets_http_only_access_token_cookie() {
@@ -544,11 +544,11 @@ fn test_login_sets_http_only_access_token_cookie() {
     assert_eq(login.status, 200)
     let token = token_from_body(login.body)
     assert(strings.len(token) > 0, "token present")
-    assert_str_contains(login.set_cookie, "access_token=")
-    assert_str_contains(login.set_cookie, token)
-    assert_str_contains(login.set_cookie, "HttpOnly")
-    assert_str_contains(login.set_cookie, "Path=/")
-    assert_str_contains(login.set_cookie, "SameSite=Lax")
+    assert_contains(login.set_cookie, "access_token=")
+    assert_contains(login.set_cookie, token)
+    assert_contains(login.set_cookie, "HttpOnly")
+    assert_contains(login.set_cookie, "Path=/")
+    assert_contains(login.set_cookie, "SameSite=Lax")
 }
 
 fn test_me_accepts_access_token_cookie() {
@@ -582,17 +582,17 @@ fn test_me_accepts_access_token_cookie() {
     let cookie = "access_token=${token}"
     let me = app.handle("GET", "/me", "", "", "", cookie, "", 0, "")
     assert_eq(me.status, 200)
-    assert_str_contains(me.body, "cookieme")
-    assert_str_contains(me.body, user_id)
+    assert_contains(me.body, "cookieme")
+    assert_contains(me.body, user_id)
 }
 
 fn test_logout_clears_access_token_cookie() {
     let mut app = AuthApp::new(default_config())
     let reply = app.handle("POST", "/logout", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.set_cookie, "access_token=")
-    assert_str_contains(reply.set_cookie, "Path=/")
-    assert_str_contains(reply.body, "ok")
+    assert_contains(reply.set_cookie, "access_token=")
+    assert_contains(reply.set_cookie, "Path=/")
+    assert_contains(reply.body, "ok")
 }
 
 fn test_rate_limit_returns_429_on_login() {
@@ -647,9 +647,9 @@ fn test_rate_limit_returns_429_on_login() {
         "{\"username\":\"limited\",\"password\":\"password1\"}",
     )
     assert_eq(r3.status, 429)
-    assert_str_contains(r3.body, "rate limit")
-    assert_str_contains(r3.extra_headers, "X-RateLimit-Limit")
-    assert_str_contains(r3.extra_headers, "Retry-After")
+    assert_contains(r3.body, "rate limit")
+    assert_contains(r3.extra_headers, "X-RateLimit-Limit")
+    assert_contains(r3.extra_headers, "Retry-After")
 }
 
 fn test_options_preflight_sets_cors_origin() {
@@ -690,7 +690,7 @@ fn test_gzip_when_accepted() {
     let reply = app.handle("GET", "/health", "", "gzip", "", "", "", 0, "")
     assert_eq(reply.content_encoding, "gzip")
     match gzip_decode_body(reply.body) {
-        Ok(plain) => assert_str_contains(plain, "ok"),
+        Ok(plain) => assert_contains(plain, "ok"),
         Err(_) => assert(false, "gzip decode"),
     }
 }
@@ -699,8 +699,8 @@ fn test_welcome_page_uses_template() {
     let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
-    assert_str_contains(reply.body, "<h1>")
-    assert_str_contains(reply.body, "wj-auth-api")
+    assert_contains(reply.body, "<h1>")
+    assert_contains(reply.body, "wj-auth-api")
     assert(!strings.contains(reply.body, "{{"), "placeholders filled")
 }
 
