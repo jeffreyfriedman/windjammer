@@ -23,6 +23,11 @@ In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` met
 - `value_formal_fixed_point.rs` makes callers and callees agree on value-formal modes (convergence O4): after each IR
   lowering round the solved modes are published to the registry and lowering repeats until none changes. Single-file
   builds run the same rounds over their one program (`attach_ir_module_if_missing`).
+- `module_reexports.rs`: the `pub use` re-export table of a library build; every re-exported struct is also keyed
+  under its re-export paths (explicit `pub use` and the implicit child re-export) in the library field table, so a
+  struct literal written `ffi::GpuVertex` types its fields (`register_reexport_struct_aliases`).
+- A library build never merges the crate's own project-root `metadata.json` (an earlier build's output):
+  `metadata::merge_wj_meta_signatures_for_crate_build`.
 - `multipass_bare_pass_demotion.rs` contains ownership post-fixes that belong to the solver (WP 9). A standard-library function's formals are the runtime's: bare-pass demotion never touches them (`server_serve(address: String, ..)`).
 
 ## Owns
