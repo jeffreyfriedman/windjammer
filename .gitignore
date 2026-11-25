@@ -84,3 +84,4 @@ crates/windjammer-playground/target/
 
 # release scorecard inputs written by the verification flow (contract: results/README.md)
 /results/*.json
+/~/
