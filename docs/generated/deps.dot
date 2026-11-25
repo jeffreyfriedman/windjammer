@@ -119,7 +119,7 @@ digraph deps {
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
   "analyzer" -> "parser" [label="149"];
   "analyzer" -> "stdlib_scanner" [label="5"];
-  "analyzer" -> "stdlib_surface" [label="1"];
+  "analyzer" -> "stdlib_surface" [label="2"];
   "analyzer" -> "test_utils" [label="1"];
   "analyzer" -> "type_classification" [label="35"];
   "analyzer" -> "type_inference" [label="2"];
@@ -262,7 +262,7 @@ digraph deps {
   "compiler" -> "build_utils" [label="4"];
   "compiler" -> "cargo_cache" [label="3"];
   "compiler" -> "cargo_toml" [label="5"];
-  "compiler" -> "codegen" [label="39"];
+  "compiler" -> "codegen" [label="40"];
   "compiler" -> "compiler_config" [label="11"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
@@ -279,7 +279,7 @@ digraph deps {
   "compiler" -> "module_system" [label="3"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
-  "compiler" -> "parser" [label="117"];
+  "compiler" -> "parser" [label="118"];
   "compiler" -> "project_paths" [label="13"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
@@ -363,9 +363,9 @@ digraph deps {
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="9"];
   "interpreter" -> "package" [label="4"];
-  "interpreter" -> "parser" [label="148"];
+  "interpreter" -> "parser" [label="149"];
   "interpreter" -> "resolve" [label="15"];
-  "interpreter" -> "source_map" [label="20"];
+  "interpreter" -> "source_map" [label="22"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_classification" [label="1"];
