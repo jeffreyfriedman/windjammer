@@ -67,7 +67,7 @@ references (`lean_value`), the same resolution `lean_push` uses. Uniqueness: arm
 shared body is copied before the record is built (copy-on-write happens in the helper, on the arming push). While armed
 nothing can clone the `Rc` (clone is a closure-run statement: it flushes first). A vector with an outstanding read/store
 view: views are cleared by the arming push (as `rt::push` already does), so the view's raw pointer is dead before the
-buffer can move.
+buffer can move. That clear is pinned by `tests/engine_parity/jit_push_view_clear.wj` (vecinline.md, item 1 of the invalidation list).
 
 ## 4. Capacity growth
 The inline path never allocates: it requires `plen < pcap`. At capacity the helper runs: flush (real len = pending),
