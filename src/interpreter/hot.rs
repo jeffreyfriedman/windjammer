@@ -155,3 +155,94 @@ impl Interpreter {
         eprintln!("[wj hot] reloaded {} function(s) from {}", swapped, file.display());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Hot reload swaps a body that holds closures and islands: the swapped-in body is compiled from ITS OWN text, so the
+    //! names its closures capture are the new body's, never a name set scanned from the body it replaced (the scans of
+    //! `resolved::island::ast_text` users: `closure::create`/`compile`, `Island::new`/`with_copies`). No watcher thread and no
+    //! sleeps: the tests call the reload entry points themselves, which is what the watcher's thread ends up calling.
+    use super::*;
+    use crate::interpreter::engine::Interpreter;
+    use crate::interpreter::value::Value;
+
+    const V1: &str = "fn compute(n: int) -> int {\n    let base = 10\n    let add = |x| x + base\n    add(n)\n}\n\nfn tally(n: int) -> int {\n    let mut total = 0\n    let k = 5\n    for i in 0..n {\n        total += i + k\n    }\n    total\n}\n\nfn main() {\n    println(\"${compute(1)} ${tally(3)}\")\n}\n";
+    // `compute` captures other names (two, one of them used twice); `tally` names other locals
+    const V2: &str = "fn compute(n: int) -> int {\n    let scale = 7\n    let bias = 3\n    let f = |x| x * scale + bias\n    f(n) + f(1)\n}\n\nfn tally(n: int) -> int {\n    let mut total = 0\n    let step = 2\n    for i in 0..n {\n        total += i * step\n    }\n    total\n}\n\nfn main() {\n    println(\"${compute(1)} ${tally(3)}\")\n}\n";
+    // `compute` captures a third name, and the first one again with another meaning
+    const V3: &str = "fn compute(n: int) -> int {\n    let offset = 100\n    let base = 1000\n    let g = |x| x - offset + base\n    g(n)\n}\n\nfn tally(n: int) -> int {\n    let mut total = 0\n    let k = 50\n    for i in 0..n {\n        total += i + k\n    }\n    total\n}\n\nfn main() {\n    println(\"${compute(1)} ${tally(3)}\")\n}\n";
+
+    fn int(v: Result<Value, crate::interpreter::error::Ctl>) -> i128 {
+        match v {
+            Ok(Value::Int(i, _)) => i,
+            Ok(other) => panic!("not an int: {other:?}"),
+            Err(_) => panic!("the call failed"),
+        }
+    }
+
+    /// `compute(5)` and `tally(4)` as the interpreter sees the functions NOW (looked up again: a swap replaces the `FuncDef`).
+    fn run(it: &mut Interpreter) -> (i128, i128) {
+        let mut one = |name: &str, n: i128| {
+            let f = it.modules[0].funcs.get(name).cloned().expect("function");
+            int(it.call_func(&f, vec![Value::Int(n, crate::interpreter::int::IntTy::I64)], None))
+        };
+        (one("compute", 5), one("tally", 4))
+    }
+
+    fn loaded(dir: &std::path::Path, engine_resolved: bool) -> (Interpreter, PathBuf) {
+        let file = dir.join("main.wj");
+        std::fs::write(&file, V1).unwrap();
+        let mut it = Interpreter::new_capturing();
+        it.set_engine_resolved(engine_resolved);
+        it.load_program_at(&file).expect("load");
+        let file = it.modules[0].file.clone();
+        (it, file)
+    }
+
+    // what the three bodies compute, worked out by hand: compute(5), tally(4)
+    const OLD: (i128, i128) = (15, 26); // 5 + 10; the sum of i + 5 for i in 0..4
+    const NEW: (i128, i128) = (48, 12); // f(5) + f(1) = 38 + 10; the sum of i * 2
+    const NEWER: (i128, i128) = (905, 206); // 5 - 100 + 1000; the sum of i + 50
+
+    fn in_a_big_stack(f: impl FnOnce() + Send + 'static) {
+        std::thread::Builder::new().stack_size(256 << 20).spawn(f).unwrap().join().unwrap();
+    }
+
+    /// The compiled engine (closure `create` scans the body for the names it captures, islands scan for the names they copy):
+    /// each swap is followed by a call that must use the new body's names. The reload is `reload_file`, the watcher's.
+    #[test]
+    fn a_swapped_body_captures_the_names_of_the_new_text() {
+        in_a_big_stack(|| {
+            let dir = tempfile::tempdir().unwrap();
+            let (mut it, file) = loaded(dir.path(), true);
+            assert_eq!(run(&mut it), OLD);
+            assert_eq!(run(&mut it), OLD, "a second call of the compiled body");
+            for (src, want) in [(V2, NEW), (V3, NEWER), (V1, OLD), (V2, NEW)] {
+                std::fs::write(&file, src).unwrap();
+                it.reload_file(&file);
+                assert_eq!(run(&mut it), want);
+                assert_eq!(run(&mut it), want, "a second call of the swapped body");
+            }
+        });
+    }
+
+    /// The same through the safe point the running program reaches (`hot_safe_point` at the next call, with the watcher's
+    /// flag raised by hand): the call that finds the edit still runs the body it resolved, the next one runs the new one.
+    #[test]
+    fn the_safe_point_applies_the_edit_between_calls() {
+        in_a_big_stack(|| {
+            let dir = tempfile::tempdir().unwrap();
+            let (mut it, file) = loaded(dir.path(), true);
+            it.hot = Some(Box::new(HotState { pending: Arc::new(AtomicBool::new(false)), changed: Arc::new(Mutex::new(Vec::new())), shapes: HashMap::new() }));
+            assert_eq!(run(&mut it), OLD);
+            std::fs::write(&file, V2).unwrap();
+            let h = it.hot.as_ref().unwrap();
+            h.changed.lock().unwrap().push(file.clone());
+            h.pending.store(true, Ordering::Release);
+            let first = run(&mut it);
+            // `compute` resolved its body, then the safe point of its own call swapped the module's table: that call is old; `tally`'s is new
+            assert_eq!(first, (OLD.0, NEW.1), "the call that meets the edit keeps the body it resolved");
+            assert_eq!(run(&mut it), NEW);
+        });
+    }
+}
