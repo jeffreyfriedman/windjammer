@@ -147,6 +147,17 @@ impl<'ast> CodeGenerator<'ast> {
         {
             args[0].replace_range(..2, "|_|");
         }
+        // `r.f ?? d` (`unwrap_or_else(|| d)`) consumes the field place as `unwrap_or` does: a field of an owned
+        // binding that is read again (the field, or the whole binding) is copied first.
+        if method == "unwrap_or_else" && args.len() == 1 {
+            if let (Expression::FieldAccess { .. }, Some(Type::Option(inner) | Type::Result(inner, _))) = (object, recv_ty) {
+                if !matches!(inner.as_ref(), Type::Reference(_)) && self.field_root_read_again(object) {
+                    let base = obj_str.strip_suffix(".as_ref()").unwrap_or(obj_str.as_str()).to_string();
+                    *obj_str = if self.is_type_copy(inner) || base.ends_with(".clone()") { base } else { format!("{base}.clone()") };
+                }
+            }
+            return;
+        }
         if method != "unwrap_or" || args.len() != 1 {
             return;
         }
