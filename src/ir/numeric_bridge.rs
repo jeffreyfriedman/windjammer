@@ -153,6 +153,12 @@ impl UnifiedNumericInference {
         self.int_collector.set_external_crate_metadata_paths(paths);
     }
 
+    /// The constants a dependency crate declares (`assert_eq(GAIN, 0.5)` types the literal from `GAIN`'s declaration).
+    pub fn add_external_crate_consts(&mut self, crate_key: &str, consts: HashMap<String, crate::parser::Type>) {
+        self.float_collector.add_external_crate_consts(crate_key, consts.clone());
+        self.int_collector.add_external_crate_consts(crate_key, consts);
+    }
+
     pub fn reset_imported_type_registry(&mut self) {
         self.float_collector.reset_imported_type_registry();
         self.int_collector.reset_imported_type_registry();

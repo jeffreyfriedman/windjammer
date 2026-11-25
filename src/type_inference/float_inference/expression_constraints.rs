@@ -172,8 +172,8 @@ impl FloatInference {
             Expression::Cast {
                 expr: inner, type_, ..
             } => {
-                // Cast expression provides explicit type constraint
-                self.collect_expression_constraints(inner, return_type);
+                // The cast target constrains the cast result only; the operand is typed on its own (no context flows in).
+                self.collect_expression_constraints(inner, None);
 
                 if let Some(float_ty) = self.extract_float_type(type_) {
                     let cast_id = self.get_expr_id(expr);

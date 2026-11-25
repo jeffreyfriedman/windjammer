@@ -1486,13 +1486,7 @@ pub(crate) fn build_library_multipass(
         }
         crate_metadata.copy_structs = global_copy_structs.iter().cloned().collect::<Vec<_>>();
         crate_metadata.copy_structs.sort();
-        crate_metadata.string_consts.clear();
-        for program in &parsed_programs {
-            crate_metadata.string_consts.extend(crate::metadata::collect_string_const_names(program));
-            crate_metadata.variant_payloads.extend(crate::metadata::collect_variant_payloads(program));
-        }
-        crate_metadata.string_consts.sort();
-        crate_metadata.string_consts.dedup();
+        crate_metadata.collect_program_facts(&parsed_programs);
         if crate_metadata.has_entries() {
             super::write_crate_metadata_json(output, &crate_metadata)?;
         }
@@ -1721,10 +1715,11 @@ fn run_parallel_numeric_inference(
     let mut global = UnifiedNumericInference::new();
     if !external_paths.is_empty() {
         global.set_external_crate_metadata_paths(external_paths);
-        for dir in external_paths.values() {
+        for (key, dir) in external_paths.iter() {
             for name in crate::metadata::load_string_const_names(dir) {
                 global.register_string_const(&name);
             }
+            global.add_external_crate_consts(key, crate::metadata::load_const_types_from_metadata(dir));
         }
     }
     global.set_global_function_signatures(global_float_signatures);

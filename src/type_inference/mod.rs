@@ -23,3 +23,24 @@ pub use int_inference::{IntInference, IntType};
 pub(crate) fn generic_type_base_name(name: &str) -> &str {
     name.rsplit("::").next().unwrap_or(name)
 }
+
+/// A `use` path with a brace group, `dep::{A, B}`, as one path per imported name (`dep::A`, `dep::B`); any other path
+/// as itself. The parser keeps a brace group inside one path segment.
+pub(crate) fn expand_use_group(path: &[String]) -> Vec<Vec<String>> {
+    let joined = path.join("::");
+    let Some((prefix, group)) = joined.split_once("::{") else {
+        return vec![path.to_vec()];
+    };
+    let Some(group) = group.strip_suffix('}') else {
+        return vec![path.to_vec()];
+    };
+    if group.contains('{') {
+        return vec![path.to_vec()];
+    }
+    group
+        .split(',')
+        .filter_map(|name| name.split_whitespace().next())
+        .filter(|name| *name != "self")
+        .map(|name| prefix.split("::").chain(std::iter::once(name)).map(str::to_string).collect())
+        .collect()
+}
