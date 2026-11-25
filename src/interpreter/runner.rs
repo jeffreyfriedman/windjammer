@@ -3,6 +3,7 @@
 //! This is the only module that touches process-level concerns (stdout/stderr text, exit codes,
 //! big-stack threads). The evaluator itself stays pure.
 
+use super::compiled_facts::WidthShare;
 use super::engine::Interpreter;
 use super::error::{ErrorKind, RuntimeError};
 use super::value::Value;
@@ -491,13 +492,30 @@ pub fn run_specs_simulated(specs: Vec<TestSpec>, sim: Option<SimRun>) -> Vec<Tes
 /// `run_specs_simulated` with the crate host for the project's Rust crate calls (ADR-0031): one host process
 /// serves every test of the run.
 pub fn run_specs_with(specs: Vec<TestSpec>, sim: Option<SimRun>, crates: Option<super::crate_host::CrateHost>) -> Vec<TestResult> {
+    let share = std::sync::Arc::new(WidthShare::new());
+    let results = run_specs_shared(specs, sim, crates, Some(share.clone()));
+    if crate::debug_env::enabled("WJ_JIT_DEBUG") {
+        eprintln!("{}", share.line());
+    }
+    results
+}
+
+/// `run_specs_with` with the literal widths shared through `share` (`None`: every test analyses its own
+/// programs, as before). The share is the test runner's, passed to each test's interpreter (never a static).
+pub fn run_specs_shared(
+    specs: Vec<TestSpec>,
+    sim: Option<SimRun>,
+    crates: Option<super::crate_host::CrateHost>,
+    share: Option<std::sync::Arc<WidthShare>>,
+) -> Vec<TestResult> {
     with_big_stack(move || {
         let crates = crates.map(std::rc::Rc::new);
+        let share = share.as_ref();
         let mut results = Vec::new();
         for spec in specs {
             results.push(match &sim {
-                None => run_one_test(&spec, None, crates.as_ref()),
-                Some(s) => run_seeds(&spec, s, crates.as_ref()),
+                None => run_one_test(&spec, None, crates.as_ref(), share),
+                Some(s) => run_seeds(&spec, s, crates.as_ref(), share),
             });
         }
         results
@@ -511,10 +529,10 @@ pub struct SimRun {
     pub faults: f64,
 }
 
-fn run_seeds(spec: &TestSpec, s: &SimRun, crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>) -> TestResult {
+fn run_seeds(spec: &TestSpec, s: &SimRun, crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>, share: Option<&std::sync::Arc<WidthShare>>) -> TestResult {
     for seed in s.seeds.clone() {
         let cfg = super::effect_port::sim::SimConfig { seed, faults: s.faults };
-        let r = run_one_test(spec, Some(&cfg), crates);
+        let r = run_one_test(spec, Some(&cfg), crates, share);
         if !r.passed {
             let faults = if s.faults > 0.0 { format!(" --faults {}", s.faults) } else { String::new() };
             let message = format!(
@@ -529,9 +547,15 @@ fn run_seeds(spec: &TestSpec, s: &SimRun, crates: Option<&std::rc::Rc<super::cra
     TestResult { file: spec.file.clone(), name: spec.display_name.clone(), passed: true, message: String::new() }
 }
 
-fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>, crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>) -> TestResult {
+fn run_one_test(
+    spec: &TestSpec,
+    sim: Option<&super::effect_port::sim::SimConfig>,
+    crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>,
+    share: Option<&std::sync::Arc<WidthShare>>,
+) -> TestResult {
     let spec = spec.clone();
     let mut it = Interpreter::new_capturing();
+    it.width_share = share.cloned();
     let env = host_env();
     // `WJ_TEST_ENGINE=walker` selects the tree walker (the drift gate compares the two engines on tests)
     let walker = env.iter().any(|(k, v)| k == "WJ_TEST_ENGINE" && v == "walker");
