@@ -187,7 +187,7 @@ fn removed_spellings_are_gone_with_a_machine_applicable_rename() {
     assert!(fixed.status.success(), "{}", String::from_utf8_lossy(&fixed.stderr));
     let (ta, tb) = (fs::read_to_string(a.join("old.wj")).unwrap(), fs::read_to_string(b.join("old.wj")).unwrap());
     assert!(tb.contains("assert_ok(parse(\"a\"))") && tb.contains("assert_ge(2, 1)"), "wj fix: {tb}");
-    assert_eq!(ta.replace("assert_ok(parse", "X"), tb.replace("assert_ok(parse", "X"), "wj check --fix and wj fix agree");
+    assert_eq!(ta, tb, "wj check --fix and wj fix agree");
     let o = Command::new(WJ).args(["check"]).arg(b.join("old.wj")).output().unwrap();
     assert!(o.status.success(), "the fixed file checks clean: {}", String::from_utf8_lossy(&o.stderr));
 }
@@ -273,4 +273,25 @@ fn t(r: Result<int, string>, o: int?, xs: Vec<int>) {
     assert_eq!(got, after);
     let again = Command::new(WJ).args(["fix", "--check"]).arg(&f).output().unwrap();
     assert!(again.status.success(), "a second run changes nothing: {}", String::from_utf8_lossy(&again.stdout));
+}
+
+/// `(a..b).reversed()` and a qualified `test::assert_is_ok(..)` (no glob import): both engines apply the same rename.
+#[test]
+fn check_fix_renames_qualified_calls_and_range_reversed() {
+    let dir = TempDir::new().unwrap();
+    let src = "use std::test\n\nfn parse(s: string) -> Result<int, string> {\n    Ok(5)\n}\n\nfn main() {\n    test::assert_is_ok(parse(\"a\"))\n    for i in (0..3).reversed() {\n        println(\"${i}\")\n    }\n}\n";
+    let f = dir.path().join("q.wj");
+    fs::write(&f, src).unwrap();
+    let o = Command::new(WJ).args(["check", "--error-format", "agent"]).arg(&f).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert!(text.contains("WJ0002") && text.contains("WJ0015"), "both removed spellings are diagnosed:\n{text}");
+    let fixed = dir.path().join("fixed.wj");
+    fs::write(&fixed, src).unwrap();
+    Command::new(WJ).args(["check", "--fix"]).arg(&fixed).output().unwrap();
+    let want = "use std::test\n\nfn parse(s: string) -> Result<int, string> {\n    Ok(5)\n}\n\nfn main() {\n    test::assert_ok(parse(\"a\"))\n    for i in (0..3).rev() {\n        println(\"${i}\")\n    }\n}\n";
+    assert_eq!(fs::read_to_string(&fixed).unwrap(), want, "wj check --fix");
+    let by_fix = dir.path().join("by_fix.wj");
+    fs::write(&by_fix, src).unwrap();
+    Command::new(WJ).args(["fix"]).arg(&by_fix).output().unwrap();
+    assert_eq!(fs::read_to_string(&by_fix).unwrap(), want, "wj fix");
 }
