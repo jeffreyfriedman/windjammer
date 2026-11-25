@@ -1,0 +1,242 @@
+// oracle: check
+// Inline `push` with a pending length (docs/design/interp-soundness/pushlen.md): elements are written into spare
+// capacity and the vector's own length is brought up to date before any helper call and when the unit leaves. Each
+// case is a way that could go wrong: growth mid-loop, reading what the loop pushes, a vector with a view already built,
+// two names for one vector, another element kind, pop/clear in the loop, early exits, a function unit, two vectors,
+// the first push onto an empty vector, a long run, the sieve; an overflow after pushes (panic) is last.
+fn build(n: int) -> Vec<int> {
+    let mut out: Vec<int> = Vec::new()
+    let mut k = 0
+    while k < n {
+        out.push(k * k)
+        k += 1
+    }
+    out
+}
+
+fn first_over(limit: int) -> int {
+    let mut v: Vec<int> = Vec::new()
+    let mut k = 0
+    while k < 100000 {
+        v.push(k)
+        if k * k > limit {
+            return v.len()
+        }
+        k += 1
+    }
+    0
+}
+
+fn sieve(n: int) -> int {
+    let mut flags: Vec<bool> = Vec::new()
+    let mut k = 0
+    while k < n {
+        flags.push(true)
+        k += 1
+    }
+    let mut count = 0
+    let mut i = 2
+    while i < n {
+        if flags[i] {
+            count += 1
+            let mut j = i * i
+            while j < n {
+                flags[j] = false
+                j += i
+            }
+        }
+        i += 1
+    }
+    count
+}
+
+fn sum_of(v: Vec<int>) -> int {
+    let mut s = 0
+    let mut i = 0
+    while i < v.len() {
+        s += v[i]
+        i += 1
+    }
+    s
+}
+
+fn main() {
+    // growth from empty past the capacity many times; then every element and the length are read back
+    let mut a: Vec<int> = Vec::new()
+    let mut k = 0
+    while k < 5000 {
+        a.push(k * 3)
+        k += 1
+    }
+    println("grow ${a.len()} ${sum_of(a.clone())} ${a[0]} ${a[4999]}")
+
+    // the first push onto an empty vector, then a loop
+    let mut e: Vec<int> = Vec::new()
+    e.push(7)
+    let mut m = 0
+    while m < 300 {
+        e.push(m)
+        m += 1
+    }
+    println("empty ${e.len()} ${e[0]} ${e[1]} ${e[300]}")
+
+    // push then read / len in the same loop (not push-only: the old helper path, a flush on every read)
+    let mut r: Vec<int> = Vec::new()
+    let mut acc = 0
+    let mut g = 0
+    while g < 2000 {
+        r.push(g)
+        acc += r[g] + r.len()
+        g += 1
+    }
+    println("readback ${acc} ${r.len()}")
+
+    // a read view already exists when the pushes start (all elements read first), then growth
+    let mut w: Vec<int> = Vec::new()
+    let mut z = 0
+    while z < 64 {
+        w.push(z)
+        z += 1
+    }
+    let mut tot = 0
+    let mut q = 0
+    while q < 64 {
+        tot += w[q]
+        q += 1
+    }
+    let mut y = 0
+    while y < 4000 {
+        w.push(y)
+        y += 1
+    }
+    let mut tot2 = 0
+    q = 0
+    while q < 4064 {
+        tot2 += w[q]
+        q += 1
+    }
+    println("view ${tot} ${tot2} ${w.len()}")
+
+    // two names for one vector, pushed in the same loop and read afterwards through both
+    let mut base: Vec<int> = Vec::new()
+    let alias = &mut base
+    let mut n = 0
+    while n < 1500 {
+        base.push(n)
+        alias.push(-n)
+        n += 1
+    }
+    println("alias ${base.len()} ${alias.len()} ${base[1]} ${base[2]} ${alias[2999]}")
+
+    // other element kinds: bool, float, a narrow int
+    let mut bs: Vec<bool> = Vec::new()
+    let mut fs: Vec<float> = Vec::new()
+    let mut ns: Vec<i32> = Vec::new()
+    let mut p = 0
+    while p < 1000 {
+        bs.push(p % 7 == 0)
+        fs.push(p * 0.25)
+        ns.push(p)
+        p += 1
+    }
+    let mut cb = 0
+    let mut cf = 0.0
+    let mut cn = 0
+    p = 0
+    while p < 1000 {
+        if bs[p] {
+            cb += 1
+        }
+        cf += fs[p]
+        cn += ns[p]
+        p += 1
+    }
+    println("kinds ${cb} ${cf} ${cn} ${bs.len()} ${fs.len()} ${ns.len()}")
+
+    // pop / clear in the loop (never push-only)
+    let mut pc: Vec<int> = Vec::new()
+    let mut s = 0
+    let mut t = 0
+    while t < 3000 {
+        pc.push(t)
+        pc.push(t + 1)
+        pc.pop()
+        if t % 1000 == 999 {
+            s += pc.len()
+            pc.clear()
+        }
+        t += 1
+    }
+    println("popclear ${s} ${pc.len()}")
+
+    // two vectors pushed by nested loops: the one pending record alternates between them
+    let mut outer: Vec<int> = Vec::new()
+    let mut inner: Vec<int> = Vec::new()
+    let mut i = 0
+    while i < 40 {
+        outer.push(i)
+        let mut j = 0
+        while j < 50 {
+            inner.push(i * j)
+            j += 1
+        }
+        i += 1
+    }
+    println("nested ${outer.len()} ${inner.len()} ${inner[1999]} ${outer[39]}")
+
+    // alternating pushes to two vectors in one loop (the record thrashes but stays right)
+    let mut left: Vec<int> = Vec::new()
+    let mut right: Vec<int> = Vec::new()
+    let mut h = 0
+    while h < 3000 {
+        left.push(h)
+        right.push(h * 2)
+        h += 1
+    }
+    println("two ${left.len()} ${right.len()} ${left[2999]} ${right[2999]}")
+
+    // early exits: break with pushes pending, a return from inside a function unit's loop
+    let mut br: Vec<int> = Vec::new()
+    let mut b = 0
+    while b < 100000 {
+        br.push(b)
+        if b == 1234 {
+            break
+        }
+        b += 1
+    }
+    println("break ${br.len()} ${br[1234]}")
+    println("return ${first_over(5000)} ${first_over(10)}")
+
+    // a function unit that builds and returns a vector, called repeatedly
+    let mut total = 0
+    let mut c = 0
+    while c < 30 {
+        let v = build(100 + c)
+        total += v.len() + v[v.len() - 1]
+        c += 1
+    }
+    println("fnunit ${total}")
+
+    // a long run: capacity doubling many times
+    let mut big: Vec<int> = Vec::new()
+    let mut x = 0
+    while x < 300000 {
+        big.push(x)
+        x += 1
+    }
+    println("big ${big.len()} ${big[299999]}")
+
+    println("sieve ${sieve(20000)}")
+
+    // an overflow after pushes in the same loop: the panic comes from the closure engine, last
+    let mut ov: Vec<int> = Vec::new()
+    let mut big_n = 9223372036854775000
+    let mut o = 0
+    while o < 2000 {
+        ov.push(o)
+        big_n += 1
+        o += 1
+    }
+    println("never ${ov.len()} ${big_n}")
+}

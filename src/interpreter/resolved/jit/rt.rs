@@ -58,12 +58,45 @@ pub(crate) struct Ctx {
     pub(crate) lean_inss: i64,
     /// The lookups among `lean_gets` a typed array (`IntDense`) answered.
     pub(crate) lean_typed: i64,
+    /// The PENDING-LENGTH record of an inline push (docs/design/interp-soundness/pushlen.md): `pk` the key (0: none),
+    /// `pptr` the address of element 0, `plen` the pending length, `pcap` the capacity, `pvec` the address of the
+    /// body's `Vec`, `pkind` which `Vec` it is. While armed the `Vec`'s own length is stale; `flush_push` writes it.
+    pub(crate) pk: i64,
+    pub(crate) pptr: i64,
+    pub(crate) plen: i64,
+    pub(crate) pcap: i64,
+    pub(crate) pvec: i64,
+    pub(crate) pkind: i64,
+    /// Inline pushes made / flushes that wrote a length (added to `FastHits` when the unit leaves).
+    pub(crate) push_inl: i64,
+    pub(crate) push_flush: i64,
 }
 
 impl Ctx {
     pub(crate) fn new(it: *mut Interpreter, base: usize, plan: *const super::lower::Plan, reg: *const crate::interpreter::resolved::osr::Reg) -> Ctx {
         let (rows, row_tbls) = (Default::default(), Default::default());
-        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), cell_hit: [(0, 0); CELL_HITS], views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, hoisted: 0, hoistfail: 0, found: 0, lean_gets: 0, view_reads: 0, lean_inss: 0, lean_typed: 0 }
+        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), cell_hit: [(0, 0); CELL_HITS], views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, hoisted: 0, hoistfail: 0, found: 0, lean_gets: 0, view_reads: 0, lean_inss: 0, lean_typed: 0, pk: 0, pptr: 0, plen: 0, pcap: 0, pvec: 0, pkind: 0, push_inl: 0, push_flush: 0 }
+    }
+
+    /// Write the pending length of an armed inline push into the vector (idempotent). Called before EVERY helper
+    /// call (`Lo::call`) and once when the unit's run returns (`osr::execute`): the only places Rust code runs.
+    pub(crate) fn flush_push(&mut self) {
+        if self.pk == 0 {
+            return;
+        }
+        // SAFETY: `pvec` is the address of the `Vec` inside the uniquely owned body `arm_push` read it from; armed
+        // implies no Rust code has run since (so the body is neither moved, dropped nor shared) and every element
+        // below `plen` was written inside `pcap`.
+        unsafe {
+            let n = self.plen as usize;
+            match self.pkind {
+                1 => (*(self.pvec as *mut Vec<bool>)).set_len(n),
+                2 => (*(self.pvec as *mut Vec<i64>)).set_len(n),
+                _ => (*(self.pvec as *mut Vec<f64>)).set_len(n),
+            }
+        }
+        self.pk = 0;
+        self.push_flush += 1;
     }
 }
 
@@ -90,6 +123,13 @@ pub(crate) const ROW_AT: i32 = std::mem::offset_of!(Ctx, rows) as i32;
 pub(crate) const ROW_HITS: i32 = std::mem::offset_of!(Ctx, row_hits) as i32;
 pub(crate) const HOISTED: i32 = std::mem::offset_of!(Ctx, hoisted) as i32;
 pub(crate) const HOISTFAIL: i32 = std::mem::offset_of!(Ctx, hoistfail) as i32;
+/// Set in the element-type argument of `push` by a site that lowered an inline push (its unit flushes before calls).
+pub(crate) const ARM_PUSH: i64 = 1 << 20;
+pub(crate) const PK: i32 = std::mem::offset_of!(Ctx, pk) as i32;
+pub(crate) const PPTR: i32 = std::mem::offset_of!(Ctx, pptr) as i32;
+pub(crate) const PLEN: i32 = std::mem::offset_of!(Ctx, plen) as i32;
+pub(crate) const PCAP: i32 = std::mem::offset_of!(Ctx, pcap) as i32;
+pub(crate) const PUSH_INL: i32 = std::mem::offset_of!(Ctx, push_inl) as i32;
 pub(crate) const FOUND: i32 = std::mem::offset_of!(Ctx, found) as i32;
 
 /// The key of a view: the local's slot and the stored element type (never 0).
@@ -415,6 +455,8 @@ fn lean_push(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, x: i64, xt: i64)
 
 /// `v.push(x)`.
 pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) -> i64 {
+    // an inline-push site (`ARM_PUSH`) asks for the record to be armed; any other push never does (its unit has no flush before calls)
+    let (arm, xt) = (xt & ARM_PUSH != 0, xt & !ARM_PUSH);
     // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
     // a push may move a packed vector's storage
     unsafe {
@@ -430,6 +472,9 @@ pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) ->
             _ => None,
         }) } {
             unsafe { (*(*c).it).fast.packed += 1 };
+            if arm {
+                unsafe { arm_push(c, slot, xt) };
+            }
             return 0;
         }
     }
@@ -453,8 +498,55 @@ pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) ->
     };
     if packed {
         unsafe { (*(*c).it).fast.packed += 1 };
+        if r == 0 && arm {
+            unsafe { arm_push(c, slot, xt) };
+        }
     }
     r
+}
+
+/// Arm the inline-push record for the vector at `slot` after a push of type `xt` went through the helper: only when
+/// the body is uniquely owned and packed with exactly that element type (bool, `i64`, float). The addresses are those
+/// of the buffer AS IT IS NOW (after any growth). Nothing else changes; a refusal leaves the record empty.
+unsafe fn arm_push(c: *mut Ctx, slot: i64, xt: i64) {
+    use crate::interpreter::vecbody::{Packed, VecBody};
+    if unsafe { (*(*c).it).fast_off("pushinl") } {
+        return;
+    }
+    let Some(t) = from_code(xt) else { return };
+    if view_elem(t).is_none() {
+        return;
+    }
+    let got = unsafe {
+        lean_value(c, slot, |v| {
+            let Value::Vec(xs) = v else { return None };
+            let VecBody::Packed(p, cache) = Rc::get_mut(xs)? else { return None };
+            cache.take();
+            match (p, t) {
+                (Packed::Bool(v), Ty::Bool) => Some((v.as_mut_ptr() as i64, v.len(), v.capacity(), v as *mut Vec<bool> as i64, 1)),
+                (Packed::Int(v, w), Ty::Int(u)) if *w == u && u == crate::interpreter::int::IntTy::I64 => {
+                    Some((v.as_mut_ptr() as i64, v.len(), v.capacity(), v as *mut Vec<i64> as i64, 2))
+                }
+                (Packed::Float(v, w), Ty::Flt(u)) if *w == u => Some((v.as_mut_ptr() as i64, v.len(), v.capacity(), v as *mut Vec<f64> as i64, 3)),
+                _ => None,
+            }
+        })
+    };
+    if let Some(Some((ptr, len, cap, vec, kind))) = got {
+        let ctx = unsafe { &mut *c };
+        ctx.pk = view_key(slot as usize, t);
+        ctx.pptr = ptr;
+        ctx.plen = len as i64;
+        ctx.pcap = cap as i64;
+        ctx.pvec = vec;
+        ctx.pkind = kind;
+    }
+}
+
+/// Flush the pending length (called by machine code before a helper call when a record is armed).
+pub(crate) unsafe extern "C" fn flush_push(c: *mut Ctx) -> i64 {
+    unsafe { (*c).flush_push() };
+    0
 }
 
 /// The integer type of the key machine code passes a map helper (its value is `int_value` at that type).

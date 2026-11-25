@@ -15,7 +15,7 @@
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 24,
     "drift.corpus_cases": 1946,
-    "errors.codes_total": 80,
+    "errors.codes_total": 81,
     "interpreter.features_supported": 44,
     "interpreter.features_unsupported": 0,
     "intrinsics.count": 13,
@@ -23,7 +23,7 @@
     "lints.w_codes": 7,
     "spec.example_files": 299,
     "stdlib.files": 42,
-    "tests.rust_files": 2113,
+    "tests.rust_files": 2115,
     "tests.wj_programs": 2393
   }
 }

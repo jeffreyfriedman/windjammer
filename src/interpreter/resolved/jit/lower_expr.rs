@@ -494,8 +494,50 @@ impl Lo<'_, '_> {
         let Bind::Handle(slot, Class::Vec(_)) = self.lookup(name)?.clone() else { return None };
         let x = self.expr(arg)?;
         let bits = self.to_bits(x.v, x.ty);
-        let (s, t) = (self.k(slot as i64), self.k(code(x.ty)));
+        let inline = self.pushfunnel && self.loops.last().is_some_and(|l| l.push_ok) && !self.it.fast_off("pushinl");
+        let size = if inline { rt::view_elem(x.ty) } else { None };
+        let s = self.k(slot as i64);
+        let Some(size) = size else {
+            let t = self.k(code(x.ty));
+            self.call("push", rt::push as *const () as usize, &[s, bits, t], false, true);
+            return Some(());
+        };
+        // Inline push (docs/design/interp-soundness/pushlen.md): the record armed for this vector with room left takes
+        // the element and the pending length; anything else goes to the helper, which flushes, pushes and arms.
+        let flags = cranelift_codegen::ir::MemFlags::trusted();
+        let key = self.b.ins().load(types::I64, flags, self.ctx, rt::PK);
+        let plen = self.b.ins().load(types::I64, flags, self.ctx, rt::PLEN);
+        let pcap = self.b.ins().load(types::I64, flags, self.ctx, rt::PCAP);
+        let same = self.b.ins().icmp_imm(IntCC::Equal, key, rt::view_key(slot, x.ty));
+        let room = self.b.ins().icmp(IntCC::UnsignedLessThan, plen, pcap);
+        let hit = self.b.ins().band(same, room);
+        let (fast, slow, join) = (self.b.create_block(), self.b.create_block(), self.b.create_block());
+        self.b.ins().brif(hit, fast, &[], slow, &[]);
+        self.b.switch_to_block(fast);
+        self.b.seal_block(fast);
+        let ptr = self.b.ins().load(types::I64, flags, self.ctx, rt::PPTR);
+        let off = self.b.ins().imul_imm(plen, size);
+        let addr = self.b.ins().iadd(ptr, off);
+        if size == 1 {
+            let nz = self.b.ins().icmp_imm(IntCC::NotEqual, bits, 0);
+            let nz = self.b.ins().uextend(types::I64, nz);
+            self.b.ins().istore8(flags, nz, addr, 0);
+        } else {
+            self.b.ins().store(flags, bits, addr, 0);
+        }
+        let n = self.b.ins().iadd_imm(plen, 1);
+        self.b.ins().store(flags, n, self.ctx, rt::PLEN);
+        let c = self.b.ins().load(types::I64, flags, self.ctx, rt::PUSH_INL);
+        let c = self.b.ins().iadd_imm(c, 1);
+        self.b.ins().store(flags, c, self.ctx, rt::PUSH_INL);
+        self.b.ins().jump(join, &[]);
+        self.b.switch_to_block(slow);
+        self.b.seal_block(slow);
+        let t = self.k(code(x.ty) | rt::ARM_PUSH);
         self.call("push", rt::push as *const () as usize, &[s, bits, t], false, true);
+        self.b.ins().jump(join, &[]);
+        self.b.switch_to_block(join);
+        self.b.seal_block(join);
         Some(())
     }
 
