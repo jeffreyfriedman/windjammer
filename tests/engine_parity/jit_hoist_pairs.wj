@@ -131,6 +131,21 @@ fn two_roles(a: Vec<Body>, b: Vec<Body>) {
     }
 }
 
+// three vecs: the first and third parameter share a view table entry (their slots differ by 2): both cannot be
+// viewed at once, so the versioned loops take their slow copy
+fn collide(a: Vec<Body>, b: Vec<Body>, c: Vec<Body>) {
+    let mut i = 0
+    while i < a.len() {
+        let mut j = 0
+        while j < c.len() {
+            a[i].x += c[j].m * 0.5 + b[0].m
+            c[j].vx -= a[i].m * 0.25
+            j += 1
+        }
+        i += 1
+    }
+}
+
 fn main() {
     let mut r = 0
     let mut bs = mk(5)
@@ -187,4 +202,13 @@ fn main() {
         r += 1
     }
     println("${sum(w)}")
+    let mut ca = mk(4)
+    let mut cb = mk(4)
+    let mut cc = mk(4)
+    r = 0
+    while r < 100 {
+        collide(ca, cb, cc)
+        r += 1
+    }
+    println("${sum(ca)} ${sum(cb)} ${sum(cc)}")
 }

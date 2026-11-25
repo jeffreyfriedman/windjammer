@@ -23,7 +23,7 @@ use crate::parser::{Expression, Pattern, Statement};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{types, AbiParam, Block, Function, InstBuilder, MemFlags, SigRef, Type as CTy, Value as V};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub(super) type E = &'static Expression<'static>;
 pub(super) type S = &'static Statement<'static>;
@@ -104,7 +104,7 @@ pub(crate) struct LoopInfo {
     /// Index variables of its row accesses: (row slot, row shape, variable name, variable walker slot).
     pub(crate) cands: Vec<(usize, Shape, &'static str, usize)>,
     /// Walker slots of the variables defined (assigned, bound) anywhere inside it.
-    pub(crate) defs: HashSet<usize>,
+    pub(crate) defs: Vec<usize>,
 }
 
 pub(crate) type Info = HashMap<usize, LoopInfo>;
@@ -224,7 +224,7 @@ pub(super) struct Lo<'a, 'i> {
     pub(super) mode: Mode,
     pub(super) info: Info,
     /// Analyze: the statement loops being lowered (their `Info` keys), innermost last.
-    pub(super) active: Vec<usize>,
+    pub(super) active: Vec<(usize, LoopInfo)>,
     /// Analyze: lowering the slow closure of a row access (the fast copy has none).
     pub(super) in_row_slow: bool,
     pub(super) hrows: Vec<HRow>,

@@ -16,8 +16,8 @@ impl Lo<'_, '_> {
     /// Pass A: a variable (walker slot `slot`) is defined here: every active loop assigns it.
     pub(super) fn note_def(&mut self, slot: usize) {
         if self.mode == Mode::Analyze && slot != super::lower::NO_SLOT {
-            for k in &self.active {
-                self.info.entry(*k).or_default().defs.insert(slot);
+            for (_, l) in &mut self.active {
+                l.defs.push(slot);
             }
         }
     }
@@ -30,8 +30,8 @@ impl Lo<'_, '_> {
         }
         match self.mode {
             Mode::Analyze => {
-                for k in &self.active {
-                    self.info.entry(*k).or_default().unsafe_ = true;
+                for (_, l) in &mut self.active {
+                    l.unsafe_ = true;
                 }
             }
             Mode::Fast => self.broken = true,
@@ -41,13 +41,12 @@ impl Lo<'_, '_> {
 
     /// Pass A: a row access of the active loops.
     pub(super) fn note_row(&mut self, row: &Row) {
-        for k in self.active.clone() {
-            let l = self.info.entry(k).or_default();
+        let id_slot = row.index.map(|(id, _)| self.vars[id].slot);
+        for (_, l) in &mut self.active {
             if !l.rows.iter().any(|(s, sh)| *s == row.slot && sh == row.shape) {
                 l.rows.push((row.slot, row.shape.clone()));
             }
-            if let Some((id, name)) = row.index {
-                let islot = self.vars[id].slot;
+            if let (Some((_, name)), Some(islot)) = (row.index, id_slot) {
                 if islot == super::lower::NO_SLOT {
                     continue; // hidden, match-arm and inlined-parameter variables have no walker slot to compare
                 }
@@ -64,10 +63,14 @@ impl Lo<'_, '_> {
         let key = body.as_ptr() as usize;
         match self.mode {
             Mode::Analyze => {
-                self.active.push(key);
-                self.info.entry(key).or_default();
+                self.active.push((key, Default::default()));
                 let r = once(self);
-                self.active.pop();
+                if let Some((k, l)) = self.active.pop() {
+                    // only loops with row accesses are of use to pass B
+                    if !l.rows.is_empty() {
+                        self.info.insert(k, l);
+                    }
+                }
                 return r;
             }
             Mode::Fast => {

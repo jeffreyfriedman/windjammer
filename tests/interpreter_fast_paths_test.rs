@@ -26,7 +26,7 @@ const CASES: &[(&str, &[&str])] = &[
     ("tests/engine_parity/jit_fnunit_boxed_params.wj", &["fnunit"]),
     ("tests/engine_parity/jit_fnunit_param_writes.wj", &["fnunit"]),
     ("tests/engine_parity/jit_row_views.wj", &["rowview"]),
-    ("tests/engine_parity/jit_hoist_pairs.wj", &["rowview", "hoisted"]),
+    ("tests/engine_parity/jit_hoist_pairs.wj", &["rowview", "hoisted", "hoistfail"]),
     ("tests/engine_parity/jit_hoist_disqualified.wj", &["hoisted", "hoistfail"]),
     ("bench/interp/strings.wj", &["pushfmt", "lenfast", "lencmp"]),
     ("tests/engine_parity/len_cmp_cond.wj", &["lencmp"]),
