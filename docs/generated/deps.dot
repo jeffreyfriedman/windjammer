@@ -121,7 +121,7 @@ digraph deps {
   "analyzer" -> "stdlib_scanner" [label="5"];
   "analyzer" -> "stdlib_surface" [label="2"];
   "analyzer" -> "test_utils" [label="1"];
-  "analyzer" -> "type_classification" [label="35"];
+  "analyzer" -> "type_classification" [label="36"];
   "analyzer" -> "type_inference" [label="2"];
   "auto_clone" -> "analyzer" [label="15"];
   "auto_clone" -> "codegen" [label="3",color=red,fontcolor=red];
@@ -359,7 +359,7 @@ digraph deps {
   "interpreter" -> "debug_env" [label="6"];
   "interpreter" -> "error" [label="2"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "interpreter" -> "ir" [label="48"];
+  "interpreter" -> "ir" [label="49"];
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="9"];
   "interpreter" -> "package" [label="4"];
@@ -486,5 +486,5 @@ digraph deps {
   "typing" -> "parser" [label="6"];
   "typing" -> "parser_impl" [label="2"];
   "typing" -> "stdlib_surface" [label="3"];
-  "typing" -> "type_classification" [label="6"];
+  "typing" -> "type_classification" [label="7"];
 }
