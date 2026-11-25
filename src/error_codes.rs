@@ -453,6 +453,16 @@ process::run_with_args("echo", [name])"#.to_string()),
             rust_codes: vec![],
             maturity: GuaranteeMaturity::HighConfidence,
         });
+        self.register(WjErrorCode {
+            code: "WJ0196".to_string(),
+            title: "Unexpected character in shader source".to_string(),
+            explanation: "A WJSL shader contains a character the lexer cannot tokenize, most often a line starting with `#` (WJSL has no `#` comments); it used to end the token stream silently and produce an empty WGSL file.".to_string(),
+            causes: vec!["A `#` comment or directive, or a stray symbol".to_string()],
+            solutions: vec!["Write comments with `//`".to_string(), "Remove the stray character, or use `use \"path\"` to include another shader file".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
     }
 
     /// ADR-0002: explicit `let mut` (WJ0051).

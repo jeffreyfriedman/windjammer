@@ -1025,12 +1025,14 @@ impl<'a> Parser<'a> {
 
 /// Parse WJSL source into AST
 pub fn parse_wjsl(source: &str) -> Result<ShaderModule> {
+    crate::wjsl::diagnostics::reject_unexpected_char(source)?;
     let mut parser = Parser::new(source);
     parser.parse_module()
 }
 
 /// Parse WJSL source with filename for better error messages
 pub fn parse_wjsl_with_filename(source: &str, filename: String) -> Result<ShaderModule> {
+    crate::wjsl::diagnostics::reject_unexpected_char(source)?;
     let mut parser = Parser::new_with_filename(source, filename);
     parser.parse_module()
 }

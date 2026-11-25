@@ -499,3 +499,12 @@ args = ["build", "--target", "wgsl", "{w}/s.wjsl", "-o", "{w}/out"]
 exit = 1
 output_has = ["WJ0195", "did you mean `normalize`"]
 absent = ["out/s.wgsl"]
+
+[[case]]
+name = "build --target wgsl rejects a line starting with # (WJ0196) instead of writing an empty file"
+polarity = "negative"
+files = { "s.wjsl" = "# not a comment\n@compute @workgroup_size(1, 1, 1)\nfn main() {\n    let a = 1.0;\n}\n" }
+args = ["build", "--target", "wgsl", "{w}/s.wjsl", "-o", "{w}/out"]
+exit = 1
+output_has = ["WJ0196", "line 1, column 1", "`//`"]
+absent = ["out/s.wgsl"]
