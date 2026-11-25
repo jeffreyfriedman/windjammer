@@ -48,8 +48,8 @@ impl<'ast> CodeGenerator<'ast> {
         let surface = self.core_surface();
         let keeps_item = |method: &str| {
             matches!(surface.declared(crate::ir::stdlib_tables::ITERATOR, method),
-                Some((generics, _, _, Some(Type::Parameterized(b, p)))) if b == "Iterator"
-                    && matches!((p.as_slice(), generics.first()), ([Type::Generic(x) | Type::Custom(x)], Some(t)) if x == t))
+                Some((generics, _, _, Some(Type::Parameterized(_, p))))
+                    if matches!((p.as_slice(), generics.first()), ([Type::Generic(x) | Type::Custom(x)], Some(t)) if x == t))
         };
         let Expression::MethodCall { object: mut cur, method, .. } = object else { return false };
         // the consumer hands back one item: `Option<T>` over the iterator's own `T`

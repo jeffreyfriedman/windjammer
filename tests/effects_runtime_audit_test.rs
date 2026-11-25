@@ -40,7 +40,12 @@ fn chunks(src: &str) -> Vec<Chunk> {
         .iter()
         .enumerate()
         .map(|(k, (i, name, public))| {
-            let end = starts.get(k + 1).map(|s| s.0).unwrap_or(lines.len());
+            // a function's doc comment and attributes belong to the NEXT function: they are not part of this body (a doc
+            // comment that names `std::fs::copy` is not a call of it)
+            let mut end = starts.get(k + 1).map(|s| s.0).unwrap_or(lines.len());
+            while end > *i + 1 && matches!(lines[end - 1].trim_start(), t if t.starts_with("///") || t.starts_with("#[")) {
+                end -= 1;
+            }
             Chunk { name: name.clone(), public: *public, text: lines[*i..end].join("\n") }
         })
         .collect()
