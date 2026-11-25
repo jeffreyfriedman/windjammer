@@ -69,6 +69,32 @@ impl<'ast> CodeGenerator<'ast> {
         prev
     }
 
+    /// `Vec<f64>` / `Vec<f32>` receiver: the float element type for generic store formals (`push(T)`).
+    fn mc_collection_float_elem(
+        &self,
+        object: &Expression<'ast>,
+        receiver_type_inferred: &Option<Type>,
+    ) -> Option<Type> {
+        let receiver_ty = receiver_type_inferred.clone().or_else(|| match object {
+            Expression::Identifier { name, .. } => self
+                .local_var_types
+                .get(name.as_str())
+                .cloned()
+                .or_else(|| {
+                    self.current_function_params
+                        .iter()
+                        .find(|p| p.name == *name)
+                        .map(|p| p.type_.clone())
+                }),
+            _ => None,
+        });
+        receiver_ty.as_ref().and_then(|rty| {
+            Self::peeled_collection_element_type(rty)
+                .filter(|e| crate::codegen::rust::type_classification_utilities::is_float_type(e))
+                .cloned()
+        })
+    }
+
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn mc_build_method_call_arg_strings(
         &mut self,
@@ -81,29 +107,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.refresh_pure_forwarding_delegate_flag();
         let prev_float_target = self.push_float_method_argument_context(method, object);
         let receiver_type_inferred = self.infer_expression_type(object);
-        // `Vec<f64>` / `Vec<f32>` receiver → float element type for generic store formals (`push(T)`).
-        let collection_float_elem: Option<Type> = {
-            let receiver_ty = receiver_type_inferred.clone().or_else(|| match object {
-                Expression::Identifier { name, .. } => self
-                    .local_var_types
-                    .get(name.as_str())
-                    .cloned()
-                    .or_else(|| {
-                        self.current_function_params
-                            .iter()
-                            .find(|p| p.name == *name)
-                            .map(|p| p.type_.clone())
-                    }),
-                _ => None,
-            });
-            receiver_ty.as_ref().and_then(|rty| {
-                Self::peeled_collection_element_type(rty)
-                    .filter(|e| {
-                        crate::codegen::rust::type_classification_utilities::is_float_type(e)
-                    })
-                    .cloned()
-            })
-        };
+        let collection_float_elem = self.mc_collection_float_elem(object, &receiver_type_inferred);
         if self.assignment_float_target_type.is_none() {
             if let Some(ref elem) = collection_float_elem {
                 self.assignment_float_target_type = Some(elem.clone());

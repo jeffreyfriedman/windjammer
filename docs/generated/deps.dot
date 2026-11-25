@@ -117,9 +117,9 @@ digraph deps {
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="9"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
-  "analyzer" -> "parser" [label="149"];
+  "analyzer" -> "parser" [label="151"];
   "analyzer" -> "stdlib_scanner" [label="5"];
-  "analyzer" -> "stdlib_surface" [label="1"];
+  "analyzer" -> "stdlib_surface" [label="2"];
   "analyzer" -> "test_utils" [label="1"];
   "analyzer" -> "type_classification" [label="35"];
   "analyzer" -> "type_inference" [label="2"];
@@ -150,11 +150,11 @@ digraph deps {
   "cargo_toml" -> "config" [label="7"];
   "cargo_toml" -> "embedded_assets" [label="2"];
   "cargo_toml" -> "package" [label="1"];
-  "check" -> "analyzer" [label="5"];
+  "check" -> "analyzer" [label="6"];
   "check" -> "codegen" [label="2"];
   "check" -> "compiler_config" [label="3"];
   "check" -> "debug_env" [label="29"];
-  "check" -> "diagnostics" [label="42"];
+  "check" -> "diagnostics" [label="43"];
   "check" -> "embedded_assets" [label="4"];
   "check" -> "fuzzy_matcher" [label="5"];
   "check" -> "intrinsics" [label="2"];
@@ -176,7 +176,7 @@ digraph deps {
   "cli" -> "analyzer" [label="2"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="48"];
+  "cli" -> "cargo_cache" [label="50"];
   "cli" -> "cargo_toml" [label="5"];
   "cli" -> "check" [label="36"];
   "cli" -> "codegen" [label="7"];
@@ -233,7 +233,7 @@ digraph deps {
   "cli_project_build" -> "parser_impl" [label="1"];
   "cli_project_build" -> "project_paths" [label="1"];
   "cli_project_build" -> "type_classification" [label="1"];
-  "codegen" -> "analyzer" [label="659"];
+  "codegen" -> "analyzer" [label="660"];
   "codegen" -> "auto_clone" [label="6"];
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
@@ -243,7 +243,7 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="435"];
+  "codegen" -> "ir" [label="436"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "module_system" [label="2"];
@@ -262,7 +262,7 @@ digraph deps {
   "compiler" -> "build_utils" [label="4"];
   "compiler" -> "cargo_cache" [label="3"];
   "compiler" -> "cargo_toml" [label="5"];
-  "compiler" -> "codegen" [label="39"];
+  "compiler" -> "codegen" [label="40"];
   "compiler" -> "compiler_config" [label="11"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
@@ -279,7 +279,7 @@ digraph deps {
   "compiler" -> "module_system" [label="3"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
-  "compiler" -> "parser" [label="117"];
+  "compiler" -> "parser" [label="118"];
   "compiler" -> "project_paths" [label="13"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
@@ -354,7 +354,7 @@ digraph deps {
   "ide_analysis" -> "type_display" [label="1"];
   "inference" -> "parser" [label="9"];
   "inference" -> "test_utils" [label="1"];
-  "interpreter" -> "analyzer" [label="5"];
+  "interpreter" -> "analyzer" [label="7"];
   "interpreter" -> "codegen" [label="1"];
   "interpreter" -> "debug_env" [label="6"];
   "interpreter" -> "error" [label="2"];
@@ -363,9 +363,9 @@ digraph deps {
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="9"];
   "interpreter" -> "package" [label="4"];
-  "interpreter" -> "parser" [label="148"];
+  "interpreter" -> "parser" [label="149"];
   "interpreter" -> "resolve" [label="15"];
-  "interpreter" -> "source_map" [label="20"];
+  "interpreter" -> "source_map" [label="22"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_classification" [label="1"];
@@ -477,7 +477,7 @@ digraph deps {
   "type_inference" -> "metadata" [label="5",color=red,fontcolor=red];
   "type_inference" -> "parser" [label="56"];
   "type_inference" -> "parser_impl" [label="2"];
-  "type_inference" -> "source_map" [label="1"];
+  "type_inference" -> "source_map" [label="3"];
   "type_inference" -> "stdlib_surface" [label="1"];
   "type_inference" -> "type_classification" [label="20"];
   "type_inference" -> "type_display" [label="1"];

@@ -28,7 +28,7 @@ pub fn make(s: String) -> Item {
 
 fn main() {
     let x = a::make(7_i64);
-    let y = b::make(String::from("abc"));
+    let y = b::make("abc".to_string());
     println!("{} {}", x.n, y.s.len());
 }
 

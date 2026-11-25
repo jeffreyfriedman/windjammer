@@ -25,7 +25,7 @@ fn main() {
         Ok(_) => String::from("ok"),
         Err(e) => e,
     };
-    let n = service::record(Deps { audit: MemAudit {  } }, String::from("xyz"));
+    let n = service::record(Deps { audit: MemAudit {  } }, "xyz".to_string());
     println!("{} {}", ok, n);
 }
 

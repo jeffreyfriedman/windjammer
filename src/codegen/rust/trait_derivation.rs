@@ -8,6 +8,9 @@ use crate::parser::*;
 
 use super::CodeGenerator;
 
+/// (types supporting `PartialEq`, (structs that cannot derive Debug/Clone, every declared type name)) of a crate.
+pub type CrateDeclFacts = (std::collections::HashSet<String>, (std::collections::HashSet<String>, std::collections::HashSet<String>));
+
 impl CodeGenerator<'_> {
     /// Merge user-listed `#[derive]` traits with compiler-inferred ones.
     ///
@@ -271,24 +274,46 @@ impl CodeGenerator<'_> {
 
     /// Fixpoint pass: record every struct that transitively contains a type that blocks Debug/Clone derive.
     pub(super) fn collect_trait_object_types(&mut self, program: &Program) {
+        self.collect_trait_object_types_all(&[program]);
+    }
+
+    /// The same fixpoint over every file of a crate. A struct holding a type declared in another module is decided
+    /// by that declaration, never by the file at hand, so the result does not depend on file order. The names of
+    /// every type the crate declares are recorded first: a user `Connection` is not the runtime's `Connection`.
+    pub fn collect_trait_object_types_all(&mut self, programs: &[&Program]) {
+        for program in programs {
+            for item in &program.items {
+                match item {
+                    Item::Struct { decl, .. } => {
+                        self.idiom.crate_user_type_names.insert(decl.name.clone());
+                    }
+                    Item::Enum { decl, .. } => {
+                        self.idiom.crate_user_type_names.insert(decl.name.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
         loop {
             let sz = self.trait_object_types.len();
 
-            for item in &program.items {
-                if let Item::Struct { decl: s, .. } = item {
-                    if self.trait_object_types.contains(&s.name) {
-                        continue;
-                    }
-                    let field_types: Vec<&Type> = if let Some(ref tf) = s.tuple_fields {
-                        tf.iter().collect()
-                    } else {
-                        s.fields.iter().map(|f| &f.field_type).collect()
-                    };
-                    if field_types
-                        .iter()
-                        .any(|t| self.type_precludes_auto_debug_clone(t))
-                    {
-                        self.trait_object_types.insert(s.name.clone());
+            for program in programs {
+                for item in &program.items {
+                    if let Item::Struct { decl: s, .. } = item {
+                        if self.trait_object_types.contains(&s.name) {
+                            continue;
+                        }
+                        let field_types: Vec<&Type> = if let Some(ref tf) = s.tuple_fields {
+                            tf.iter().collect()
+                        } else {
+                            s.fields.iter().map(|f| &f.field_type).collect()
+                        };
+                        if field_types
+                            .iter()
+                            .any(|t| self.type_precludes_auto_debug_clone(t))
+                        {
+                            self.trait_object_types.insert(s.name.clone());
+                        }
                     }
                 }
             }
@@ -297,6 +322,24 @@ impl CodeGenerator<'_> {
                 break;
             }
         }
+    }
+
+    /// A struct or enum some module of this crate (or this file) declares: it is that type, not a runtime one of the same name.
+    pub(super) fn type_is_declared_in_crate(&self, base: &str) -> bool {
+        self.idiom.crate_user_type_names.contains(base) || self.user_declared_struct_names.contains(base)
+    }
+
+    /// (structs of the crate that cannot derive Debug/Clone, every type name the crate declares).
+    pub fn crate_derive_facts_snapshot(&self) -> (std::collections::HashSet<String>, std::collections::HashSet<String>) {
+        (self.trait_object_types.clone(), self.idiom.crate_user_type_names.clone())
+    }
+
+    /// Seed the declaration facts of the other modules of this crate before generating a file: the types that support
+    /// `PartialEq`, and the derive facts (`crate_derive_facts_snapshot`).
+    pub fn set_crate_decl_facts(&mut self, facts: CrateDeclFacts) {
+        self.partial_eq_types.extend(facts.0);
+        self.trait_object_types.extend((facts.1).0);
+        self.idiom.crate_user_type_names.extend((facts.1).1);
     }
 
     /// TDD FIX: Check if a type is Copy, including user-defined types with @derive(Copy)
@@ -472,10 +515,6 @@ impl CodeGenerator<'_> {
         self.partial_eq_types.clone()
     }
 
-    /// Seed the `PartialEq` facts of the other modules of this crate before generating a file.
-    pub fn set_crate_partial_eq_types(&mut self, types: std::collections::HashSet<String>) {
-        self.partial_eq_types.extend(types);
-    }
 
     /// True if `generate_struct` will emit a `#[derive(...)]` that includes `PartialEq`
     /// (explicit `@derive` / `@auto`, or implicit auto-derive when there is no derive decorator).

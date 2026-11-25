@@ -15,7 +15,7 @@ fn draft(a: String, b: String) -> Doc {
 
 #[inline]
 pub fn make(a: String) -> Doc {
-    draft(a, String::from("x"))
+    draft(a, "x".to_string())
 }
 
 // ==== lib.rs ====

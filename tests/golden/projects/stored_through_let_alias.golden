@@ -12,7 +12,7 @@ fn main() {
     let mut headers: Vec<String> = Vec::new();
     headers.push(String::from("a"));
     headers.push(String::from("b"));
-    let req = request::make_request(headers, String::from("/x"));
+    let req = request::make_request(headers, "/x".to_string());
     println!("{} {}", req.headers.len(), &req.headers[0]);
 }
 

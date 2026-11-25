@@ -31,17 +31,21 @@ pub(super) fn apply_stdlib_api_types(
     }
 }
 
-/// `PartialEq` of a struct whose fields are declared in another module of this crate: decided once over every module's
+/// `PartialEq` (and Debug/Clone derivability) of a struct whose fields are declared in another module of this crate: decided once over every module's
 /// declarations (a per-file pass cannot see them). `registries` is (Copy, explicit Copy, non-Copy) types.
 pub(super) fn crate_partial_eq_types(
     programs: &[crate::parser::Program<'_>],
     registries: (&HashSet<String>, &HashSet<String>, &HashSet<String>),
     target: CompilationTarget,
-) -> HashSet<String> {
+) -> crate::codegen::rust::trait_derivation::CrateDeclFacts {
     let mut g = CodeGenerator::new_for_module(SignatureRegistry::new(), target);
     g.set_copy_types_registry(registries.0.clone());
     g.set_explicit_copy_types_registry(registries.1.clone());
     g.set_non_copy_types_registry(registries.2.clone());
-    g.collect_partial_eq_types_all(&programs.iter().collect::<Vec<_>>());
-    g.partial_eq_types_snapshot()
+    let all: Vec<&crate::parser::Program<'_>> = programs.iter().collect();
+    // which structs cannot derive Debug/Clone is decided over the same declarations, first (the PartialEq facts read it): a struct
+    // and the struct that holds it agree whichever file is generated first
+    g.collect_trait_object_types_all(&all);
+    g.collect_partial_eq_types_all(&all);
+    (g.partial_eq_types_snapshot(), g.crate_derive_facts_snapshot())
 }

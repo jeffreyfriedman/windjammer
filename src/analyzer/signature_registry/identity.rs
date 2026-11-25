@@ -248,7 +248,8 @@ impl SignatureRegistry {
 }
 
 /// `Vec::contains`, `String::push`, `HashMap::get`: a method of a builtin value type (not of a runtime module's type).
+/// The builtin value types are the ones `std/rust_core.wji` declares (`CoreType`); no name list is kept here.
 pub(super) fn key_is_builtin_type_method(key: &str) -> bool {
     let owner = key.rsplit_once("::").map_or("", |(o, _)| o.rsplit("::").next().unwrap_or(o));
-    crate::type_classification::is_stdlib_container(owner) || matches!(owner, "String" | "str" | "string")
+    crate::stdlib_surface::lowering::CoreType::from_trait(owner).is_some()
 }

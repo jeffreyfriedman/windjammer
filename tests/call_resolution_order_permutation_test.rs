@@ -135,3 +135,22 @@ fn homonym_matrix_each_call_resolves_to_its_receiver() {
     assert_has(&out, "{M3}.rs", "ledger.contains(id)");
     assert_has(&out, "{M3}.rs", "Counter::record(\"static\".to_string())");
 }
+
+/// A string literal passed to the free fn `tag(a: string, b: string)` (owned formals; a method `Probe::tag` shares
+/// the name) is spelled `"p".to_string()` under two file orders and `String::from("p")` under the two others.
+/// Both compile, but output must not depend on file order. FAILS today: the gate found it; not fixed yet.
+#[test]
+fn literal_into_free_fn_owned_formal_spelling_is_order_independent() {
+    let out = assert_order_independent(&[
+        // Owned: the key is stored.
+        ("{M0}.wj", "pub struct Ledger {\n    keys: Vec<string>,\n}\n\nimpl Ledger {\n    pub fn record(self, key: string) {\n        self.keys.push(key)\n    }\n\n    pub fn contains(self, id: i64) -> bool {\n        id > 0\n    }\n}\n"),
+        // Borrowed: the key is only read.
+        // `tag` is also a free fn with owned formals of the same shape (registered under the bare key `tag`).
+        ("{M1}.wj", "pub struct Probe {\n    pub hits: i64,\n}\n\nimpl Probe {\n    pub fn record(self, key: string) -> bool {\n        key.len() > 0\n    }\n\n    pub fn push(self, frame: string) -> bool {\n        frame.len() > 1\n    }\n\n    pub fn tag(self, a: string, b: string) -> bool {\n        a.len() > b.len()\n    }\n}\n\npub fn tag(a: string, b: string) -> Vec<string> {\n    vec![a, b]\n}\n"),
+        // Static fn of the same name: owned, stored in the result.
+        ("{M2}.wj", "pub struct Counter {\n    pub label: string,\n}\n\nimpl Counter {\n    pub fn record(key: string) -> Counter {\n        Counter { label: key }\n    }\n}\n"),
+        // Caller: every homonym once, plus the builtin `Vec::contains` / `Vec::push` on a late-inferred local.
+        ("{M3}.wj", "pub fn drive(ledger: Ledger, probe: Probe, ids: Vec<i64>) -> Counter {\n    ledger.record(\"owned\")\n    let seen_probe = probe.record(\"shared\")\n    let pushed = probe.push(\"frame\") && probe.tag(\"x\", \"y\") && tag(\"p\", \"q\").len() > 1\n    let mut seen = Vec::new()\n    let mut j = 0\n    while j < ids.len() {\n        let id = ids[j]\n        if !seen.contains(id) && ledger.contains(id) {\n            seen.push(id)\n        }\n        j = j + 1\n    }\n    let mut names = Vec::new()\n    names.push(\"n\")\n    if seen_probe && pushed && seen.len() > names.len() {\n        return Counter::record(\"static\")\n    }\n    Counter::record(\"other\")\n}\n"),
+    ]);
+    assert_has(&out, "{M3}.rs", "tag(\"p\".to_string(), \"q\".to_string())");
+}

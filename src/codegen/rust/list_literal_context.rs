@@ -76,10 +76,10 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::Array { elements, .. } if tail && !elements.is_empty() => {
                     out.insert(elements.as_ptr() as usize);
                 }
-                Expression::MacroInvocation { is_repeat: false, name, args, .. }
+                Expression::MacroInvocation { is_repeat: false, args, .. }
                     if tail
                         && !args.is_empty()
-                        && name == "vec" =>
+                        && crate::codegen::rust::call_site_borrow::expression_is_vec_macro_literal(e) =>
                 {
                     out.insert(args.as_ptr() as usize);
                 }
@@ -149,20 +149,25 @@ impl<'ast> CodeGenerator<'ast> {
     /// `x ?? [a]` / `x.unwrap_or_else(|| [a])` on an `Option<Vec<T>>` / `Result<Vec<T>, E>`: the closure returns the
     /// payload type, so the list literals in its value position are `Vec`s (never fixed arrays).
     pub(in crate::codegen::rust) fn record_default_closure_lists(&mut self, method: &str, arg: &Expression<'ast>, recv: Option<&Type>) {
-        if method != "unwrap_or_else" {
-            return;
-        }
         let Expression::Closure { body, .. } = arg else { return };
-        let payload = match recv {
+        let receiver = match recv {
             Some(Type::Reference(inner)) => inner.as_ref(),
             Some(other) => other,
             None => return,
         };
-        let payload = match payload {
+        let payload = match receiver {
             Type::Option(inner) => inner.as_ref(),
             Type::Result(ok, _) => ok.as_ref(),
             _ => return,
         };
+        // The declaration decides which method takes a closure that yields the payload (`unwrap_or_else(f: fn() -> T) -> T`).
+        let yields_payload = self.core_surface().method_signature(receiver, method, &[]).is_some_and(|sig| {
+            matches!(sig.params.first(), Some(Type::FunctionPointer { return_type: Some(r), .. }) if r.as_ref() == payload)
+                && sig.ret.as_ref() == Some(payload)
+        });
+        if !yields_payload {
+            return;
+        }
         if Self::holds_list(payload) {
             let tails = Self::collect_value_position_lists(body, payload);
             self.idiom.declared_let_list_literals.extend(tails);

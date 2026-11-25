@@ -182,7 +182,7 @@ fn identity<T>(x: T) -> T {
 #[inline]
 fn test_generic_identity() {
     let a = identity(42_i64);
-    let b = identity(String::from("hello"));
+    let b = identity("hello".to_string());
     println!("[generic_identity] int: {}", a);
     println!("[generic_identity] string: {}", b);
 }

@@ -10,7 +10,7 @@ pub use rows::*;
 mod rows;
 fn main() {
     let r = rows::Row { cols: vec!["a".to_string(), "b".to_string()] };
-    let (r2, s) = rows::tag(r, String::from("x"));
+    let (r2, s) = rows::tag(r, "x".to_string());
     println!("{} {}", s, r2.cols.len());
 }
 
