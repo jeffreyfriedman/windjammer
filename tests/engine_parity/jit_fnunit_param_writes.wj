@@ -1,6 +1,6 @@
 // Function units whose parameters are written by machine code and read by the caller after the unit's end: a `&mut` scalar,
 // a `&mut` struct's fields, a scalar written after the last loop. The end exit keeps no register state the caller needs
-// (see SOUNDNESS-fnunit2 / `lower.rs::unit_body`): the output equals the walker's.
+// (see docs/design/interp-soundness/fnunit2.md / `lower.rs::unit_body`): the output equals the walker's.
 struct P {
     x: int,
     n: int,
