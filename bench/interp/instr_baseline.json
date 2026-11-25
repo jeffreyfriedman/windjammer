@@ -1,15 +1,15 @@
 {
  "callgrind:Linux-x86_64": {
-  "agent_loop": 356910765,
-  "closures": 107113207,
-  "fib30": 141858259,
-  "hashmap": 156665689,
-  "loop5m": 229645998,
-  "nbody": 459717327,
-  "sieve": 289609247,
-  "startup": 32841958,
-  "strings": 251386056,
-  "structs": 89312202
+  "agent_loop": 352573264,
+  "closures": 106414627,
+  "fib30": 140932105,
+  "hashmap": 155374506,
+  "loop5m": 228705242,
+  "nbody": 458145094,
+  "sieve": 174886212,
+  "startup": 32191655,
+  "strings": 250268336,
+  "structs": 87861728
  },
  "callgrind:Linux-x86_64:method": {
   "cwd_chars": 73,
@@ -18,16 +18,16 @@
   "runs": 3
  },
  "callgrind:Linux-x86_64:warm": {
-  "agent_loop": 24353519,
+  "agent_loop": 24220687,
   "closures": 40190226,
-  "fib30": 101790350,
-  "hashmap": 85365159,
-  "loop5m": 190821718,
+  "fib30": 101665700,
+  "hashmap": 85227401,
+  "loop5m": 190695712,
   "nbody": 318342071,
-  "sieve": 230476305,
-  "startup": 4309252,
-  "strings": 194732287,
-  "structs": 31222547
+  "sieve": 116750780,
+  "startup": 4178172,
+  "strings": 194601573,
+  "structs": 31116741
  },
  "notes": {},
  "retired:Darwin-arm64": {
