@@ -690,6 +690,14 @@ pub(crate) struct FastHits {
     pub(crate) scalarpipe: u64,
     /// Typed drains that met an element they do not handle (overflow, zero divisor, a non-integer item) and left it to the boxed path.
     pub(crate) scalarbail: u64,
+    /// Function units (`jit/osr.rs`) that ran a whole function body in one machine-code run (struct-vec design, step 1).
+    pub(crate) fnunit: u64,
+    /// Native calls of a compiled function from machine code (`jit/rt.rs::call_unit`, step 2).
+    pub(crate) callunit: u64,
+    /// Row views and packed views handed from a caller's `Ctx` to its callee's and back (step 2).
+    pub(crate) rowhandoff: u64,
+    /// Struct-vector rows packed into a flat table of fields at a unit boundary (step 4).
+    pub(crate) rowpack: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,

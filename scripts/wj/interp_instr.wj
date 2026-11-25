@@ -6,6 +6,9 @@
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --check        fail when a kernel counts more than its recorded
 //                                                              instructions + 3% (bench/interp/instr_baseline.json)
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --self-test   check that the warm-row guard fires on a mislabelled row
+//   wj run scripts/wj/interp_instr.wj -- WJ_BIN --marginal     print the marginal Ir per unit of work of the scaling kernels
+//                                                              ((Ir at 10x - Ir at 1x) / (work10 - work1), cold counts of
+//                                                              bench/interp/scaling/gen/{1x,10x}); no ratchet, nothing recorded
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --write        record the counts (lower only; --allow-raise to raise,
 //                                                              --raise K1,K2 to raise only those kernels)
 //   wj run scripts/wj/interp_instr.wj -- WJ_BIN --self-test-write   check that --write refuses inside a git work tree
@@ -59,6 +62,7 @@ const BASELINE: string = "bench/interp/instr_baseline.json"
 const STARTUP: string = "bench/interp/startup/hello.wj"
 const AGENT_LOOP: string = "bench/interp/startup/agent_loop.wj"
 const SLACK_PCT: int = 3
+const SCALING: string = "bench/interp/scaling"
 
 struct Count {
     instr: int,
@@ -367,10 +371,115 @@ fn self_test_write(wj: string, cwd: string) {
     println("self-test-write ok: --write is refused inside a git work tree")
 }
 
+// One row of bench/interp/scaling/sizes.toml: the work multiplier against 1x and the kernel's first size parameter
+// (steps, n, iters: its count of work units at this label; 0 when the section has none).
+struct Size {
+    kernel: string,
+    label: string,
+    work: f64,
+    unit: int,
+}
+
+// The sections of sizes.toml ("[nbody.10x]" then "work = 10" and "steps = 200000").
+fn read_sizes() -> Vec<Size> {
+    let text = fs::read_to_string("${SCALING}/sizes.toml") ?? ""
+    let mut out: Vec<Size> = Vec::new()
+    let mut kernel = ""
+    let mut label = ""
+    let mut work = 0.0
+    let mut unit = 0
+    let mut open = false
+    for raw in strings.split_lines(text) {
+        let l = strings.trim(raw)
+        if l.starts_with("[") && l.ends_with("]") {
+            if open {
+                out.push(Size { kernel: kernel, label: label, work: work, unit: unit })
+            }
+            let name = l[1..l.len() - 1].to_string()
+            let parts: Vec<string> = name.split(".").collect()
+            kernel = parts[0]
+            label = parts[1]
+            work = 0.0
+            unit = 0
+            open = true
+        } else if open && l.contains("=") && !l.starts_with("#") {
+            let kv: Vec<string> = l.split("=").collect()
+            let k = strings.trim(kv[0])
+            let v = strings.trim(kv[1])
+            if k == "work" {
+                work = v.parse::<f64>() ?? 0.0
+            } else if unit == 0 {
+                unit = v.parse::<int>() ?? 0
+            }
+        }
+    }
+    if open {
+        out.push(Size { kernel: kernel, label: label, work: work, unit: unit })
+    }
+    out
+}
+
+fn size_of(sizes: Vec<Size>, kernel: string, label: string) -> Option<Size> {
+    for z in sizes {
+        if z.kernel == kernel && z.label == label {
+            return Some(z)
+        }
+    }
+    None
+}
+
+fn one_decimal(x: f64) -> f64 {
+    (x * 10.0).round() / 10.0
+}
+
+// `--marginal`: for every kernel with a 1x and a 10x scaling program, the cold count of each (the ratchet's own
+// machinery: a fresh copy of `seed` per run, the recorded output checked) and
+//   marginal = (Ir10x - Ir1x) / (work10x - work1x)      Ir per 1x-sized workload
+//   per unit = marginal / unit1x                        Ir per step / element / iteration (the report's "marginal Ir/unit")
+//   fixed    = Ir1x - marginal * work1x                 start-up, front end, compile, warm-up
+// printed as JSON on stdout. The program of a label is bench/interp/scaling/gen/<label>/<kernel>.wj.
+fn marginal(c: string, wj: string, runs: int, seed: string, cwd: string) {
+    let sizes = read_sizes()
+    let mut rows = object()
+    for z in sizes {
+        if z.label != "1x" {
+            continue
+        }
+        let big = match size_of(sizes, z.kernel, "10x") {
+            Some(b) => b,
+            None => continue,
+        }
+        let mut ir: Vec<int> = Vec::new()
+        for label in ["1x", "10x"] {
+            let prog = "${cwd}/${SCALING}/gen/${label}/${z.kernel}.wj"
+            let expected = fs::read_to_string("${SCALING}/expected/${label}/${z.kernel}.out") ?? ""
+            ir.push(measure(c, quote(wj) + " run --no-lint " + quote(prog), runs, expected, "${z.kernel} ${label}", "cold:" + seed))
+        }
+        let dwork = big.work - z.work
+        if dwork <= 0.0 {
+            continue
+        }
+        let marg = ((ir[1] - ir[0]) as f64) / dwork
+        let mut row = with(object(), "ir_1x", from_int(ir[0] as i64))
+        row = with(row, "ir_10x", from_int(ir[1] as i64))
+        row = with(row, "work_1x", from_float(z.work))
+        row = with(row, "work_10x", from_float(big.work))
+        row = with(row, "marginal_ir_per_work", from_float(one_decimal(marg)))
+        if z.unit > 0 {
+            row = with(row, "unit_1x", from_int(z.unit as i64))
+            row = with(row, "marginal_ir_per_unit", from_float(one_decimal(marg / (z.unit as f64))))
+        }
+        row = with(row, "fixed_ir", from_float(one_decimal((ir[0] as f64) - marg * z.work)))
+        rows = with(rows, z.kernel, row)
+    }
+    let res = with(with(object(), "counter", from_str(platform_key(c))), "marginal", rows)
+    println(dumps(res, 1, true))
+}
+
 fn main() {
     let args = env.args()
     if args.len() < 2 {
-        eprintln("usage: interp_instr.wj WJ_BIN [--refs] [--check] [--write [--allow-raise | --raise K1,K2]] [--runs N]")
+        eprintln("usage: interp_instr.wj WJ_BIN [--refs] [--marginal] [--check] [--write [--allow-raise | --raise K1,K2]] [--runs N]")
         process.exit(1)
     }
     let wj = args[1]
@@ -409,6 +518,11 @@ fn main() {
     }
     if args.contains("--self-test") {
         self_test(c, wj, cwd, seed)
+        return
+    }
+    if args.contains("--marginal") {
+        marginal(c, wj, runs, seed, cwd)
+        sh_out("rm -rf " + quote(seed))
         return
     }
     // startup: the smallest program through the default `wj run` path
