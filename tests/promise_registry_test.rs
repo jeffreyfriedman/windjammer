@@ -173,18 +173,26 @@ fn run_all(sb: &Sandbox, cases: &[(String, Case)]) -> Vec<String> {
         }
     }
     let fails = std::sync::Mutex::new(Vec::new());
+    let run_chunk = |chunk: &[&(String, Case)]| {
+        for (file, c) in chunk {
+            match (promise::runner::run_case(sb, c), &c.xfail) {
+                (Err(e), None) => fails.lock().unwrap().push(format!("{file}: {} ({}):\n{e}", c.name, c.polarity)),
+                (Ok(()), Some(bug)) => fails.lock().unwrap().push(format!("{file}: {}: xfail case now passes ({bug}): remove `xfail`", c.name)),
+                _ => {}
+            }
+        }
+    };
+    // The sandbox has one cache tree (HOME/Library/Caches/windjammer/cargo-target/shared). Cases that run cargo build into
+    // it, and `wj clean --all` / `wj cache prune --force` delete it: run concurrently, the cleaner removed the tree under a
+    // running build and cargo failed with `could not write output to .../shared/debug/build/libc/<hash>/out/...: No such
+    // file or directory` (reported as WJ0099 in the verify case, one run in ten). Those cases run one after another
+    // on one thread; the rest run in parallel.
+    let shares_cache = |c: &Case| c.needs.is_some() || matches!(c.args.first().map(String::as_str), Some("clean" | "cache"));
+    let (cargo_cases, plain): (Vec<&(String, Case)>, Vec<&(String, Case)>) = runnable.into_iter().partition(|(_, c)| shares_cache(c));
     std::thread::scope(|s| {
-        for chunk in runnable.chunks(runnable.len().div_ceil(4).max(1)) {
-            let fails = &fails;
-            s.spawn(move || {
-                for (file, c) in chunk {
-                    match (promise::runner::run_case(sb, c), &c.xfail) {
-                        (Err(e), None) => fails.lock().unwrap().push(format!("{file}: {} ({}):\n{e}", c.name, c.polarity)),
-                        (Ok(()), Some(bug)) => fails.lock().unwrap().push(format!("{file}: {}: xfail case now passes ({bug}): remove `xfail`", c.name)),
-                        _ => {}
-                    }
-                }
-            });
+        s.spawn(|| run_chunk(&cargo_cases));
+        for chunk in plain.chunks(plain.len().div_ceil(4).max(1)) {
+            s.spawn(move || run_chunk(chunk));
         }
     });
     fails.into_inner().unwrap()
