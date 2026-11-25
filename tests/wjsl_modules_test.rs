@@ -219,3 +219,18 @@ fn s1_module_qualified_names_are_user_functions_for_the_undefined_function_check
     let err = emit(d.path(), "skin.wjsl").unwrap_err();
     assert!(err.contains("WJ0195") || err.contains("fresnel_schlik"), "{err}");
 }
+
+#[test]
+fn s1_import_and_mod_keywords_get_a_message_that_says_what_to_write() {
+    let frag = "@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0);\n}\n";
+    let d = tree(&[("e.wjsl", &format!("import \"../lib/brdf.wjsl\";\n{frag}"))]);
+    assert_eq!(
+        emit(d.path(), "e.wjsl").unwrap_err(),
+        "e.wjsl:1:1: error[WJ0197]: WJSL has no `import`: write `use crate::module::item` (module import, same folder) or `use \"path\"` (text include)\n  fix: replace the line with a `use` import"
+    );
+    let d = tree(&[("e.wjsl", &format!("// c\nmod brdf;\n{frag}"))]);
+    assert_eq!(
+        emit(d.path(), "e.wjsl").unwrap_err(),
+        "e.wjsl:2:1: error[WJ0197]: WJSL has no `mod`: a module is a file; write `use crate::module::item` to import from `module.wjsl` in the same folder\n  fix: replace the line with a `use` import"
+    );
+}

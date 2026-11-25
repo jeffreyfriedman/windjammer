@@ -194,6 +194,22 @@ fn scan_top_level(source: &str, file: &str) -> Result<Scan> {
         if at_top {
             let indent = raw.len() - raw.trim_start().len();
             let trimmed = &raw[indent..];
+            for (kw, advice) in [
+                ("import", "WJSL has no `import`: write `use crate::module::item` (module import, same folder) or `use \"path\"` (text include)"),
+                ("mod", "WJSL has no `mod`: a module is a file; write `use crate::module::item` to import from `module.wjsl` in the same folder"),
+            ] {
+                let is_kw = trimmed.strip_prefix(kw).is_some_and(|r| r.starts_with(|c: char| c.is_whitespace() || c == '"'));
+                if is_kw {
+                    return Err(diag(
+                        "WJ0197",
+                        file,
+                        line_no,
+                        indent + 1,
+                        advice,
+                        "replace the line with a `use` import",
+                    ));
+                }
+            }
             if let Some(rest) = trimmed.strip_prefix("use ") {
                 if !rest.trim_start().starts_with('"') {
                     parse_use(rest, raw, line_no, file, &mut uses)?;
@@ -264,7 +280,7 @@ fn parse_use(rest: &str, raw: &str, line: usize, file: &str, out: &mut Vec<UseDe
     };
     let segs: Vec<&str> = body.splitn(3, "::").collect();
     if segs.len() < 2 || segs[0] != "crate" {
-        return Err(bad(&format!("unsupported import `{body}`: only `crate::` paths into the same folder are supported")));
+        return Err(bad(&format!("unsupported import `{body}`: write `use crate::module::item` (same folder) or `use \"path\"` (text include)")));
     }
     let module = segs[1].trim().to_string();
     if module.is_empty() || !module.chars().all(is_ident_char) {

@@ -917,7 +917,7 @@ pub static ERRORS: &[CodeInfo] = &[
         fix: "Create the module file next to the entry file, fix the spelling, or import each name once; import two same-named items through their modules (`use crate::a`, then `a::name(..)`).",
         example_bad: "use crate::nope::helper\n\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(helper());\n}",
         example_good: "use crate::brdf::fresnel_schlick\n\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(fresnel_schlick(0.5, 0.04));\n}",
-        front_end_checked: true,
+        front_end_checked: false,
     },
     CodeInfo {
         code: "WJ0198",
@@ -932,7 +932,7 @@ pub static ERRORS: &[CodeInfo] = &[
         fix: "Declare the item `pub` in its module; the message names the file and the exact declaration to change.",
         example_bad: "use crate::brdf::pow5\n\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(pow5(2.0));\n}",
         example_good: "use crate::brdf::fresnel_schlick\n\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(fresnel_schlick(0.5, 0.04));\n}",
-        front_end_checked: true,
+        front_end_checked: false,
     },
     CodeInfo {
         code: "WJ0199",
@@ -947,7 +947,7 @@ pub static ERRORS: &[CodeInfo] = &[
         fix: "Move the shared items into a third module that both import.",
         example_bad: "use crate::b::g\n\npub fn f() -> f32 {\n    return g();\n}",
         example_good: "pub fn f() -> f32 {\n    return 1.0;\n}",
-        front_end_checked: true,
+        front_end_checked: false,
     },
     CodeInfo {
         code: "WJ0200",
@@ -962,7 +962,7 @@ pub static ERRORS: &[CodeInfo] = &[
         fix: "Move the binding or entry point to the entry file and pass the resource to the library function as a parameter.",
         example_bad: "@group(0) @binding(0) uniform u: f32;\n\npub fn f() -> f32 {\n    return 1.0;\n}",
         example_good: "pub fn f(u: f32) -> f32 {\n    return u;\n}",
-        front_end_checked: true,
+        front_end_checked: false,
     },
     CodeInfo {
         code: "WJ0201",
@@ -977,6 +977,6 @@ pub static ERRORS: &[CodeInfo] = &[
         fix: "Rename the identifier without a double underscore.",
         example_bad: "fn bad__name() -> f32 {\n    return 1.0;\n}",
         example_good: "fn good_name() -> f32 {\n    return 1.0;\n}",
-        front_end_checked: true,
+        front_end_checked: false,
     },
 ];
