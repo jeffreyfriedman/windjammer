@@ -171,7 +171,8 @@ impl FloatInference {
                 let value_float_ctx: Option<&Type> = match type_.as_ref() {
                     Some(ty) if self.extract_float_type(ty).is_some() => Some(ty),
                     Some(_) => None,
-                    None => return_type,
+                    // An untyped `let` is typed by its value and its uses, not by the function's return type.
+                    None => None,
                 };
                 self.collect_expression_constraints(value, value_float_ctx);
 
@@ -209,26 +210,6 @@ impl FloatInference {
                                 // No constraint needed
                             }
                         }
-                    }
-                }
-
-                // If this expression might be returned (in a function returning a float),
-                // constrain it to the return type
-                if let Some(ret_ty) = return_type {
-                    if let Some(float_ty) = self.extract_float_type(ret_ty) {
-                        let expr_id = self.get_expr_id(value);
-                        let constraint = match float_ty {
-                            FloatType::F32 => Constraint::MustBeF32(
-                                expr_id,
-                                "function return type f32".to_string(),
-                            ),
-                            FloatType::F64 => Constraint::MustBeF64(
-                                expr_id,
-                                "function return type f64".to_string(),
-                            ),
-                            FloatType::Unknown => return,
-                        };
-                        self.constraints.push(constraint);
                     }
                 }
             }

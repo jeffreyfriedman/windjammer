@@ -22,7 +22,7 @@ pub use signature_filters::{
 };
 
 pub use crate_metadata::{
-    collect_string_const_names, collect_variant_payloads, find_project_root, global_meta_cache_dir,
+    collect_const_types, collect_string_const_names, collect_variant_payloads, load_const_types_from_metadata, find_project_root, global_meta_cache_dir,
     load_function_signatures_from_metadata,
     load_merged_external_function_signatures, load_merged_external_struct_fields,
     load_string_const_names, load_struct_field_types_from_file, meta_cache_path, meta_cache_root,
@@ -681,6 +681,7 @@ pub fn merge_file_skeleton_into_crate(
         .string_consts
         .extend(crate_metadata::collect_string_const_names(program));
     crate_metadata.variant_payloads.extend(crate_metadata::collect_variant_payloads(program));
+    crate_metadata.consts.extend(crate_metadata::collect_const_types(std::slice::from_ref(program)));
     crate_metadata.string_consts.sort();
     crate_metadata.string_consts.dedup();
 }

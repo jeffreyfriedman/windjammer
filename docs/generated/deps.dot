@@ -364,7 +364,7 @@ digraph deps {
   "interpreter" -> "package" [label="4"];
   "interpreter" -> "parser" [label="145"];
   "interpreter" -> "resolve" [label="15"];
-  "interpreter" -> "source_map" [label="18"];
+  "interpreter" -> "source_map" [label="20"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_classification" [label="1"];
@@ -379,7 +379,7 @@ digraph deps {
   "ir" -> "debug_env" [label="7"];
   "ir" -> "intrinsics" [label="3"];
   "ir" -> "lexer" [label="26"];
-  "ir" -> "parser" [label="113"];
+  "ir" -> "parser" [label="114"];
   "ir" -> "resolve" [label="9"];
   "ir" -> "source_map" [label="6"];
   "ir" -> "stdlib_surface" [label="2"];
@@ -400,8 +400,9 @@ digraph deps {
   "metadata" -> "codegen" [label="5"];
   "metadata" -> "compiler" [label="5",color=red,fontcolor=red];
   "metadata" -> "debug_env" [label="1"];
-  "metadata" -> "parser" [label="29"];
+  "metadata" -> "parser" [label="31"];
   "metadata" -> "type_classification" [label="2"];
+  "metadata" -> "type_inference" [label="1"];
   "module_system" -> "config" [label="1"];
   "module_system" -> "project_paths" [label="1"];
   "module_system" -> "resolve" [label="1"];

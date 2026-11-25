@@ -268,10 +268,9 @@ pub fn build_project_with_config(
         let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
         if !external_paths.is_empty() {
             numeric_inference.set_external_crate_metadata_paths(&external_paths);
-            for dir in external_paths.values() {
-                for name in crate::metadata::load_string_const_names(dir) {
-                    numeric_inference.register_string_const(&name);
-                }
+            for (key, dir) in external_paths.iter() {
+                crate::metadata::load_string_const_names(dir).iter().for_each(|name| numeric_inference.register_string_const(name));
+                numeric_inference.add_external_crate_consts(key, crate::metadata::load_const_types_from_metadata(dir));
             }
         }
         numeric_inference.infer_program(&program);
