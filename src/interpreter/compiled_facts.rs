@@ -118,6 +118,12 @@ pub fn install_fact_store(store: Arc<dyn FactStore>) {
 
 /// Record what `file` was parsed from (`loader::parse_source_renaming`); a later parse of it replaces the entry.
 pub(crate) fn note_parsed(file: &str, source: &str, renames: &HashMap<String, String>) {
+    let key = content_key(file, source, renames);
+    PARSED.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(file.to_string(), key);
+}
+
+/// The content key of a parse: its name, text and renames (what a parse is a function of).
+pub(crate) fn content_key(file: &str, source: &str, renames: &HashMap<String, String>) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     let mut part = |b: &[u8]| {
@@ -133,8 +139,7 @@ pub(crate) fn note_parsed(file: &str, source: &str, renames: &HashMap<String, St
         part(a.as_bytes());
         part(b.as_bytes());
     }
-    let key = format!("{:x}", h.finalize());
-    PARSED.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(file.to_string(), key);
+    format!("{:x}", h.finalize())
 }
 
 fn parsed_key(file: &str) -> Option<String> {
