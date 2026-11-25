@@ -104,6 +104,21 @@ fn the_firing_gate_notices_each_disabled_path() {
     }
 }
 
+/// The call-site retag (`resolved/expr.rs::retag_arg`) retags a LOCAL once: a thousand calls with the same local are
+/// one retag, not a thousand (docs/design/interp-soundness/vecretag.md). Exact counts of `vecretag` per program.
+#[test]
+fn the_vector_retag_happens_once_per_local() {
+    const RETAG: &[(&str, u64)] = &[
+        ("bench/interp/vecpass.wj", 1),
+        ("tests/engine_parity/vec_retag.wj", 4),
+        ("tests/engine_parity/vec_retag_int.wj", 2),
+    ];
+    for (program, want) in RETAG {
+        let r = run(program, "resolved", None);
+        assert_eq!(count(&r, "vecretag"), Some(*want), "{program}: {:?}", r.counts);
+    }
+}
+
 /// The typed scalar pipeline (`scalar_pipe.rs`) is a speculation with a boxed fallback: each program below holds
 /// the exact number of chains it drained typed and of chains that started typed and met an element it hands to the
 /// boxed path (a guard that stops declining, or a bail that stops happening, changes a count). The outputs of the
