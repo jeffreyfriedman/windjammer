@@ -252,7 +252,7 @@ digraph deps {
   "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="9"];
   "codegen" -> "test_utils" [label="7"];
-  "codegen" -> "type_classification" [label="254"];
+  "codegen" -> "type_classification" [label="255"];
   "codegen" -> "type_inference" [label="63"];
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
