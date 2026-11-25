@@ -8,11 +8,11 @@ fn half(n: i64) -> Option<i64> {
 }
 
 fn main() {
-    println!("{:?}", Some(5).map(|x| x * 2_i64));
+    println!("{:?}", Some(5_i64).map(|x| x * 2_i64));
     let n: Option<i64> = None;
     println!("{:?}", n.map(|x| x * 2_i64));
-    println!("{:?}", Some(12).and_then(half));
-    println!("{}", Some(10).map_or(0, |x| x + 1_i64));
+    println!("{:?}", Some(12_i64).and_then(half));
+    println!("{}", Some(10_i64).map_or(0, |x| x + 1_i64));
     println!("{}", n.map_or(-1_i64, |x| x + 1_i64));
 }
 

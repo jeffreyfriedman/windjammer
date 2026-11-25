@@ -363,8 +363,8 @@ impl Parser {
                         let count = self.parse_expression()?;
                         self.expect(Token::RBracket)?;
 
-                        // Represent as a macro invocation: vec![value; count]
-                        self.alloc_expr(Expression::MacroInvocation {
+                        // Represent as a macro invocation: vec![value; count] (`[x; n]` has no `vec` in its source)
+                        self.alloc_synthetic(Expression::MacroInvocation {
                             name: "vec".to_string(),
                             args: vec![first_element, count],
                             delimiter: MacroDelimiter::Brackets,

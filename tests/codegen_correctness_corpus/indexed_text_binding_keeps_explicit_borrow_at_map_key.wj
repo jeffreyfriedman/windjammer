@@ -1,0 +1,23 @@
+// expect: 2 1
+// `let key = keys[i]` of a list of text is an owned String local; the borrow the program writes at the lookup
+// (`&key`) is kept (rustc rejects `names.get(key)` with E0308).
+use std::collections::HashMap
+
+fn main() {
+    let mut names: HashMap<string, int> = HashMap::new()
+    names.insert("a", 1)
+    names.insert("bb", 2)
+    let keys = ["a", "zz", "bb"]
+    let mut present = 0
+    let mut absent = 0
+    let mut i = 0
+    while i < 3 {
+        let key = keys[i]
+        match names.get(&key) {
+            Some(_) => { present += 1 }
+            _ => { absent += 1 }
+        }
+        i += 1
+    }
+    println("${present} ${absent}")
+}

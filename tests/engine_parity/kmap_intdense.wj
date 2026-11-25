@@ -1,3 +1,4 @@
+// oracle: check
 // Typed integer arrays (`kmap.rs` IntDense): a HashMap<int, int> whose keys fit an array part and whose values are all
 // one 64-bit int is held as values + presence bits. Every case below is one way the typed store must answer exactly as
 // the ordinary store does: promotion at the power-of-two lengths, sparse-then-dense growth, negative keys, a stored 0
@@ -8,6 +9,7 @@ use std::collections::HashMap
 
 // order-sensitive digest of a map: keys in iteration order, then the values in iteration order
 fn digest(m: &HashMap<int, int>) -> int {
+//~@14+1 ERROR W0001 explicit ownership annotation
     let mut h = 7
     for k in m.keys() {
         h = (h * 31 + k + 1) % 1000000007
@@ -16,6 +18,7 @@ fn digest(m: &HashMap<int, int>) -> int {
         h = (h * 37 + v % 1000003 + 1000008) % 1000000007
     }
     for (k, v) in m.iter() {
+//~@21+4 ERROR W0003 explicit call
         h = (h * 41 + k * 3 + v % 1000003 + 1000003) % 1000000007
     }
     h
@@ -23,12 +26,14 @@ fn digest(m: &HashMap<int, int>) -> int {
 
 fn get_or(m: &HashMap<int, int>, k: int, d: int) -> int {
     match m.get(&k) {
+//~@17+1 ERROR W0001 explicit ownership annotation
         Some(v) => *v,
         None => d,
     }
 }
 
 fn fill(m: &mut HashMap<int, int>, from: int, to: int) {
+//~@12+1 ERROR W0001 explicit ownership annotation
     let mut i = from
     while i < to {
         m.insert(i, i * i - 7)
@@ -37,6 +42,7 @@ fn fill(m: &mut HashMap<int, int>, from: int, to: int) {
 }
 
 fn bump_all(m: &mut HashMap<int, int>, n: int) {
+//~@16+1 ERROR W0004 explicit borrow in function
     let mut i = 0
     while i < n {
         let k = (i * 5) % 40
@@ -56,9 +62,11 @@ fn main() {
         n += 1
         if n == 7 || n == 8 || n == 9 || n == 16 || n == 32 || n == 64 || n == 128 || n == 256 {
             lens = (lens * 131 + digest(&a) + a.len()) % 1000000007
+//~@41+1 ERROR W0004 explicit borrow in function
         }
     }
     println("ascending ${a.len()} ${lens} ${digest(&a)}")
+//~@52+1 ERROR W0004 explicit borrow in function
 
     // 2. scattered keys (the hashmap kernel's order): a table first, an array at a power of two
     let mut s: HashMap<int, int> = HashMap::new()
@@ -66,9 +74,11 @@ fn main() {
     while i < 5000 {
         let k = (i * 7919) % 1009
         s.insert(k, get_or(&s, k, 0) + 1)
+//~@28+1 ERROR W0004 explicit borrow in function
         i += 1
     }
     println("scattered ${s.len()} ${digest(&s)}")
+//~@44+1 ERROR W0004 explicit borrow in function
 
     // 3. sparse keys, then enough keys to be dense; then a far key
     let mut sp: HashMap<int, int> = HashMap::new()
@@ -85,17 +95,26 @@ fn main() {
     }
     sp.insert(1000000, 5)
     println("sparse ${sparse_len} ${sp.len()} ${digest(&sp)}")
+//~@56+1 ERROR W0004 explicit borrow in function
 
     // 4. negative keys: an array holds none, so the map must answer for them through the ordinary store
     let mut ng: HashMap<int, int> = HashMap::new()
     fill(&mut ng, 0, 64)
+//~@10+1 ERROR W0004 explicit borrow in function
     ng.insert(-1, 11)
     ng.insert(-100, 12)
     println("negative ${ng.len()} ${get_or(&ng, -1, 0)} ${get_or(&ng, -100, 0)} ${get_or(&ng, 5, 0)} ${get_or(&ng, -5, -9)} ${digest(&ng)}")
+//~@44+1 ERROR W0004 explicit borrow in function
+//~@66+1 ERROR W0004 explicit borrow in function
+//~@90+1 ERROR W0004 explicit borrow in function
+//~@111+1 ERROR W0004 explicit borrow in function
+//~@134+1 ERROR W0004 explicit borrow in function
     let mut ng2: HashMap<int, int> = HashMap::new()
     ng2.insert(-3, 1)
     fill(&mut ng2, 0, 70)
+//~@10+1 ERROR W0004 explicit borrow in function
     println("negative2 ${ng2.len()} ${get_or(&ng2, -3, 0)} ${digest(&ng2)}")
+//~@46+1 ERROR W0004 explicit borrow in function
 
     // 5. a stored 0 is present; an absent key is not; the same for negative values
     let mut z: HashMap<int, int> = HashMap::new()
@@ -117,6 +136,7 @@ fn main() {
             present += 1
         }
         match z.get(&r) {
+//~@21+1 ERROR W0004 explicit borrow in function
             Some(v) => {
                 if *v == 0 {
                     zero += 1
@@ -127,6 +147,7 @@ fn main() {
         r += 1
     }
     println("zero ${z.len()} ${present} ${zero} ${digest(&z)}")
+//~@58+1 ERROR W0004 explicit borrow in function
 
     // 6. remove then reinsert; remove of an absent key; remove everything; reuse
     let mut rm: HashMap<int, int> = HashMap::new()
@@ -143,28 +164,39 @@ fn main() {
         t += 1
     }
     let again = match rm.remove(&1) {
+//~@33+1 ERROR W0004 explicit borrow in function
         Some(_) => 1,
         None => 0,
     }
     println("removed ${rm.len()} ${gone} ${again} ${digest(&rm)}")
+//~@60+1 ERROR W0004 explicit borrow in function
     fill(&mut rm, 50, 120)
+//~@10+1 ERROR W0004 explicit borrow in function
     println("reinserted ${rm.len()} ${digest(&rm)} ${rm.contains_key(&3)} ${rm.contains_key(&4)}")
     let mut all = 0
     while all < 130 {
         rm.remove(&all)
+//~@19+1 ERROR W0004 explicit borrow in function
         all += 1
     }
     println("emptied ${rm.len()} ${rm.is_empty()} ${digest(&rm)}")
+//~@60+1 ERROR W0004 explicit borrow in function
     fill(&mut rm, 0, 20)
+//~@10+1 ERROR W0004 explicit borrow in function
     println("reused ${rm.len()} ${digest(&rm)}")
+//~@42+1 ERROR W0004 explicit borrow in function
 
     // 7. clear then reuse (same type, then another value type)
     let mut c: HashMap<int, int> = HashMap::new()
     fill(&mut c, 0, 80)
+//~@10+1 ERROR W0004 explicit borrow in function
     c.clear()
     println("cleared ${c.len()} ${c.is_empty()} ${get_or(&c, 3, -1)}")
+//~@58+1 ERROR W0004 explicit borrow in function
     fill(&mut c, 10, 90)
+//~@10+1 ERROR W0004 explicit borrow in function
     println("refilled ${c.len()} ${digest(&c)}")
+//~@43+1 ERROR W0004 explicit borrow in function
 
     // 8. clone then mutate, in both directions
     let mut o: HashMap<int, int> = HashMap::new()
@@ -172,20 +204,34 @@ fn main() {
     let mut cl = o.clone()
     cl.insert(3, 999)
     cl.remove(&4)
+//~@15+1 ERROR W0004 explicit borrow in function
     cl.insert(500, 1)
     o.insert(5, -5)
     println("cow ${o.len()} ${cl.len()} ${get_or(&o, 3, 0)} ${get_or(&cl, 3, 0)} ${get_or(&o, 4, 0)} ${get_or(&cl, 4, 0)} ${get_or(&o, 5, 0)} ${get_or(&cl, 5, 0)} ${digest(&o)} ${digest(&cl)}")
+//~@50+1 ERROR W0004 explicit borrow in function
+//~@70+1 ERROR W0004 explicit borrow in function
+//~@91+1 ERROR W0004 explicit borrow in function
+//~@111+1 ERROR W0004 explicit borrow in function
+//~@132+1 ERROR W0004 explicit borrow in function
+//~@152+1 ERROR W0004 explicit borrow in function
+//~@173+1 ERROR W0004 explicit borrow in function
+//~@187+1 ERROR W0004 explicit borrow in function
     let mut cl2 = o.clone()
     o.clear()
     cl2.insert(70, 70)
     println("cow2 ${o.len()} ${cl2.len()} ${digest(&cl2)}")
+//~@52+1 ERROR W0004 explicit borrow in function
 
     // 9. a map passed by &mut to functions that read, fill and bump it
     let mut pm: HashMap<int, int> = HashMap::new()
     bump_all(&mut pm, 400)
+//~@14+1 ERROR W0004 explicit borrow in function
     fill(&mut pm, 100, 164)
+//~@10+1 ERROR W0004 explicit borrow in function
     bump_all(&mut pm, 400)
+//~@14+1 ERROR W0004 explicit borrow in function
     println("param ${pm.len()} ${digest(&pm)}")
+//~@41+1 ERROR W0004 explicit borrow in function
 
     // 10. an in-place update through the entry API and through get_mut (a mutable reference into the map)
     let mut em: HashMap<int, int> = HashMap::new()
@@ -197,6 +243,7 @@ fn main() {
         x += 1
     }
     match em.get_mut(&7) {
+//~@22+1 ERROR W0004 explicit borrow in function
         Some(v) => { *v = *v * 2 }
         None => {}
     }
@@ -211,6 +258,7 @@ fn main() {
         f += 1
     }
     println("float ${fm.len()} ${fm.get(&9).unwrap()}")
+//~@45+6 ERROR W0002 explicit call
 
     // 12. i32 and u64 values stay on the ordinary store: same answers, wide values exact
     let mut m32: HashMap<int, i32> = HashMap::new()
@@ -231,6 +279,8 @@ fn main() {
         s64 = (s64 + *v % 1000003) % 1000003
     }
     println("widths ${m32.len()} ${m64.len()} ${s32} ${s64} ${m64.get(&69).unwrap()}")
+//~@71+1 ERROR W0004 explicit borrow in function
+//~@76+6 ERROR W0002 explicit call
 
     // 13. extremes: values at the i64 limits, a key past the dense range, key 0
     let mut ex: HashMap<int, int> = HashMap::new()
@@ -242,11 +292,16 @@ fn main() {
     ex.insert(0, -9223372036854775807 - 1)
     ex.insert(4294967295, 1)
     println("extremes ${ex.len()} ${get_or(&ex, 0, 5)} ${get_or(&ex, 15, 5)} ${get_or(&ex, 4294967295, 5)} ${digest(&ex)}")
+//~@44+1 ERROR W0004 explicit borrow in function
+//~@65+1 ERROR W0004 explicit borrow in function
+//~@87+1 ERROR W0004 explicit borrow in function
+//~@117+1 ERROR W0004 explicit borrow in function
 
     // 14. retain and extend over a typed array
     let mut rt: HashMap<int, int> = HashMap::new()
     fill(&mut rt, 0, 50)
     rt.retain(|k, v| k % 2 == 0 && v > 0)
+//~@34+1 ERROR W0004 explicit borrow in function
     let mut ext: HashMap<int, int> = HashMap::new()
     ext.insert(1000, 1)
     rt.extend(ext)

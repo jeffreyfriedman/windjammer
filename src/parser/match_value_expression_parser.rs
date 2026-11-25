@@ -102,7 +102,7 @@ impl Parser {
                     self.advance();
                     let count = self.parse_expression()?;
                     self.expect(Token::RBracket)?;
-                    return Ok(self.alloc_expr(Expression::MacroInvocation {
+                    return Ok(self.alloc_synthetic(Expression::MacroInvocation {
                         name: "vec".to_string(),
                         args: vec![first_element, count],
                         delimiter: MacroDelimiter::Brackets,

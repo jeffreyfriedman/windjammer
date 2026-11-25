@@ -1019,7 +1019,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     // Untyped `let s = …` infers WJ `string` but RHS may emit `&text[i..j]`
                     // — coerce so `Some(s)` / owned returns typecheck.
-                    value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
+                    value_str = self.own_text_let_initializer(var_name, &value_str);
                 } else if mutable
                     && string_utilities::return_type_expects_owned_string(
                         &self.current_function_return_type,
@@ -1664,5 +1664,17 @@ impl<'ast> CodeGenerator<'ast> {
         {
             self.local_var_types.insert(name.to_string(), Type::Reference(Box::new(Type::Custom("str".to_string()))));
         }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `let s = v[i]` of text whose initializer was a borrow (`&v[i]`): the binding holds an owned `String`, so the
+    /// borrow `apply_vec_index_let_rhs_fixup` recorded for it no longer describes it and a later `&s` at a map-key
+    /// call stays `&s`.
+    fn own_text_let_initializer(&mut self, var_name: Option<&str>, value_str: &str) -> String {
+        if let Some(vn) = var_name {
+            self.borrowed_iterator_vars.remove(vn);
+        }
+        string_utilities::coerce_expr_to_owned_string(value_str)
     }
 }

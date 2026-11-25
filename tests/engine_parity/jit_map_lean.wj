@@ -1,3 +1,4 @@
+// oracle: check
 // The lean map helpers of machine-code loops (`jit/rt.rs::lean_map`): a map reached directly or through a plain
 // reference, int keys, scalar values, read and written without the general helper. Each case below is one way
 // the lean path must hand over or see a change: a map behind a `&mut` parameter, a map changed by a statement the
@@ -6,6 +7,7 @@
 use std::collections::HashMap
 
 fn bump(m: &mut HashMap<int, int>, n: int) {
+//~@12+5 ERROR W0001 explicit ownership annotation
     let mut i = 0
     while i < n {
         let k = (i * 13) % 17
@@ -35,6 +37,7 @@ fn main() {
     let mut j = 0
     while j < 120 {
         match m.get(&j) {
+//~@21+1 ERROR W0004 explicit borrow in function
             Some(v) => {
                 if *v > best {
                     best = *v
@@ -49,6 +52,7 @@ fn main() {
     // a map behind a &mut parameter, called twice (the loop runs in the callee)
     let mut shared: HashMap<int, int> = HashMap::new()
     bump(&mut shared, 500)
+//~@10+1 ERROR W0004 explicit borrow in function
     bump(&mut shared, 500)
     let mut tot = 0
     let mut q = 0
