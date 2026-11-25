@@ -444,6 +444,26 @@ process::run_with_args("echo", [name])"#.to_string()),
             maturity: GuaranteeMaturity::HighConfidence,
         });
         self.register(WjErrorCode {
+            code: "WJ0195".to_string(),
+            title: "Undefined shader function".to_string(),
+            explanation: "A WJSL shader calls a name that is not a WGSL builtin, a value constructor, a struct or a function declared with `fn` in the shader; reported at build time instead of failing later in the WGSL validator.".to_string(),
+            causes: vec!["A misspelled builtin such as `normalise`, or a helper that was never defined".to_string()],
+            solutions: vec!["Correct the spelling (the diagnostic names the closest builtin or user function)".to_string(), "Define the function with `fn` or import the file that defines it".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0196".to_string(),
+            title: "Unexpected character in shader source".to_string(),
+            explanation: "A WJSL shader contains a character the lexer cannot tokenize, most often a line starting with `#` (WJSL has no `#` comments); it used to end the token stream silently and produce an empty WGSL file.".to_string(),
+            causes: vec!["A `#` comment or directive, or a stray symbol".to_string()],
+            solutions: vec!["Write comments with `//`".to_string(), "Remove the stray character, or use `use \"path\"` to include another shader file".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
             code: "WJ0197".to_string(),
             title: "WJSL import does not resolve".to_string(),
             explanation: "A `.wjsl` import `use crate::module::item` names a module file that is not in the entry file's folder, an item the module does not declare, a name that is already declared or imported in the importing file, or uses a form the module system does not support yet (only `crate::` paths into the same folder). The module is the file stem; `crate` is the entry file's folder (docs/design/wjsl-modules.md).".to_string(),

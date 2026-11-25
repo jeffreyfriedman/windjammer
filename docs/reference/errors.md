@@ -27,6 +27,8 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0192` | Task changes a captured variable | HighConfidence |  | A task works on its own copy of the variables it reads; an assignment to one inside the task is refused (ADR-0004) |
 | `WJ0193` | Value cannot move to another thread | HighConfidence |  | A `spawn` task captures a value bound to its thread (`Rc`, `RefCell`, `Cell`, `Weak`); use `async` or build the value inside the task (ADR-0004) |
 | `WJ0194` | Name is not re-exported | HighConfidence | E0425, E0433 | A path or import names an item through a module that only gets it from one of its child modules; `pub mod child` re-exports nothing, a module re-exports a name only through an explicit `pub use` (ADR-0040) |
+| `WJ0195` | Undefined shader function | HighConfidence |  | A WJSL shader calls a name that is not a WGSL builtin, a value constructor, a struct or a function declared with `fn` in the shader; reported at build time instead of failing later in the WGSL validator |
+| `WJ0196` | Unexpected character in shader source | HighConfidence |  | A WJSL shader contains a character the lexer cannot tokenize, most often a line starting with `#` (WJSL has no `#` comments); it used to end the token stream silently and produce an empty WGSL file |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

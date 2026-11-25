@@ -10,6 +10,25 @@ pub fn format_shader_error(message: &str, source: &str) -> String {
     out
 }
 
+/// WJ0196: fail with the offending line when the source holds a character WJSL cannot tokenize
+/// (a `#` line, a stray `$`, ...), instead of letting it end the token stream silently.
+pub fn reject_unexpected_char(source: &str) -> anyhow::Result<()> {
+    let Some((ch, line, col)) = crate::wjsl::lexer::first_unexpected_char(source) else {
+        return Ok(());
+    };
+    let text = source.lines().nth(line - 1).unwrap_or("").trim_end();
+    let hint = if ch == '#' && text.trim_start().starts_with("#include") {
+        "`#include` needs the include resolver (`wj build` resolves includes; a bare transpile does not); the native form is `use \"path\"`"
+    } else if ch == '#' {
+        "WJSL has no `#` comments or directives; start a comment with `//`"
+    } else {
+        "remove the character, or write it inside a `//` comment"
+    };
+    Err(anyhow::anyhow!(
+        "error[WJ0196]: unexpected character `{ch}` at line {line}, column {col}\n  | {text}\n  hint: {hint}"
+    ))
+}
+
 /// Source-aware diagnostics for the WJSL pipeline: enriches errors from any stage.
 pub struct ShaderDiagnostics<'a> {
     source: &'a str,
@@ -163,7 +182,7 @@ fn storage_binding_name(line: &str) -> Option<&str> {
     rest.split(':').next()?.trim().split_whitespace().next()
 }
 
-fn levenshtein(a: &str, b: &str) -> u32 {
+pub(crate) fn levenshtein(a: &str, b: &str) -> u32 {
     if a == b {
         return 0;
     }

@@ -72,6 +72,7 @@ impl<'a> TypeChecker<'a> {
                 ep.return_type.as_ref(),
                 &ep.name,
                 true,
+                ep.body_line,
             )?;
         }
         Ok(())
@@ -90,6 +91,7 @@ impl<'a> TypeChecker<'a> {
                 return_type_wrapper.as_ref(),
                 &f.name,
                 false,
+                f.body_line,
             )?;
         }
         Ok(())
@@ -112,8 +114,9 @@ impl<'a> TypeChecker<'a> {
         body: &str,
         params: &[Param],
         return_type: Option<&ReturnType>,
-        _fn_name: &str,
+        fn_name: &str,
         _is_entry: bool,
+        body_line: usize,
     ) -> Result<()> {
         let mut symbols = HashMap::new();
         for p in params {
@@ -143,6 +146,9 @@ impl<'a> TypeChecker<'a> {
 
         let fn_sigs = self.collect_function_signatures();
         let mut parser = BodyParser::new(body, symbols, self.structs.clone(), fn_sigs);
+        parser.fn_names = self.ast.functions.iter().map(|f| f.name.clone()).collect();
+        parser.body_line = body_line;
+        parser.fn_name = fn_name.to_string();
         parser.parse_and_check(return_type)
     }
 }
@@ -156,6 +162,12 @@ pub(crate) struct BodyParser<'a> {
     pub(crate) symbols: HashMap<String, Type>,
     pub(crate) structs: HashMap<String, &'a StructDecl>,
     pub(crate) ast_functions: Vec<(String, Type)>,
+    /// Every user function name (including void ones, which have no signature entry).
+    pub(crate) fn_names: Vec<String>,
+    /// 1-based source line where this body starts.
+    pub(crate) body_line: usize,
+    /// Name of the function whose body is being checked.
+    pub(crate) fn_name: String,
 }
 
 impl<'a> BodyParser<'a> {
@@ -177,6 +189,9 @@ impl<'a> BodyParser<'a> {
             symbols,
             structs,
             ast_functions,
+            fn_names: Vec::new(),
+            body_line: 1,
+            fn_name: String::new(),
         }
     }
 }

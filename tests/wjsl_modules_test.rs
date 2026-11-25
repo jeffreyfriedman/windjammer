@@ -208,3 +208,14 @@ fn s1_build_cli_writes_one_module_and_validate_wjsl_accepts_library_folders() {
     let both = Command::new(env!("CARGO_BIN_EXE_wj")).arg("validate-wjsl").arg(d.path()).output().unwrap();
     assert!(both.status.success(), "{}", String::from_utf8_lossy(&both.stderr));
 }
+
+#[test]
+fn s1_module_qualified_names_are_user_functions_for_the_undefined_function_check() {
+    // WJ0195 (undefined function) must accept `brdf__fresnel_schlick` and still reject a truly undefined call.
+    let d = tree(&[("brdf.wjsl", BRDF), ("skin.wjsl", SKIN)]);
+    assert!(emit(d.path(), "skin.wjsl").is_ok());
+    let bad = SKIN.replace("fresnel_schlick(clamp", "fresnel_schlik(clamp");
+    let d = tree(&[("brdf.wjsl", BRDF), ("skin.wjsl", &bad)]);
+    let err = emit(d.path(), "skin.wjsl").unwrap_err();
+    assert!(err.contains("WJ0195") || err.contains("fresnel_schlik"), "{err}");
+}

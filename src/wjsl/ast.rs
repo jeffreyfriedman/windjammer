@@ -123,6 +123,8 @@ pub struct EntryPoint {
     pub return_type: Option<ReturnType>,
     /// Raw function body (for Phase 1)
     pub body: String,
+    /// 1-based source line where the body starts (for diagnostics)
+    pub body_line: usize,
 }
 
 /// Helper function (non-entry-point)
@@ -134,6 +136,8 @@ pub struct Function {
     pub body: String,
     /// origin comment of an imported item (modules only)
     pub origin: Option<String>,
+    /// 1-based source line where the body starts (for diagnostics)
+    pub body_line: usize,
 }
 
 /// Function parameter with optional attributes

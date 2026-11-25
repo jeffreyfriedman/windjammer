@@ -9,6 +9,7 @@
 
 mod ast;
 mod block_syntax;
+pub mod builtins;
 mod codegen;
 mod diagnostics;
 mod expression_type_checking;

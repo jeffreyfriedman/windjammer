@@ -158,6 +158,7 @@ pub struct Lexer<'a> {
     position: usize,
     line: usize,
     column: usize,
+    unexpected: Option<(char, usize, usize)>,
 }
 
 impl<'a> Lexer<'a> {
@@ -168,6 +169,7 @@ impl<'a> Lexer<'a> {
             position: 0,
             line: 1,
             column: 1,
+            unexpected: None,
         }
     }
 
@@ -539,7 +541,26 @@ impl<'a> Lexer<'a> {
                 let s = self.read_ident(c);
                 self.keyword_or_ident(&s)
             }
-            _ => Token::Eof,
+            _ => {
+                if self.unexpected.is_none() {
+                    // `next()` consumed the character: it started one column back.
+                    self.unexpected = Some((c, self.line, self.column.saturating_sub(1).max(1)));
+                }
+                Token::Eof
+            }
+        }
+    }
+}
+
+/// First character the lexer cannot tokenize, as `(char, line, column)`.
+///
+/// An unknown character used to end the token stream as if the file ended, so a stray
+/// `#` line silently dropped the rest of the shader.
+pub fn first_unexpected_char(source: &str) -> Option<(char, usize, usize)> {
+    let mut lexer = Lexer::new(source);
+    loop {
+        if lexer.next_token() == Token::Eof {
+            return lexer.unexpected;
         }
     }
 }

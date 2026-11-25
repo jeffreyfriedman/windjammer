@@ -8,6 +8,13 @@ use anyhow::{anyhow, Result};
 
 /// Find the position after the '{' that matches the '}' at rbrace_pos.
 /// Searches backwards from rbrace_pos, counting braces to find the matching '{'.
+/// 1-based source line of the first character of the trimmed body `source[start..end]`.
+fn trimmed_body_line(source: &str, start: usize, end: usize) -> usize {
+    let raw = &source[start..end];
+    let lead = raw.len() - raw.trim_start().len();
+    source[..start + lead].matches('\n').count() + 1
+}
+
 fn find_matching_lbrace(source: &str, rbrace_pos: usize) -> usize {
     let bytes = source.as_bytes();
     let mut depth = 1;
@@ -720,6 +727,7 @@ impl<'a> Parser<'a> {
                             params,
                             return_type,
                             body: body.to_string(),
+                            body_line: trimmed_body_line(self.lexer.source(), body_start, body_end),
                         });
                     }
                     self.advance();
@@ -766,6 +774,7 @@ impl<'a> Parser<'a> {
                             return_type,
                             body: body.to_string(),
                             origin: None,
+                            body_line: trimmed_body_line(self.lexer.source(), body_start, body_end),
                         });
                     }
                     self.advance();
@@ -1018,12 +1027,14 @@ impl<'a> Parser<'a> {
 
 /// Parse WJSL source into AST
 pub fn parse_wjsl(source: &str) -> Result<ShaderModule> {
+    crate::wjsl::diagnostics::reject_unexpected_char(source)?;
     let mut parser = Parser::new(source);
     parser.parse_module()
 }
 
 /// Parse WJSL source with filename for better error messages
 pub fn parse_wjsl_with_filename(source: &str, filename: String) -> Result<ShaderModule> {
+    crate::wjsl::diagnostics::reject_unexpected_char(source)?;
     let mut parser = Parser::new_with_filename(source, filename);
     parser.parse_module()
 }
