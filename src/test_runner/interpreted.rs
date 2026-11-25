@@ -37,6 +37,11 @@ pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
         .collect()
 }
 
+/// Every test under `dir` as interpreter specs (the discovery `wj test --interpret` runs).
+pub fn discover_specs(dir: &Path) -> Result<Vec<TestSpec>> {
+    Ok(specs_for(&test_discovery::discover(dir)?, None))
+}
+
 /// Entry point of `wj test --interpret`. Exits the process with the test status on failure. `crates`: the crate host
 /// for the project's Rust crate calls (ADR-0031), built by the caller (`cli::crate_host_build::host_for_path`).
 pub fn run_interpreted(
