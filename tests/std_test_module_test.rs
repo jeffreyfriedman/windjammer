@@ -295,3 +295,23 @@ fn check_fix_renames_qualified_calls_and_range_reversed() {
     Command::new(WJ).args(["fix"]).arg(&by_fix).output().unwrap();
     assert_eq!(fs::read_to_string(&by_fix).unwrap(), want, "wj fix");
 }
+
+/// One `T` for every operand: a float literal beside an `f32` value is `f32` in the emitted Rust (not the `f64`
+/// default), for the comparisons and for `assert_approx_eq`.
+#[test]
+fn float_literals_take_the_width_of_the_other_operand() {
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("w.wj");
+    fs::write(&f, "use std::test::*\n\nfn main() {\n    let x: f32 = 1.0\n    assert_approx_eq(x, 1.5, 0.001)\n    assert_gt(x, 0.5)\n}\n").unwrap();
+    let out = dir.path().join("out");
+    let o = Command::new(WJ).args(["build"]).arg(&f).arg("-o").arg(&out).output().unwrap();
+    assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let rs: String = fs::read_dir(&out)
+        .unwrap()
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "rs"))
+        .map(|e| fs::read_to_string(e.path()).unwrap())
+        .collect();
+    assert!(rs.contains("assert_approx_eq(x, 1.5_f32, 0.001_f32)"), "{rs}");
+    assert!(rs.contains("assert_gt(x, 0.5_f32)"), "{rs}");
+}
