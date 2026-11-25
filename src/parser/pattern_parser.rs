@@ -537,13 +537,13 @@ impl Parser {
             }
             _ => {
                 // TDD: Add line number to parser errors for better debugging
-                if let Some(loc) = self.current_location() {
+                if let (Some(loc), Some((line, column))) = (self.current_location(), self.current_src_position()) {
                     Err(format!(
                         "Expected pattern, got {:?} at {}:{}:{}",
                         self.current_token(),
                         loc.file.display(),
-                        loc.line,
-                        loc.column
+                        line,
+                        column
                     ))
                 } else {
                     Err(format!("Expected pattern, got {:?}", self.current_token()))

@@ -260,7 +260,7 @@ impl Parser {
 
     pub(in crate::parser) fn pipe_error(&self, token_index: usize, msg: &str) -> String {
         match self.tokens.get(token_index) {
-            Some(t) => format!("{}:{}:{}: error: {}", self.filename, t.line, t.column, msg),
+            Some(t) => format!("{}:{}:{}: error: {}", self.filename, t.src_line, t.src_column, msg),
             None => format!("{}: error: {}", self.filename, msg),
         }
     }
