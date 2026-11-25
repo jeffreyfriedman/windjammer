@@ -679,6 +679,10 @@ pub(crate) struct FastHits {
     pub(crate) mapleanget: u64,
     /// Machine-code element reads straight from a packed vector's storage (a read `View`, `jit/rt.rs::read_view`).
     pub(crate) packedread: u64,
+    /// Pushes machine code made straight into a packed vector's spare capacity (pending length, `jit/rt.rs::arm_push`).
+    pub(crate) pushinl: u64,
+    /// Pending push lengths written into their vector (before a helper call, at unit exit).
+    pub(crate) pushflush: u64,
     pub(crate) mapleanins: u64,
     /// Lean lookups among `mapleanget` answered by a typed array (`kmap.rs`'s `IntDense`).
     pub(crate) mapleantyped: u64,

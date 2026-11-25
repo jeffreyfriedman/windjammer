@@ -214,7 +214,7 @@ pub(super) struct Lo<'a, 'i> {
     /// The innermost construct that refused the loop (`WJ_JIT_DEBUG`).
     pub(super) why: Option<String>,
     /// The loops being lowered, innermost last (targets of `break` / `continue`).
-    loops: Vec<LoopCtx>,
+    pub(super) loops: Vec<LoopCtx>,
     /// The unit loop's label.
     unit_label: Option<&'static str>,
     stmts: Vec<StmtRun>,
@@ -234,18 +234,22 @@ pub(super) struct Lo<'a, 'i> {
     pub(super) hidx: Vec<HIdx>,
     /// Fast copy: something the soundness argument excludes was emitted (the whole pass is abandoned).
     pub(super) broken: bool,
+    /// The unit has a push-only loop that pushes: every helper call flushes a pending push length (`call`).
+    pub(super) pushfunnel: bool,
 }
 
 /// A loop being lowered: where `continue` goes (the head, or a `for` loop's increment), where `break`
 /// goes (`None` for the unit's own loop: an exit, so the closure engine leaves its loop), and the
 /// variable types at its head (both jumps must arrive with them).
-struct LoopCtx {
+pub(super) struct LoopCtx {
     label: Option<&'static str>,
     cont: Block,
     brk: Option<Block>,
     tys: Vec<Ty>,
     /// Some jump reached `cont` (a `for` loop's increment block is emitted only then).
     cont_used: bool,
+    /// The loop's body is push-only (`pushscan`): its `push` statements may be inline.
+    pub(super) push_ok: bool,
 }
 
 pub(crate) fn signature(ptr: CTy, call_conv: cranelift_codegen::isa::CallConv) -> cranelift_codegen::ir::Signature {
@@ -307,6 +311,7 @@ fn lower_pass(
     mode: Mode,
     info: Info,
 ) -> Result<(Plan, Info, bool), String> {
+    let it_fast_off = it.fast_off("pushinl");
     let mut b = FunctionBuilder::new(func, fctx);
     let entry = b.create_block();
     b.append_block_params_for_function_params(entry);
@@ -342,6 +347,10 @@ fn lower_pass(
         hrows: Vec::new(),
         hidx: Vec::new(),
         broken: false,
+        pushfunnel: !it_fast_off && match root {
+            Root::Loop(s) => super::pushscan::site(s),
+            Root::Body(l) => super::pushscan::has_site(l),
+        },
         unit_label: match root {
             Root::Loop(Statement::While { label, .. } | Statement::For { label, .. }) => label.as_deref(),
             _ => None,
@@ -625,10 +634,29 @@ impl Lo<'_, '_> {
         r
     }
 
+    /// Before a helper call: `if ctx.pk != 0 { flush_push(ctx) }` (the pending push length is written into the vector so the
+    /// helper sees the real one; docs/design/interp-soundness/pushlen.md, protocol 1).
+    fn flush_pending_push(&mut self) {
+        let pk = self.b.ins().load(types::I64, MemFlags::trusted(), self.ctx, rt::PK);
+        let (flush, join) = (self.b.create_block(), self.b.create_block());
+        self.b.ins().brif(pk, flush, &[], join, &[]);
+        self.b.switch_to_block(flush);
+        self.b.seal_block(flush);
+        let sig = self.helper("flush_push", 0, false);
+        let callee = self.b.ins().iconst(self.ptr, rt::flush_push as *const () as usize as i64);
+        self.b.ins().call_indirect(sig, callee, &[self.ctx]);
+        self.b.ins().jump(join, &[]);
+        self.b.switch_to_block(join);
+        self.b.seal_block(join);
+    }
+
     /// Call helper `f` (context first unless `float`), then leave if it reported failure.
     pub(super) fn call(&mut self, name: &'static str, f: usize, args: &[V], float: bool, fallible: bool) -> V {
         self.note_call(name);
         let sig = self.helper(name, args.len(), float);
+        if self.pushfunnel {
+            self.flush_pending_push();
+        }
         let callee = self.b.ins().iconst(self.ptr, f as i64);
         let mut all = Vec::with_capacity(args.len() + 1);
         if !float {
@@ -708,7 +736,8 @@ impl Lo<'_, '_> {
         self.exit_now(true);
         self.b.switch_to_block(bb);
         self.b.seal_block(bb);
-        self.loops.push(LoopCtx { label: self.unit_label, cont: head, brk: None, tys: tys0.clone(), cont_used: false });
+        let push_ok = super::pushscan::loop_ok(Some(cond), body);
+        self.loops.push(LoopCtx { label: self.unit_label, cont: head, brk: None, tys: tys0.clone(), cont_used: false, push_ok });
         let ended = self.block(body)?;
         self.loops.pop();
         if !ended {
@@ -904,7 +933,8 @@ impl Lo<'_, '_> {
         self.b.ins().brif(c, bb, &[], out, &[]);
         self.b.switch_to_block(bb);
         self.b.seal_block(bb);
-        self.loops.push(LoopCtx { label, cont: head, brk: Some(out), tys: tys0.clone(), cont_used: false });
+        let push_ok = super::pushscan::loop_ok(Some(cond), body);
+        self.loops.push(LoopCtx { label, cont: head, brk: Some(out), tys: tys0.clone(), cont_used: false, push_ok });
         let ended = self.block(body);
         self.loops.pop();
         if !ended? {
@@ -983,7 +1013,8 @@ impl Lo<'_, '_> {
         self.b.seal_block(bb);
         self.loop_var(s, pattern, t, cv)?;
         let latch = self.b.create_block();
-        self.loops.push(LoopCtx { label: self.unit_label, cont: latch, brk: None, tys: tys0.clone(), cont_used: false });
+        let push_ok = super::pushscan::own_loop_ok(s);
+        self.loops.push(LoopCtx { label: self.unit_label, cont: latch, brk: None, tys: tys0.clone(), cont_used: false, push_ok });
         let ended = self.block(body);
         let ctx = self.loops.pop()?;
         self.scopes.pop();
@@ -1041,7 +1072,8 @@ impl Lo<'_, '_> {
         self.b.seal_block(bb);
         self.loop_var(s, pattern, t, cv)?;
         let latch = self.b.create_block();
-        self.loops.push(LoopCtx { label, cont: latch, brk: Some(out), tys: tys0.clone(), cont_used: false });
+        let push_ok = super::pushscan::own_loop_ok(s);
+        self.loops.push(LoopCtx { label, cont: latch, brk: Some(out), tys: tys0.clone(), cont_used: false, push_ok });
         let ended = self.block(body);
         let ctx = self.loops.pop()?;
         self.scopes.pop();

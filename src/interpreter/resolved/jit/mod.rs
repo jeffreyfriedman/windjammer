@@ -26,6 +26,7 @@ mod lower_expr;
 mod lower_struct;
 mod lower_rows;
 mod hoist;
+mod pushscan;
 mod lower_map;
 pub(crate) mod osr;
 mod rt;

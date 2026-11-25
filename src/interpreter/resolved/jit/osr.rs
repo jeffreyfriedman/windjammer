@@ -303,6 +303,10 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     // SAFETY: `f` is finalized code of the module `it.jit` keeps alive, with the `UnitFn` signature;
     // `ctx` and `buf` (`nbuf` slots) outlive the call.
     let exit = unsafe { (unit.f)(&mut ctx, buf.as_mut_ptr()) } as usize;
+    // every way out of the machine code (planned or failed exit, trap, break, return, end of a function unit) returns
+    // here: write an inline push's pending length into the vector before anything else looks at it
+    // (docs/design/interp-soundness/pushlen.md, protocol 2)
+    ctx.flush_push();
     let raised = ctx.raised.take();
     if rows {
         if let Ok(mut s) = unit.spare.try_borrow_mut() {
@@ -314,6 +318,8 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     it.fast.hoisted += ctx.hoisted as u64;
     it.fast.hoistfail += ctx.hoistfail as u64;
     it.fast.packedread += ctx.view_reads as u64;
+    it.fast.pushinl += ctx.push_inl as u64;
+    it.fast.pushflush += ctx.push_flush as u64;
     it.fast.mapleanget += ctx.lean_gets as u64;
     it.fast.mapleanins += ctx.lean_inss as u64;
     it.fast.mapleantyped += ctx.lean_typed as u64;
