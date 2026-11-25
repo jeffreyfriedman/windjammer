@@ -1,0 +1,53 @@
+struct Body {
+    x: f32,
+    v: f32,
+}
+
+fn step(b: Body, dt: f32) -> Body {
+    Body { x: b.x + b.v * dt, v: b.v * 0.99 }
+}
+
+fn main() {
+    let mut acc = 0.0
+    let mut i = 0
+    while i < 1000 {
+        acc = acc + 0.1
+        i += 1
+    }
+    let total: f32 = acc
+    println("${total.to_bits():08x}")
+    let mut s: f32 = 0.0
+    let mut j = 0
+    while j < 500 {
+        s += 0.1 * 3.0
+        s = s * 1.0001 + 0.0003
+        j += 1
+    }
+    println("${s.to_bits():08x}")
+    let mut b = Body { x: 1.0, v: 0.5 }
+    let mut k = 0
+    while k < 100 {
+        b = step(b, 0.016)
+        k += 1
+    }
+    println("${b.x.to_bits():08x} ${b.v.to_bits():08x}")
+    let mut w: f32 = 1.0
+    let mut m = 0
+    while m < 50 {
+        w = 0.1
+        w = w + 16777216.0 + 1.0
+        m += 1
+    }
+    println("${w.to_bits():08x} ${(w as f64).to_bits():016x}")
+    let mut xs: Vec<f32> = Vec::new()
+    let mut n = 0
+    while n < 10 {
+        xs.push(0.1 * 7.0)
+        n += 1
+    }
+    let mut sum: f32 = 0.0
+    for x in xs {
+        sum += x
+    }
+    println("${sum.to_bits():08x}")
+}

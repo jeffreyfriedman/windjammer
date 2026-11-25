@@ -1004,8 +1004,8 @@ fn untyped_assign(slot: usize, v: Code, op: Option<CompoundOp>, tloc: Loc) -> Co
 fn retag(old: &Value, new: Value) -> Value {
     match (old, &new) {
         (Value::Int(_, ot), Value::Int(n, IntTy::Lit)) if *ot != IntTy::Lit && ot.fits(*n) => Value::Int(*n, *ot),
-        (Value::Float(_, ot), Value::Float(n, FloatTy::Lit)) => Value::Float(*n, *ot),
-        (Value::Float(_, ot), Value::Int(n, IntTy::Lit)) => Value::Float(*n as f64, *ot),
+        (Value::Float(_, ot), Value::Float(n, FloatTy::Lit)) => Value::Float(if *ot == FloatTy::F32 { *n as f32 as f64 } else { *n }, *ot),
+        (Value::Float(_, ot), Value::Int(n, IntTy::Lit)) => Value::Float(if *ot == FloatTy::F32 { *n as f32 as f64 } else { *n as f64 }, *ot),
         _ => new,
     }
 }

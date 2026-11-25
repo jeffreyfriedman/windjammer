@@ -1,0 +1,23 @@
+struct P {
+    x: f32,
+}
+
+fn main() {
+    let mut v: Vec<f32> = Vec::new()
+    v.push(16777217.0)
+    println("${v[0]} ${v[0].to_bits():08x}")
+    let mut p = P { x: 1.0 }
+    p.x = 16777217.0
+    println("${p.x} ${p.x.to_bits():08x}")
+    let mut y: f32 = 1.0
+    y = 0.1
+    println("${y.to_bits():08x} ${y * 3.0}")
+    let vv: Vec<f32> = [0.1, 16777217.0]
+    println("${vv[1]} ${vv[0].to_bits():08x}")
+    let mut o: Option<f32> = None
+    o = Some(16777217.0)
+    match o {
+        Some(x) => println("${x} ${x.to_bits():08x}"),
+        None => println("none"),
+    }
+}

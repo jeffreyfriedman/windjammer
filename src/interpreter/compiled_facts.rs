@@ -160,9 +160,13 @@ fn stored_literal_widths(program: &'static crate::parser::Program<'static>, file
 /// `widths` as text: `-` for no answer (the analysis failed or did not run), else `line:col:width` lines.
 fn encode_widths(widths: Option<&LiteralWidths>) -> String {
     let Some(w) = widths else { return "-".to_string() };
-    let mut v: Vec<(&(usize, usize), &IntTy)> = w.iter().collect();
+    let mut v: Vec<(&(usize, usize), &IntTy)> = w.ints.iter().collect();
     v.sort_by_key(|(k, _)| **k);
-    v.iter().map(|((l, c), t)| format!("{l}:{c}:{}\n", t.name())).collect()
+    let mut f: Vec<&(usize, usize)> = w.f32s.iter().collect();
+    f.sort();
+    let mut out: String = v.iter().map(|((l, c), t)| format!("{l}:{c}:{}\n", t.name())).collect();
+    out.extend(f.iter().map(|(l, c)| format!("{l}:{c}:f32\n")));
+    out
 }
 
 fn decode_widths(text: &str) -> Option<Option<LiteralWidths>> {
@@ -172,8 +176,12 @@ fn decode_widths(text: &str) -> Option<Option<LiteralWidths>> {
     let mut out = LiteralWidths::new();
     for line in text.lines() {
         let mut it = line.split(':');
-        let (l, c, t) = (it.next()?.parse().ok()?, it.next()?.parse().ok()?, IntTy::from_name(it.next()?)?);
-        out.insert((l, c), t);
+        let (l, c, t): (usize, usize, &str) = (it.next()?.parse().ok()?, it.next()?.parse().ok()?, it.next()?);
+        if t == "f32" {
+            out.f32s.insert((l, c));
+        } else {
+            out.ints.insert((l, c), IntTy::from_name(t)?);
+        }
     }
     Some(Some(out))
 }
@@ -198,7 +206,23 @@ fn compute(program: &'static crate::parser::Program<'static>) -> Option<MutRefPa
 }
 
 /// Solver widths of a module's unsuffixed integer literals other than `int`, by source position (line, column).
-pub(crate) type LiteralWidths = HashMap<(usize, usize), IntTy>;
+#[derive(Clone, Default, Debug, PartialEq)]
+pub(crate) struct LiteralWidths {
+    /// Unsuffixed integer literals the solver gives a width other than `int`.
+    pub(crate) ints: HashMap<(usize, usize), IntTy>,
+    /// Unsuffixed float literals the solver types `f32` (the generated Rust prints `0.1_f32`: rustc rounds the
+    /// literal, and an operation on two of them is an f32 operation). Everything else stays an open float literal.
+    pub(crate) f32s: HashSet<(usize, usize)>,
+}
+
+impl LiteralWidths {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+    pub(crate) fn is_empty(&self) -> bool {
+        self.ints.is_empty() && self.f32s.is_empty()
+    }
+}
 
 /// What the interpreter knows about a module's literal widths.
 #[derive(Clone, Default)]
@@ -247,7 +271,9 @@ fn solve_literal_widths(program: &'static crate::parser::Program<'static>) -> Op
     for f in &module.functions {
         for (k, b) in &f.literal_widths {
             if let Some(t) = int_width(b) {
-                out.insert(*k, t);
+                out.ints.insert(*k, t);
+            } else if matches!(b, crate::ir::safety_type::BaseType::F32) {
+                out.f32s.insert(*k);
             }
         }
     }
@@ -263,7 +289,7 @@ const USIZE_METHODS: &[&str] = &[
 ];
 
 /// Integer widths other than `int`, as type names.
-const WIDTHS: &[&str] = &["i8", "i16", "i32", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize", "uint"];
+const WIDTHS: &[&str] = &["i8", "i16", "i32", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize", "uint", "f32"];
 
 /// Does a declared type name an integer width other than `int` (anywhere inside it)?
 fn has_width(t: &crate::parser::Type) -> bool {
@@ -354,8 +380,38 @@ impl Interpreter {
             Some(s) => s.clone(),
         };
         match state {
-            LitWidths::Known(m) => m.get(&(loc.line, loc.column)).copied(),
+            LitWidths::Known(m) => m.ints.get(&(loc.line, loc.column)).copied(),
             _ => None,
+        }
+    }
+
+    /// The value of the unsuffixed float literal `f` at `loc` in `module`: an `f32` literal when the compiled program
+    /// types it so (rustc rounds `0.1_f32` at compile time; an operation on two such literals is an f32 operation),
+    /// else the open float literal. Soundness: `docs/design/interp-f32-units.md`, ledger rows L3/L6.
+    pub(crate) fn float_literal(&mut self, module: usize, loc: Option<&Location>, f: f64) -> crate::interpreter::value::Value {
+        use crate::interpreter::value::{FloatTy, Value};
+        if let Some(loc) = loc {
+            if self.literal_widths_on {
+                let state = match self.lit_widths.get(module) {
+                    Some(LitWidths::Unknown) | None => self.compute_literal_widths(module),
+                    Some(s) => s.clone(),
+                };
+                if let LitWidths::Known(m) = state {
+                    if m.f32s.contains(&(loc.line, loc.column)) {
+                        return Value::Float(f as f32 as f64, FloatTy::F32);
+                    }
+                }
+            }
+        }
+        Value::Float(f, FloatTy::Lit)
+    }
+
+    /// `float_literal` for a literal known only by its location (machine-code lowering).
+    pub(crate) fn float_literal_at(&mut self, loc: Option<&Location>, f: f64) -> crate::interpreter::value::Value {
+        let module = loc.and_then(|l| self.modules.iter().position(|m| m.file == l.file));
+        match module {
+            Some(m) => self.float_literal(m, loc, f),
+            None => crate::interpreter::value::Value::Float(f, crate::interpreter::value::FloatTy::Lit),
         }
     }
 

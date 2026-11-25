@@ -101,12 +101,17 @@ mirrors whatever the interpreter does when the unit lands (section 3).
 |---|---|---|---|---|
 | L1 | `sin cos tan exp exp2 ln log2 log10 atan atan2 cbrt sinh tanh powf` on f32 | f64 function, rounded | glibc `sinf`-family | P1 |
 | L2 | `powi`, `to_degrees`, `to_radians` on f32 | f64, rounded | f32 operations (square-and-multiply; multiply by an f32 constant) | P2 |
-| L3 | a float or integer literal assigned to an f32 place (`y = 0.1`); `16777217_f32`; integer literal coerced to f32 | **unrounded** f64 kept under the F32 tag (`retag` in `src/interpreter/eval_stmt.rs` and `src/interpreter/resolved/compile.rs`; the `"f32"` suffix in `src/interpreter/eval_expr.rs`; `Int(Lit)` in `coerce`) | rounded at compile time (`0.1_f32`, P5) | P3: `y as f64` prints `0.1` |
 | L4 | `i64`/`u64`/`isize`/`usize` above 2^53 `as f32` | `i -> f64 -> f32`, double rounding | single rounding | P3 (m2): 0x5a800000 vs 0x5a800001 |
 | L5 | `f32::from_bits(sNaN).to_bits()` | quieted (0x7fc00001) | unchanged (0x7f800001) | P4 |
-| L6 | literal-only arithmetic in an f32 context (`let x: f32 = 0.1 * 3.0`) | f64 arithmetic, rounded once at the coercion | f32 arithmetic per operation | argued from `float_binary` (Lit with Lit stays Lit); not probed |
 
-L3 is the one that matters for the unit's representation. An F32-tagged value can hold an f64 that f32 cannot
+L3 and L6 are fixed (rows removed): an unsuffixed float literal the compiled program types `f32` is an f32 value from the
+moment it is evaluated (`Interpreter::float_literal`, from the solver's published literal widths, the same facts that type
+integer literals), and the assignment, `+=`, `retag` and integer-literal coercions round with `as f32 as f64`. Literal-only
+arithmetic in an f32 context is therefore f32 arithmetic per operation. `tests/f32_parity` pins the bits against
+compiled Rust. A literal whose type the solver does not publish (it reaches an f32 place through code the analysis does
+not see) stays an open float literal, as before.
+
+The text below was written while L3 stood; with L3 fixed, F6's precondition holds. L3 was the one that mattered for the unit's representation. An F32-tagged value can hold an f64 that f32 cannot
 represent, and that is observable: through `as f64`, through `Value` equality and ordering (`value.rs` compares raw
 f64 payloads), and through the copy of a field. The carrier design reproduces it exactly. A native-f32 design would
 not (section 3.3).
@@ -188,8 +193,8 @@ the F1 measurement shows the carrier's conversions cost more than *assumed*.
 | `as f64` from f32 | (retag) | payload unchanged | `Val` retagged, no instruction |
 | `as iN/uN` from f32 | yes (`fcvt_to_sint_sat`/`uint_sat`: NaN to 0, saturation) | trunc, NaN to 0, clamp, on the payload | the existing f64 cast lowering on the payload; `i128`/`u128` still refused |
 | literal `1.5` in f32 context | | `Lit` f64; rounded where an op meets F32 | `Lit` `f64const`; rounded at the op (folded when constant) |
-| literal `16777217_f32` | | f64 of the integer, F32 tag, unrounded (L3) | `f64const(i as f64)` tagged F32, unrounded |
-| `y = <Lit>` with `y: f32` (retag) | | bits kept, tag F32 (L3) | the same: `Val` relabelled, no rounding |
+| literal `16777217_f32` | | f64 of the integer rounded once to f32 (L3 fixed), F32 tag | `f64const((i as f32) as f64)` tagged F32 |
+| `y = <Lit>` with `y: f32` (retag) | | rounded with `as f32 as f64`, tag F32 (L3 fixed) | `R(x)` then relabelled |
 | `to_bits` | yes (`fdemote` + `bitcast` I32 + `uextend`) | `(x as f32).to_bits()` as u32 | F5: the same; `from_bits` refused in v1 (a static path call, not a method) |
 | NaN payload through conversions | same instructions in both | cvtsd2ss/cvtss2sd quiet and truncate | identical; two-NaN operand choice not argued (section 0, item 2) |
 | printing | runtime only | `Display` of `x as f32` | not in units |

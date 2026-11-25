@@ -107,7 +107,7 @@ impl Interpreter {
             Literal::Int(i) => Value::Int(*i as i128, IntTy::Lit),
             Literal::IntSuffixed(i, suf) => match suf.as_str() {
                 "f64" => Value::Float(*i as f64, FloatTy::F64),
-                "f32" => Value::Float(*i as f64, FloatTy::F32),
+                "f32" => Value::Float(*i as f32 as f64, FloatTy::F32),
                 // `u64`/`usize` payloads above i64::MAX are stored as their bit pattern (negative).
                 "u64" | "usize" => Value::Int(*i as u64 as i128, IntTy::from_name(suf).unwrap_or(IntTy::Lit)),
                 s => Value::Int(*i as i128, IntTy::from_name(s).unwrap_or(IntTy::Lit)),
@@ -133,6 +133,7 @@ impl Interpreter {
                     None => Value::Int(*i as i128, IntTy::Lit),
                 })
             }
+            Expression::Literal { value: Literal::Float(f), location } => Ok(self.float_literal(self.scope.module, location.as_ref(), *f)),
             Expression::Literal { value, .. } => Ok(self.literal(value)),
 
             Expression::Identifier { name, location } => {

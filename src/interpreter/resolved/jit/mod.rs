@@ -457,7 +457,7 @@ impl Tr<'_> {
             // an integer function computes in `int`: a literal the compiled program types otherwise keeps it in the closures
             Expression::Literal { value: Literal::Int(i), location } => {
                 if let (Some(w), Some(l)) = (&self.wide, location) {
-                    if w.contains_key(&(l.line, l.column)) {
+                    if w.ints.contains_key(&(l.line, l.column)) {
                         return None;
                     }
                 }

@@ -9,7 +9,7 @@ use super::rt;
 use super::kinds::{code, full_i64, int_ok, mutant, unsigned_repr, Class, Elem, Shape, Ty};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::ops::compound_to_binary;
-use crate::interpreter::value::{type_is_float, FloatTy};
+use crate::interpreter::value::{type_is_float, FloatTy, Value};
 use crate::parser::{BinaryOp, CompoundOp, Expression, Literal, Statement, Type, UnaryOp};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{types, InstBuilder, Value as V};
@@ -67,6 +67,13 @@ impl Lo<'_, '_> {
                 Some(_) => return None,
                 None => self.literal(&Literal::Int(*i))?,
             },
+            // a float literal the compiled program types `f32` is an f32 value: refused here (f32 values never enter machine code)
+            Expression::Literal { value: Literal::Float(f), location } => {
+                if !matches!(self.it.float_literal_at(location.as_ref(), *f), Value::Float(_, FloatTy::Lit)) {
+                    return None;
+                }
+                self.literal(&Literal::Float(*f))?
+            }
             Expression::Literal { value, .. } => self.literal(value)?,
             Expression::Identifier { name, .. } => match self.lookup(name)?.clone() {
                 Bind::Var(id) => Val::of(self.b.use_var(self.vars[id].var), self.vars[id].ty),
