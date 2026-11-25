@@ -44,7 +44,13 @@ impl<'ast> CodeGenerator<'ast> {
         // The cast applies to the WHOLE operand: an index-position `usize` expectation belongs to the
         // cast's result, never to the operand's peers (`items[((i + 1) % n) as usize]` keeps `i` an
         // `i64`; pushing `as usize` onto `i` mixes widths against `n`).
-        let prev_in_index = std::mem::replace(&mut self.in_index_context, false);
+        // A bare literal operand has no peers: in an index position it stays unsuffixed (`mask[0 as usize]`, not
+        // `mask[0_i64 as usize]`).
+        let operand_is_bare_int_literal = matches!(expr, Expression::Literal { value: Literal::Int(_), .. });
+        let prev_in_index = self.in_index_context;
+        if !operand_is_bare_int_literal {
+            self.in_index_context = false;
+        }
 
         // Add parentheses around binary expressions for correct precedence
         // because `as` has higher precedence than arithmetic in Rust:

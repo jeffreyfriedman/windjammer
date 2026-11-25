@@ -240,6 +240,57 @@ pub fn register_braced_pub_use_reexports(
     }
 }
 
+/// Key every re-exported struct under its re-export paths too: `ffi::GpuVertex` for a struct declared in `ffi::api`,
+/// re-exported by `pub use api::GpuVertex` in `ffi` or by the implicit child re-export (ADR-0040: a module
+/// re-exports the public items of its child modules, the `pub use self::child::*` its generated `mod.rs` has).
+///
+/// Invariant: a struct's field table is reachable under every crate-root path that names it: its declaring path,
+/// each `pub use` path (`module_re_exports`) and each ancestor module that re-exports it implicitly
+/// (`defining_paths`, one declaring struct per ancestor and name; two are ambiguous, as in Rust). Decided by the
+/// declarations, never by a name match. Every consumer looks a struct literal's written name up directly
+/// (`type_struct_literal_field` in the IR solver, float and int inference): without the re-export key,
+/// `ffi::GpuVertex { texcoord: [0.0, 0.0] }` has no field types and its literals in `[f32; N]` fields get the
+/// solver's default `f64` (rustc E0308). An alias never replaces a declared key.
+pub fn register_reexport_struct_aliases(
+    struct_field_types: &mut HashMap<String, HashMap<String, Type>>,
+    module_re_exports: &HashMap<String, HashMap<String, String>>,
+    defining_paths: &HashMap<String, Vec<Vec<String>>>,
+) {
+    let mut aliases: Vec<(String, String)> = Vec::new();
+    for (module, exports) in module_re_exports {
+        if module.is_empty() {
+            continue;
+        }
+        for (name, key) in exports {
+            aliases.push((format!("{module}::{name}"), key.clone()));
+        }
+    }
+    let mut implicit: HashMap<String, Vec<String>> = HashMap::new();
+    for (name, paths) in defining_paths {
+        for path in paths {
+            let key = qualify_struct_key(path, name);
+            for depth in 1..path.len() {
+                implicit.entry(qualify_struct_key(&path[..depth], name)).or_default().push(key.clone());
+            }
+        }
+    }
+    for (alias, mut keys) in implicit {
+        keys.sort();
+        keys.dedup();
+        if let [key] = keys.as_slice() {
+            aliases.push((alias, key.clone()));
+        }
+    }
+    for (alias, key) in aliases {
+        if alias == key || struct_field_types.contains_key(&alias) {
+            continue;
+        }
+        if let Some(fields) = struct_field_types.get(&key).cloned() {
+            struct_field_types.insert(alias, fields);
+        }
+    }
+}
+
 /// Walk items (and inline `mod` blocks) and merge `pub use` re-exports into `out`.
 pub fn merge_module_reexports_from_items<'ast>(
     items: &[Item<'ast>],

@@ -14,6 +14,7 @@ pub mod incremental;
 mod library_codegen_inputs;
 mod library_copy_registry;
 mod lone_script_modules;
+mod module_reexports;
 mod value_formal_fixed_point;
 pub(crate) mod rust_surface_metadata;
 pub mod library_multipass;

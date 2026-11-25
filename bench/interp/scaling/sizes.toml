@@ -99,3 +99,17 @@ iters = 3000000
 [structs.100x]
 work = 40
 iters = 12000000
+
+# vecpass: a Vec<float> of 100k float literals passed by value to a read-only function; calls scale with the work
+[vecpass.1x]
+work = 1
+len = 100000
+calls = 200
+[vecpass.10x]
+work = 10
+len = 100000
+calls = 2000
+[vecpass.100x]
+work = 100
+len = 100000
+calls = 20000

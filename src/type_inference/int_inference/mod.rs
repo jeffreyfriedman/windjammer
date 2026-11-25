@@ -81,6 +81,8 @@ pub struct IntInference {
     module_re_exports: HashMap<String, HashMap<String, String>>,
     /// External crate → directory (or file) containing `metadata.json` for cross-crate formals.
     external_crate_metadata_paths: HashMap<String, PathBuf>,
+    /// Declared types of each dependency crate's constants (crate key -> name -> type).
+    external_crate_consts: HashMap<String, HashMap<String, Type>>,
     expr_id_cache: HashMap<(usize, usize, usize), ExprId>,
     current_file_id: usize,
     file_name_to_id: HashMap<String, usize>,
@@ -116,6 +118,7 @@ impl IntInference {
             imported_type_registry_keys: HashMap::new(),
             module_re_exports: HashMap::new(),
             external_crate_metadata_paths: HashMap::new(),
+            external_crate_consts: HashMap::new(),
             expr_id_cache: HashMap::new(),
             current_file_id: 0,
             file_name_to_id: HashMap::new(),
@@ -210,6 +213,10 @@ impl IntInference {
         self.external_crate_metadata_paths = paths.clone();
     }
 
+    pub fn add_external_crate_consts(&mut self, crate_key: &str, consts: HashMap<String, Type>) {
+        self.external_crate_consts.insert(crate_key.to_string(), consts);
+    }
+
     /// Load function signatures from external `metadata.json` when the program imports
     /// that crate (`use prebuilt_i32_lib::double`). Signature-driven — no name heuristics.
     fn load_imported_external_function_signatures<'ast>(&mut self, program: &Program<'ast>) {
@@ -219,6 +226,7 @@ impl IntInference {
             let Item::Use { path, .. } = item else {
                 continue;
             };
+            for path in crate::type_inference::expand_use_group(&path) {
             let mut module_path: Vec<String> = path
                 .iter()
                 .skip_while(|s| {
@@ -229,7 +237,7 @@ impl IntInference {
             if module_path.len() < 2 {
                 continue;
             }
-            let _imported_name = module_path.pop();
+            let imported_name = module_path.pop();
             let Some(crate_name) = module_path.first() else {
                 continue;
             };
@@ -241,6 +249,10 @@ impl IntInference {
                 crate::metadata::load_function_signatures_from_metadata(meta_dir)
             {
                 self.function_signatures.insert(func_name, sig);
+            }
+            if let (Some(consts), Some(imported)) = (self.external_crate_consts.get(&crate_key), imported_name.as_deref()) {
+                self.const_types.load_imported_crate_consts(&crate_key, consts, imported);
+            }
             }
         }
     }

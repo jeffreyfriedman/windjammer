@@ -1,0 +1,55 @@
+// `x ?? [a, b]` on an Option/Result whose payload is a Vec: the default list literal is a Vec (not an array),
+// in every position: assert_eq, let initializer, call argument, method chain, nested, empty and non-empty,
+// element widths f32/f64/i32/string. A fixed-size array context stays an array.
+// expect: 0
+// expect: 1
+// expect: 3
+// expect: 2
+// expect: 1
+// expect: 2
+// expect: 1
+// expect: 4
+// expect: 1
+enum Oops {
+    Bad,
+}
+
+fn samples(ok: bool) -> Result<Vec<f32>, Oops> {
+    if ok { Ok([1.5, 2.5]) } else { Err(Oops::Bad) }
+}
+
+fn wide(ok: bool) -> Option<Vec<f64>> {
+    if ok { Some([1.0, 2.0, 3.0]) } else { None }
+}
+
+fn ints(ok: bool) -> Result<Vec<int>, Oops> {
+    if ok { Ok([7]) } else { Err(Oops::Bad) }
+}
+
+fn names(ok: bool) -> Option<Vec<string>> {
+    if ok { Some(["a"]) } else { None }
+}
+
+fn total(xs: Vec<f32>) -> int {
+    xs.len() as int
+}
+
+fn quad() -> [i32; 4] {
+    [1, 2, 3, 4]
+}
+
+fn main() {
+    assert_eq((samples(true) ?? []).len() as int, 2)
+    println("{}", (samples(true) ?? [1.0]).len() - 2)
+    println("{}", (samples(false) ?? [1.0]).len())
+    println("{}", (wide(false) ?? [1.0, 2.0, 3.0]).len())
+    let a = samples(false) ?? [1.0, 2.0]
+    println("{}", a.len())
+    println("{}", (ints(false) ?? [9]).len())
+    println("{}", total(samples(false) ?? [0.5, 0.25]))
+    let n = names(false) ?? ["x"]
+    println("{}", n.len())
+    let q = quad()
+    println("{}", q.len())
+    println("{}", (names(false) ?? []).len() + 1)
+}

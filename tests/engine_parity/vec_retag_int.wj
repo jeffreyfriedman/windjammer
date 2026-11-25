@@ -1,0 +1,126 @@
+// A local vector of untyped integer literals passed to a `Vec<iN>` parameter: values and later uses are unchanged
+// for every width, the caller's vector keeps its other aliases, and 1000 calls retag it once
+// (docs/design/interp-soundness/vecretag.md). The out-of-range cases are `vec_retag_int_range_*.wj`.
+struct Keep {
+    items: Vec<int>,
+}
+
+fn at_i8(v: Vec<i8>, i: int) -> i8 {
+    v[i as usize]
+}
+fn at_u8(v: Vec<u8>, i: int) -> u8 {
+    v[i as usize]
+}
+fn at_i16(v: Vec<i16>, i: int) -> i16 {
+    v[i as usize]
+}
+fn at_u32(v: Vec<u32>, i: int) -> u32 {
+    v[i as usize]
+}
+fn at_i64(v: Vec<int>, i: int) -> int {
+    v[i as usize]
+}
+fn at_usize(v: Vec<usize>, i: int) -> usize {
+    v[i as usize]
+}
+fn at_u64(v: Vec<u64>, i: int) -> u64 {
+    v[i as usize]
+}
+
+fn sum(v: Vec<int>) -> int {
+    let mut s = 0
+    let mut i = 0
+    while i < v.len() as int {
+        s += v[i as usize]
+        i += 1
+    }
+    s
+}
+
+fn grow(v: Vec<int>) -> int {
+    v[0] * 100000 * 100000
+}
+
+fn first_f(v: Vec<f32>) -> float {
+    v[0] as float
+}
+
+fn main() {
+    let mut a: Vec<int> = []
+    let mut k = 0
+    while k < 100 {
+        a.push(k - 50)
+        k += 1
+    }
+    // a thousand calls of a read-only function with the same local: the answer never changes
+    let mut total = 0
+    let mut c = 0
+    while c < 1000 {
+        total += at_i64(a, c % 100)
+        c += 1
+    }
+    println("i64 ${total} ${a.len()} ${sum(a)}")
+    // arithmetic in the callee runs at the formal's width (i64: no 32-bit overflow)
+    let mut big = Vec::new()
+    let mut m = 0
+    while m < 4 {
+        big.push(m + 50000)
+        m += 1
+    }
+    println("wide ${grow(big)} ${grow(big)}")
+    // the caller keeps another name for the same vector: it is not changed by the call
+    let keep = Keep { items: a }
+    let z = at_i64(a, 3)
+    println("alias ${z} ${keep.items[3]} ${keep.items.len()}")
+    // each width has its own vector (the checker types a vector by its uses)
+    let mut p8 = Vec::new()
+    let mut j_p8 = 0
+    while j_p8 < 8 {
+        p8.push(j_p8 * 10)
+        j_p8 += 1
+    }
+    println("i8 ${at_i8(p8, 3)} ${at_i8(p8, 3)} ${p8[7]}")
+    let mut pu8 = Vec::new()
+    let mut j_pu8 = 0
+    while j_pu8 < 8 {
+        pu8.push(j_pu8 * 10)
+        j_pu8 += 1
+    }
+    println("u8 ${at_u8(pu8, 3)} ${at_u8(pu8, 3)} ${pu8[7]}")
+    let mut p16 = Vec::new()
+    let mut j_p16 = 0
+    while j_p16 < 8 {
+        p16.push(j_p16 * 10)
+        j_p16 += 1
+    }
+    println("i16 ${at_i16(p16, 3)} ${at_i16(p16, 3)} ${p16[7]}")
+    let mut p32 = Vec::new()
+    let mut j_p32 = 0
+    while j_p32 < 8 {
+        p32.push(j_p32 * 10)
+        j_p32 += 1
+    }
+    println("u32 ${at_u32(p32, 3)} ${at_u32(p32, 3)} ${p32[7]}")
+    let mut pus = Vec::new()
+    let mut j_pus = 0
+    while j_pus < 8 {
+        pus.push(j_pus * 10)
+        j_pus += 1
+    }
+    println("usize ${at_usize(pus, 3)} ${at_usize(pus, 3)} ${pus[7]}")
+    let mut p64 = Vec::new()
+    let mut j_p64 = 0
+    while j_p64 < 8 {
+        p64.push(j_p64 * 10)
+        j_p64 += 1
+    }
+    println("u64 ${at_u64(p64, 3)} ${at_u64(p64, 3)} ${p64[7]}")
+    // an f32 formal keeps the generic path
+    let mut f = Vec::new()
+    f.push(0.1)
+    f.push(0.2)
+    println("f32 ${first_f(f)} ${f[0]}")
+    // after the call the caller keeps pushing and calling
+    a.push(99)
+    println("after ${at_i64(a, 100)} ${sum(a)}")
+}

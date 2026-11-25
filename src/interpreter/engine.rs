@@ -277,6 +277,8 @@ pub struct Interpreter {
     pub(crate) lit_widths: Vec<super::compiled_facts::LitWidths>,
     /// The same, by program (modules sharing a file share them).
     pub(crate) lit_widths_by_program: HashMap<usize, super::compiled_facts::LitWidths>,
+    /// Widths shared with the other tests of this run (`WidthShare`); `None` outside the test runner.
+    pub(crate) width_share: Option<std::sync::Arc<super::compiled_facts::WidthShare>>,
     /// Give unsuffixed literals the solver's widths (a host may turn it off).
     pub(crate) literal_widths_on: bool,
     /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
@@ -396,6 +398,7 @@ impl Interpreter {
             compiled_facts: HashMap::new(),
             lit_widths: Vec::new(),
             lit_widths_by_program: HashMap::new(),
+            width_share: None,
             literal_widths_on: true,
             type_hint: None,
             retained: Vec::new(),
@@ -705,6 +708,9 @@ pub(crate) struct FastHits {
     /// Versioned loops (hoisted row views) entered through the fast copy, and through the slow copy (a view could not be built).
     pub(crate) hoisted: u64,
     pub(crate) hoistfail: u64,
+    /// A local `Vec<float>` of untyped float literals retagged `f64` once at a call whose parameter is `Vec<f64>`
+    /// (`resolved/expr.rs::retag_arg`), so later calls do not rebuild it.
+    pub(crate) vecretag: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,

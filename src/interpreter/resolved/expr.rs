@@ -17,6 +17,7 @@ use crate::interpreter::int::IntTy;
 use crate::interpreter::intrinsics::Intrinsic;
 use crate::interpreter::place::{deref_value, strip_refs};
 use crate::interpreter::value::*;
+use crate::interpreter::vecbody::Retag;
 use crate::parser::{BinaryOp, Expression, Literal, Type, UnaryOp};
 use crate::source_map::Location;
 use std::rc::Rc;
@@ -451,7 +452,26 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
             .enumerate()
             .map(|(i, e)| match mutated.get(i) {
                 Some(true) if Interpreter::is_place_expr(e) => Some(X::V(super::place::arg(cx, e)?)),
-                _ => expr_arg(cx, e),
+                _ => {
+                    let to = if mutated.get(i).copied().unwrap_or(false) || cx.it.fast_off("vecretag") {
+                        None
+                    } else {
+                        f.params.get(i).and_then(|p| vec_retag(&p.type_))
+                    };
+                    match (to, e) {
+                        (Some(to), Expression::Identifier { name, .. }) if cx.local(name).is_some() => {
+                            let slot = cx.local(name)?;
+                            let boxed = cx.is_boxed(slot);
+                            let x = expr_arg(cx, e)?;
+                            match (x, boxed) {
+                                (X::Slot(s), false) => Some(retag_arg(s, to)),
+                                (x, true) => Some(retag_boxed_arg(slot, x, to)),
+                                (x, _) => Some(x),
+                            }
+                        }
+                        _ => expr_arg(cx, e),
+                    }
+                }
             })
             .collect::<Option<_>>()?;
         if places {
@@ -512,6 +532,58 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
         }
         Ok(Value::Unit)
     })))
+}
+
+/// `Vec<f64>`, `Vec<float>`, `Vec<int>` and the other integer widths: the parameter types `retag_arg` serves.
+fn vec_retag(t: &Type) -> Option<Retag> {
+    let inner = match t {
+        Type::Vec(inner) => &**inner,
+        Type::Parameterized(n, args) if n == "Vec" && args.len() == 1 => &args[0],
+        _ => return None,
+    };
+    if type_is_float(inner) == Some(FloatTy::F64) {
+        return Some(Retag::F64);
+    }
+    match inner {
+        Type::Reference(_) | Type::MutableReference(_) => None,
+        _ => IntTy::from_type(inner).map(Retag::Int),
+    }
+}
+
+/// The argument `v` (a plain local) of a `Vec<f64>` parameter. Binding the parameter coerces a vector whose
+/// first element is an untyped float literal by rebuilding it, so a local filled with `push(1.0)` was rebuilt
+/// at every call (O(n) each). Retag the LOCAL once instead: its slot gets a body with the same bits tagged
+/// `f64`, which `coerce` then passes through. Soundness: `docs/design/interp-soundness/vecretag.md`.
+fn retag_arg(s: usize, to: Retag) -> X {
+    X::V(Box::new(move |it, b| {
+        if let Value::Vec(rc) = &it.rstack[b + s] {
+            if let Some(body) = rc.retagged(to) {
+                it.fast.vecretag += 1;
+                it.rstack[b + s] = Value::Vec(Rc::new(body));
+            }
+        }
+        Ok(it.rstack[b + s].clone())
+    }))
+}
+
+/// `retag_arg` for a boxed local: the retag is made in its walker cell (only when the cell holds the vector itself,
+/// not a reference to another place), then the argument is read as `read_boxed_arg` reads it.
+fn retag_boxed_arg(slot: usize, read: X, to: Retag) -> X {
+    let read = read.code();
+    X::V(Box::new(move |it, b| {
+        let new = match &it.rstack[b + slot] {
+            Value::Ref(p) if p.path.is_empty() => match &*p.slot.borrow() {
+                Value::Vec(rc) => rc.retagged(to),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let (Some(body), Value::Ref(p)) = (new, &it.rstack[b + slot]) {
+            it.fast.vecretag += 1;
+            *p.slot.borrow_mut() = Value::Vec(Rc::new(body));
+        }
+        read(it, b)
+    }))
 }
 
 /// A call site of a module function.

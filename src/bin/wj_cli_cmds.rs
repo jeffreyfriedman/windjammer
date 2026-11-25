@@ -309,6 +309,10 @@ pub fn run(cli: Cli) -> Result<()> {
                 // ADR-0031: the crate host for the project's surfaced Rust crates (built once, cached)
                 let here = path.clone().unwrap_or_else(|| std::path::PathBuf::from("."));
                 let crates = if list { None } else { windjammer::cli::crate_host_build::host_for_path(&here, &mut |m| eprintln!("{m}")).map_err(|e| anyhow::anyhow!(e))? };
+                if !list {
+                    // the literal widths of a file are kept by content next to the cached runs, so a repeat run and every test of this one reuse them (`wj run` shares the same entries)
+                    windjammer::cli::check::share_run_facts();
+                }
                 return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json, sim, crates);
             }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {

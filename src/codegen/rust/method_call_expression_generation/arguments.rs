@@ -317,6 +317,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Vec::new()
                     };
 
+                self.record_default_closure_lists(method, arg_to_generate, receiver_type_inferred.as_ref());
                 let ref_closure_names = self.mark_ref_closure_params(method, arg_to_generate);
                 let element_types = self.bind_element_param_types(object, method, i, arg_to_generate, &receiver_type_inferred);
                 let prev_closure_predicate = self.closure_predicate_typed_params;

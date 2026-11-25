@@ -22,7 +22,7 @@ pub use signature_filters::{
 };
 
 pub use crate_metadata::{
-    collect_string_const_names, collect_variant_payloads, find_project_root, global_meta_cache_dir,
+    collect_const_types, collect_string_const_names, collect_variant_payloads, load_const_types_from_metadata, find_project_root, global_meta_cache_dir,
     load_function_signatures_from_metadata,
     load_merged_external_function_signatures, load_merged_external_struct_fields,
     load_string_const_names, load_struct_field_types_from_file, meta_cache_path, meta_cache_root, peer_meta_entries,
@@ -113,6 +113,23 @@ pub fn merge_wj_meta_signatures_from_dir(
     merge_wj_meta_signatures_from_dir_reaching(root, cache_root, None, registry);
 }
 
+/// [`merge_wj_meta_signatures_from_dir`] for a build that compiles every source of `root`'s crate (the library
+/// multipass build).
+///
+/// Invariant: a signature of a function this build compiles from source is decided by this build's analysis, never
+/// read back from an earlier build's output. The crate's own project-root `metadata.json` is such an output (written
+/// by an older compiler, or committed with the sources), so it is not merged: merged last and as "authoritative", a
+/// stale entry (`is_in_sight_cone(&self, npc_pos: &Vec3, ..)` from an older compiler) became the call-site contract
+/// while the definition was emitted from the converged analysis (`npc_pos: Vec3`), and calls borrowed a by-value
+/// formal (E0308). Cached `.wj.meta` sidecars stay: they are used only when current (`wj_meta_is_current`).
+pub fn merge_wj_meta_signatures_for_crate_build(
+    root: &Path,
+    cache_root: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+) {
+    merge_sidecars(root, cache_root, None, registry, true);
+}
+
 /// [`merge_wj_meta_signatures_from_dir`] for a build that reaches only the modules its sources name (only peers it
 /// reaches, closed over their own `use` / `mod` declarations, and whose sources still hold the text they were
 /// written for): `uses` are the
@@ -124,6 +141,18 @@ pub fn merge_wj_meta_signatures_from_dir_reaching(
     cache_root: &Path,
     uses: Option<std::collections::BTreeSet<String>>,
     registry: &mut crate::analyzer::SignatureRegistry,
+) {
+    merge_sidecars(root, cache_root, uses, registry, false);
+}
+
+/// The merge behind [`merge_wj_meta_signatures_from_dir_reaching`] and [`merge_wj_meta_signatures_for_crate_build`]
+/// (`compiles_own_crate`: the build compiles every source of `root`'s crate).
+fn merge_sidecars(
+    root: &Path,
+    cache_root: &Path,
+    uses: Option<std::collections::BTreeSet<String>>,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    compiles_own_crate: bool,
 ) {
     let scope = sidecar_policy::PeerScope::new(root, uses, cache_root);
     let prev = PEER_SCOPE.with(|c| c.replace(Some(scope)));
@@ -145,9 +174,22 @@ pub fn merge_wj_meta_signatures_from_dir_reaching(
         &mut copy_structs,
         &mut all_struct_fields,
     );
-    load_project_root_metadata(root, registry, &mut copy_structs, &mut all_struct_fields);
+    if !compiles_own_crate || !project_root_metadata_is_own_output(root) {
+        load_project_root_metadata(root, registry, &mut copy_structs, &mut all_struct_fields);
+    }
     type_metadata::infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
     PEER_SCOPE.with(|c| *c.borrow_mut() = prev);
+}
+
+/// Whether the project-root `metadata.json` above `root` describes the crate whose tree `root` is (`root` is the
+/// project root or its `src/`): then it is an earlier build's output for the very sources being compiled.
+fn project_root_metadata_is_own_output(root: &Path) -> bool {
+    let Some(project_root) = crate_metadata::find_project_root(root) else { return false };
+    let same = |a: &Path, b: &Path| match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    };
+    same(root, &project_root) || same(root, &project_root.join("src"))
 }
 
 /// The cached sidecar `candidate` (a path relative to the cache of `source_root`'s project, or `./.wj-cache` without
@@ -679,6 +721,7 @@ pub fn merge_file_skeleton_into_crate(
         .string_consts
         .extend(crate_metadata::collect_string_const_names(program));
     crate_metadata.variant_payloads.extend(crate_metadata::collect_variant_payloads(program));
+    crate_metadata.consts.extend(crate_metadata::collect_const_types(std::slice::from_ref(program)));
     crate_metadata.string_consts.sort();
     crate_metadata.string_consts.dedup();
 }

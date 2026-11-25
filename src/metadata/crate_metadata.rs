@@ -258,6 +258,11 @@ pub struct CrateMetadata {
     /// passed to another crate's `Value::Int64(..)` has the declared payload width).
     #[serde(default)]
     pub variant_payloads: std::collections::BTreeMap<String, Vec<String>>,
+    /// Top-level `const` / `static` declarations: name -> serialized declared Type (a dependent's numeric inference
+    /// types `assert_eq(GAIN, 0.5)` from the declaration: a float literal takes the constant's width). A name two
+    /// files declare with different types is left out.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub consts: std::collections::BTreeMap<String, String>,
     /// Struct and enum names the generated crate declares with `#[derive(Serialize)]` (`None` in metadata written
     /// before this field existed: unknown). A dependent's derive inference reads it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -280,6 +285,7 @@ impl CrateMetadata {
             copy_structs: Vec::new(),
             string_consts: Vec::new(),
             variant_payloads: Default::default(),
+            consts: Default::default(),
             serde_types: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
@@ -287,7 +293,19 @@ impl CrateMetadata {
 
     /// Whether there is anything to publish in `metadata.json`.
     pub fn has_entries(&self) -> bool {
-        !self.structs.is_empty() || !self.functions.is_empty() || !self.variant_payloads.is_empty()
+        !self.structs.is_empty() || !self.functions.is_empty() || !self.variant_payloads.is_empty() || !self.consts.is_empty()
+    }
+
+    /// The facts a crate's parsed programs declare: string constants, tuple-variant payloads and constant types.
+    pub fn collect_program_facts(&mut self, programs: &[crate::parser::Program]) {
+        self.string_consts.clear();
+        for program in programs {
+            self.string_consts.extend(collect_string_const_names(program));
+            self.variant_payloads.extend(collect_variant_payloads(program));
+        }
+        self.string_consts.sort();
+        self.string_consts.dedup();
+        self.consts = collect_const_types(programs);
     }
 
     /// Merge in struct/function data from a ModuleMetadata
@@ -459,6 +477,34 @@ pub fn collect_string_const_names(program: &crate::parser::Program) -> Vec<Strin
         walk(item, &mut out);
     }
     out
+}
+
+/// Declared types of the top-level `const` / `static` items of `programs`, serialized for `metadata.json`
+/// (names every declaration of agrees on; see [`CrateMetadata::consts`]).
+pub fn collect_const_types(programs: &[crate::parser::Program]) -> std::collections::BTreeMap<String, String> {
+    crate::type_inference::const_table::ConstTable::from_programs(programs)
+        .agreed()
+        .into_iter()
+        .map(|(name, ty)| (name, ModuleMetadata::serialize_type(&ty)))
+        .collect()
+}
+
+/// The declared types of the constants in a crate `metadata.json` (file or directory), by name.
+pub fn load_const_types_from_metadata(meta_dir_or_file: &Path) -> HashMap<String, Type> {
+    let Some(metadata_path) = resolve_metadata_json_path(meta_dir_or_file) else {
+        return HashMap::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&metadata_path) else {
+        return HashMap::new();
+    };
+    let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&text) else {
+        return HashMap::new();
+    };
+    crate_meta
+        .consts
+        .iter()
+        .filter_map(|(name, ty)| Some((name.clone(), ModuleMetadata::deserialize_type(ty)?)))
+        .collect()
 }
 
 /// Load function signatures from a crate `metadata.json` (file or directory).

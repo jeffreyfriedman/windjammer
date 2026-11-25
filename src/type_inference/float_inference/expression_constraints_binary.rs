@@ -7,9 +7,12 @@ impl FloatInference {
         op: crate::parser::ast::operators::BinaryOp,
         return_type: Option<&Type>,
     ) {
-        // Binary ops require both operands to have same type
-        self.collect_expression_constraints(left, return_type);
-        self.collect_expression_constraints(right, return_type);
+        // Binary ops require both operands to have same type. An operand's width comes from its own operands and
+        // declarations, never from the enclosing function's return type: `x * 3.0` with `x: f64` is an f64 product
+        // even in a function returning f32 (`(x * 3.0) as f32`, `if x > 0.5 { .. }`).
+        let _ = return_type;
+        self.collect_expression_constraints(left, None);
+        self.collect_expression_constraints(right, None);
 
         // For arithmetic ops (+, -, *, /), operands must match
         use crate::parser::ast::operators::BinaryOp;

@@ -81,6 +81,8 @@ pub struct FloatInference {
     /// External crate metadata: crate_name → path to metadata.json directory
     /// Used for cross-crate type inference (e.g., a game engine project)
     external_crate_metadata_paths: std::collections::HashMap<String, std::path::PathBuf>,
+    /// Declared types of each dependency crate's constants (crate key -> name -> type).
+    external_crate_consts: std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
     /// Debug: Optional source text for error context (line extraction)
     debug_source: Option<String>,
     /// Library multipass: module path for the current `.wj` file.
@@ -117,6 +119,7 @@ impl FloatInference {
             const_types: Default::default(),
             current_file_name: String::new(),
             external_crate_metadata_paths: std::collections::HashMap::new(),
+            external_crate_consts: std::collections::HashMap::new(),
             debug_source: None,
             current_file_module_path: Vec::new(),
             struct_defining_module_paths: HashMap::new(),
@@ -266,6 +269,10 @@ impl FloatInference {
         paths: &std::collections::HashMap<String, std::path::PathBuf>,
     ) {
         self.external_crate_metadata_paths = paths.clone();
+    }
+
+    pub fn add_external_crate_consts(&mut self, crate_key: &str, consts: std::collections::HashMap<String, Type>) {
+        self.external_crate_consts.insert(crate_key.to_string(), consts);
     }
 
     /// Register signatures/metadata from a program (no constraint collection).

@@ -56,6 +56,16 @@ impl ConstTable {
         self.global.contains_key(name)
     }
 
+    /// Register the constants of another crate that a `use` names: `imported` is the imported name (`GAIN` for
+    /// `use dep::GAIN`, `*` for a glob). `consts` is that crate's declared constants by name (its `metadata.json`).
+    pub fn load_imported_crate_consts(&mut self, crate_key: &str, consts: &HashMap<String, Type>, imported: &str) {
+        for (name, ty) in consts {
+            if name == imported || imported == "*" {
+                self.insert(crate_key, name.clone(), ty.clone());
+            }
+        }
+    }
+
     pub fn extend(&mut self, other: ConstTable) {
         for ((file, name), ty) in other.by_file {
             self.insert(&file, name, ty);

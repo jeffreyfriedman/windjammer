@@ -9,3 +9,4 @@ bench/interp/sieve.wj	1	0	0	0	0	0
 bench/interp/startup/hello.wj	0	0	0	0	0	0
 bench/interp/strings.wj	400	0	0	1	0	0
 bench/interp/structs.wj	0	0	0	0	0	0
+bench/interp/vecpass.wj	1	0	0	0	0	0

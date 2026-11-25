@@ -26,6 +26,66 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+/// Literal widths shared by the tests of one `wj test --interpret` run (soundness:
+/// `docs/design/interp-soundness/widthshare.md`). Every test runs in a fresh `Interpreter` that re-parses its
+/// project, so without this each test would run the whole analysis again for each file it loads. The key is the file's
+/// content key (`note_parsed`: name, text, renames); the compiler build, the stdlib tables and the `WJ_*` environment
+/// are constant inside one process. It is passed down by the test runner, never a static.
+#[derive(Default)]
+pub struct WidthShare {
+    entries: Mutex<HashMap<String, SharedWidths>>,
+    hits: std::sync::atomic::AtomicU64,
+    misses: std::sync::atomic::AtomicU64,
+    mismatches: std::sync::atomic::AtomicU64,
+    /// Recompute on every hit and count a result that differs (the staleness gate).
+    verify: bool,
+}
+
+/// A stored answer: `None` is "no width other than `int`" (the analysis failed, or did not run).
+type SharedWidths = Option<Arc<LiteralWidths>>;
+
+impl WidthShare {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// A share that recomputes every hit and counts a stored answer that differs from the fresh one.
+    pub fn verifying() -> Self {
+        WidthShare { verify: true, ..Self::default() }
+    }
+    /// (hits, misses): a miss is one analysis run, a hit one skipped.
+    pub fn counts(&self) -> (u64, u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.hits.load(Relaxed), self.misses.load(Relaxed))
+    }
+    /// Hits whose stored answer differed from a fresh computation (only counted by a verifying share; must be 0).
+    pub fn mismatches(&self) -> u64 {
+        self.mismatches.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    /// The `[fast]` line of `WJ_JIT_DEBUG` for a test run.
+    pub fn line(&self) -> String {
+        let (h, m) = self.counts();
+        format!("[fast] widthshare hits {h} misses {m}")
+    }
+    /// The widths of `program` (`file` is the name it was parsed under), from this share or computed and kept.
+    fn get_or_compute(&self, program: &'static crate::parser::Program<'static>, file: &str) -> Option<LiteralWidths> {
+        use std::sync::atomic::Ordering::Relaxed;
+        let Some(key) = parsed_key(file) else { return stored_literal_widths(program, file) };
+        let found = self.entries.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned();
+        if let Some(w) = found {
+            self.hits.fetch_add(1, Relaxed);
+            let shared = w.as_deref().cloned();
+            if self.verify && encode_widths(shared.as_ref()) != encode_widths(stored_literal_widths(program, file).as_ref()) {
+                self.mismatches.fetch_add(1, Relaxed);
+            }
+            return shared;
+        }
+        self.misses.fetch_add(1, Relaxed);
+        let w = stored_literal_widths(program, file);
+        self.entries.lock().unwrap_or_else(|e| e.into_inner()).insert(key, w.clone().map(Arc::new));
+        w
+    }
+}
+
 /// A store for facts that are functions of one parsed file, injected by the driver (`cli::run_dev`): `key` covers
 /// the file's name, text and renames; the store adds everything else the result depends on (the compiler build by
 /// content, the baked stdlib, the working directory, the `WJ_*` environment, the `.wj.meta` sidecars `program`'s
@@ -36,6 +96,18 @@ pub trait FactStore: Send + Sync {
 }
 
 static FACT_STORE: Mutex<Option<Arc<dyn FactStore>>> = Mutex::new(None);
+
+/// The literal widths of `source` parsed as `file` with `renames`, as the store's text (`-`: no answer), through `share`
+/// when given: the staleness gate compares a shared answer with a fresh one.
+pub fn widths_text_of_source(share: Option<&WidthShare>, source: &str, file: &str, renames: &HashMap<String, String>) -> Option<String> {
+    let program = super::loader::parse_source_renaming(source, file, renames).ok()?;
+    let program: &'static crate::parser::Program<'static> = Box::leak(Box::new(program));
+    let w = match share {
+        Some(s) => s.get_or_compute(program, file),
+        None => stored_literal_widths(program, file),
+    };
+    Some(encode_widths(w.as_ref()))
+}
 
 /// Content key of each parsed file (by the name it was parsed under): its text and the renames applied.
 static PARSED: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
@@ -335,7 +407,12 @@ impl Interpreter {
             Some(s) => s,
             None => {
                 let file = self.modules.get(m).map(|x| x.file.to_string_lossy().to_string()).unwrap_or_default();
-                let s = match program.and_then(|p| stored_literal_widths(p, &file)) {
+                let computed = match (program, &self.width_share) {
+                    (Some(p), Some(share)) => share.get_or_compute(p, &file),
+                    (Some(p), None) => stored_literal_widths(p, &file),
+                    (None, _) => None,
+                };
+                let s = match computed {
                     Some(w) if !w.is_empty() => LitWidths::Known(Rc::new(w)),
                     _ => LitWidths::Open,
                 };

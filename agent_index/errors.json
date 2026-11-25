@@ -338,5 +338,105 @@
       "Name the item by its declaring module: `adapters::http::serve`"
     ],
     "title": "Name is not re-exported"
+  },
+  "WJ0195": {
+    "causes": [
+      "A misspelled builtin such as `normalise`, or a helper that was never defined"
+    ],
+    "code": "WJ0195",
+    "example": null,
+    "explanation": "A WJSL shader calls a name that is not a WGSL builtin, a value constructor, a struct or a function declared with `fn` in the shader; reported at build time instead of failing later in the WGSL validator.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Correct the spelling (the diagnostic names the closest builtin or user function)",
+      "Define the function with `fn` or import the file that defines it"
+    ],
+    "title": "Undefined shader function"
+  },
+  "WJ0196": {
+    "causes": [
+      "A `#` comment or directive, or a stray symbol"
+    ],
+    "code": "WJ0196",
+    "example": null,
+    "explanation": "A WJSL shader contains a character the lexer cannot tokenize, most often a line starting with `#` (WJSL has no `#` comments); it used to end the token stream silently and produce an empty WGSL file.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Write comments with `//`",
+      "Remove the stray character, or use `use \"path\"` to include another shader file"
+    ],
+    "title": "Unexpected character in shader source"
+  },
+  "WJ0197": {
+    "causes": [
+      "`use crate::brdf::fresnel` where `brdf.wjsl` is missing from the folder or declares no `fresnel`."
+    ],
+    "code": "WJ0197",
+    "example": null,
+    "explanation": "A `.wjsl` import `use crate::module::item` names a module file that is not in the entry file's folder, an item the module does not declare, a name that is already declared or imported in the importing file, or uses a form the module system does not support yet (only `crate::` paths into the same folder). The module is the file stem; `crate` is the entry file's folder (docs/design/wjsl-modules.md).",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Create the module file next to the entry file, fix the spelling, or import each name once; import two same-named items through their modules (`use crate::a`, then `a::name(..)`)."
+    ],
+    "title": "WJSL import does not resolve"
+  },
+  "WJ0198": {
+    "causes": [
+      "`use crate::brdf::pow5` where `fn pow5` in `brdf.wjsl` has no `pub`."
+    ],
+    "code": "WJ0198",
+    "example": null,
+    "explanation": "A `.wjsl` file imports or calls a function, struct or const that its module does not declare `pub`. Items are private unless `pub`, as in Windjammer.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Declare the item `pub` in its module; the message names the file and the exact declaration to change."
+    ],
+    "title": "WJSL item is private to its module"
+  },
+  "WJ0199": {
+    "causes": [
+      "`a.wjsl` has `use crate::b::g` and `b.wjsl` has `use crate::a::f`."
+    ],
+    "code": "WJ0199",
+    "example": null,
+    "explanation": "Two or more `.wjsl` modules import each other, directly or through a chain. WGSL has no recursion and a cycle never buys anything; the message lists the chain.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Move the shared items into a third module that both import."
+    ],
+    "title": "WJSL import cycle"
+  },
+  "WJ0200": {
+    "causes": [
+      "`brdf.wjsl` declares `@group(0) @binding(0) uniform u: f32;` and another file imports from it."
+    ],
+    "code": "WJ0200",
+    "example": null,
+    "explanation": "A library module (a `.wjsl` file imported by another) declares a binding, a `var<...>` global or an entry point, or `pub` is used on something other than `fn`, `struct` or `const`. Library modules hold only functions, structs and consts so that they can run on the CPU as well; bindings and pipeline layout belong to the entry file.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Move the binding or entry point to the entry file and pass the resource to the library function as a parameter."
+    ],
+    "title": "WJSL module declares something only an entry file may"
+  },
+  "WJ0201": {
+    "causes": [
+      "`fn bad__name()` in a `.wjsl` file."
+    ],
+    "code": "WJ0201",
+    "example": null,
+    "explanation": "A `.wjsl` identifier contains `__`. The double underscore is reserved for module-qualified emitted names such as `brdf__fresnel_schlick`, which keeps those names collision-free.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Rename the identifier without a double underscore."
+    ],
+    "title": "WJSL identifier contains a double underscore"
   }
 }

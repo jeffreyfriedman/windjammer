@@ -5,6 +5,7 @@ impl FloatInference {
 
         for item in &program.items {
             if let Item::Use { path, .. } = item {
+              for path in &crate::type_inference::expand_use_group(path) {
                 // Convert import path to file path
                 // e.g., "crate::math::vec3::Vec3" → "math/vec3.wj.meta" (skip type name!)
                 // e.g., "mylib::vec3::Vec3" → external crate, load from metadata.json
@@ -57,6 +58,9 @@ impl FloatInference {
                                     )
                                 {
                                     self.function_signatures.insert(func_name, sig);
+                                }
+                                if let Some(consts) = self.external_crate_consts.get(&crate_key) {
+                                    self.const_types.load_imported_crate_consts(&crate_key, consts, ty_name);
                                 }
                                 continue; // Handled, skip .wj.meta lookup
                             }
@@ -194,6 +198,7 @@ impl FloatInference {
                 }
 
                 if !found_metadata {}
+              }
             }
         }
     }
