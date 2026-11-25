@@ -193,7 +193,7 @@ single saving.
   saving **3,600-5,000 Ir/step**.
 - **Soundness.** A view is valid until something clears it. In a view-stable nest nothing can (F7 enumerates the
   clearing sites, and A6 of the call-unit page makes that one function). F14 says no helper keeps an `Rc` clone.
-  Bounds are still checked. Links: SOUNDNESS-rowcache.md (why the view may not outlive a run: it does not here),
+  Bounds are still checked. Links: [interp-soundness/rowcache.md](interp-soundness/rowcache.md) (why the view may not outlive a run: it does not here),
   interp-call-unit.md 2.2 (a nest with `call_unit` cannot hoist).
 - **Gates.**
   - Parity programs:
@@ -234,7 +234,7 @@ With L1 in place, the whole step loop is one view-stable nest, so `rows::fill` r
   malloc calls per step on v1 should be about 0.
 - **Risk:** the P3 hazard. A trap at iteration k of an inlined loop has committed k-1 iterations, so the exit must
   resume inside the callee. Lazy materialisation closes it only if 2a's frame half is the code that builds the frame
-  (SOUNDNESS-p3.md; interp-call-unit.md section 0.1). Failing-frame locals (ADR-0036) and backtraces must match the
+  ([interp-soundness/p3.md](interp-soundness/p3.md); interp-call-unit.md section 0.1). Failing-frame locals (ADR-0036) and backtraces must match the
   closure engine's.
 - **Gates:**
   - the 13 step-2a parity programs with inlining forced;

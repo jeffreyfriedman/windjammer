@@ -1,6 +1,6 @@
 //! Typed scalar pipeline: a `map`/`filter` chain over packed integers, drained without a `Value` or a `Result`
-//! per element. The argument that it is observationally the boxed drain is in `perf/SOUNDNESS-pipeline.md` (kept in
-//! the commit body): every closure is a pure integer expression (no call, assignment or capture write), the pipeline
+//! per element. The argument that it is observationally the boxed drain is in `docs/design/interp-soundness/pipeline.md`:
+//! every closure is a pure integer expression (no call, assignment or capture write), the pipeline
 //! implements only the success branch of `fast::int_op`, and on anything else (a guard, an overflow, a zero divisor)
 //! it writes nothing and declines, so the boxed loop runs from the start and raises whatever it raises.
 

@@ -24,7 +24,7 @@
 //! value `Value::Int` of the one type `vt` (`typed_ok`), absent slots are 0 with their bit clear. Any operation it
 //! cannot serve as the array would (a `&mut Value` into it, a key or value of another type, a key past the array's
 //! reach) turns it back into `Dense` first and never promotes that map again (`int_off`). Reads of it build their
-//! `Value`s (the accessors return `Cow`). See `perf/SOUNDNESS-intdense.md`.
+//! `Value`s (the accessors return `Cow`). See `docs/design/interp-soundness/intdense.md`.
 
 use super::int::IntTy;
 use super::value::{Key, Value};

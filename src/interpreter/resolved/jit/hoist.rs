@@ -1,4 +1,4 @@
-//! Hoisted row views by loop versioning (SOUNDNESS-hoist.md). Pass A (`Mode::Analyze`) records per statement loop
+//! Hoisted row views by loop versioning (docs/design/interp-soundness/hoist.md). Pass A (`Mode::Analyze`) records per statement loop
 //! whether it can run without any helper that clears views or mutates vec/struct storage, which rows it accesses
 //! and which index variables it never assigns. Pass B (`Mode::Version`) lowers such a loop twice behind one
 //! preheader that builds and checks every row view: a fast copy (`Mode::Fast`) whose row accesses need no key check,
