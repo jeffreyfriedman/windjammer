@@ -261,6 +261,7 @@ pub fn emit_block_shader(shader: &BlockShader) -> String {
             &StructDecl {
                 name: "Uniforms".into(),
                 fields,
+                origin: None,
             },
         );
         let ub = binding(

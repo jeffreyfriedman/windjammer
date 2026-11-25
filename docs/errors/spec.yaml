@@ -50,6 +50,20 @@ codes:
   - code: WJ0194
     title: Name is not re-exported
     rust_codes: [E0425, E0433]
+  - code: WJ0197
+    title: WJSL import does not resolve
+    rust_codes: []
+  - code: WJ0198
+    title: WJSL item is private to its module
+    rust_codes: []
+  - code: WJ0199
+    title: WJSL import cycle
+    rust_codes: []
+  - code: WJ0200
+    title: WJSL module declares something only an entry file may
+    rust_codes: []
+  - code: WJ0201
+    title: WJSL identifier contains a double underscore
   - code: WJ0195
     title: Undefined shader function
     rust_codes: []

@@ -15,6 +15,7 @@ mod diagnostics;
 mod expression_type_checking;
 mod includes;
 mod lexer;
+pub mod modules;
 pub mod parser;
 mod shader_type_rules;
 mod statement_type_checking;
@@ -58,14 +59,25 @@ pub fn transpile_wjsl(source: &str) -> Result<String, anyhow::Error> {
     emit_wgsl(ast, source)
 }
 
-/// Transpile WJSL source to WGSL, resolving `#include` directives relative to `base_dir`.
+/// Transpile WJSL source to WGSL, resolving `use "path"` / `#include` text includes and
+/// `use crate::module::item` imports relative to `base_dir` (the `crate` root).
 pub fn transpile_wjsl_with_includes(
     source: &str,
     base_dir: &Path,
 ) -> Result<String, anyhow::Error> {
-    let resolved = resolve_includes(source, base_dir, &mut Vec::new())
-        .map_err(|e| ShaderDiagnostics::new(source).enrich(e))?;
-    transpile_wjsl(&resolved)
+    modules::transpile(source, base_dir, None)
+}
+
+/// Transpile the `.wjsl` file at `path` to one WGSL module: its folder is the `crate` root and its
+/// file stem is its module name (docs/design/wjsl-modules.md).
+pub fn transpile_wjsl_file(path: &Path) -> Result<String, anyhow::Error> {
+    let source = std::fs::read_to_string(path)?;
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let stem = path.file_stem().and_then(|s| s.to_str());
+    modules::transpile(&source, dir, stem)
 }
 
 #[cfg(test)]

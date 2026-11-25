@@ -165,6 +165,7 @@ libloading = "0.8"
 tempfile = "3.0"
 assert_cmd = "2.0"
 criterion = "0.5"
+naga = { version = "22.1.0", default-features = false, features = ["wgsl-in"] }
 serde_json = "1.0"
 
 [[example]]

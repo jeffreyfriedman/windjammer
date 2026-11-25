@@ -29,6 +29,11 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0194` | Name is not re-exported | HighConfidence | E0425, E0433 | A path or import names an item through a module that only gets it from one of its child modules; `pub mod child` re-exports nothing, a module re-exports a name only through an explicit `pub use` (ADR-0040) |
 | `WJ0195` | Undefined shader function | HighConfidence |  | A WJSL shader calls a name that is not a WGSL builtin, a value constructor, a struct or a function declared with `fn` in the shader; reported at build time instead of failing later in the WGSL validator |
 | `WJ0196` | Unexpected character in shader source | HighConfidence |  | A WJSL shader contains a character the lexer cannot tokenize, most often a line starting with `#` (WJSL has no `#` comments); it used to end the token stream silently and produce an empty WGSL file |
+| `WJ0197` | WJSL import does not resolve | HighConfidence |  | A `.wjsl` import `use crate::module::item` names a module file that is not in the entry file's folder, an item the module does not declare, a name that is already declared or imported in the importing file, or uses a form the module system does not support yet (only `crate::` paths into the same folder) |
+| `WJ0198` | WJSL item is private to its module | HighConfidence |  | A `.wjsl` file imports or calls a function, struct or const that its module does not declare `pub` |
+| `WJ0199` | WJSL import cycle | HighConfidence |  | Two or more `.wjsl` modules import each other, directly or through a chain |
+| `WJ0200` | WJSL module declares something only an entry file may | HighConfidence |  | A library module (a `.wjsl` file imported by another) declares a binding, a `var<...>` global or an entry point, or `pub` is used on something other than `fn`, `struct` or `const` |
+| `WJ0201` | WJSL identifier contains a double underscore | HighConfidence |  | A `.wjsl` identifier contains `__` |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

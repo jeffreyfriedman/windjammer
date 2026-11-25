@@ -463,6 +463,56 @@ process::run_with_args("echo", [name])"#.to_string()),
             rust_codes: vec![],
             maturity: GuaranteeMaturity::HighConfidence,
         });
+        self.register(WjErrorCode {
+            code: "WJ0197".to_string(),
+            title: "WJSL import does not resolve".to_string(),
+            explanation: "A `.wjsl` import `use crate::module::item` names a module file that is not in the entry file's folder, an item the module does not declare, a name that is already declared or imported in the importing file, or uses a form the module system does not support yet (only `crate::` paths into the same folder). The module is the file stem; `crate` is the entry file's folder (docs/design/wjsl-modules.md).".to_string(),
+            causes: vec!["`use crate::brdf::fresnel` where `brdf.wjsl` is missing from the folder or declares no `fresnel`.".to_string()],
+            solutions: vec!["Create the module file next to the entry file, fix the spelling, or import each name once; import two same-named items through their modules (`use crate::a`, then `a::name(..)`).".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0198".to_string(),
+            title: "WJSL item is private to its module".to_string(),
+            explanation: "A `.wjsl` file imports or calls a function, struct or const that its module does not declare `pub`. Items are private unless `pub`, as in Windjammer.".to_string(),
+            causes: vec!["`use crate::brdf::pow5` where `fn pow5` in `brdf.wjsl` has no `pub`.".to_string()],
+            solutions: vec!["Declare the item `pub` in its module; the message names the file and the exact declaration to change.".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0199".to_string(),
+            title: "WJSL import cycle".to_string(),
+            explanation: "Two or more `.wjsl` modules import each other, directly or through a chain. WGSL has no recursion and a cycle never buys anything; the message lists the chain.".to_string(),
+            causes: vec!["`a.wjsl` has `use crate::b::g` and `b.wjsl` has `use crate::a::f`.".to_string()],
+            solutions: vec!["Move the shared items into a third module that both import.".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0200".to_string(),
+            title: "WJSL module declares something only an entry file may".to_string(),
+            explanation: "A library module (a `.wjsl` file imported by another) declares a binding, a `var<...>` global or an entry point, or `pub` is used on something other than `fn`, `struct` or `const`. Library modules hold only functions, structs and consts so that they can run on the CPU as well; bindings and pipeline layout belong to the entry file.".to_string(),
+            causes: vec!["`brdf.wjsl` declares `@group(0) @binding(0) uniform u: f32;` and another file imports from it.".to_string()],
+            solutions: vec!["Move the binding or entry point to the entry file and pass the resource to the library function as a parameter.".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+        self.register(WjErrorCode {
+            code: "WJ0201".to_string(),
+            title: "WJSL identifier contains a double underscore".to_string(),
+            explanation: "A `.wjsl` identifier contains `__`. The double underscore is reserved for module-qualified emitted names such as `brdf__fresnel_schlick`, which keeps those names collision-free.".to_string(),
+            causes: vec!["`fn bad__name()` in a `.wjsl` file.".to_string()],
+            solutions: vec!["Rename the identifier without a double underscore.".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
     }
 
     /// ADR-0002: explicit `let mut` (WJ0051).

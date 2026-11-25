@@ -26,6 +26,8 @@ pub struct ConstDecl {
     pub ty: Option<Type>,
     /// Raw initializer expression text (passed through to WGSL)
     pub initializer: String,
+    /// `// from file.wjsl:LINE` comment printed above an imported item (modules only)
+    pub origin: Option<String>,
 }
 
 /// Address space for module-level variables
@@ -48,6 +50,8 @@ pub struct PrivateVar {
 pub struct StructDecl {
     pub name: String,
     pub fields: Vec<StructField>,
+    /// origin comment of an imported item (modules only)
+    pub origin: Option<String>,
 }
 
 /// Field in a struct
@@ -130,6 +134,8 @@ pub struct Function {
     pub params: Vec<Param>,
     pub return_type: Option<Type>, // None = void (no return type in WGSL)
     pub body: String,
+    /// origin comment of an imported item (modules only)
+    pub origin: Option<String>,
     /// 1-based source line where the body starts (for diagnostics)
     pub body_line: usize,
 }
