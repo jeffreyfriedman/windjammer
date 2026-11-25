@@ -215,7 +215,8 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.binding_emits_owned_value(name) {
             return false;
         }
-        self.clone_facts.stmt_stack.last().is_some_and(|stmt| self.clone_facts.read_after.get(stmt).is_some_and(|names| names.contains(name)))
+        let again_in_stmt = self.clone_facts.reread_stack.last().is_some_and(|r| r.contains(&crate::ir::numeric_defaults::node_id(root)));
+        again_in_stmt || self.clone_facts.stmt_stack.last().is_some_and(|stmt| self.clone_facts.read_after.get(stmt).is_some_and(|names| names.contains(name)))
     }
 
     /// A value tail (the arm of an `if` passed as an argument) that is a binding this function emits as a

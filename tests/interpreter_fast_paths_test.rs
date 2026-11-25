@@ -119,6 +119,35 @@ fn the_vector_retag_happens_once_per_local() {
     }
 }
 
+/// The downstream vector shapes (tests/engine_parity/vec_shape_*.wj, 100k elements, 20 calls): exact `vecretag` counts.
+/// A: annotated empty vec + literal pushes passed to a `Vec<float>` formal: one retag, not twenty. B: a second hop
+/// through another function: no second retag. C: a vec returned from a function is already typed: none. D: the caller
+/// pushes a literal between calls: one retag, and the pushes keep the body packed (`packed` counts each push that ends
+/// packed: base build 16, with the literal-adopts-the-element-type store 36). E: four literal-built locals, one retag each.
+/// F, G: element stores and a struct field: none.
+#[test]
+fn the_downstream_vector_shapes_retag_at_most_once() {
+    const SHAPES: &[(&str, u64)] = &[
+        ("a", 1),
+        ("b", 1),
+        ("c", 0),
+        ("d", 1),
+        ("e", 4),
+        ("f", 0),
+        ("g", 0),
+    ];
+    for (shape, want) in SHAPES {
+        let program = format!("tests/engine_parity/vec_shape_{shape}.wj");
+        let r = run(&program, "resolved", None);
+        assert_eq!(count(&r, "vecretag"), Some(*want), "{program}: {:?}", r.counts);
+    }
+    let d = run("tests/engine_parity/vec_shape_d.wj", "resolved", None);
+    assert_eq!(count(&d, "packed"), Some(36), "a literal pushed into a typed packed vector must keep it packed: {:?}", d.counts);
+    // float, i32 and u8 vectors: every literal push into a typed packing stays packed (8 pushes; the base build keeps 6)
+    let a = run("tests/engine_parity/vec_shape_adopt.wj", "resolved", None);
+    assert_eq!(count(&a, "packed"), Some(8), "{:?}", a.counts);
+}
+
 /// The typed scalar pipeline (`scalar_pipe.rs`) is a speculation with a boxed fallback: each program below holds
 /// the exact number of chains it drained typed and of chains that started typed and met an element it hands to the
 /// boxed path (a guard that stops declining, or a bail that stops happening, changes a count). The outputs of the

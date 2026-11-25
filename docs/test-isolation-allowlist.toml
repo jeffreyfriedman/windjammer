@@ -1,0 +1,25 @@
+# Process-global state in tests: `std::env::set_current_dir`, `std::env::set_var`, `std::env::remove_var`.
+# They change the whole test process, so a concurrent test sees them (a chdir into a temp dir that is deleted a moment
+# later gave "Current directory is invalid" to 118 unrelated cases). Tests use `Command::current_dir` / `.env(..)` on a
+# child instead. This list only ever SHRINKS (tests/test_isolation_gate_test.rs): `max` is the exact number of
+# remaining calls in the file; a file that reaches 0 is removed from the list.
+
+[[allow]]
+file = "src/cargo_cache/mod.rs"
+max = 8
+reason = "unit tests serialize on a private ENV_LOCK while pointing the cache root at a temp dir; move them to a child process"
+
+[[allow]]
+file = "src/package/graph.rs"
+max = 2
+reason = "git dependency unit test sets WJ_HOME; move it to a child process or pass the home explicitly"
+
+[[allow]]
+file = "tests/toolchain_stale_test.rs"
+max = 1
+reason = "body of an #[ignore]d test that only ever runs in its own child process (run_ignored_test_in_child)"
+
+[[allow]]
+file = "src/test_runner/test_harness.rs"
+max = 1
+reason = "a string literal: the generated test harness text the unit test asserts on (never run in the test process)"

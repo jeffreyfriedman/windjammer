@@ -48,6 +48,7 @@ invokes cargo or rustc and never writes generated code. Exit status is 1 when an
 | WJ0199 | A `.wjsl` import cycle |
 | WJ0200 | A `.wjsl` library module declares an entry-file-only item |
 | WJ0201 | A `.wjsl` identifier contains `__` |
+| WJ0202 | a `for` loop changes the collection it iterates (`for p in v { v.push(..) }`) |
 | WJ0195 | a WJSL shader calls a function that is no WGSL builtin, constructor, struct or `fn` in the shader |
 | WJ0196 | a WJSL shader holds a character the lexer cannot tokenize, such as a `#` line (use `//`) |
 | WJ0020 | `string + int`, arithmetic on strings, or declared `int` mixed with declared `float` |

@@ -48,8 +48,8 @@ impl Renderer {
 "#;
 
     let wj = env!("CARGO_BIN_EXE_windjammer");
-    let dir = std::env::temp_dir().join("wj_some_wrap_auto_clone_test");
-    let _ = std::fs::remove_dir_all(&dir);
+    let scratch = tempfile::tempdir().unwrap();
+    let dir = scratch.path().to_path_buf();
     std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(dir.join("src/test.wj"), source).unwrap();
 

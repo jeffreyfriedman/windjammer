@@ -224,7 +224,7 @@ pub fn capture_from<R: Read + Send + 'static>(mut input: R, wait: std::time::Dur
 /// `wj check` reports an error that stops an interpreted run (what the child printed as "not running ...").
 fn refused(entry: &Path, no_lint: bool) -> bool {
     let use_cache = crate::check::effects::manifest_path(entry).is_some();
-    let Ok(c) = crate::check::check_path(entry, &crate::check::CheckOptions { use_cache }) else { return true };
+    let Ok(c) = crate::check::check_path(entry, &crate::check::CheckOptions::new(use_cache)) else { return true };
     let is_lint = |code: &str| code.len() == 5 && code.starts_with('W') && code[1..].bytes().all(|b| b.is_ascii_digit());
     c.report.diagnostics.iter().any(|d| d.is_error() && (!no_lint || !is_lint(&d.code)))
 }

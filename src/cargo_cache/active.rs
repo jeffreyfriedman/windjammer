@@ -30,8 +30,59 @@ pub fn hold(kind: TargetKind) -> Option<TreeLock> {
 /// Hold the target tree at `tree` for a build.
 pub fn hold_path(tree: &Path) -> Option<TreeLock> {
     fs::create_dir_all(tree).ok()?;
-    let file = File::options().create(true).append(true).open(tree.join(LOCK_FILE)).ok()?;
-    lock(&file, false).then_some(TreeLock { _file: file })
+    let mut file = File::options().create(true).append(true).open(tree.join(LOCK_FILE)).ok()?;
+    // nobody holds the tree (an exclusive probe succeeds): drop the pids of earlier, finished holders
+    if lock(&file, true) {
+        let _ = file.set_len(0);
+    }
+    if !lock(&file, false) {
+        return None;
+    }
+    // name this holder, so a refused `wj clean --all` can say whose build it is (one `pid N` line per holder)
+    use std::io::Write;
+    let _ = writeln!(file, "{}", std::process::id());
+    Some(TreeLock { _file: file })
+}
+
+/// The pid of a live build that holds the target tree at `tree` (or one directly inside it), if any.
+pub fn holder(tree: &Path) -> Option<u32> {
+    if !held(tree) {
+        return None;
+    }
+    let mut trees: Vec<PathBuf> = vec![tree.to_path_buf()];
+    if let Ok(rd) = fs::read_dir(tree) {
+        trees.extend(rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()));
+    }
+    let named = trees.iter().filter_map(|t| fs::read_to_string(t.join(LOCK_FILE)).ok()).flat_map(|text| {
+        text.lines().filter_map(|l| l.trim().parse::<u32>().ok()).collect::<Vec<_>>()
+    });
+    // the holder's pid when a recorded one is still alive; pid 0 means "held, holder not named" (a build by an older wj)
+    Some(named.filter(|p| pid_alive(*p)).last().unwrap_or(0))
+}
+
+/// Refuse (or, with `wait`, wait) while a build holds any of `trees`: a destructive command must never delete
+/// the target tree under a running cargo. `what` names the command in the error.
+pub fn require_free(trees: &[PathBuf], wait: bool) -> Result<(), String> {
+    loop {
+        let busy = trees.iter().find_map(|t| holder(t));
+        let Some(pid) = busy else { return Ok(()) };
+        if !wait {
+            let who = if pid == 0 { String::new() } else { format!(" (pid {pid})") };
+            return Err(format!("a build is using the shared cache{who}: finish it or run with --wait"));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+#[cfg(unix)]
+fn pid_alive(pid: u32) -> bool {
+    // SAFETY: signal 0 only probes for existence.
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+}
+
+#[cfg(not(unix))]
+fn pid_alive(_pid: u32) -> bool {
+    true
 }
 
 /// Is `tree` (or a target tree directly inside it, such as `shared` / `verify` under the cache's

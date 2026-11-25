@@ -1,0 +1,57 @@
+// `place ?? default` consumes an Option field (`unwrap_or_else` takes self), so a field place that is used
+// again later (same field, or the whole struct) is cloned at the earlier use; a last use is moved, never cloned.
+// expect: 3 3
+// expect: ab 2
+// expect: 6
+// expect: 4 hi
+// expect: 15
+// expect: 1
+struct Resp {
+    body: Option<Vec<u8>>,
+    name: Option<string>,
+    n: int,
+}
+
+fn fallback() -> Vec<u8> {
+    [1, 2]
+}
+
+fn total(r: Resp) -> int {
+    r.n
+}
+
+fn sum(v: Vec<u8>) -> int {
+    let mut t = 0
+    for b in v {
+        t += b as int
+    }
+    t
+}
+
+fn main() {
+    let r = Resp { body: Some([1, 2, 3]), name: Some("ab"), n: 7 }
+    assert_eq(r.body ?? [], [1, 2, 3])
+    println("${(r.body ?? []).len()} ${(r.body ?? []).len()}")
+    let a = r.name ?? ""
+    let b = r.name ?? "z"
+    println("${a} ${b.len()}")
+    println("${sum(r.body ?? fallback())}")
+
+    let s = Resp { body: None, name: Some("hi"), n: 4 }
+    let first = s.body ?? fallback()
+    let nm = s.name ?? ""
+    println("${total(s)} ${nm}")
+
+    let mut acc = 0
+    for i in 0..3 {
+        let t = Resp { body: Some([1, 2]), name: None, n: i }
+        let x = t.body ?? []
+        acc += x.len() as int + (t.body ?? []).len() as int
+        acc += total(t) - i
+    }
+    println("${acc + first.len() as int - 2 + 3}")
+
+    let last = Resp { body: None, name: None, n: 1 }
+    let only = last.body ?? fallback()
+    println("${only.len() - 1}")
+}

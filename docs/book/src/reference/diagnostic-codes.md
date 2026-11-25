@@ -34,6 +34,7 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0199` | WJSL import cycle | HighConfidence |  | Two or more `.wjsl` modules import each other, directly or through a chain |
 | `WJ0200` | WJSL module declares something only an entry file may | HighConfidence |  | A library module (a `.wjsl` file imported by another) declares a binding, a `var<...>` global or an entry point, or `pub` is used on something other than `fn`, `struct` or `const` |
 | `WJ0201` | WJSL identifier contains a double underscore | HighConfidence |  | A `.wjsl` identifier contains `__` |
+| `WJ0202` | Loop changes the collection it iterates | HighConfidence |  | A `for` loop over a collection changes that collection in its body (`push`, `pop`, `clear`, `remove`, `sort`, an assignment to `v` or `v[i]`, `&mut v`) |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

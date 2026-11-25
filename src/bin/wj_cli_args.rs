@@ -865,6 +865,10 @@ pub enum Commands {
         /// With --tmp or --generated: actually delete (default is a dry run)
         #[arg(long)]
         yes: bool,
+
+        /// With --all: wait for a running build to release the shared cache instead of refusing
+        #[arg(long)]
+        wait: bool,
     },
 
     /// Manage the shared Cargo target cache (outside application repos)
@@ -993,6 +997,10 @@ pub enum CacheCommand {
         /// Also delete what a running build holds or wrote within the last hour (normally left alone)
         #[arg(long)]
         force: bool,
+
+        /// With --force: wait for a running build to finish instead of refusing
+        #[arg(long)]
+        wait: bool,
     },
     /// Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm)
     Warm,

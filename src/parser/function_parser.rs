@@ -130,7 +130,7 @@ impl Parser {
                 // Every line of a parser error carries its position (tests/lexer_parser_never_panic_test.rs).
                 // Recoverable: one coded, located diagnostic with a machine-applicable fix (`wj check --fix` deletes
                 // `mut`), the same in `wj check`, `wj run` and `wj build`; the receiver parses as plain `self`.
-                let (line, col) = self.current_location().map(|loc| (loc.line, loc.column)).unwrap_or((1, 1));
+                let (line, col) = self.current_src_position().unwrap_or((1, 1));
                 self.emit_error_diagnostic(
                     "WJ0011: `mut self` is not Windjammer: the receiver is always `self` and its ownership is inferred".to_string(),
                     Some(self.filename.clone()),

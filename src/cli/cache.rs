@@ -55,7 +55,11 @@ pub fn execute_status() -> Result<()> {
     Ok(())
 }
 
-pub fn execute_prune(aggressive: bool, force: bool) -> Result<()> {
+pub fn execute_prune(aggressive: bool, force: bool, wait: bool) -> Result<()> {
+    if force {
+        // `--force` deletes what a build holds: refuse (or wait) while a running build holds the shared cache
+        crate::cargo_cache::require_trees_free(wait).map_err(|e| anyhow::anyhow!(e))?;
+    }
     // Soft reclaim before reporting so long agent sessions stay under the threshold.
     let report = prune(PruneOptions {
         aggressive,

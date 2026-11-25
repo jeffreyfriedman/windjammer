@@ -14,9 +14,9 @@ use std::path::Path;
 use std::process::Command;
 
 fn compile_wj_to_rust(source: &str) -> String {
-    let test_dir = std::env::temp_dir().join("wj_cross_extern_test");
-    let _ = std::fs::remove_dir_all(&test_dir);
-    let _ = std::fs::create_dir_all(&test_dir);
+    // a private directory per call: several tests in this file compile concurrently
+    let scratch = tempfile::tempdir().unwrap();
+    let test_dir = scratch.path().to_path_buf();
 
     let input_file = test_dir.join("test_input.wj");
     std::fs::write(&input_file, source).unwrap();

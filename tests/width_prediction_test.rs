@@ -259,6 +259,13 @@ fn predictions_across_the_corpora() {
         // rustc rejected their build; the width-13 merge (23231c430) fixed the emitted widths, so they are no longer predicted.
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
+        // the vecpass interpreter-soundness programs (docs/design/interp-soundness/vecretag.md): an untyped literal list passed to a
+        // `Vec<iN>` / `Vec<f32>` formal is retagged by the interpreter; compiled, rustc rejects the width mix (E0308), as predicted
+        "tests/engine_parity/vec_retag_int.wj 12",
+        "tests/engine_parity/vec_retag_int_range_i16.wj 1",
+        "tests/engine_parity/vec_retag_int_range_i8.wj 1",
+        "tests/engine_parity/vec_retag_int_range_neg_unsigned.wj 1",
+        "tests/engine_parity/vec_retag_int_range_u8.wj 1",
         "tests/error_system/test_type_mismatch.wj 1",
         "tests/error_system_e2e/test_type_errors.wj 1",
         "tests/fixtures/library_multipass/postgres_query_vec_params.wj 1",

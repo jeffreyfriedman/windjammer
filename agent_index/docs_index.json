@@ -2984,6 +2984,15 @@
     "tags": []
   },
   {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0202",
+    "signature": "Loop changes the collection it iterates",
+    "source": "",
+    "summary": "A `for` loop over a collection changes that collection in its body (`push`, `pop`, `clear`, `remove`, `sort`, an assignment to `v` or `v[i]`, `&mut v`). `wj run",
+    "tags": []
+  },
+  {
     "kind": "example",
     "module": "",
     "name": "algo_anagram",

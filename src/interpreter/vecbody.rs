@@ -89,7 +89,8 @@ impl Packed {
                 Ok(n) => at(v, i, n),
                 Err(_) => false,
             },
-            (Packed::Float(v, t), Value::Float(f, u)) if t == u => at(v, i, *f),
+            // an untyped float literal stored into an `f64` packing is an `f64` element (vecretag.md, item 6)
+            (Packed::Float(v, t), Value::Float(f, u)) if t == u || (*t == FloatTy::F64 && *u == FloatTy::Lit) => at(v, i, *f),
             _ => false,
         }
     }
@@ -193,6 +194,21 @@ impl VecBody {
             }
             _ => None,
         }
+    }
+
+    /// Whether `f` holds of the first element, WITHOUT materializing a packed body's `Vec<Value>` cache (a `first()`
+    /// through `Deref` unpacks the whole body, O(n), again after every push that clears the cache).
+    pub fn first_is(&self, f: impl Fn(&Value) -> bool) -> bool {
+        match self {
+            VecBody::Packed(p, _) => p.get(0).map_or(false, |x| f(&x)),
+            VecBody::Values(v) => v.first().map_or(false, f),
+        }
+    }
+
+    /// Whether the unpacked `Vec<Value>` view has been materialized (a packed body only).
+    #[cfg(test)]
+    pub fn unpacked_cache_built(&self) -> bool {
+        matches!(self, VecBody::Packed(_, c) if c.get().is_some())
     }
 
     /// The packed scalars, if the body is packed.

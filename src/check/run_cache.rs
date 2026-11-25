@@ -83,14 +83,14 @@ pub fn fact_key(file_key: &str) -> Option<String> {
 /// cannot be digested, so it is not stored).
 pub fn encode_fact(program: &crate::parser::Program<'static>, text: &str) -> Option<String> {
     let use_depth = ambient::use_depth([program]);
-    let ambient = ambient::fingerprint(&use_depth)?;
+    let ambient = ambient::fingerprint(&use_depth, None)?;
     serde_json::to_string(&Entry { format: FORMAT, use_depth, ambient, stderr: text.to_string() }).ok()
 }
 
 /// The stderr text of a stored clean check (`text`, the entry [`encode`] made), when its sidecars are unchanged.
 pub fn decode(text: &str) -> Option<String> {
     let e: Entry = serde_json::from_str(text).ok()?;
-    (e.format == FORMAT && ambient::fingerprint(&e.use_depth).as_deref() == Some(e.ambient.as_str())).then_some(e.stderr)
+    (e.format == FORMAT && ambient::fingerprint(&e.use_depth, None).as_deref() == Some(e.ambient.as_str())).then_some(e.stderr)
 }
 
 /// The entry for a clean check of the program whose sources are `sources` that printed `stderr` (`None`: the
@@ -99,6 +99,6 @@ pub fn encode(sources: &[(String, String)], stderr: &str) -> Option<String> {
     let mut sink = Vec::new();
     let parsed: Vec<super::front::Parsed> = sources.iter().filter_map(|(f, t)| super::front::parse(f, t, &mut sink)).collect();
     let use_depth = ambient::use_depth(parsed.iter().map(|p| &p.program));
-    let ambient = ambient::fingerprint(&use_depth)?;
+    let ambient = ambient::fingerprint(&use_depth, None)?;
     serde_json::to_string(&Entry { format: FORMAT, use_depth, ambient, stderr: stderr.to_string() }).ok()
 }

@@ -650,8 +650,7 @@ impl Parser {
 
                 // Normalize Rust string types to canonical Type::String
                 if (type_name == "str" || type_name == "String") && !self.in_extern_fn {
-                    let loc = self.current_location();
-                    let (line, col) = loc.as_ref().map(|l| (l.line, l.column)).unwrap_or((1, 1));
+                    let (line, col) = self.current_src_position().unwrap_or((1, 1));
                     self.emit_error_diagnostic(
                         format!(
                             "W0010: use `string` instead of `{}` -- Windjammer has one string type",

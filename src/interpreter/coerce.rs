@@ -83,7 +83,7 @@ impl Interpreter {
                 Ok(v)
             }
             (Value::Vec(items), Type::Vec(inner)) | (Value::Vec(items), Type::Array(inner, _)) => {
-                if items.first().map(needs_coerce).unwrap_or(false) {
+                if items.first_is(needs_coerce) {
                     let mut out = Vec::with_capacity(items.len());
                     for x in items.iter() {
                         out.push(self.coerce(x.clone(), inner)?);
@@ -103,7 +103,7 @@ impl Interpreter {
                 Ok(v)
             }
             (Value::Vec(items), Type::Parameterized(n, args)) if n == "Vec" && args.len() == 1 => {
-                if items.first().map(needs_coerce).unwrap_or(false) {
+                if items.first_is(needs_coerce) {
                     let mut out = Vec::with_capacity(items.len());
                     for x in items.iter() {
                         out.push(self.coerce(x.clone(), &args[0])?);
@@ -193,11 +193,33 @@ fn needs_coerce(v: &Value) -> bool {
         Value::Int(_, IntTy::Lit) => true,
         Value::Float(_, FloatTy::Lit) => true,
         Value::Tuple(t) => t.iter().any(needs_coerce),
-        Value::Vec(t) => t.first().map(needs_coerce).unwrap_or(false),
+        Value::Vec(t) => t.first_is(needs_coerce),
         Value::Enum(e) => match &e.payload {
             Payload::Tuple(p) => p.iter().any(needs_coerce),
             _ => false,
         },
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interpreter::vecbody::VecBody;
+    use std::rc::Rc;
+
+    /// Asking whether an argument vector needs coercion must not unpack a packed body (O(n) per call after every push).
+    #[test]
+    fn needs_coerce_does_not_unpack_a_packed_vector() {
+        let mut b = VecBody::default();
+        b.push_value(Value::Float(1.5, FloatTy::F64));
+        b.push_value(Value::Float(2.5, FloatTy::Lit));
+        assert!(b.packed().is_some());
+        let v = Value::Vec(Rc::new(b));
+        assert!(!needs_coerce(&v));
+        match &v {
+            Value::Vec(b) => assert!(!b.unpacked_cache_built()),
+            _ => unreachable!(),
+        }
     }
 }

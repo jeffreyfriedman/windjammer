@@ -1,0 +1,26 @@
+// Shape E: constructors: vec![0.0; n], with_capacity + push, annotated vec![..] and a clone.
+fn at(v: Vec<float>, i: int) -> float {
+    v[i as usize]
+}
+
+fn main() {
+    let mut a: Vec<float> = vec![0.0; 100000]
+    let mut b: Vec<float> = Vec::with_capacity(100000)
+    let mut k = 0
+    while k < 100000 {
+        b.push(4.5)
+        k += 1
+    }
+    let c = vec![7.0; 100000]
+    let d = b.clone()
+    let mut e: Vec<float> = vec![1.0, 2.0, 3.0]
+    e = d.clone()
+    a.push(8.5)
+    let mut s = 0.0
+    let mut i = 0
+    while i < 20 {
+        s += at(a, i) + at(b, i) + at(c, i) + at(d, i) + at(e, i)
+        i += 1
+    }
+    println("${s}")
+}

@@ -161,6 +161,11 @@ pub fn configure_cargo_command(cmd: &mut Command, kind: TargetKind) -> Option<ac
     active::hold_path(&dir)
 }
 
+/// `Err(message)` while a build holds the shared or verify tree (or, with `wait`, blocks until it ends).
+pub fn require_trees_free(wait: bool) -> Result<(), String> {
+    active::require_free(&[target_dir(TargetKind::Shared), target_dir(TargetKind::Verify)], wait)
+}
+
 /// Convenience: shared target path (creates dir when possible).
 pub fn shared_target_dir() -> PathBuf {
     target_dir(TargetKind::Shared)

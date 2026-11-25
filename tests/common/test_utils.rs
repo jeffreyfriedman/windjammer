@@ -546,6 +546,7 @@ pub fn verify_rust_compiles(rust_code: &str) -> Result<(), String> {
     fs::write(&rs_file, rust_code).unwrap();
 
     let output = Command::new("rustc")
+        .current_dir(tmp.path()) // never inherit the process directory (another test's deleted temp dir)
         .arg("--edition=2021")
         .arg("--crate-type=lib")
         .arg("--emit=metadata")
@@ -572,7 +573,8 @@ pub fn verify_rust_compiles_with_deps(
     fs::write(&rs_file, rust_code).unwrap();
 
     let mut cmd = Command::new("rustc");
-    cmd.arg("--edition=2021")
+    cmd.current_dir(tmp.path())
+        .arg("--edition=2021")
         .arg("--crate-type=lib")
         .arg("--emit=metadata")
         .arg("-o")

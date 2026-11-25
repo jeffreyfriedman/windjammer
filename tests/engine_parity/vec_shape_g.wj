@@ -1,0 +1,31 @@
+// Shape G: a struct field holding the vec, passed as `self.heights`.
+struct Terrain {
+    heights: Vec<float>,
+}
+
+fn at(v: Vec<float>, i: int) -> float {
+    v[i as usize]
+}
+
+impl Terrain {
+    fn sample(self, i: int) -> float {
+        at(self.heights, i)
+    }
+}
+
+fn main() {
+    let mut h: Vec<float> = []
+    let mut k = 0
+    while k < 100000 {
+        h.push(6.5)
+        k += 1
+    }
+    let t = Terrain { heights: h }
+    let mut s = 0.0
+    let mut i = 0
+    while i < 20 {
+        s += t.sample(i)
+        i += 1
+    }
+    println("${s}")
+}
