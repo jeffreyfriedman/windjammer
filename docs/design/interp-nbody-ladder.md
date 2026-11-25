@@ -4,7 +4,7 @@ last_verified: f5a1d311b5d9
 ---
 # The n-body ladder: the cheapest path to within 2x of node
 
-> **Proposal: analysis, nothing implemented.** It orders the steps of
+> **Proposal: analysis, not implemented.** It orders the steps of
 > [interp-struct-vec-loops.md](interp-struct-vec-loops.md) and [interp-call-unit.md](interp-call-unit.md) by cost
 > per Ir saved on the n-body kernel, adds one step those pages do not have (hoisted row views), and names the
 > experiments that confirm each projection before any code lands. The hand-written kernel variants used as evidence
