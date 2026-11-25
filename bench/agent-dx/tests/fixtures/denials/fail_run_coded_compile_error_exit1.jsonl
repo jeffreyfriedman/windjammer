@@ -1,0 +1,2 @@
+{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "printf 'x\\n' | wj run --compiled main.wj"}}]}}
+{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Exit code 1\nerror[E0308]: mismatched types\n --> main.rs:12:5\nerror: could not compile `windjammer`", "is_error": true}]}}

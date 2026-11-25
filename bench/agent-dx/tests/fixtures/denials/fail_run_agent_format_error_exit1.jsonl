@@ -1,0 +1,2 @@
+{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "wj run --compiled --stdin-file in1.txt main.wj"}}]}}
+{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Exit code 2\nerror: an iterator is used as a list: it is indexed [WJ0035]\n  --> main.wj:3:4", "is_error": true}]}}

@@ -1,0 +1,2 @@
+{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "printf 'open a 10\\nopen a 1\\n' | wj run --compiled main.wj"}}]}}
+{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Exit code 1\nok a 10\nerror: account exists a\nwarning: explicit .clone() call [W0005]\n  --> main.wj:3:4", "is_error": true}]}}
