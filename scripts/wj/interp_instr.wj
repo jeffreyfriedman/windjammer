@@ -13,11 +13,10 @@
 //                                                              from a 28-character and an 87-character checkout path (< 0.5%)
 //
 // `--write` records a baseline, so it refuses to run in a git work tree or beside a `.wj-cache` (see `write_refusal`):
-// a checkout's untracked files change the counts. Run it from a clean `git archive`. The count also depends on the
-// LENGTH of the working directory's path in interpreters that Debug-format and hash source paths (about +55K
-// instructions per path character on agent_loop warm; fixed by `source_map::with_elided_paths`, held by
-// `--self-test-cwd`), so `--write` stores the method it ran with next to the rows
-// (`<counter>:method`: runs, cwd_chars, home, env) and `--check` says when its own cwd length differs from the recorded one.
+// a checkout's untracked files change the counts. Run it from a clean `git archive`. The counts do not depend on the
+// length of the working directory's path (the interpreter once Debug-formatted source paths, about +55K instructions per
+// path character on agent_loop warm; fixed by `source_map::with_elided_paths` and held by `--self-test-cwd`), and
+// `--write` still stores the method it ran with next to the rows (`<counter>:method`: runs, cwd_chars, home, env).
 //
 // Effects (ADR-0021): this script declares no `extern` items. Its `--write` guard (inside_git_tree, method_json) uses the
 // std effect calls `fs.exists`, `env.get_or`, `env.vars` and `env.current_dir`, which the run grants by flag
@@ -468,13 +467,6 @@ fn main() {
     }
     println(dumps(res, 1, true))
     let mut doc = parse(fs::read_to_string(BASELINE) ?? "{}") ?? object()
-    if args.contains("--check") {
-        let was = as_i64(get(get(doc, key + ":method") ?? object(), "cwd_chars") ?? Json::Null) ?? 0
-        let now = cwd.len() as i64
-        if was > 0 && (now - was > 8 || was - now > 8) {
-            eprintln("note: the recorded rows were taken at a ${was}-character cwd path, this run's is ${now}: the counts move about 55K instructions per path character (agent_loop warm), so a small difference is not a regression")
-        }
-    }
     let bad_cold = ratchet(args, doc, key, counts)
     let bad_warm = ratchet(args, doc, key + ":warm", warm)
     if args.contains("--write") {
