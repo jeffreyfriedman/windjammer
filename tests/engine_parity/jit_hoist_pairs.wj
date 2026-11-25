@@ -1,0 +1,190 @@
+// Row views hoisted out of loops (versioned loops): the `i` row of a pair loop, a store into the row that is
+// also read (j == i), the empty and the one-element vec, an index that is not loop-invariant, a nest three
+// deep, an out-of-range hoisted index that never runs a statement, and the same vec in two roles.
+struct Body {
+    x: f64,
+    y: f64,
+    vx: f64,
+    vy: f64,
+    m: f64,
+    k: int,
+}
+
+fn mk(n: int) -> Vec<Body> {
+    let mut v: Vec<Body> = Vec::new()
+    let mut i = 0
+    while i < n {
+        let f = i as f64
+        v.push(Body { x: f * 1.5, y: 2.0 - f, vx: 0.25, vy: -0.5, m: 1.0 + f, k: i })
+        i += 1
+    }
+    v
+}
+
+fn pairs(bs: Vec<Body>, dt: f64) {
+    let n = bs.len()
+    let mut i = 0
+    while i < n {
+        let mut j = i + 1
+        while j < n {
+            let dx = bs[i].x - bs[j].x
+            let dy = bs[i].y - bs[j].y
+            let d2 = dx * dx + dy * dy + 0.01
+            let mag = dt / (d2 * d2.sqrt())
+            bs[i].vx -= dx * bs[j].m * mag
+            bs[i].vy -= dy * bs[j].m * mag
+            bs[j].vx += dx * bs[i].m * mag
+            bs[j].vy += dy * bs[i].m * mag
+            bs[i].k += 1
+            j += 1
+        }
+        i += 1
+    }
+    let mut q = 0
+    while q < n {
+        bs[q].x += dt * bs[q].vx
+        bs[q].y += dt * bs[q].vy
+        q += 1
+    }
+}
+
+// j runs over every element including i: the stores to row j alias the hoisted row i
+fn selfpairs(bs: Vec<Body>) {
+    let n = bs.len()
+    let mut i = 0
+    while i < n {
+        let mut j = 0
+        while j < n {
+            bs[j].vx += bs[i].x * 0.5
+            bs[i].x += bs[j].vx * 0.25
+            bs[j].k += bs[i].k % 7
+            j += 1
+        }
+        i += 1
+    }
+}
+
+// the index changes inside the loop: nothing about it may be hoisted
+fn shifted(bs: Vec<Body>) {
+    let n = bs.len()
+    let mut i = 0
+    while i < n {
+        let mut j = 0
+        while j < n {
+            let t = (i + j) % n
+            bs[t].vy += bs[(n - 1 - j + i) % n].x
+            bs[i].m += 0.001 * bs[t].m
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn deep(bs: Vec<Body>) {
+    let n = bs.len()
+    let mut a = 0
+    while a < n {
+        let mut b = 0
+        while b < n {
+            let mut c = 0
+            while c < n {
+                bs[a].vx += bs[b].x * 0.001 - bs[c].y * 0.002
+                bs[b].k += 1
+                bs[c].vy -= bs[a].m * 0.0001
+                c += 1
+            }
+            b += 1
+        }
+        a += 1
+    }
+}
+
+// the hoisted index is out of range, but the loop runs no iteration: no error
+fn touch(bs: Vec<Body>, i: int, cnt: int) {
+    let mut j = 0
+    while j < cnt {
+        bs[i].x += 1.0
+        j += 1
+    }
+}
+
+fn sum(bs: Vec<Body>) -> f64 {
+    let mut s = 0.0
+    let mut i = 0
+    while i < bs.len() {
+        s += bs[i].x + bs[i].y + bs[i].vx + bs[i].vy + bs[i].m + (bs[i].k as f64) * 0.001
+        i += 1
+    }
+    s
+}
+
+fn two_roles(a: Vec<Body>, b: Vec<Body>) {
+    let mut i = 0
+    while i < a.len() {
+        let mut j = 0
+        while j < b.len() {
+            a[i].x += b[j].m * 0.01
+            b[j].y -= a[i].x * 0.01
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn main() {
+    let mut r = 0
+    let mut bs = mk(5)
+    while r < 300 {
+        pairs(bs, 0.001)
+        r += 1
+    }
+    println("${sum(bs)} ${bs[0].k} ${bs[4].k} ${bs[2].vx}")
+    let mut ss = mk(4)
+    r = 0
+    while r < 60 {
+        selfpairs(ss)
+        r += 1
+    }
+    println("${sum(ss)} ${ss[1].k} ${ss[3].k}")
+    let mut sh = mk(6)
+    r = 0
+    while r < 60 {
+        shifted(sh)
+        r += 1
+    }
+    println("${sum(sh)}")
+    let mut dp = mk(4)
+    r = 0
+    while r < 40 {
+        deep(dp)
+        r += 1
+    }
+    println("${sum(dp)} ${dp[3].k}")
+    let mut none: Vec<Body> = Vec::new()
+    let mut one = mk(1)
+    r = 0
+    while r < 300 {
+        pairs(none, 0.1)
+        pairs(one, 0.1)
+        selfpairs(one)
+        shifted(one)
+        deep(one)
+        r += 1
+    }
+    println("${none.len()} ${sum(one)} ${one[0].k}")
+    let mut t = mk(3)
+    r = 0
+    while r < 300 {
+        touch(t, 1, 5)
+        touch(t, 99, 0)
+        r += 1
+    }
+    println("${t[1].x}")
+    let mut w = mk(3)
+    r = 0
+    while r < 100 {
+        two_roles(w, w)
+        r += 1
+    }
+    println("${sum(w)}")
+}

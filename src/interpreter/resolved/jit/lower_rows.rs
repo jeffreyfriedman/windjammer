@@ -3,7 +3,7 @@
 //! `row_build` build the view for the next access.
 
 use super::kinds::{Shape, Ty};
-use super::lower::{Lo, Val};
+use super::lower::{Lo, Mode, Val};
 use super::rows::{self, row_field, row_key, RowView, ROWS};
 use super::rt;
 use crate::interpreter::int::IntTy;
@@ -17,6 +17,8 @@ pub(super) struct Row<'s> {
     pub(super) shape: &'s Shape,
     pub(super) hint: usize,
     pub(super) ty: Ty,
+    /// The index when it is an identifier bound to a loop variable: (variable id, name).
+    pub(super) index: Option<(usize, &'static str)>,
 }
 
 impl Lo<'_, '_> {
@@ -36,7 +38,7 @@ impl Lo<'_, '_> {
     }
 
     /// The plan's index of the view shape for `slot`.
-    fn row_shape(&mut self, slot: usize, shape: &Shape) -> usize {
+    pub(super) fn row_shape(&mut self, slot: usize, shape: &Shape) -> usize {
         match self.row_shapes.iter().position(|(s, sh)| *s == slot && **sh == *shape) {
             Some(i) => i,
             None => {
@@ -49,6 +51,11 @@ impl Lo<'_, '_> {
     /// Branch on the view: in the fast block the payload's address is passed on; `slow` runs the
     /// helper, after which the view is built. Returns the value both paths give (`load`: the bits read).
     fn row_access(&mut self, row: &Row, i: &Val, fast: impl FnOnce(&mut Self, V) -> Option<V>, slow: impl FnOnce(&mut Self) -> Option<V>) -> Option<V> {
+        match self.mode {
+            Mode::Fast => return self.row_access_fast(row, i, fast),
+            Mode::Analyze => self.note_row(row),
+            _ => {}
+        }
         let idx = self.row_shape(row.slot, row.shape);
         let shape_at = &*self.row_shapes[idx].1 as *const Shape as i64;
         let at = rt::ROW_AT + (row.slot % ROWS * std::mem::size_of::<RowView>()) as i32;
@@ -79,9 +86,12 @@ impl Lo<'_, '_> {
         self.b.ins().jump(join, &[]);
         self.b.switch_to_block(sb);
         self.b.seal_block(sb);
-        let r = slow(self)?;
+        let was = std::mem::replace(&mut self.in_row_slow, true);
+        let r = slow(self);
         let a = [row.slot as i64, shape_at, idx as i64].map(|c| self.b.ins().iconst(types::I64, c));
         self.call("row_build", rows::row_build as *const () as usize, &a, false, false);
+        self.in_row_slow = was;
+        let r = r?;
         self.b.def_var(out, r);
         self.b.ins().jump(join, &[]);
         self.b.switch_to_block(join);

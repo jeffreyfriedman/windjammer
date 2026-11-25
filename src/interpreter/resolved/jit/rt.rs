@@ -46,6 +46,9 @@ pub(crate) struct Ctx {
     pub(crate) row_credit: i64,
     /// Field accesses machine code made through a row view (added to `FastHits::rowview`).
     pub(crate) row_hits: i64,
+    /// Versioned loops entered through their fast copy / their slow copy (added to `FastHits::hoisted` / `hoistfail`).
+    pub(crate) hoisted: i64,
+    pub(crate) hoistfail: i64,
     /// Whether the last `map_get` found its key (read by machine code after the call).
     pub(crate) found: i64,
     /// Map lookups / inserts the lean helpers served (added to `FastHits::mapleanget` / `mapleanins` when the unit leaves).
@@ -60,7 +63,7 @@ pub(crate) struct Ctx {
 impl Ctx {
     pub(crate) fn new(it: *mut Interpreter, base: usize, plan: *const super::lower::Plan, reg: *const crate::interpreter::resolved::osr::Reg) -> Ctx {
         let (rows, row_tbls) = (Default::default(), Default::default());
-        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), cell_hit: [(0, 0); CELL_HITS], views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, found: 0, lean_gets: 0, view_reads: 0, lean_inss: 0, lean_typed: 0 }
+        Ctx { it, base, fail: 0, plan, reg, raised: None, cells: Vec::new(), cell_hit: [(0, 0); CELL_HITS], views: Default::default(), view_stores: 0, rows, row_tbls, row_credit: super::rows::CREDIT_START, row_hits: 0, hoisted: 0, hoistfail: 0, found: 0, lean_gets: 0, view_reads: 0, lean_inss: 0, lean_typed: 0 }
     }
 }
 
@@ -85,6 +88,8 @@ pub(crate) const VIEW_READS: i32 = std::mem::offset_of!(Ctx, view_reads) as i32;
 pub(crate) const VIEW_STORES: i32 = std::mem::offset_of!(Ctx, view_stores) as i32;
 pub(crate) const ROW_AT: i32 = std::mem::offset_of!(Ctx, rows) as i32;
 pub(crate) const ROW_HITS: i32 = std::mem::offset_of!(Ctx, row_hits) as i32;
+pub(crate) const HOISTED: i32 = std::mem::offset_of!(Ctx, hoisted) as i32;
+pub(crate) const HOISTFAIL: i32 = std::mem::offset_of!(Ctx, hoistfail) as i32;
 pub(crate) const FOUND: i32 = std::mem::offset_of!(Ctx, found) as i32;
 
 /// The key of a view: the local's slot and the stored element type (never 0).

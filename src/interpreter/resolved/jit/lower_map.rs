@@ -88,7 +88,7 @@ impl Lo<'_, '_> {
         if let Arm::Some(Some(name)) = kinds[some_at] {
             let id = self.new_var(NO_SLOT, vt, true);
             let x = self.from_bits(bits, vt);
-            self.b.def_var(self.vars[id].var, x);
+            self.def(id, x);
             self.bind(name, Bind::Var(id));
         }
         let some_v = self.arm_body(arms[some_at].body, want_value);

@@ -713,3 +713,8 @@ path = "tests/match_variant_pattern_test.rs"
 [[test]]
 name = "location_cache_differential"
 path = "tests/location_cache_differential_test.rs"
+
+# A trap inside a versioned (hoisted row views) loop matches the walker: cargo test --release --test hoist_traps
+[[test]]
+name = "hoist_traps"
+path = "tests/hoist_traps_test.rs"

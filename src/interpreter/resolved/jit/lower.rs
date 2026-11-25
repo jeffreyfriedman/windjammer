@@ -23,7 +23,7 @@ use crate::parser::{Expression, Pattern, Statement};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{types, AbiParam, Block, Function, InstBuilder, MemFlags, SigRef, Type as CTy, Value as V};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub(super) type E = &'static Expression<'static>;
 pub(super) type S = &'static Statement<'static>;
@@ -94,6 +94,54 @@ pub(crate) struct Spill {
     pub(crate) fresh: bool,
 }
 
+/// What the analysis pass learned about one statement loop (keyed by the address of its body; `hoist` in SOUNDNESS-hoist.md).
+#[derive(Default)]
+pub(crate) struct LoopInfo {
+    /// Some helper that can clear views or mutate vec/struct storage is called inside it.
+    pub(crate) unsafe_: bool,
+    /// The rows (local slot, shape) it reads or writes through views.
+    pub(crate) rows: Vec<(usize, Shape)>,
+    /// Index variables of its row accesses: (row slot, row shape, variable name, variable walker slot).
+    pub(crate) cands: Vec<(usize, Shape, &'static str, usize)>,
+    /// Walker slots of the variables defined (assigned, bound) anywhere inside it.
+    pub(crate) defs: HashSet<usize>,
+}
+
+pub(crate) type Info = HashMap<usize, LoopInfo>;
+
+/// Which lowering pass this is.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Mode {
+    /// The ordinary lowering (also the slow copy of a versioned loop).
+    Plain,
+    /// The ordinary lowering, recording `Info`.
+    Analyze,
+    /// Like `Plain`, but a loop `Info` calls safe with rows is lowered twice (fast copy, slow copy).
+    Version,
+    /// Inside the fast copy: row accesses use the preheader's views.
+    Fast,
+}
+
+/// A row validated at a versioned loop's preheader: its table address and length (SSA values of the preheader).
+pub(super) struct HRow {
+    pub(super) slot: usize,
+    pub(super) idx: usize,
+    pub(super) len: V,
+    pub(super) tbl: V,
+}
+
+/// The field-array address of element `var` of a row, computed at a loop's preheader (`bad`: the index is out of range).
+pub(super) struct HIdx {
+    pub(super) slot: usize,
+    pub(super) idx: usize,
+    pub(super) var: usize,
+    pub(super) bad: V,
+    pub(super) fields: V,
+}
+
+/// Helpers that never clear a row view or mutate vec/struct storage.
+pub(super) const SAFE_CALLS: [&str; 9] = ["index_get", "index_field_get", "field_get", "len", "map_get", "int_op", "fmod", "round", "row_build"];
+
 pub(crate) struct Plan {
     /// Scalars read from their slots at entry: (spill buffer index, slot, type).
     pub(crate) live: Vec<(usize, usize, Ty)>,
@@ -120,7 +168,7 @@ pub(super) enum Bind {
 
 pub(super) struct Var {
     pub(super) var: Variable,
-    slot: usize,
+    pub(super) slot: usize,
     pub(super) ty: Ty,
     /// Bound by a `let` of the loop (not a local the loop was entered with).
     fresh: bool,
@@ -170,9 +218,19 @@ pub(super) struct Lo<'a, 'i> {
     /// `&&`/`||` blocks opened and not yet joined (a statement that fails inside one cannot fall back).
     pub(super) open_joins: usize,
     /// Statements lowered to machine code (`stmts` holds those run by their closure code).
-    natives: usize,
+    pub(super) natives: usize,
     /// Row view shapes (`Plan::row_shapes`) with the slot each is for.
     pub(super) row_shapes: Vec<(usize, Box<Shape>)>,
+    pub(super) mode: Mode,
+    pub(super) info: Info,
+    /// Analyze: the statement loops being lowered (their `Info` keys), innermost last.
+    pub(super) active: Vec<usize>,
+    /// Analyze: lowering the slow closure of a row access (the fast copy has none).
+    pub(super) in_row_slow: bool,
+    pub(super) hrows: Vec<HRow>,
+    pub(super) hidx: Vec<HIdx>,
+    /// Fast copy: something the soundness argument excludes was emitted (the whole pass is abandoned).
+    pub(super) broken: bool,
 }
 
 /// A loop being lowered: where `continue` goes (the head, or a `for` loop's increment), where `break`
@@ -202,7 +260,11 @@ pub(crate) enum Root {
     Body(&'static [S]),
 }
 
-/// Lower `root` with the locals it names (`refs`: name, slot, class at entry) into `func`.
+/// Lower `root` with the locals it names (`refs`: name, slot, class at entry) into `func`. A first pass lowers it as
+/// always and records what each statement loop does (`LoopInfo`); when a loop with row accesses can run without any
+/// view-clearing helper (SOUNDNESS-hoist.md), a second pass lowers the unit again with that loop versioned (a fast
+/// copy that checks the views once, a slow copy that is the first pass's code). If the second pass fails, the first
+/// pass's function is kept.
 pub(crate) fn lower(
     func: &mut Function,
     fctx: &mut FunctionBuilderContext,
@@ -212,6 +274,36 @@ pub(crate) fn lower(
     refs: &[(&'static str, usize, Class)],
     ptr: CTy,
 ) -> Result<Plan, String> {
+    let versioning = !it.fast_off("hoist");
+    let sig = func.signature.clone();
+    let mode = if versioning { Mode::Analyze } else { Mode::Plain };
+    let (plan, info, _) = lower_pass(func, fctx, it, root, reg, refs, ptr, mode, Info::new())?;
+    if !versioning || !info.values().any(|l| !l.unsafe_ && !l.rows.is_empty()) {
+        return Ok(plan);
+    }
+    let mut f2 = Function::new();
+    f2.signature = sig;
+    match lower_pass(&mut f2, fctx, it, root, reg, refs, ptr, Mode::Version, info) {
+        Ok((plan2, _, false)) => {
+            *func = f2;
+            Ok(plan2)
+        }
+        _ => Ok(plan),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lower_pass(
+    func: &mut Function,
+    fctx: &mut FunctionBuilderContext,
+    it: &mut Interpreter,
+    root: Root,
+    reg: &Reg,
+    refs: &[(&'static str, usize, Class)],
+    ptr: CTy,
+    mode: Mode,
+    info: Info,
+) -> Result<(Plan, Info, bool), String> {
     let mut b = FunctionBuilder::new(func, fctx);
     let entry = b.create_block();
     b.append_block_params_for_function_params(entry);
@@ -240,6 +332,13 @@ pub(crate) fn lower(
         open_joins: 0,
         natives: 0,
         row_shapes: Vec::new(),
+        mode,
+        info,
+        active: Vec::new(),
+        in_row_slow: false,
+        hrows: Vec::new(),
+        hidx: Vec::new(),
+        broken: false,
         unit_label: match root {
             Root::Loop(Statement::While { label, .. } | Statement::For { label, .. }) => label.as_deref(),
             _ => None,
@@ -256,7 +355,7 @@ pub(crate) fn lower(
                 let id = lo.new_var(*slot, *t, false);
                 let x = lo.b.ins().load(types::I64, MemFlags::trusted(), buf, (id * 8) as i32);
                 let x = lo.from_bits(x, *t);
-                lo.b.def_var(lo.vars[id].var, x);
+                lo.def(id, x);
                 live.push((id, *slot, *t));
                 Bind::Var(id)
             }
@@ -296,7 +395,8 @@ pub(crate) fn lower(
     }
     lo.b.seal_all_blocks();
     lo.b.finalize();
-    Ok(Plan { live, live_structs, inlines: lo.inlines, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts, row_shapes: lo.row_shapes.into_iter().map(|(_, s)| s).collect() })
+    let plan = Plan { live, live_structs, inlines: lo.inlines, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts, row_shapes: lo.row_shapes.into_iter().map(|(_, s)| s).collect() };
+    Ok((plan, lo.info, lo.broken))
 }
 
 impl Lo<'_, '_> {
@@ -326,6 +426,13 @@ impl Lo<'_, '_> {
         let var = self.b.declare_var(cty(ty));
         self.vars.push(Var { var, slot, ty, fresh });
         self.vars.len() - 1
+    }
+
+    /// Define program variable `id` (pass A records the definition for the loops being lowered).
+    pub(super) fn def(&mut self, id: usize, v: V) {
+        let slot = self.vars[id].slot;
+        self.note_def(slot);
+        self.b.def_var(self.vars[id].var, v);
     }
 
     pub(super) fn tys(&self) -> Vec<Ty> {
@@ -451,7 +558,7 @@ impl Lo<'_, '_> {
         for sp in &spills {
             let x = self.b.ins().load(types::I64, MemFlags::trusted(), self.buf, (sp.buf * 8) as i32);
             let x = self.from_bits(x, sp.ty);
-            self.b.def_var(self.vars[sp.buf].var, x);
+            self.def(sp.buf, x);
         }
         Some(())
     }
@@ -517,6 +624,7 @@ impl Lo<'_, '_> {
 
     /// Call helper `f` (context first unless `float`), then leave if it reported failure.
     pub(super) fn call(&mut self, name: &'static str, f: usize, args: &[V], float: bool, fallible: bool) -> V {
+        self.note_call(name);
         let sig = self.helper(name, args.len(), float);
         let callee = self.b.ins().iconst(self.ptr, f as i64);
         let mut all = Vec::with_capacity(args.len() + 1);
@@ -722,7 +830,7 @@ impl Lo<'_, '_> {
                     v = self.coerce(v, t)?;
                 }
                 let id = self.new_var(slot, v.ty, true);
-                self.b.def_var(self.vars[id].var, v.v);
+                self.def(id, v.v);
                 self.scopes.last_mut()?.push((n.as_str(), Bind::Var(id)));
             }
             Statement::Assignment { target, value, compound_op, .. } => self.assign(target, value, *compound_op)?,
@@ -780,6 +888,10 @@ impl Lo<'_, '_> {
     }
 
     fn while_stmt(&mut self, cond: E, body: &'static [S], label: Option<&'static str>) -> Option<()> {
+        self.loop_versioned(body, |lo| lo.while_once(cond, body, label))
+    }
+
+    fn while_once(&mut self, cond: E, body: &'static [S], label: Option<&'static str>) -> Option<()> {
         let head = self.b.create_block();
         self.b.ins().jump(head, &[]);
         self.b.switch_to_block(head);
@@ -808,7 +920,7 @@ impl Lo<'_, '_> {
     /// A hidden variable (a `for` counter or end), bound in the innermost scope so exits spill it.
     fn hidden(&mut self, name: &'static str, ty: Ty, v: V) -> usize {
         let id = self.new_var(NO_SLOT, ty, true);
-        self.b.def_var(self.vars[id].var, v);
+        self.def(id, v);
         self.scopes.last_mut().expect("scope").push((name, Bind::Var(id)));
         id
     }
@@ -821,7 +933,7 @@ impl Lo<'_, '_> {
             (Pattern::Identifier(n) | Pattern::MutBinding(n), Some(slot)) => {
                 self.reg.kind(slot)?;
                 let id = self.new_var(slot, ty, true);
-                self.b.def_var(self.vars[id].var, c);
+                self.def(id, c);
                 self.scopes.last_mut()?.push((n.as_str(), Bind::Var(id)));
             }
             (Pattern::Wildcard, None) => {}
@@ -883,7 +995,7 @@ impl Lo<'_, '_> {
             self.b.seal_block(latch);
             let cv = self.b.use_var(self.vars[c].var);
             let next = self.b.ins().iadd_imm(cv, 1);
-            self.b.def_var(self.vars[c].var, next);
+            self.def(c, next);
             self.b.ins().jump(head, &[]);
         }
         self.b.seal_block(head);
@@ -891,7 +1003,11 @@ impl Lo<'_, '_> {
     }
 
     /// `for x in a..b` / `a..=b` inside a unit.
-    fn for_stmt(&mut self, s: S, pattern: &'static Pattern<'static>, (start, end, inclusive): (E, E, bool), body: &'static [S], label: Option<&'static str>) -> Option<()> {
+    fn for_stmt(&mut self, s: S, pattern: &'static Pattern<'static>, range: (E, E, bool), body: &'static [S], label: Option<&'static str>) -> Option<()> {
+        self.loop_versioned(body, |lo| lo.for_once(s, pattern, range, body, label))
+    }
+
+    fn for_once(&mut self, s: S, pattern: &'static Pattern<'static>, (start, end, inclusive): (E, E, bool), body: &'static [S], label: Option<&'static str>) -> Option<()> {
         let (a, z) = (self.expr(start)?, self.expr(end)?);
         let (Ty::Int(ta), Ty::Int(tz)) = (a.ty, z.ty) else { return None };
         let ty = IntTy::unify(ta, tz);
@@ -937,7 +1053,7 @@ impl Lo<'_, '_> {
             self.b.seal_block(latch);
             let (cv, ev) = (self.b.use_var(self.vars[c].var), self.b.use_var(self.vars[e].var));
             let next = self.b.ins().iadd_imm(cv, 1);
-            self.b.def_var(self.vars[c].var, next);
+            self.def(c, next);
             if inclusive {
                 // the last value is the end itself: stop before the counter could pass it
                 let last = self.b.ins().icmp(IntCC::Equal, cv, ev);
@@ -960,7 +1076,7 @@ impl Lo<'_, '_> {
         if cty(v.ty) != cty(self.vars[id].ty) {
             return None;
         }
-        self.b.def_var(self.vars[id].var, v.v);
+        self.def(id, v.v);
         self.vars[id].ty = v.ty;
         Some(())
     }
