@@ -43,6 +43,11 @@ invokes cargo or rustc and never writes generated code. Exit status is 1 when an
 | WJ0018 | `impl Trait for T` missing required methods |
 | WJ0019 | a private item called, imported or re-exported outside its module |
 | WJ0194 | a name used through a module that does not re-export it with `pub use` (ADR-0040) |
+| WJ0197 | A `.wjsl` import does not resolve |
+| WJ0198 | A `.wjsl` item is private to its module |
+| WJ0199 | A `.wjsl` import cycle |
+| WJ0200 | A `.wjsl` library module declares an entry-file-only item |
+| WJ0201 | A `.wjsl` identifier contains `__` |
 | WJ0020 | `string + int`, arithmetic on strings, or declared `int` mixed with declared `float` |
 | WJ0003 (return) | literal of the wrong type returned from a function |
 | WJ0021 | duplicate top-level definition |

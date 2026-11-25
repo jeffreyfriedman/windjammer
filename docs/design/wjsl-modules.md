@@ -4,7 +4,7 @@ last_verified: 46e3e530143f
 ---
 # WJSL modules and CPU twins: a composable shading library
 
-> **Proposal: not implemented.** This page designs module imports between `.wjsl` files and CPU twins of shared shading code; nothing described as new here exists in the compiler yet.
+> **Proposal: stages S2 and later are not implemented.** Stages S0 (`wj build` resolves text includes) and S1 (same-folder `use crate::module::item`, `pub`, dead-code elimination, stable `module__name` names, WJ0197 to WJ0201) are implemented; resolver invariants are in [wjsl-modules-soundness.md](wjsl-modules-soundness.md). CPU twins, packages, subfolders and the parity harness are designs only.
 
 Related: [ADR-0040](../adr/0040-explicit-module-reexports.md) (explicit re-exports),
 [ADR-0039](../adr/0039-stdlib-one-way.md) (one way, no back-compat), [ADR-0021](../adr/0021-effects-and-capabilities.md)

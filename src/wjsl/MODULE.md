@@ -20,7 +20,7 @@ In: `.wjsl` / block-syntax shader source text (plus an include dir). Out: `Shade
 lexer, parser, ast: tokens and AST. type_checker + expression_/statement_type_checking +
 shader_type_rules: semantic checks. codegen: module-level layout and function bodies.
 wgsl_printer: pure type/struct/binding printing (shared). block_syntax: compact block-syntax
-front end lowering into the same AST. includes: include resolution. diagnostics: errors/hints.
+front end lowering into the same AST. includes: include resolution. modules: `use crate::module::item` between .wjsl files of one folder (graph, visibility, mangling, DCE; docs/design/wjsl-modules-soundness.md). diagnostics: errors/hints.
 
 ## Invariants
 - Output is pinned by `tests/wgsl_golden_test.rs` (goldens in `tests/golden/wgsl/`).
@@ -37,7 +37,7 @@ Only `crate::wjsl` itself plus `anyhow`/std; `codegen/wgsl` depends on `wjsl`, n
 Contract: docs/MODULE_MAP.toml.
 
 ## Entry points
-`parse`, `check`, `emit_wgsl`, `transpile_wjsl[_with_includes]`, `compile_legacy_shader` (src/wjsl/mod.rs).
+`parse`, `check`, `emit_wgsl`, `transpile_wjsl[_with_includes]`, `transpile_wjsl_file` (modules), `compile_legacy_shader` (src/wjsl/mod.rs).
 
 ## Callers
 `wj shader-compile` (block syntax), `wj validate-wjsl`, `wj build` (.wjsl files),

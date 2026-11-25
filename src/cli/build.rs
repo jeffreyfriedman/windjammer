@@ -439,12 +439,8 @@ fn build_wgsl(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> R
     // Note: .wjsl uses array<T, N> syntax; main Windjammer parser expects .wj syntax
     let (wgsl_source, additional_files) =
         if path.extension().and_then(|e| e.to_str()) == Some("wjsl") {
-            // Resolve `use "path"` includes relative to the file's folder (same as `wj validate-wjsl`).
-            let base_dir = path
-                .parent()
-                .filter(|p| !p.as_os_str().is_empty())
-                .unwrap_or_else(|| Path::new("."));
-            let wgsl = crate::wjsl::transpile_wjsl_with_includes(&source, base_dir)?;
+            // Includes and `use crate::m::item` imports resolve relative to the file's folder.
+            let wgsl = crate::wjsl::transpile_wjsl_file(path)?;
             (wgsl, Vec::new())
         } else {
             // Use Windjammer parser for .wj files

@@ -22,6 +22,7 @@ impl WjslCodegen {
 
         // 1. Struct declarations
         for s in &self.module.structs {
+            Self::emit_origin(&mut out, &s.origin);
             wgsl_printer::emit_struct(&mut out, s);
         }
 
@@ -32,6 +33,7 @@ impl WjslCodegen {
 
         // 2b. Constant declarations
         for cd in &self.module.const_decls {
+            Self::emit_origin(&mut out, &cd.origin);
             if let Some(ref ty) = cd.ty {
                 out.push_str(&format!(
                     "const {}: {} = {};\n",
@@ -76,7 +78,17 @@ impl WjslCodegen {
         Ok(out)
     }
 
+    /// `// from brdf.wjsl:2` above an item that came from another module.
+    fn emit_origin(out: &mut String, origin: &Option<String>) {
+        if let Some(o) = origin {
+            out.push_str("// from ");
+            out.push_str(o);
+            out.push('\n');
+        }
+    }
+
     fn emit_function(&self, out: &mut String, f: &Function) {
+        Self::emit_origin(out, &f.origin);
         out.push_str("fn ");
         out.push_str(&f.name);
         out.push('(');

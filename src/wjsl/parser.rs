@@ -431,7 +431,7 @@ impl<'a> Parser<'a> {
         }
 
         self.expect(Token::RBrace)?;
-        Ok(StructDecl { name, fields })
+        Ok(StructDecl { name, fields, origin: None })
     }
 
     fn parse_storage_access_mode(&mut self) -> StorageAccess {
@@ -765,6 +765,7 @@ impl<'a> Parser<'a> {
                             params,
                             return_type,
                             body: body.to_string(),
+                            origin: None,
                         });
                     }
                     self.advance();
@@ -867,6 +868,7 @@ impl<'a> Parser<'a> {
             name,
             ty,
             initializer,
+            origin: None,
         })
     }
 

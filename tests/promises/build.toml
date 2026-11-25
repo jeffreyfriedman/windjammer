@@ -295,3 +295,83 @@ files = { "m.wj" = "use std::fs\nuse std::process\n\nfn main() {\n    let name =
 args = ["build", "{w}/m.wj", "--no-cargo", "--no-generate-cargo-toml", "-o", "{w}/out"]
 exit = 1
 output_has = ["WJ0173", "before generating code"]
+
+[[case]]
+name = "build --target wgsl rejects a use of a module that does not exist (WJ0197)"
+polarity = "negative"
+files = { "e.wjsl" = "use crate::nope::x\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0);\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["error[WJ0197]", "no module `nope`"]
+
+[[case]]
+name = "build --target wgsl rejects an import of a private item (WJ0198)"
+polarity = "negative"
+files = { "brdf.wjsl" = "fn helper() -> f32 {\n    return 1.0;\n}\n", "e.wjsl" = "use crate::brdf::helper\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0);\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["error[WJ0198]", "is private to `brdf`"]
+
+[[case]]
+name = "build --target wgsl rejects an import cycle (WJ0199)"
+polarity = "negative"
+files = { "a.wjsl" = "use crate::b::g\npub fn f() -> f32 {\n    return g();\n}\n", "b.wjsl" = "use crate::a::f\npub fn g() -> f32 {\n    return f();\n}\n", "e.wjsl" = "use crate::a::f\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0);\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["error[WJ0199]", "import cycle"]
+
+[[case]]
+name = "build --target wgsl rejects a binding in a library module (WJ0200)"
+polarity = "negative"
+files = { "lib.wjsl" = "@group(0) @binding(0) uniform u: f32;\npub fn f() -> f32 {\n    return 1.0;\n}\n", "e.wjsl" = "use crate::lib::f\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0);\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["error[WJ0200]", "not allowed in library module"]
+
+[[case]]
+name = "build --target wgsl rejects an identifier with a double underscore (WJ0201)"
+polarity = "negative"
+files = { "e.wjsl" = "fn bad__name() -> f32 {\n    return 1.0;\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["error[WJ0201]", "reserved for module-qualified names"]
+
+[[case]]
+name = "build --target wgsl accepts a module import (WJ0197)"
+polarity = "positive"
+files = { "brdf.wjsl" = "pub fn fresnel_schlick(c: f32, f0: f32) -> f32 {\n    return f0 + (1.0 - f0) * c;\n}\n", "e.wjsl" = "use crate::brdf::fresnel_schlick\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(fresnel_schlick(0.5, 0.04));\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+creates = ["out/e.wgsl"]
+file_has = { "out/e.wgsl" = "brdf__fresnel_schlick" }
+
+[[case]]
+name = "build --target wgsl accepts an import of a pub item (WJ0198)"
+polarity = "positive"
+files = { "brdf.wjsl" = "pub fn fresnel_schlick(c: f32, f0: f32) -> f32 {\n    return f0 + (1.0 - f0) * c;\n}\n", "e.wjsl" = "use crate::brdf::fresnel_schlick\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(fresnel_schlick(0.5, 0.04));\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+creates = ["out/e.wgsl"]
+file_has = { "out/e.wgsl" = "brdf__fresnel_schlick" }
+
+[[case]]
+name = "build --target wgsl accepts a module without a cycle (WJ0199)"
+polarity = "positive"
+files = { "brdf.wjsl" = "pub fn fresnel_schlick(c: f32, f0: f32) -> f32 {\n    return f0 + (1.0 - f0) * c;\n}\n", "e.wjsl" = "use crate::brdf::fresnel_schlick\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(fresnel_schlick(0.5, 0.04));\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+creates = ["out/e.wgsl"]
+file_has = { "out/e.wgsl" = "brdf__fresnel_schlick" }
+
+[[case]]
+name = "build --target wgsl accepts a library module of functions (WJ0200)"
+polarity = "positive"
+files = { "brdf.wjsl" = "pub fn fresnel_schlick(c: f32, f0: f32) -> f32 {\n    return f0 + (1.0 - f0) * c;\n}\n", "e.wjsl" = "use crate::brdf::fresnel_schlick\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(fresnel_schlick(0.5, 0.04));\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+creates = ["out/e.wgsl"]
+file_has = { "out/e.wgsl" = "brdf__fresnel_schlick" }
+
+[[case]]
+name = "build --target wgsl accepts qualified emitted names (WJ0201)"
+polarity = "positive"
+files = { "brdf.wjsl" = "pub fn fresnel_schlick(c: f32, f0: f32) -> f32 {\n    return f0 + (1.0 - f0) * c;\n}\n", "e.wjsl" = "use crate::brdf::fresnel_schlick\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(fresnel_schlick(0.5, 0.04));\n}\n" }
+args = ["build", "{w}/e.wjsl", "--target", "wgsl", "--no-cargo", "-o", "{w}/out"]
+creates = ["out/e.wgsl"]
+file_has = { "out/e.wgsl" = "brdf__fresnel_schlick" }
