@@ -1,0 +1,74 @@
+// A loop with row accesses AND a store into a narrow scalar vec (`Vec<i32>`, `Vec<u8>`: not packed-viewable, so the
+// store calls the `index_set` helper) and a packed `Vec<f64>` store. That store is why such a loop is not versioned (hoisted views); either way
+// the result must equal the walker's.
+struct Cell {
+    a: f64,
+    b: f64,
+    n: int,
+}
+
+fn mk(n: int) -> Vec<Cell> {
+    let mut v: Vec<Cell> = Vec::new()
+    let mut i = 0
+    while i < n {
+        v.push(Cell { a: (i as f64) * 0.5, b: 1.0, n: i })
+        i += 1
+    }
+    v
+}
+
+fn run(cs: Vec<Cell>, w: Vec<i32>, bytes: Vec<u8>, fw: Vec<f64>) {
+    let mut i = 0
+    while i < cs.len() {
+        let mut j = 0
+        while j < cs.len() {
+            cs[i].a += cs[j].b * 0.5
+            w[j] = w[j] + 1
+            bytes[j] = (cs[j].n % 200) as u8
+            fw[j] = cs[j].a * 0.5 + fw[j]
+            cs[j].n += 1
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn overrun(cs: Vec<Cell>, w: Vec<i32>, k: int) {
+    let mut j = 0
+    while j < k {
+        cs[0].a += cs[1].b
+        w[j] = 7
+        cs[1].n += 1
+        j += 1
+    }
+}
+
+fn main() {
+    let mut cs = mk(4)
+    let mut w: Vec<i32> = Vec::new()
+    let mut bytes: Vec<u8> = Vec::new()
+    let mut fw: Vec<f64> = Vec::new()
+    let mut q = 0
+    while q < 4 {
+        fw.push(1.0)
+        w.push(0)
+        bytes.push(0 as u8)
+        q += 1
+    }
+    let mut r = 0
+    while r < 200 {
+        run(cs, w, bytes, fw)
+        r += 1
+    }
+    println("${cs[0].a} ${cs[3].n} ${w[0]} ${w[3]} ${bytes[1]} ${bytes[3]} ${fw[0]} ${fw[3]}")
+    let mut o = mk(3)
+    let mut ow: Vec<i32> = Vec::new()
+    ow.push(0)
+    ow.push(0)
+    r = 0
+    while r < 100 {
+        overrun(o, ow, 2)
+        r += 1
+    }
+    println("${o[0].a} ${o[1].n} ${ow[1]}")
+}

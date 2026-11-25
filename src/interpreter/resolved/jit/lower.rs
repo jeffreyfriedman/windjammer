@@ -140,6 +140,9 @@ pub(super) struct HIdx {
 }
 
 /// Helpers that never clear a row view or mutate vec/struct storage.
+// index_set is deliberately absent and adding it is an EQUIVALENT mutant (SOUNDNESS-hoist.md 7): whole-element stores
+// are closure-run statements (run_stmt, the disqualified case), and the stores that do call it (narrow-scalar and packed
+// slow paths) only clear row keys (tables stay allocated) of vecs that are never row vecs, so a hoisted loop stays valid.
 pub(super) const SAFE_CALLS: [&str; 9] = ["index_get", "index_field_get", "field_get", "len", "map_get", "int_op", "fmod", "round", "row_build"];
 
 pub(crate) struct Plan {
