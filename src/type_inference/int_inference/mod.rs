@@ -59,6 +59,9 @@ pub enum IntConstraint {
 pub struct IntInference {
     pub inferred_types: HashMap<ExprId, IntType>,
     constraints: Vec<IntConstraint>,
+    /// Nesting depth of block expressions whose value is used (`x += if c { a } else { b }`): the tails of
+    /// those blocks are values of the enclosing expression, not the function's implicit return.
+    value_block_depth: usize,
     pub errors: Vec<String>,
     function_signatures: crate::type_inference::sig_table::SigTable,
     var_assignments: HashMap<String, ExprId>,
@@ -100,6 +103,7 @@ impl IntInference {
         let mut inference = IntInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
+            value_block_depth: 0,
             errors: Vec::new(),
             function_signatures: crate::type_inference::sig_table::SigTable::default(),
             var_assignments: HashMap::new(),
@@ -906,7 +910,7 @@ impl IntInference {
             }
             Statement::Expression { expr, .. } => {
                 self.collect_expression_constraints(expr, return_type);
-                if let Some(ret_ty) = return_type {
+                if let Some(ret_ty) = return_type.filter(|_| self.value_block_depth == 0) {
                     if let Some(int_ty) = self.extract_int_type(ret_ty) {
                         let expr_id = self.get_expr_id(expr);
                         self.constraints.push(IntConstraint::MustBe(
