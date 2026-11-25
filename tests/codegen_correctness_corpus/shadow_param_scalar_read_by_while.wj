@@ -1,0 +1,15 @@
+// A `let` that shadows a scalar parameter and is read by a `while` bound. The front end used to recurse forever
+// (`n` -> `let n = n * 2` -> `n` ...) and overflow the stack; the inner `n` is the parameter.
+// expect: 6
+fn f3(n: int) {
+    let n = n * 2
+    let mut i = 0
+    while i < n {
+        i += 1
+    }
+    println("${i}")
+}
+
+fn main() {
+    f3(3)
+}

@@ -1,0 +1,110 @@
+// Shadows of parameters and of other lets, in loops, match arms, closures and nested blocks: each `let` is its own
+// binding, so reads resolve to the previous one and mutation never leaks onto the outer name.
+// expect: a 6
+// expect: b 6
+// expect: c 3
+// expect: d 4
+// expect: e 3
+// expect: f 6
+// expect: f outer 2
+// expect: g 2
+// expect: main 1
+// expect: h 5
+fn a() {
+    let n = 3
+    let n = n * 2
+    let mut i = 0
+    while i < n {
+        i += 1
+    }
+    println("a ${i}")
+}
+
+fn b(k: int) {
+    let mut total = 0
+    for j in 0..k {
+        let j = j * 2
+        let mut c = 0
+        while c < j {
+            c += 1
+        }
+        total += c
+    }
+    println("b ${total}")
+}
+
+fn c(o: Option<int>) {
+    match o {
+        Some(v) => {
+            let v = v + 1
+            let mut i = 0
+            while i < v {
+                i += 1
+            }
+            println("c ${i}")
+        }
+        None => println("c none"),
+    }
+}
+
+fn d(n: int) {
+    let f = |n: int| {
+        let n = n * 2
+        let mut i = 0
+        while i < n {
+            i += 1
+        }
+        i
+    }
+    println("d ${f(n)}")
+}
+
+fn e(v: Vec<int>) {
+    let v = v.len()
+    let mut i = 0
+    while i < v {
+        i += 1
+    }
+    println("e ${i}")
+}
+
+fn f(n: int) {
+    if n > 0 {
+        let n = n * 3
+        let mut i = 0
+        while i < n {
+            i += 1
+        }
+        println("f ${i}")
+    }
+    println("f outer ${n}")
+}
+
+fn g(xs: Vec<int>) {
+    let mut xs = xs
+    xs.push(9)
+    println("g ${xs.len()}")
+}
+
+fn h(n: int) {
+    let n = n
+    let n = n + 1
+    let mut i = 0
+    while i < n {
+        i += 1
+    }
+    println("h ${i}")
+}
+
+fn main() {
+    a()
+    b(3)
+    c(Some(2))
+    d(2)
+    e([1, 2, 3])
+    f(2)
+    let v = [1]
+    g(v)
+    println("main ${v.len()}")
+    h(4)
+}

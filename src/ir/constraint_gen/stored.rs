@@ -19,6 +19,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             );
         }
     }
+
+
+    /// The parameter variable `name` denotes at this point of the walk: `None` when a `let`, `for`, pattern or
+    /// closure parameter in scope rebinds the name, so a requirement on the shadow never lands on the parameter.
+    pub(super) fn param_var(&self, name: &str) -> Option<ConstraintVar> {
+        if self.scopes.iter().any(|s| s.contains_key(name)) {
+            return None;
+        }
+        self.param_vars.get(name).copied()
+    }
 }
 
 /// OWN-MUT-PARAM-COPY (SPEC-OWN-008): `fn f(mut s: S)` declares that the callee changes its own copy, so the
@@ -31,5 +41,4 @@ pub(super) fn seed_mut_declared_param(cs: &mut ConstraintSet, var: ConstraintVar
             origin("OWN-MUT-PARAM-COPY", format!("`{}` is declared `mut`: the callee changes its own copy", param.name), &None),
         );
     }
-
 }

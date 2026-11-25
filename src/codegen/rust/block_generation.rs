@@ -45,6 +45,13 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Generate code for a block of statements
     pub(crate) fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
+        let saved = self.enter_param_shadow_scope(stmts);
+        let out = self.generate_block_in_scope(stmts);
+        self.leave_param_shadow_scope(saved);
+        out
+    }
+
+    fn generate_block_in_scope(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
         self.prepass_mark_loop_counter_usize_variables(stmts);
         let mut output = String::new();
         let len = stmts.len();
@@ -54,6 +61,7 @@ impl<'ast> CodeGenerator<'ast> {
         let saved_skips = std::mem::take(&mut self.skip_block_indices);
         self.current_function_body = stmts.to_vec();
         for (i, stmt) in stmts.iter().enumerate() {
+            self.shadow_params_after_let(stmts, i);
             self.begin_block_statement(i);
 
             // Skip statements folded into a preceding .take() or .replace()
@@ -366,6 +374,14 @@ impl<'ast> CodeGenerator<'ast> {
         self.exit_statement_liveness(outer_dying);
         self.exit_recursion();
         result
+    }
+
+    /// A block expression: a `let` in it that rebinds a borrowed parameter's name ends that parameter's scope.
+    pub(in crate::codegen::rust) fn generate_block_expr_scoped(&mut self, stmts: &[&'ast Statement<'ast>], is_unsafe: bool) -> String {
+        let saved = self.enter_param_shadow_scope(stmts);
+        let out = self.generate_block_expr(stmts, is_unsafe);
+        self.leave_param_shadow_scope(saved);
+        out
     }
 
     pub(in crate::codegen::rust) fn generate_block_expr(
@@ -771,7 +787,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_body = stmts.to_vec();
 
         let len = stmts.len();
-        for (i, stmt) in stmts.iter().enumerate() {
+        for (i, stmt) in stmts.iter().enumerate() { self.shadow_params_after_let(stmts, i);
             self.begin_block_statement(i);
 
             let is_last = i == len - 1;

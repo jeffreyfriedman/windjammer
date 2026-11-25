@@ -203,6 +203,26 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Parameters returned, returned through a field, or written through a field, each judged on the part of the
+    /// body where the name still denotes the parameter.
+    fn param_return_and_field_facts(&self, func: &FunctionDecl<'ast>) -> (HashSet<String>, HashSet<String>, HashSet<String>) {
+        let (mut returned, mut extract, mut field_mutated) = (HashSet::new(), HashSet::new(), HashSet::new());
+        for param in &func.parameters {
+            let live_body = Self::param_live_body(&param.name, &func.body);
+            let body = &*live_body;
+            if self.is_returned(&param.name, body) {
+                returned.insert(param.name.clone());
+            }
+            if self.is_field_extract_returned(&param.name, body) {
+                extract.insert(param.name.clone());
+            }
+            if self.is_field_mutated(&param.name, body) {
+                field_mutated.insert(param.name.clone());
+            }
+        }
+        (returned, extract, field_mutated)
+    }
+
     /// A Copy type's method that produces a new value of the same type (`fn double(self) -> Point`) takes
     /// `self` by value: free for Copy, and the receiver mode its callers read.
     fn copy_value_method_returning_own_type(&self, func: &FunctionDecl<'ast>) -> bool {
@@ -273,6 +293,8 @@ impl<'ast> Analyzer<'ast> {
 
         // Analyze each parameter to infer ownership mode
         for (i, param) in func.parameters.iter().enumerate() {
+            let live_body = Self::param_live_body(&param.name, &func.body);
+            let body = &*live_body;
             let mode = match param.ownership {
                 OwnershipHint::Owned => {
                     // Windjammer writes `self` without & — in impl methods, infer receiver
@@ -281,29 +303,29 @@ impl<'ast> Analyzer<'ast> {
                         self.infer_impl_self_receiver_ownership(func, registry)
                     } else if func.parent_type.is_some()
                         && !self.is_copy_type(&param.type_)
-                        && self.is_field_access_only_param_usage(&param.name, &func.body)
-                        && !self.is_only_hashmap_lookup_key_param(&param.name, &func.body, func)
+                        && self.is_field_access_only_param_usage(&param.name, body)
+                        && !self.is_only_hashmap_lookup_key_param(&param.name, body, func)
                     {
                         // Read-only field chains (e.g. key.bytes.len()) → &Key at API and registry.
                         self.infer_parameter_ownership(
                             &param.name,
                             &param.type_,
-                            &func.body,
+                            body,
                             &func.return_type,
                             registry,
                             &func.name,
                             func,
                         )?
                     } else if func.parent_type.is_none()
-                        && self.is_field_access_only_param_usage(&param.name, &func.body)
-                        && !self.is_only_hashmap_lookup_key_param(&param.name, &func.body, func)
+                        && self.is_field_access_only_param_usage(&param.name, body)
+                        && !self.is_only_hashmap_lookup_key_param(&param.name, body, func)
                     {
                         // Free helpers (e.g. replay_to_lsn, keys_equal) with readonly field
                         // access emit borrowed formals; IR/analyzer stay aligned.
                         self.infer_parameter_ownership(
                             &param.name,
                             &param.type_,
-                            &func.body,
+                            body,
                             &func.return_type,
                             registry,
                             &func.name,
@@ -316,7 +338,7 @@ impl<'ast> Analyzer<'ast> {
                         self.infer_parameter_ownership(
                             &param.name,
                             &param.type_,
-                            &func.body,
+                            body,
                             &func.return_type,
                             registry,
                             &func.name,
@@ -380,7 +402,7 @@ impl<'ast> Analyzer<'ast> {
                                 OwnershipMode::Owned
                             } else if modifies_fields {
                                 OwnershipMode::MutBorrowed
-                            } else if self.is_used_in_binary_op("self", &func.body) {
+                            } else if self.is_used_in_binary_op("self", body) {
                                 OwnershipMode::Owned
                             } else {
                                 OwnershipMode::Borrowed
@@ -397,7 +419,7 @@ impl<'ast> Analyzer<'ast> {
                         } else if is_copy {
                             let mutated = self.is_mutated(
                                 &param.name,
-                                &func.body,
+                                body,
                                 registry,
                                 Some(&param.type_),
                             );
@@ -405,7 +427,7 @@ impl<'ast> Analyzer<'ast> {
                                 self.infer_passthrough_ownership(
                                     &param.name,
                                     &param.type_,
-                                    &func.body,
+                                    body,
                                     registry,
                                     &func.name,
                                     func,
@@ -419,14 +441,14 @@ impl<'ast> Analyzer<'ast> {
                                 );
                             }
                             if (mutated || passthrough_mut)
-                                && !self.is_returned(&param.name, &func.body)
+                                && !self.is_returned(&param.name, body)
                             {
                                 OwnershipMode::MutBorrowed
                             } else {
                                 self.infer_parameter_ownership(
                                     &param.name,
                                     &param.type_,
-                                    &func.body,
+                                    body,
                                     &func.return_type,
                                     registry,
                                     &func.name,
@@ -438,7 +460,7 @@ impl<'ast> Analyzer<'ast> {
                             let inferred_mode = self.infer_parameter_ownership(
                                 &param.name,
                                 &param.type_,
-                                &func.body,
+                                body,
                                 &func.return_type,
                                 registry,
                                 &func.name,
@@ -490,7 +512,9 @@ impl<'ast> Analyzer<'ast> {
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
             for param in &func.parameters {
-                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body) {
+                let live_body = Self::param_live_body(&param.name, &func.body);
+                let body = &*live_body;
+                if self.param_used_in_consuming_string_concat_expression(&param.name, body) {
                     str_ref_optimizable_params.remove(&param.name);
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                 }
@@ -505,20 +529,7 @@ impl<'ast> Analyzer<'ast> {
             }
             str_ref_optimizable_params
                 .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
-            let mut returned_parameters = HashSet::new();
-            let mut field_extract_parameters = HashSet::new();
-            let mut field_mutated_parameters = HashSet::new();
-            for param in &func.parameters {
-                if self.is_returned(&param.name, &func.body) {
-                    returned_parameters.insert(param.name.clone());
-                }
-                if self.is_field_extract_returned(&param.name, &func.body) {
-                    field_extract_parameters.insert(param.name.clone());
-                }
-                if self.is_field_mutated(&param.name, &func.body) {
-                    field_mutated_parameters.insert(param.name.clone());
-                }
-            }
+            let (returned_parameters, field_extract_parameters, field_mutated_parameters) = self.param_return_and_field_facts(func);
             (
                 Vec::new(),
                 Vec::new(),
@@ -550,30 +561,21 @@ impl<'ast> Analyzer<'ast> {
             let mutated_variables = self.mutated_variables.clone();
 
             let mut mutated_parameters = HashSet::new();
-            let mut returned_parameters = HashSet::new();
-            let mut field_extract_parameters = HashSet::new();
-            let mut field_mutated_parameters = HashSet::new();
             for param in &func.parameters {
-                if self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
+                if self.is_mutated(&param.name, &Self::param_live_body(&param.name, &func.body), registry, Some(&param.type_)) {
                     mutated_parameters.insert(param.name.clone());
                 }
-                if self.is_returned(&param.name, &func.body) {
-                    returned_parameters.insert(param.name.clone());
-                }
-                if self.is_field_extract_returned(&param.name, &func.body) {
-                    field_extract_parameters.insert(param.name.clone());
-                }
-                if self.is_field_mutated(&param.name, &func.body) {
-                    field_mutated_parameters.insert(param.name.clone());
-                }
             }
+            let (returned_parameters, field_extract_parameters, field_mutated_parameters) = self.param_return_and_field_facts(func);
             for param in &func.parameters {
+                let live_body = Self::param_live_body(&param.name, &func.body);
+                let body = &*live_body;
                 if mutated_parameters.contains(&param.name)
-                    && (self.is_stored(&param.name, &func.body, registry)
+                    && (self.is_stored(&param.name, body, registry)
                         || self.is_stored_requiring_owned(
                             &param.name,
                             &param.type_,
-                            &func.body,
+                            body,
                             registry,
                         ))
                 {
@@ -589,7 +591,9 @@ impl<'ast> Analyzer<'ast> {
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
             for param in &func.parameters {
-                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body) {
+                let live_body = Self::param_live_body(&param.name, &func.body);
+                let body = &*live_body;
+                if self.param_used_in_consuming_string_concat_expression(&param.name, body) {
                     str_ref_optimizable_params.remove(&param.name);
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                 }
@@ -638,6 +642,8 @@ impl<'ast> Analyzer<'ast> {
         // owned `String` at the API boundary with borrow at `.get()` call sites.
         if func.parent_type.is_none() {
             for param in &func.parameters {
+                let live_body = Self::param_live_body(&param.name, &func.body);
+                let body = &*live_body;
                 if Self::trait_param_is_owned_string(&param.type_) {
                     if param.pins_str_ref() {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
@@ -664,19 +670,19 @@ impl<'ast> Analyzer<'ast> {
                         || (func.is_pub
                             && self.param_used_in_consuming_string_concat_expression(
                                 &param.name,
-                                &func.body,
+                                body,
                             )))
                 {
-                    if self.string_param_consumed_owned(&param.name, &func.body, registry) {
+                    if self.string_param_consumed_owned(&param.name, body, registry) {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                         str_ref_optimizable_params.remove(&param.name);
                         continue;
                     }
-                    if self.param_needs_string_ref(&param.name, &func.body, registry) {
+                    if self.param_needs_string_ref(&param.name, body, registry) {
                         if func.is_pub
                             && self.param_used_in_consuming_string_concat_expression(
                                 &param.name,
-                                &func.body,
+                                body,
                             )
                         {
                             inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
@@ -691,7 +697,7 @@ impl<'ast> Analyzer<'ast> {
                     if func.parent_type.is_none()
                         && self.param_only_forwarded_to_asref_str_runtime_modules(
                             &param.name,
-                            &func.body,
+                            body,
                             func,
                         )
                     {
@@ -708,7 +714,7 @@ impl<'ast> Analyzer<'ast> {
                     if let Some(passthrough_mode) = self.infer_passthrough_ownership(
                         &param.name,
                         &param.type_,
-                        &func.body,
+                        body,
                         registry,
                         &func.name,
                         func,
@@ -746,19 +752,21 @@ impl<'ast> Analyzer<'ast> {
 
         // Signature-registry passthrough: readonly/mut-borrow callees win over stale Owned stubs.
         for param in &func.parameters {
+            let live_body = Self::param_live_body(&param.name, &func.body);
+            let body = &*live_body;
             if param.name == "self" {
                 continue;
             }
             if Self::trait_param_is_owned_string(&param.type_) {
-                if self.string_param_consumed_owned(&param.name, &func.body, registry) {
+                if self.string_param_consumed_owned(&param.name, body, registry) {
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                     str_ref_optimizable_params.remove(&param.name);
                     continue;
                 }
-                if self.param_needs_string_ref(&param.name, &func.body, registry) {
+                if self.param_needs_string_ref(&param.name, body, registry) {
                     if func.is_pub
                         && func.parent_type.is_none()
-                        && self.param_used_bare_in_string_concat_expression(&param.name, &func.body)
+                        && self.param_used_bare_in_string_concat_expression(&param.name, body)
                     {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                     } else if inferred_ownership.get(&param.name) != Some(&OwnershipMode::Owned) {
@@ -771,7 +779,7 @@ impl<'ast> Analyzer<'ast> {
                     self.infer_passthrough_ownership(
                         &param.name,
                         &param.type_,
-                        &func.body,
+                        body,
                         registry,
                         &func.name,
                         func,
@@ -783,7 +791,7 @@ impl<'ast> Analyzer<'ast> {
                     if func.parent_type.is_none()
                         && self.param_only_forwarded_to_asref_str_runtime_modules(
                             &param.name,
-                            &func.body,
+                            body,
                             func,
                         )
                     {
@@ -798,12 +806,12 @@ impl<'ast> Analyzer<'ast> {
             }
             if !self.is_copy_type(&param.type_)
                 && !returned_parameters.contains(&param.name)
-                && !self.is_stored_requiring_owned(&param.name, &param.type_, &func.body, registry)
+                && !self.is_stored_requiring_owned(&param.name, &param.type_, body, registry)
                 && matches!(
                     self.infer_passthrough_ownership(
                         &param.name,
                         &param.type_,
-                        &func.body,
+                        body,
                         registry,
                         &func.name,
                         func,
@@ -827,7 +835,7 @@ impl<'ast> Analyzer<'ast> {
                     Type::Reference(Box::new(Type::Custom("str".to_string())))
                 } else if is_string
                     && (param.pins_string_ref()
-                        || self.param_needs_string_ref(&param.name, &func.body, registry))
+                        || self.param_needs_string_ref(&param.name, &Self::param_live_body(&param.name, &func.body), registry))
                 {
                     Type::Reference(Box::new(Type::String))
                 } else {

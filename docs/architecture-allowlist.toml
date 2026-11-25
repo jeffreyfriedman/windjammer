@@ -182,7 +182,7 @@
 "src/stdlib_scanner.rs" = 2083
 
 [long_functions]
-"src/analyzer/function_analysis.rs::analyze_function" = 649
+"src/analyzer/function_analysis.rs::analyze_function" = 637
 "src/analyzer/function_analysis.rs::build_signature" = 496
 "src/analyzer/module_analysis.rs::analyze_program_pass" = 322
 "src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 512

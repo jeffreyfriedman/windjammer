@@ -24,6 +24,7 @@ mod module_analysis;
 mod mutation_detection;
 mod optimization_detectors;
 mod parameter_analysis;
+pub(crate) mod param_scope;
 mod passthrough_inference;
 mod primitive_float_signatures;
 mod primitive_int_signatures;

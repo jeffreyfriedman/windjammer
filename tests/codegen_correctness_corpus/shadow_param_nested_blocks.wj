@@ -1,0 +1,67 @@
+// A parameter shadowed inside a nested block (`if`, `for`, `match` arm, `while`, closure) is a different binding:
+// mutating the shadow neither makes the parameter `&mut` nor makes the caller's argument need `mut`.
+// expect: a 1
+// expect: b 1
+// expect: b 1
+// expect: c 1
+// expect: d 5 2
+// expect: e 5
+// expect: g 1
+// expect: g 1
+// expect: main 1
+fn a(xs: Vec<int>) {
+    if xs.len() > 0 {
+        let mut xs: Vec<int> = Vec::new()
+        xs.push(1)
+        println("a ${xs.len()}")
+    }
+}
+fn b(xs: Vec<int>) {
+    for i in 0..2 {
+        let mut xs: Vec<int> = Vec::new()
+        xs.push(i)
+        println("b ${xs.len()}")
+    }
+}
+fn c(xs: Vec<int>, o: Option<int>) {
+    match o {
+        Some(v) => {
+            let mut xs: Vec<int> = Vec::new()
+            xs.push(v)
+            println("c ${xs.len()}")
+        }
+        None => println("c none ${xs.len()}")
+    }
+}
+fn d(n: int) {
+    let f = |n: int| {
+        let mut n = n * 2
+        n += 1
+        n
+    }
+    println("d ${f(n)} ${n}")
+}
+fn e(n: int) {
+    let mut k = 0
+    while k < 1 {
+        let mut n = n * 2
+        n += 1
+        println("e ${n}")
+        k += 1
+    }
+}
+fn g(xs: Vec<int>) {
+    for xs in [[1], [2]] {
+        println("g ${xs.len()}")
+    }
+}
+fn main() {
+    let v = [1]
+    a(v)
+    b(v)
+    c(v, Some(1))
+    d(2)
+    e(2)
+    g(v)
+    println("main ${v.len()}")
+}
