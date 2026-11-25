@@ -1,0 +1,60 @@
+// oracle: check
+// `push` clears every read/store view of the run before it touches the vector's storage
+// (docs/design/interp-soundness/vecinline.md section 'What can invalidate a view', item 1; pushlen.md section 3: `rt::push` entry): the push may move the buffer, and a view
+// left standing would read the old one, which the allocator has already taken back. Each case reads element 0 of a
+// vector through a view, pushes onto it (storage moves while a neighbour vector pushes in step, so the buffers are
+// interleaved on the heap and growth cannot extend in place), and reads element 0 again in the same loop. A skipped
+// clear shows as a wrong sum (the freed block's first words are the allocator's own links).
+fn floats() -> float {
+    let mut a: Vec<float> = Vec::new()
+    let mut b: Vec<float> = Vec::new()
+    let mut j = 0
+    while j < 4 {
+        a.push(j * 2.0 + 1.0)
+        b.push(j * 2.0 + 2.0)
+        j += 1
+    }
+    let mut total = 0.0
+    let mut k = 0
+    while k < 5000 {
+        total += a[0]
+        a.push(0.5)
+        total += a[0]
+        b.push(0.25)
+        total += b[0]
+        k += 1
+    }
+    println("lens ${a.len()} ${b.len()}")
+    total
+}
+
+// the same through a function unit (a parameter-sized run), and the first element read once per push round
+fn floats2(rounds: int) -> float {
+    let mut a: Vec<float> = Vec::new()
+    let mut b: Vec<float> = Vec::new()
+    let mut j = 0
+    while j < 4 {
+        a.push(j * 4.0 + 3.0)
+        b.push(j * 4.0 + 5.0)
+        j += 1
+    }
+    let mut total = 0.0
+    let mut r = 0
+    while r < rounds {
+        let mut k = 0
+        while k < 700 {
+            total += a[0] + b[0]
+            a.push(1.5)
+            b.push(2.5)
+            total += a[0] + b[0]
+            k += 1
+        }
+        r += 1
+    }
+    total
+}
+
+fn main() {
+    println("floats ${floats()}")
+    println("sum ${floats2(7)}")
+}

@@ -38,7 +38,7 @@ pointer to the old buffer because all views were cleared before it.
   storage; the flag is a second belt: a store through a view must never skip `make_mut`.
 
 ### What can invalidate a view, and who clears it (unchanged set, now also covering reads)
-1. `push` clears all views before touching storage (storage may move).
+1. `push` clears all views before touching storage (storage may move). Pinned by `tests/engine_parity/jit_push_view_clear.wj`: two float vectors push in step so their buffers interleave and growth must move; element 0 is read through a view before and after each push. With the clear at `rt::push` entry skipped (release build) the sums come out wrong under every `WJ_JIT_LOOP_HOT` setting (the freed block's first words are allocator links); the older `jit_vec_view.wj` growth case did not notice because `realloc` grew its buffer in place. Row views (`clear_rows`, same entry) are not pinned by output: they are only built for hoisted loops, which exclude `push`.
 2. `run_stmt` (any closure-run statement: clone, pop, truncate, clear, reassign, a call that mutates through `&mut`, a
    rebinding of a reference) clears all views and the resolved cells.
 3. `index_set` that is not served in place (unpack, non-packing store) clears all views.
