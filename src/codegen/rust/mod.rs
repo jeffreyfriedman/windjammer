@@ -108,6 +108,7 @@ pub mod return_statement_generation;
 pub mod rust_coercion_rules;
 pub mod self_analysis;
 pub mod signature_promotion;
+pub mod formal_slot;
 pub mod simd_transform;
 pub mod list_literal_context;
 pub mod optional_chain_lowering;
