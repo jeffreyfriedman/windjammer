@@ -25,6 +25,7 @@ pub mod run_cache;
 pub mod shared_cache;
 mod std_calls;
 pub mod taint;
+mod loop_mutation;
 mod tasks;
 mod semantic;
 pub mod watch;

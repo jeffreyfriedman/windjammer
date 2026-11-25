@@ -438,5 +438,21 @@
       "Rename the identifier without a double underscore."
     ],
     "title": "WJSL identifier contains a double underscore"
+  },
+  "WJ0202": {
+    "causes": [
+      "`for n in names { names.push(n) }`"
+    ],
+    "code": "WJ0202",
+    "example": null,
+    "explanation": "A `for` loop over a collection changes that collection in its body (`push`, `pop`, `clear`, `remove`, `sort`, an assignment to `v` or `v[i]`, `&mut v`). `wj run` walks a snapshot and does not see the change; a compiled build keeps the collection borrowed for the whole loop and rustc rejects it.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Collect the changes in a second list (or the indexes to change) and apply them after the loop",
+      "Loop over `0..v.len()` and index `v` when the body has to change it",
+      "Write `for p in v.clone()` when the loop should see a snapshot"
+    ],
+    "title": "Loop changes the collection it iterates"
   }
 }

@@ -213,6 +213,26 @@ pub const OPERATORS: &[Operator] = &[
         name: "return-type-mismatch-call",
         apply: |r| ("slot2", format!("let bad: int = describe({})", r.int(1, 9))),
     },
+    Operator {
+        name: "for-in-push-while-iterating",
+        apply: |r| {
+            ("slot2", format!("let mut grow = [1, 2, 3]\n    for g in &grow {{\n        grow.push({})\n    }}", r.int(4, 9)))
+        },
+    },
+    Operator {
+        name: "for-in-by-value-clear",
+        apply: |_| ("slot2", s("let mut grow = [1, 2, 3]\n    for g in grow {\n        grow.clear()\n    }")),
+    },
+    Operator {
+        name: "for-in-element-assign",
+        apply: |r| {
+            ("slot2", format!("let mut grow = [1, 2, 3]\n    for g in &grow {{\n        grow[0] = {}\n    }}", r.int(4, 9)))
+        },
+    },
+    Operator {
+        name: "for-in-remove-while-iterating",
+        apply: |_| ("slot2", s("let mut grow = [1, 2, 3]\n    for g in &grow {\n        grow.remove(0)\n    }")),
+    },
 ];
 
 /// The base program for `seed`, with `op` applied (its edit marked `// MUTATED <name>`).

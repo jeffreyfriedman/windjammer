@@ -346,6 +346,21 @@ args = ["check", "{w}/m.wj"]
 output_has = ["0 error(s)"]
 
 [[case]]
+name = "check rejects a loop that changes the collection it iterates (WJ0202), with no automatic fix"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut names = [1, 2, 3]\n    for n in &names {\n        names.push(*n)\n    }\n    println(\"${names.len()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0202\"", "for i in 0..names.len()", "names.clone()"]
+
+[[case]]
+name = "check accepts a loop over a snapshot, an index range or another collection (WJ0202)"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let mut names = [1, 2, 3]\n    let mut more = [0]\n    for n in names.clone() {\n        names.push(n)\n    }\n    for i in 0..names.len() {\n        names[i] = names[i] + 1\n    }\n    for n in &names {\n        more.push(*n)\n    }\n    println(\"${names.len()} ${more.len()}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
 name = "check leaves out generated directories and says so"
 polarity = "positive"
 files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "proj/src/main.wj" = "fn main() {\n    println(\"ok\")\n}\n", "proj/gen/old.wj" = "fn main( {\n" }
