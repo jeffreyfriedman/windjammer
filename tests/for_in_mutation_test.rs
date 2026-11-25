@@ -81,10 +81,14 @@ fn negatives() -> Vec<(&'static str, String)> {
 
 #[test]
 fn loops_that_change_what_they_iterate_are_refused_with_wj0202() {
+    let mut bad = Vec::new();
     for (name, src) in positives() {
         let (ok, text) = check(&src);
-        assert!(!ok && text.contains("WJ0202"), "[{name}] expected WJ0202:\n{text}\n{src}");
+        if ok || !text.contains("WJ0202") {
+            bad.push(format!("[{name}] expected WJ0202:\n{text}\n{src}"));
+        }
     }
+    assert!(bad.is_empty(), "{} positive(s) not refused: {}", bad.len(), bad.join("\n---\n"));
 }
 
 #[test]
@@ -105,13 +109,16 @@ fn what_check_refuses_the_compiled_build_refuses_too() {
 #[test]
 fn negatives_are_accepted_by_check_and_by_rustc() {
     let rustc = Command::new("rustc").arg("--version").output().is_ok();
+    let mut bad = Vec::new();
     for (name, src) in negatives() {
         let (ok, text) = check(&src);
-        assert!(ok && !text.contains("WJ0202"), "[{name}] false positive:\n{text}\n{src}");
-        if rustc {
-            assert!(pipeline_accepts(&src), "[{name}] the pipeline rejects a negative program:\n{src}");
+        if !ok || text.contains("WJ0202") {
+            bad.push(format!("[{name}] false positive:\n{text}"));
+        } else if rustc && !pipeline_accepts(&src) {
+            bad.push(format!("[{name}] the pipeline rejects a negative program:\n{src}"));
         }
     }
+    assert!(bad.is_empty(), "{} negative(s) wrong: {}", bad.len(), bad.join("\n---\n"));
 }
 
 #[test]
@@ -123,4 +130,34 @@ fn the_interpreter_refuses_what_check_refuses() {
         let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
         assert!(!o.status.success() && text.contains("WJ0202"), "[{name}] wj run did not refuse:\n{text}");
     }
+}
+
+fn interpret(src: &str) -> Result<String, String> {
+    use windjammer::interpreter::Interpreter;
+    let src = src.to_string();
+    std::thread::Builder::new()
+        .stack_size(64 << 20)
+        .spawn(move || {
+            let tokens = windjammer::lexer::Lexer::new(&src).tokenize_with_locations();
+            let program = windjammer::parser::Parser::new_with_source(tokens, "t.wj".into(), src.clone()).parse().expect("parses");
+            let mut it = Interpreter::new_capturing();
+            match it.run_checked(&program) {
+                Ok(_) => Ok(it.get_output()),
+                Err(e) => Err(e.message),
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+/// The interpreter's own loader gate (a program that never went through `wj check`, e.g. embedded use).
+#[test]
+fn the_interpreter_loader_refuses_the_loop_without_a_prior_check() {
+    for (name, src) in positives().into_iter().take(2) {
+        let err = interpret(&src).expect_err(&format!("[{name}] the interpreter ran a loop that changes what it iterates"));
+        assert!(err.contains("WJ0202"), "[{name}] {err}");
+    }
+    let (name, src) = negatives().into_iter().nth(1).unwrap();
+    assert!(interpret(&src).is_ok(), "[{name}] the interpreter refused a snapshot loop");
 }
