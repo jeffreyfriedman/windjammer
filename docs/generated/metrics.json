@@ -22,8 +22,8 @@
     "lexer.keywords": 47,
     "lints.w_codes": 7,
     "spec.example_files": 299,
-    "stdlib.files": 43,
-    "tests.rust_files": 2109,
-    "tests.wj_programs": 2357
+    "stdlib.files": 42,
+    "tests.rust_files": 2112,
+    "tests.wj_programs": 2365
   }
 }

@@ -79,7 +79,7 @@
 "src/codegen/rust/item_generation.rs" = 16
 "src/codegen/rust/let_statement_generation.rs" = 6
 "src/codegen/rust/macro_and_string_generation.rs" = 13
-"src/codegen/rust/macro_conversion.rs" = 9
+"src/codegen/rust/macro_conversion.rs" = 7
 "src/codegen/rust/match_statement_generation.rs" = 1
 "src/codegen/rust/method_call_analyzer/mod.rs" = 1
 "src/codegen/rust/method_call_expression_generation/arguments.rs" = 4

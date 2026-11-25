@@ -30,7 +30,7 @@ fn test_add_rejects_title_over_max() {
     let long = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
     match store.add(long, 50) {
         Ok(_) => assert(false, "long title must fail"),
-        Err(msg) => assert_str_contains(msg, "at most"),
+        Err(msg) => assert_contains(msg, "at most"),
     }
 }
 

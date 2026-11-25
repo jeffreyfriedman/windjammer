@@ -24,6 +24,6 @@ fn test_join_upstream_root_path() {
 fn test_join_upstream_rejects_empty_base() {
     match join_upstream_url("", "/x") {
         Ok(_) => assert(false, "expected error"),
-        Err(e) => assert_str_contains(e, "upstream"),
+        Err(e) => assert_contains(e, "upstream"),
     }
 }

@@ -15,5 +15,5 @@ pub fn test_unit_x_scaled_by_literal_two() {
         y: 0.0,
         z: 0.0,
     }
-    assert_approx(scale_with_literal(v) as f64, 2.0, 0.001)
+    assert_approx_eq(scale_with_literal(v) as f64, 2.0, 0.001)
 }

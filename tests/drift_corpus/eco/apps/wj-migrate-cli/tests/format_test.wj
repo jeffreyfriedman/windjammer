@@ -11,6 +11,6 @@ fn test_format_apply_result_lists_versions() {
     versions.push(1)
     versions.push(2)
     let msg = format_apply_result(2, versions)
-    assert_str_contains(msg, "2")
-    assert_str_contains(msg, "1")
+    assert_contains(msg, "2")
+    assert_contains(msg, "1")
 }

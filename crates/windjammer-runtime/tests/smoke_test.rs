@@ -64,8 +64,8 @@ fn test_all_modules_exist_and_work() {
     // std::strings
     assert_eq!(strings::len("test"), 4);
 
-    // std::testing
-    testing::assert(true, "test");
+    // std::test
+    test::assert(true, "test");
 
     // std::time
     let _timestamp = time::instant_now(); // Instant, not i64
@@ -106,7 +106,7 @@ fn test_all_22_stdlib_modules_accounted_for() {
         "random",
         "regex",
         "strings",
-        "testing",
+        "test",
         "time",
         // Missing 2 - need to verify
     ];

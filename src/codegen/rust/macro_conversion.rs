@@ -23,8 +23,6 @@ impl<'ast> CodeGenerator<'ast> {
             "assert",
             "assert_eq",
             "assert_ne",
-            "assert_ok",
-            "assert_err",
             "panic",
             "vec",
             "format",
@@ -177,31 +175,19 @@ impl<'ast> CodeGenerator<'ast> {
         arguments: &[(Option<String>, &Expression<'ast>)],
     ) -> Option<String> {
         // Test runtime functions that need windjammer_runtime::test:: qualification
-        let test_functions = [
-            "assert_gt",
-            "assert_lt",
-            "assert_gte",
-            "assert_lte",
-            "assert_approx",
-            "assert_not_empty",
-            "assert_empty",
-            "assert_contains",
-            "assert_is_some",
-            "assert_is_none",
-        ];
-
-        if !test_functions.contains(&func_name) {
+        if !crate::stdlib_surface::test_asserts::is_runtime_function(func_name) {
             return None;
         }
 
+        // The string/collection assertions only look at their first argument: borrow it, so the caller keeps it.
+        let borrows_first = crate::stdlib_surface::test_asserts::borrows_first_argument(func_name);
         let args: Vec<String> = arguments
             .iter()
             .enumerate()
             .map(|(idx, (_label, arg))| {
                 let generated = self.generate_expression(arg);
-                // assert_is_some and assert_is_none expect &Option, so add & for first arg
-                if (func_name == "assert_is_some" || func_name == "assert_is_none") && idx == 0 {
-                    format!("&{}", generated)
+                if borrows_first && idx == 0 && !generated.starts_with('&') {
+                    format!("&{generated}")
                 } else {
                     generated
                 }

@@ -1,10 +1,10 @@
-//! Standard-library functions that older or engine-facing modules declare (`std/test`, `std/testing`,
+//! Standard-library functions that older or engine-facing modules declare (`std/test`,
 //! `std/encoding` JSON helpers, `std/async`, `std/compute`, `env::vars`) and the ones the interpreter refuses
 //! by name (`std/dialog`, `std/storage`, `std/net`, legacy `std/fs` and `std/process` entry points, `random::random`).
 //!
 //! A refusal is explicit and total: it stops the run with `unsupported`, which makes `wj run` take the compiled path
 //! (ADR-0022), and the message names the interpreter-side alternative. Assertion texts and results follow the runtime
-//! functions of the same name (`windjammer_runtime::{test, testing}`).
+//! functions of the same name (`windjammer_runtime::test`).
 
 use super::*;
 use crate::interpreter::error::{panic_ctl, unsupported};
@@ -37,7 +37,7 @@ fn eq_pair(it: &mut Interpreter, a: &[Value], name: &str) -> R<(Value, Value, St
 
 pub fn register(r: &mut Registry) {
     // ----- std::test (runtime `test.rs`) -----
-    for name in ["test::assert", "test::assert_msg"] {
+    for name in ["test::assert"] {
         r.func(name, |_, a| {
             let ok = matches!(arg(&a, 0, "assert")?, Value::Bool(true));
             assertion(ok, || {
@@ -54,18 +54,6 @@ pub fn register(r: &mut Registry) {
         let (l, rr, ls, rs) = eq_pair(it, &a, "assert_ne")?;
         assertion(!l.structural_eq(&rr), || Ok(format!("Assertion failed: {ls} == {rs}")))
     });
-    // ----- std::testing (runtime `testing.rs`) -----
-    r.func("testing::assert_eq", |it, a| {
-        let (l, rr, ls, rs) = eq_pair(it, &a, "assert_eq")?;
-        let msg = if a.len() > 2 { arg_str(&a, 2, "assert_eq")?.to_string() } else { String::new() };
-        assertion(l.structural_eq(&rr), || Ok(format!("Assertion failed: {msg}\n  left: {ls}\n right: {rs}")))
-    });
-    r.func("testing::assert_ne", |it, a| {
-        let (l, rr, ls, _) = eq_pair(it, &a, "assert_ne")?;
-        let msg = if a.len() > 2 { arg_str(&a, 2, "assert_ne")?.to_string() } else { String::new() };
-        assertion(!l.structural_eq(&rr), || Ok(format!("Assertion failed: {msg}\n  values should not be equal: {ls}")))
-    });
-
     // ----- std::encoding JSON helpers: the `std::json` functions under their encoding names -----
     alias!(r, "encoding::json_encode" => "json::to_string");
     alias!(r, "encoding::json_encode_pretty" => "json::to_string_pretty");

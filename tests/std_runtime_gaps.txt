@@ -111,16 +111,5 @@ time::duration_days
 time::duration_hours
 time::duration_minutes
 time::duration_seconds
-test::assert_msg
 test_simple::add
 test_simple::hello
-testing::assert_approx_eq
-testing::assert_err
-testing::assert_ge
-testing::assert_gt
-testing::assert_le
-testing::assert_lt
-testing::assert_none
-testing::assert_ok
-testing::assert_some
-testing::assert_with_message

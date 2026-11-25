@@ -93,9 +93,9 @@ fn test_rate_limit_headers() {
     let c3 = check_fixed_window(lim, c2.0, 5000)
     let c4 = check_fixed_window(lim, c3.0, 5000)
     let headers = rate_limit_headers(c4.1)
-    assert_str_contains(headers, "X-RateLimit-Limit: 10")
-    assert_str_contains(headers, "X-RateLimit-Remaining: 6")
-    assert_str_contains(headers, "X-RateLimit-Reset:")
+    assert_contains(headers, "X-RateLimit-Limit: 10")
+    assert_contains(headers, "X-RateLimit-Remaining: 6")
+    assert_contains(headers, "X-RateLimit-Reset:")
 }
 
 @test
@@ -104,8 +104,8 @@ fn test_rate_limit_headers_when_denied() {
     let c1 = check_fixed_window(lim, empty_bucket(), 1000)
     let denied = check_fixed_window(lim, c1.0, 1000)
     let headers = rate_limit_headers(denied.1)
-    assert_str_contains(headers, "X-RateLimit-Remaining: 0")
-    assert_str_contains(headers, "Retry-After:")
+    assert_contains(headers, "X-RateLimit-Remaining: 0")
+    assert_contains(headers, "Retry-After:")
 }
 
 @test
@@ -116,7 +116,7 @@ fn test_rate_limit_header_lines_allowed() {
     assert_eq(lines.len(), 3)
     assert_eq(lines[0], "X-RateLimit-Limit: 5")
     assert_eq(lines[1], "X-RateLimit-Remaining: 4")
-    assert_str_contains(lines[2], "X-RateLimit-Reset:")
+    assert_contains(lines[2], "X-RateLimit-Reset:")
 }
 
 @test
@@ -126,7 +126,7 @@ fn test_rate_limit_header_lines_denied_includes_retry() {
     let denied = check_fixed_window(lim, c1.0, 1000)
     let lines = rate_limit_header_lines(denied.1)
     assert_eq(lines.len(), 4)
-    assert_str_contains(lines[3], "Retry-After:")
+    assert_contains(lines[3], "Retry-After:")
 }
 
 @test

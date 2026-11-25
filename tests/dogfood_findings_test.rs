@@ -456,9 +456,9 @@ fn parse_match(body: string) -> Result<Payload, string> {
 
 @test
 fn result_assertions() {
-    assert_is_ok(parse_try("{\"name\":\"a\",\"count\":2}"))
-    assert_is_ok(parse_match("{\"name\":\"b\",\"count\":3}"))
-    assert_is_err(parse_try("nope"))
+    assert_ok(parse_try("{\"name\":\"a\",\"count\":2}"))
+    assert_ok(parse_match("{\"name\":\"b\",\"count\":3}"))
+    assert_err(parse_try("nope"))
     assert_eq(parse_match("{\"name\":\"b\",\"count\":3}").unwrap().count, 3)
 }
 
@@ -466,8 +466,8 @@ fn result_assertions() {
 fn string_and_option_assertions() {
     let msg = parse_try("nope").unwrap_err()
     assert_contains(msg, "expected")
-    assert_is_some(Some(1))
-    assert_is_none(None)
+    assert_some(Some(1))
+    assert_none(None)
 }
 "#;
 

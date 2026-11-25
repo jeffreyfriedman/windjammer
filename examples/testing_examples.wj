@@ -25,12 +25,12 @@ fn example_basic_assertions() {
     let health = 75;
     assert_gt(health, 50);           // Greater than
     assert_lt(health, 100);          // Less than
-    assert_gte(health, 75);          // Greater than or equal
-    assert_lte(health, 75);          // Less than or equal
+    assert_ge(health, 75);          // Greater than or equal
+    assert_le(health, 75);          // Less than or equal
     
     // Floating-point comparison
     let pi = 3.14159;
-    assert_approx(pi, 3.14159, 0.00001);  // Approximately equal
+    assert_approx_eq(pi, 3.14159, 0.00001);  // Approximately equal
     
     // Ranges
     let level = 5;
@@ -55,7 +55,7 @@ fn example_string_assertions() {
     let message = "Player has entered the dungeon";
     
     // String contains substring
-    assert_str_contains(message, "dungeon");
+    assert_contains(message, "dungeon");
     
     // String starts/ends with
     assert_starts_with(message, "Player");
@@ -68,15 +68,15 @@ fn example_option_result_assertions() {
     let found_item = Some("key");
     let missing_item: Option<string> = None;
     
-    assert_is_some(&found_item);
-    assert_is_none(&missing_item);
+    assert_some(found_item);
+    assert_none(missing_item);
     
     // Testing Result types
     let success: Result<int, string> = Ok(42);
     let failure: Result<int, string> = Err("failed");
     
-    assert_is_ok(&success);
-    assert_is_err(&failure);
+    assert_ok(success);
+    assert_err(failure);
 }
 
 // ============================================================================
@@ -110,7 +110,7 @@ fn example_deep_equality() {
     let state2 = GameState { level: 5, score: 1000 };
     
     // Deep structural comparison
-    assert_deep_eq(state1, state2);
+    assert_eq(state1, state2);
 }
 
 // ============================================================================
@@ -461,7 +461,7 @@ fn example_fixture_scope() {
 /// # Example
 /// ```
 /// let distance = calculate_distance(0.0, 0.0, 3.0, 4.0);
-/// assert_approx(distance, 5.0, 0.001);
+/// assert_approx_eq(distance, 5.0, 0.001);
 /// ```
 fn calculate_distance(x1: float, y1: float, x2: float, y2: float) -> float {
     let dx = x2 - x1;
@@ -738,7 +738,7 @@ fn example_player_health_property() {
         player.take_damage(damage);
         
         // Property: health is always >= 0
-        assert_gte(player.health, 0);
+        assert_ge(player.health, 0);
     }
 }
 
@@ -748,11 +748,11 @@ fn example_player_movement_with_fixture() {
     register_fixture("player", || Player::new());
     
     let mut player = use_fixture::<Player>("player").unwrap();
-    assert_approx(player.position_x, 0.0, 0.001);
+    assert_approx_eq(player.position_x, 0.0, 0.001);
     
     player.move_to(10.5, 20.3);
-    assert_approx(player.position_x, 10.5, 0.001);
-    assert_approx(player.position_y, 20.3, 0.001);
+    assert_approx_eq(player.position_x, 10.5, 0.001);
+    assert_approx_eq(player.position_y, 20.3, 0.001);
 }
 
 // Inventory tests

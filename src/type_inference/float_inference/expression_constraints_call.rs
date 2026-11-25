@@ -97,6 +97,28 @@ impl FloatInference {
             }
         }
 
+        // `std::test` comparisons take one `T` for every operand: a float literal beside an `f32` value is `f32`
+        // (`assert_approx_eq(position.x, 1.5, 0.001)`), exactly as for `assert_eq`.
+        if func_sig.is_none() {
+            if let Some(operands) = func_name.as_deref().and_then(crate::stdlib_surface::test_asserts::same_type_operands) {
+                if arguments.len() == operands {
+                    for (_label, arg) in arguments.iter() {
+                        self.collect_expression_constraints(arg, return_type);
+                    }
+                    let first_id = self.get_expr_id(arguments[0].1);
+                    for (_label, arg) in arguments.iter().skip(1) {
+                        let id = self.get_expr_id(arg);
+                        self.constraints.push(Constraint::MustMatch(
+                            first_id,
+                            id,
+                            "a std::test comparison takes operands of one type".to_string(),
+                        ));
+                    }
+                    return;
+                }
+            }
+        }
+
         if let Some((param_types, _)) = func_sig {
             let label = func_name.unwrap_or_else(|| "function".to_string());
             for (i, (_label, arg)) in arguments.iter().enumerate() {

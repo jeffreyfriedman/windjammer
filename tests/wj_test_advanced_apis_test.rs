@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! Advanced `std::testing` APIs under `wj test`: property + setup auto-imports.
+//! Advanced `std::test` APIs under `wj test`: property + setup auto-imports.
 
 use std::fs;
 use std::process::Command;

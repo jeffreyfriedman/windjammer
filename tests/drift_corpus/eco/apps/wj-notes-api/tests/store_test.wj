@@ -30,7 +30,7 @@ fn test_create_assigns_uuid_uid() {
     match store.create("first", "a", max_title(), max_body(), 0) {
         Ok(n) => {
             assert_eq(strings.len(n.uid), 36)
-            assert_str_contains(n.uid, "-")
+            assert_contains(n.uid, "-")
             assert_ne(n.uid, "")
         },
         Err(_) => assert(false, "create for uid"),
@@ -42,9 +42,9 @@ fn test_create_sets_rfc3339_created_at() {
     // 1_700_000_000 seconds → 2023-11-14T22:13:20Z
     match store.create("first", "a", max_title(), max_body(), 1_700_000_000_000) {
         Ok(n) => {
-            assert_str_contains(n.created_at, "T")
-            assert_str_contains(n.created_at, "Z")
-            assert_str_contains(n.created_at, "2023")
+            assert_contains(n.created_at, "T")
+            assert_contains(n.created_at, "Z")
+            assert_contains(n.created_at, "2023")
         },
         Err(_) => assert(false, "create for created_at"),
     }

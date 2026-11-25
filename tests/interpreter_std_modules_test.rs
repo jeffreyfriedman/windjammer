@@ -465,7 +465,7 @@ use std::yaml
 use std::compress
 use std::jwt
 use std::crypto
-use std::testing
+use std::test
 fn main() {
     println(yaml::parse("name: windjammer\nversion: 1\nlist:\n  - a\n  - b\n").unwrap_or("bad"))
     match yaml::parse("   ") { Ok(_) => println("ok"), Err(e) => println(e) }
@@ -480,7 +480,7 @@ fn main() {
     println(h.starts_with("$2b$12$"))
     println(crypto::verify_password("pw", h).unwrap_or(false))
     println(crypto::verify_password("nope", h).unwrap_or(true))
-    testing::assert_approx_eq(1.0, 1.0005, 0.001)
+    test::assert_approx_eq(1.0, 1.0005, 0.001)
 }
 "##,
     );

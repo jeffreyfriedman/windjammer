@@ -78,8 +78,8 @@ fn test_basic_assertions() {
     assert_ne!(x, y);
     windjammer_runtime::test::assert_gt(x, y);
     windjammer_runtime::test::assert_lt(y, x);
-    windjammer_runtime::test::assert_gte(x, 10);
-    windjammer_runtime::test::assert_lte(y, 5);
+    windjammer_runtime::test::assert_ge(x, 10);
+    windjammer_runtime::test::assert_le(y, 5);
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn test_advanced_assertions() {
     windjammer_runtime::test::assert_contains(&nums, &3);
     windjammer_runtime::test::assert_not_empty(&nums);
     windjammer_runtime::test::assert_empty(&empty);
-    assert_in_range(3, 1, 5);
+    windjammer_runtime::test::assert_in_range(3, 1, 5);
 }
 
 #[inline]
@@ -274,11 +274,11 @@ fn test_player_damage_case_3() {
 #[test]
 fn test_player_movement() {
     let mut player = Player::new();
-    windjammer_runtime::test::assert_approx(player.position_x, 0.0_f64, 0.001_f64);
-    windjammer_runtime::test::assert_approx(player.position_y, 0.0_f64, 0.001_f64);
+    windjammer_runtime::test::assert_approx_eq(player.position_x, 0.0_f64, 0.001_f64);
+    windjammer_runtime::test::assert_approx_eq(player.position_y, 0.0_f64, 0.001_f64);
     player.move_to(10.5_f64, 20.3_f64);
-    windjammer_runtime::test::assert_approx(player.position_x, 10.5_f64, 0.001_f64);
-    windjammer_runtime::test::assert_approx(player.position_y, 20.3_f64, 0.001_f64);
+    windjammer_runtime::test::assert_approx_eq(player.position_x, 10.5_f64, 0.001_f64);
+    windjammer_runtime::test::assert_approx_eq(player.position_y, 20.3_f64, 0.001_f64);
 }
 
 #[test]

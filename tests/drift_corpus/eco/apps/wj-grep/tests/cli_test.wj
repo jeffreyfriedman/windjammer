@@ -82,7 +82,7 @@ fn test_parse_replace_and_write() {
 fn test_missing_pattern_is_a_usage_error() {
     match parse_args(argv(["--ignore-case"])) {
         Ok(_) => assert(false, "expected usage error"),
-        Err(e) => assert_str_contains(e, "usage"),
+        Err(e) => assert_contains(e, "usage"),
     }
 }
 
@@ -90,6 +90,6 @@ fn test_missing_pattern_is_a_usage_error() {
 fn test_non_numeric_context_is_an_error() {
     match parse_args(argv(["--context=abc", "needle"])) {
         Ok(_) => assert(false, "expected error"),
-        Err(e) => assert_str_contains(e, "context"),
+        Err(e) => assert_contains(e, "context"),
     }
 }

@@ -152,15 +152,15 @@ fn test_validate_unique_versions_dup() {
 @test
 fn test_schema_table_sql() {
     let sql = schema_table_sql()
-    assert_str_contains(sql, "schema_migrations")
-    assert_str_contains(sql, "version")
+    assert_contains(sql, "schema_migrations")
+    assert_contains(sql, "version")
 }
 
 @test
 fn test_select_applied_sql() {
     let sql = select_applied_sql()
-    assert_str_contains(sql, "schema_migrations")
-    assert_str_contains(sql, "version")
+    assert_contains(sql, "schema_migrations")
+    assert_contains(sql, "version")
 }
 
 @test
@@ -168,10 +168,10 @@ fn test_record_applied_sql() {
     match parse_filename("001_create_users.sql") {
         Ok(m) => {
             let sql = record_applied_sql(m, "2026-08-23T00:00:00Z")
-            assert_str_contains(sql, "INSERT INTO schema_migrations")
-            assert_str_contains(sql, "1")
-            assert_str_contains(sql, "create_users")
-            assert_str_contains(sql, "2026-08-23T00:00:00Z")
+            assert_contains(sql, "INSERT INTO schema_migrations")
+            assert_contains(sql, "1")
+            assert_contains(sql, "create_users")
+            assert_contains(sql, "2026-08-23T00:00:00Z")
         },
         Err(_) => assert(false, "parse"),
     }

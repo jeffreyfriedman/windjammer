@@ -105,32 +105,32 @@ fn test_title_from_markdown_untitled_without_heading() {
 
 fn test_markdown_to_html_heading_and_paragraph() {
     let html = markdown_to_html("# Hello\n\nA paragraph.")
-    assert_str_contains(html, "<h1>Hello</h1>")
-    assert_str_contains(html, "<p>A paragraph.</p>")
+    assert_contains(html, "<h1>Hello</h1>")
+    assert_contains(html, "<p>A paragraph.</p>")
 }
 
 fn test_markdown_to_html_escapes_markup() {
     let html = markdown_to_html("<script>")
-    assert_str_contains(html, "&lt;script&gt;")
+    assert_contains(html, "&lt;script&gt;")
 }
 
 fn test_render_document_includes_title_and_body() {
     let page = render_document("Hello", "<p>Hi</p>")
-    assert_str_contains(page, "<title>Hello</title>")
-    assert_str_contains(page, "<p>Hi</p>")
+    assert_contains(page, "<title>Hello</title>")
+    assert_contains(page, "<p>Hi</p>")
 }
 
 fn test_render_document_escapes_title_quotes() {
     let page = render_document("Say \"hi\"", "<p>ok</p>")
-    assert_str_contains(page, "&quot;")
+    assert_contains(page, "&quot;")
 }
 
 fn test_generate_page_combines_filename_title_and_html() {
     let page = generate_page("docs/intro.md", "# Intro\n\nWelcome.")
     assert_eq(page.filename, "docs/intro.html")
     assert_eq(page.title, "Intro")
-    assert_str_contains(page.html, "<h1>Intro</h1>")
-    assert_str_contains(page.html, "<title>Intro</title>")
+    assert_contains(page.html, "<h1>Intro</h1>")
+    assert_contains(page.html, "<title>Intro</title>")
 }
 
 fn test_dirs_from_args_takes_src_and_out() {
@@ -184,9 +184,9 @@ fn test_render_sitemap_lists_page_locations() {
     entries.push(make_entry("posts/a.html", "A"))
     match render_sitemap("https://example.com", entries) {
         Ok(xml) => {
-            assert_str_contains(xml, "<urlset")
-            assert_str_contains(xml, "https://example.com/posts/a.html")
-            assert_str_contains(xml, "https://example.com/posts/b.html")
+            assert_contains(xml, "<urlset")
+            assert_contains(xml, "https://example.com/posts/a.html")
+            assert_contains(xml, "https://example.com/posts/b.html")
         },
         Err(_) => assert(false, "expected Ok"),
     }
@@ -196,7 +196,7 @@ fn test_render_sitemap_requires_base_url() {
     let entries = Vec::new()
     match render_sitemap("", entries) {
         Ok(_) => assert(false, "expected Err"),
-        Err(msg) => assert_str_contains(msg, "base url"),
+        Err(msg) => assert_contains(msg, "base url"),
     }
 }
 
@@ -205,10 +205,10 @@ fn test_render_rss_includes_titles_and_links() {
     entries.push(make_entry("hello.html", "Hello"))
     match render_rss("https://example.com/", "My Site", entries) {
         Ok(xml) => {
-            assert_str_contains(xml, "<rss")
-            assert_str_contains(xml, "<title>My Site</title>")
-            assert_str_contains(xml, "<title>Hello</title>")
-            assert_str_contains(xml, "https://example.com/hello.html")
+            assert_contains(xml, "<rss")
+            assert_contains(xml, "<title>My Site</title>")
+            assert_contains(xml, "<title>Hello</title>")
+            assert_contains(xml, "https://example.com/hello.html")
         },
         Err(_) => assert(false, "expected Ok"),
     }
@@ -218,7 +218,7 @@ fn test_render_rss_defaults_site_title() {
     let mut entries = Vec::new()
     entries.push(make_entry("index.html", "Home"))
     match render_rss("https://example.com", "", entries) {
-        Ok(xml) => assert_str_contains(xml, "<title>Site</title>"),
+        Ok(xml) => assert_contains(xml, "<title>Site</title>"),
         Err(_) => assert(false, "expected Ok"),
     }
 }
@@ -227,7 +227,7 @@ fn test_render_rss_escapes_markup_in_titles() {
     let mut entries = Vec::new()
     entries.push(make_entry("x.html", "A & B"))
     match render_rss("https://example.com", "Site", entries) {
-        Ok(xml) => assert_str_contains(xml, "A &amp; B"),
+        Ok(xml) => assert_contains(xml, "A &amp; B"),
         Err(_) => assert(false, "expected Ok"),
     }
 }
@@ -235,9 +235,9 @@ fn test_render_rss_escapes_markup_in_titles() {
 fn test_render_robots_includes_sitemap_url() {
     match render_robots("https://example.com") {
         Ok(text) => {
-            assert_str_contains(text, "User-agent: *")
-            assert_str_contains(text, "Allow: /")
-            assert_str_contains(text, "Sitemap: https://example.com/sitemap.xml")
+            assert_contains(text, "User-agent: *")
+            assert_contains(text, "Allow: /")
+            assert_contains(text, "Sitemap: https://example.com/sitemap.xml")
         },
         Err(_) => assert(false, "expected Ok"),
     }
@@ -246,6 +246,6 @@ fn test_render_robots_includes_sitemap_url() {
 fn test_render_robots_requires_base_url() {
     match render_robots("") {
         Ok(_) => assert(false, "expected Err"),
-        Err(msg) => assert_str_contains(msg, "base url"),
+        Err(msg) => assert_contains(msg, "base url"),
     }
 }

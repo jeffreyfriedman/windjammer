@@ -4,5 +4,5 @@ fn greet(name: string) -> string {
 }
 
 pub fn test_greeting_contains_name() {
-    assert_str_contains(greet("Ada"), "Ada")
+    assert_contains(greet("Ada"), "Ada")
 }

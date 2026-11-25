@@ -760,6 +760,17 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         if let Some(sp) = &span {
             d = d.at(sp.clone().with_label("unknown method"));
         }
+        // `(0..n).reversed()`: the iterator method is `rev` (shared table with `wj fix`)
+        let range_rename = crate::stdlib_surface::removed_names::REMOVED_RANGE_METHODS.iter().find(|(old, _)| *old == method);
+        if let (Some((_, rev)), Some(sp), Expression::Range { .. }) = (range_rename, &span, object) {
+            d = d.with_help(format!("`{method}` does not exist: a range is iterated in reverse with `{rev}`"));
+            let mut fix = replace_fix(sp, rev, format!("call `{rev}` instead"));
+            fix.applicability = Applicability::MachineApplicable;
+            d = d.with_fix(fix);
+            d.maturity = Some("heuristic".to_string());
+            self.cx.out.push(d);
+            return;
+        }
         let pool: Vec<String> = super::std_methods::KNOWN_METHODS.iter().map(|m| m.to_string()).collect();
         match (closest(method, pool.iter()), span) {
             (Some(best), Some(sp)) => {

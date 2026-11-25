@@ -9,5 +9,5 @@ pub fn compute_total() -> f32 {
 }
 
 pub fn test_add_literal_after_const_f32_function() {
-    assert_approx(compute_total() as f64, 45.14, 0.02)
+    assert_approx_eq(compute_total() as f64, 45.14, 0.02)
 }

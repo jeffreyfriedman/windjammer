@@ -636,36 +636,30 @@ fn test_strings_trim() {
 }
 
 // ============================================================================
-// std::testing - Test Utilities
+// std::test - Test Utilities
 // ============================================================================
 
 #[test]
-fn test_testing_assert() {
-    testing::assert(true, "Should not panic");
+fn test_test_assert() {
+    test::assert(true, "Should not panic");
 }
 
 #[test]
 #[should_panic]
-fn test_testing_assert_fail() {
-    testing::assert(false, "Should panic");
+fn test_test_assert_fail() {
+    test::assert(false, "Should panic");
 }
 
 #[test]
-fn test_testing_assert_eq() {
-    testing::assert_eq(5, 5, "Should be equal");
+fn test_test_assert_eq() {
+    test::assert_eq(5, 5);
 }
 
 #[test]
-fn test_testing_should_panic() {
-    let panics = testing::should_panic(|| {
+fn test_test_assert_panics() {
+    test::assert_panics(|| {
         panic!("test");
     });
-    assert!(panics);
-
-    let no_panic = testing::should_panic(|| {
-        // do nothing
-    });
-    assert!(!no_panic);
 }
 
 // ============================================================================

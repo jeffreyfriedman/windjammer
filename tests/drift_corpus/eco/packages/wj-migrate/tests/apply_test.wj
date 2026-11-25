@@ -89,7 +89,7 @@ fn test_apply_url_rejects_empty_dir() {
     }
     match apply_url(":memory:", root) {
         Ok(_) => assert(false, "expected error for empty dir"),
-        Err(e) => assert_str_contains(e, "migration"),
+        Err(e) => assert_contains(e, "migration"),
     }
     teardown_dir(root)
 }

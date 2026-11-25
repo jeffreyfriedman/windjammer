@@ -42,7 +42,7 @@ fn test_status_is_client_and_server_error() {
 fn test_require_ok_returns_body_on_success() {
     let result = from_parts(200, "{\"ok\":true}")
     match require_ok(result) {
-        Ok(body) => assert_str_contains(body, "ok"),
+        Ok(body) => assert_contains(body, "ok"),
         Err(_) => assert(false, "expected Ok"),
     }
 }
@@ -52,16 +52,16 @@ fn test_require_ok_errors_on_4xx() {
     match require_ok(result) {
         Ok(_) => assert(false, "expected Err"),
         Err(msg) => {
-            assert_str_contains(msg, "404")
-            assert_str_contains(msg, "missing")
+            assert_contains(msg, "404")
+            assert_contains(msg, "missing")
         },
     }
 }
 
 fn test_error_message_includes_status_and_body() {
     let msg = error_message(500, "boom")
-    assert_str_contains(msg, "500")
-    assert_str_contains(msg, "boom")
+    assert_contains(msg, "500")
+    assert_contains(msg, "boom")
 }
 
 fn test_from_parts_builds_result() {

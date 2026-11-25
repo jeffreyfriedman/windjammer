@@ -2,7 +2,7 @@
 
 **Audience:** language / tooling owners  
 **Date:** 2026-08-10  
-**Context:** Dogfood libraries often still run **Rust** `cargo test` against WJ-generated `build/lib.rs` even though Windjammer advertises a full test suite (`wj test`, `std::testing` / `std::test`, `@test`).
+**Context:** Dogfood libraries often still run **Rust** `cargo test` against WJ-generated `build/lib.rs` even though Windjammer advertises a full test suite (`wj test`, `std::test`, `@test`).
 
 This document lists the **concrete gaps** that block migrating those tests to Windjammer today. It is language-only (no product names required to act on the items).
 
@@ -37,11 +37,11 @@ Windjammer **does** have a real test stack for the happy path:
 |-------|--------|
 | `wj test` CLI | Discovers `*_test.wj` / files under `tests/` |
 | `@test` decorator **or** `test_*` fn names | Both recognized in discovery |
-| `std::testing` / `std::test` asserts | `assert`, `assert_eq`, `assert_contains`, Option/Result helpers |
+| `std::test` asserts | `assert`, `assert_eq`, `assert_contains`, Option/Result helpers |
 | Library under test | Harness can compile the package lib into a temp crate and link tests |
 | Path deps (incl. special-case `windjammer-ui`) | Partially supported in `test_execution` |
 
-Examples: `examples/testing_examples.wj`, `examples/syntax_tests/32_testing/`, `std/testing.wj`, `std/test/mod.wj`.
+Examples: `examples/testing_examples.wj`, `examples/syntax_tests/32_testing/`, `std/test/mod.wj`.
 
 So the gap is not “no testing language” — it is **dogfood / library-project fidelity**.
 
@@ -83,9 +83,9 @@ Packages frequently keep:
 
 ### 3. Discovery UX vs docs / examples mismatch
 
-CLI help text still says “functions starting with `test_`”, while discovery also accepts `@test`. Examples mix `std::testing`, `std::test`, and rich APIs (`mock`, `bench`, `property`) that may not all be wired for library tests.
+CLI help text still says “functions starting with `test_`”, while discovery also accepts `@test`. Examples use `std::test` and rich APIs (`mock`, `bench`, `property`) that may not all be wired for library tests.
 
-**Need:** one documented happy path (`tests/<name>_test.wj` + `@test` + `std::testing`) that `wj test` guarantees for libraries.
+**Need:** one documented happy path (`tests/<name>_test.wj` + `@test` + `std::test`) that `wj test` guarantees for libraries.
 
 ### 4. Harness fragility (runtime / sandbox copy)
 
@@ -132,7 +132,7 @@ Discovery finds `tests/<name>_test.wj` and generates `pub mod foo_test;` in the 
 A dogfood library package can:
 
 1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`. — **partially met** (related ownership / leakage gates green)  
-2. Add `tests/<name>_test.wj` using `@test` + `std::testing` / `std::test` asserts. — **blocked** on §7 E0583 until tip greens the transpile gate  
+2. Add `tests/<name>_test.wj` using `@test` + `std::test` asserts. — **blocked** on §7 E0583 until tip greens the transpile gate  
 3. Run `wj test` with the **same** compile flags as `wj build` for that package. — **met on tip** (`--module-file --library`, `--use-project-cargo`, `--use-build-dir` + i32 lit + SKIP_WJ_REGEN default)  
 4. Path-depend on UI crates without manual Cargo.toml surgery. — **met for harness** (SKIP_WJ_REGEN default green); still prefer deliberate UI regen  
 

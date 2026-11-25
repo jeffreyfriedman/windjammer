@@ -159,10 +159,10 @@ fn test_session_cookie_defaults() {
     assert(c.secure, "Secure")
     assert_eq(c.same_site, "Lax")
     let header = format_set_cookie(c)
-    assert_str_contains(header, "Path=/")
-    assert_str_contains(header, "HttpOnly")
-    assert_str_contains(header, "Secure")
-    assert_str_contains(header, "SameSite=Lax")
+    assert_contains(header, "Path=/")
+    assert_contains(header, "HttpOnly")
+    assert_contains(header, "Secure")
+    assert_contains(header, "SameSite=Lax")
 }
 
 @test
@@ -215,9 +215,9 @@ fn test_get_cookie_or_and_is_empty() {
 @test
 fn test_delete_cookie_header() {
     let header = delete_cookie_header("sid")
-    assert_str_contains(header, "sid=")
-    assert_str_contains(header, "Max-Age=0")
-    assert_str_contains(header, "Path=/")
+    assert_contains(header, "sid=")
+    assert_contains(header, "Max-Age=0")
+    assert_contains(header, "Path=/")
 }
 
 @test

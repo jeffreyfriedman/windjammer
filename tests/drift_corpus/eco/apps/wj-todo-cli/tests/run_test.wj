@@ -13,8 +13,8 @@ fn test_run_add_message() {
     args.push("milk")
     match run_args(store, args, config) {
         Ok(r) => {
-            assert_str_contains(r.1, "milk")
-            assert_str_contains(r.1, "1")
+            assert_contains(r.1, "milk")
+            assert_contains(r.1, "1")
         },
         Err(_) => assert(false, "add failed"),
     }
@@ -33,7 +33,7 @@ fn test_run_add_then_list() {
             list_args.push("list")
             match run_args(r1.0, list_args, config) {
                 Ok(r2) => {
-                    assert_str_contains(r2.1, "milk")
+                    assert_contains(r2.1, "milk")
                 },
                 Err(_) => assert(false, "list failed"),
             }
@@ -55,9 +55,9 @@ fn test_run_list_json() {
             list_args.push("--json")
             match run_args(r1.0, list_args, config) {
                 Ok(r2) => {
-                    assert_str_contains(r2.1, "json-task")
-                    assert_str_contains(r2.1, "[")
-                    assert_str_contains(r2.1, "id")
+                    assert_contains(r2.1, "json-task")
+                    assert_contains(r2.1, "[")
+                    assert_contains(r2.1, "id")
                 },
                 Err(_) => assert(false, "list json failed"),
             }
@@ -89,7 +89,7 @@ fn test_run_list_pending_hides_done() {
                             list_args.push("--pending")
                             match run_args(r3.0, list_args, config) {
                                 Ok(r4) => {
-                                    assert_str_contains(r4.1, "open-task")
+                                    assert_contains(r4.1, "open-task")
                                     assert(!str_contains(r4.1, "done-task"), "done task hidden")
                                 },
                                 Err(_) => assert(false, "list pending failed"),
@@ -133,11 +133,11 @@ fn test_run_clear_all() {
             clear_args.push("clear")
             match run_args(r1.0, clear_args, config) {
                 Ok(r2) => {
-                    assert_str_contains(r2.1, "cleared")
+                    assert_contains(r2.1, "cleared")
                     let mut list_args = Vec::new()
                     list_args.push("list")
                     match run_args(r2.0, list_args, config) {
-                        Ok(r3) => assert_str_contains(r3.1, "no todos"),
+                        Ok(r3) => assert_contains(r3.1, "no todos"),
                         Err(_) => assert(false, "list after clear"),
                     }
                 },
@@ -171,12 +171,12 @@ fn test_run_clear_done() {
                             clear_args.push("--done")
                             match run_args(r3.0, clear_args, config) {
                                 Ok(r4) => {
-                                    assert_str_contains(r4.1, "removed 1")
+                                    assert_contains(r4.1, "removed 1")
                                     let mut list_args = Vec::new()
                                     list_args.push("list")
                                     match run_args(r4.0, list_args, config) {
                                         Ok(r5) => {
-                                            assert_str_contains(r5.1, "keep")
+                                            assert_contains(r5.1, "keep")
                                             assert(!str_contains(r5.1, "drop"), "done item cleared")
                                         },
                                         Err(_) => assert(false, "list after clear --done"),
@@ -212,14 +212,14 @@ fn test_run_export_keeps_store() {
                     export_args.push("export")
                     match run_args(r2.0, export_args, config) {
                         Ok(r3) => {
-                            assert_str_contains(r3.1, "stay")
-                            assert_str_contains(r3.1, "also")
+                            assert_contains(r3.1, "stay")
+                            assert_contains(r3.1, "also")
                             let mut list_args = Vec::new()
                             list_args.push("list")
                             match run_args(r3.0, list_args, config) {
                                 Ok(r4) => {
-                                    assert_str_contains(r4.1, "stay")
-                                    assert_str_contains(r4.1, "also")
+                                    assert_contains(r4.1, "stay")
+                                    assert_contains(r4.1, "also")
                                 },
                                 Err(_) => assert(false, "list after export"),
                             }
@@ -252,12 +252,12 @@ fn test_run_import_replace() {
             import_args.push("wj_todo_import_fixture.json")
             match run_args(r1.0, import_args, config) {
                 Ok(r2) => {
-                    assert_str_contains(r2.1, "imported")
+                    assert_contains(r2.1, "imported")
                     let mut list_args = Vec::new()
                     list_args.push("list")
                     match run_args(r2.0, list_args, config) {
                         Ok(r3) => {
-                            assert_str_contains(r3.1, "remote")
+                            assert_contains(r3.1, "remote")
                             assert(!str_contains(r3.1, "local"), "replace removes old todos")
                         },
                         Err(_) => assert(false, "list after import"),
@@ -289,14 +289,14 @@ fn test_run_import_merge() {
             import_args.push("wj_todo_import_merge_fixture.json")
             match run_args(r1.0, import_args, config) {
                 Ok(r2) => {
-                    assert_str_contains(r2.1, "imported")
-                    assert_str_contains(r2.1, "merge")
+                    assert_contains(r2.1, "imported")
+                    assert_contains(r2.1, "merge")
                     let mut list_args = Vec::new()
                     list_args.push("list")
                     match run_args(r2.0, list_args, config) {
                         Ok(r3) => {
-                            assert_str_contains(r3.1, "keep")
-                            assert_str_contains(r3.1, "merged")
+                            assert_contains(r3.1, "keep")
+                            assert_contains(r3.1, "merged")
                         },
                         Err(_) => assert(false, "list after import --merge"),
                     }
@@ -330,9 +330,9 @@ fn test_run_stats() {
                             stats_args.push("stats")
                             match run_args(r3.0, stats_args, config) {
                                 Ok(r4) => {
-                                    assert_str_contains(r4.1, "2 total")
-                                    assert_str_contains(r4.1, "1 pending")
-                                    assert_str_contains(r4.1, "1 done")
+                                    assert_contains(r4.1, "2 total")
+                                    assert_contains(r4.1, "1 pending")
+                                    assert_contains(r4.1, "1 done")
                                 },
                                 Err(_) => assert(false, "stats failed"),
                             }
@@ -360,9 +360,9 @@ fn test_run_stats_json() {
             stats_args.push("--json")
             match run_args(r1.0, stats_args, config) {
                 Ok(r2) => {
-                    assert_str_contains(r2.1, "\"total\"")
-                    assert_str_contains(r2.1, "\"pending\"")
-                    assert_str_contains(r2.1, "\"done\"")
+                    assert_contains(r2.1, "\"total\"")
+                    assert_contains(r2.1, "\"pending\"")
+                    assert_contains(r2.1, "\"done\"")
                 },
                 Err(_) => assert(false, "stats --json failed"),
             }
@@ -385,12 +385,12 @@ fn test_run_edit_message() {
             edit_args.push("new name")
             match run_args(r1.0, edit_args, config) {
                 Ok(r2) => {
-                    assert_str_contains(r2.1, "edited")
-                    assert_str_contains(r2.1, "new name")
+                    assert_contains(r2.1, "edited")
+                    assert_contains(r2.1, "new name")
                     let mut list_args = Vec::new()
                     list_args.push("list")
                     match run_args(r2.0, list_args, config) {
-                        Ok(r3) => assert_str_contains(r3.1, "new name"),
+                        Ok(r3) => assert_contains(r3.1, "new name"),
                         Err(_) => assert(false, "list after edit failed"),
                     }
                 },

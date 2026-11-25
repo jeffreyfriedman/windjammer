@@ -7,7 +7,7 @@
 use super::front::Parsed;
 use super::locate::Locator;
 use super::semantic::{walk_block, walk_expr, Visitor};
-use crate::diagnostics::{Diagnostic, SourceIndex};
+use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, SourceIndex, Span};
 use crate::parser::ast::core::{Expression, FunctionDecl, Item, Pattern};
 use crate::source_map::Location;
 use crate::stdlib_surface::std_functions;
@@ -90,6 +90,19 @@ impl Calls<'_, '_> {
             .map(|f| (crate::fuzzy_matcher::levenshtein_distance(func, f), *f))
             .filter(|(dist, _)| *dist <= (func.len() / 3).clamp(1, 3))
             .min();
+        if module == "test" {
+            if let Some(new) = crate::stdlib_surface::removed_names::replacement(func) {
+                if let Some(sp) = self.loc.word(&loc, func).or_else(|| self.loc.first_use(func)) {
+                    d = d.with_fix(Fix {
+                        description: format!("rename to `{new}`"),
+                        applicability: Applicability::MachineApplicable,
+                        edits: vec![Edit { span: Span { label: None, ..sp }, replacement: new.to_string() }],
+                    });
+                }
+                self.out.push(d.with_help(format!("`{func}` was removed from `std::test`: use `{module}::{new}`")));
+                return;
+            }
+        }
         self.out.push(match best {
             Some((_, f)) => d.with_help(format!("a function with a similar name exists: `{module}::{f}`")),
             None => d.with_help(format!("`wj docs {module}` lists the functions of std::{module}")),

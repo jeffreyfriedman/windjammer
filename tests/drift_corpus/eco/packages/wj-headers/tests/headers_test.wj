@@ -23,21 +23,21 @@ use std::strings
 fn test_defaults_include_nosniff() {
     let h = defaults()
     let text = format_headers(h)
-    assert_str_contains(text, "X-Content-Type-Options: nosniff")
+    assert_contains(text, "X-Content-Type-Options: nosniff")
 }
 
 @test
 fn test_defaults_include_frame_deny() {
     let h = defaults()
     let text = format_headers(h)
-    assert_str_contains(text, "X-Frame-Options: DENY")
+    assert_contains(text, "X-Frame-Options: DENY")
 }
 
 @test
 fn test_defaults_include_referrer() {
     let h = defaults()
     let text = format_headers(h)
-    assert_str_contains(text, "Referrer-Policy: no-referrer")
+    assert_contains(text, "Referrer-Policy: no-referrer")
 }
 
 @test
@@ -60,7 +60,7 @@ fn test_custom_csp_in_defaults() {
     let mut h = defaults()
     h.content_security_policy = "default-src 'self'"
     let text = format_headers(h)
-    assert_str_contains(text, "Content-Security-Policy: default-src 'self'")
+    assert_contains(text, "Content-Security-Policy: default-src 'self'")
 }
 
 @test
@@ -79,8 +79,8 @@ fn test_referrer_policy_helper() {
 fn test_defaults_with_hsts_enables_header() {
     let h = defaults_with_hsts(31536000)
     let text = format_headers(h)
-    assert_str_contains(text, "Strict-Transport-Security: max-age=31536000")
-    assert_str_contains(text, "X-Content-Type-Options: nosniff")
+    assert_contains(text, "Strict-Transport-Security: max-age=31536000")
+    assert_contains(text, "X-Content-Type-Options: nosniff")
 }
 
 @test
@@ -120,7 +120,7 @@ fn test_has_csp_and_with_csp() {
     let cleared = with_csp(h, "")
     let custom = with_csp(defaults(), "default-src 'self'")
     let text = format_headers(custom)
-    assert_str_contains(text, "Content-Security-Policy: default-src 'self'")
+    assert_contains(text, "Content-Security-Policy: default-src 'self'")
 }
 
 @test
@@ -130,14 +130,14 @@ fn test_without_csp_and_frame_helpers() {
     assert_eq(header_line_count(no_csp), 3)
     let same = with_frame_options(defaults(), "SAMEORIGIN")
     let text = format_headers(same)
-    assert_str_contains(text, "X-Frame-Options: SAMEORIGIN")
+    assert_contains(text, "X-Frame-Options: SAMEORIGIN")
 }
 
 @test
 fn test_with_referrer_and_with_hsts() {
     let refp = with_referrer(defaults(), "strict-origin")
     let text = format_headers(refp)
-    assert_str_contains(text, "Referrer-Policy: strict-origin")
+    assert_contains(text, "Referrer-Policy: strict-origin")
     let secured = with_hsts(defaults(), 120)
     assert(hsts_enabled(secured), "hsts on")
     assert_eq(header_line_count(secured), 5)

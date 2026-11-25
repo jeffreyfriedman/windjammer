@@ -23,7 +23,7 @@ fn test_usernames_are_unique() {
     let mut store = seeded()
     match store.add_user("ann", "other@example.com", "h") {
         Ok(_) => assert(false, "duplicate username accepted"),
-        Err(e) => assert_str_contains(e, "username"),
+        Err(e) => assert_contains(e, "username"),
     }
 }
 
@@ -32,7 +32,7 @@ fn test_emails_are_unique_case_insensitively() {
     let mut store = seeded()
     match store.add_user("carl", "ANN@example.com", "h") {
         Ok(_) => assert(false, "duplicate email accepted"),
-        Err(e) => assert_str_contains(e, "email"),
+        Err(e) => assert_contains(e, "email"),
     }
 }
 
