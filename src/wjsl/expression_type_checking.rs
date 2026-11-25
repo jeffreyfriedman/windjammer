@@ -589,7 +589,13 @@ impl<'a> BodyParser<'a> {
             "reflect" | "refract" | "faceForward" => first_arg,
             "transpose" => first_arg,
             "determinant" => Type::Scalar(ScalarType::F32),
-            "textureSample" | "textureLoad" => Type::Vec4(Some(ScalarType::F32)),
+            "textureSample" | "textureLoad" | "textureSampleLevel" | "textureSampleBias"
+            | "textureSampleGrad" | "textureSampleBaseClampToEdge" | "textureGather" => {
+                Type::Vec4(Some(ScalarType::F32))
+            }
+            "textureSampleCompare" | "textureSampleCompareLevel" | "textureGatherCompare" => {
+                Type::Scalar(ScalarType::F32)
+            }
             _ => {
                 let mut matched = false;
                 let mut user_fn_type = first_arg.clone();
