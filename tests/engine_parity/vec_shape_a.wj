@@ -1,0 +1,22 @@
+// Shape A: an annotated EMPTY vec, literal pushes and literal-derived locals, passed to a `Vec<float>` formal many times.
+fn bake(heights: Vec<float>, i: int) -> float {
+    heights[i as usize] * 2.0
+}
+
+fn main() {
+    let mut depths: Vec<float> = []
+    let h = 100.0 * 2.0
+    let mut k = 0
+    while k < 50000 {
+        depths.push(10000.0)
+        depths.push(h)
+        k += 1
+    }
+    let mut s = 0.0
+    let mut c = 0
+    while c < 20 {
+        s += bake(depths, c * 3)
+        c += 1
+    }
+    println("${s} ${depths.len()} ${depths[1]}")
+}

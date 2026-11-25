@@ -1,0 +1,35 @@
+// An untyped literal pushed into a vector whose elements are typed takes the element type and the vector stays packed
+// (docs/design/interp-soundness/vecretag.md, "stores into a typed vector").
+fn first(v: Vec<float>) -> float {
+    v[0] + v[v.len() - 1]
+}
+
+fn firsti(v: Vec<i32>) -> i32 {
+    v[0] + v[v.len() - 1]
+}
+
+fn main() {
+    let x = 3
+    let mut f: Vec<float> = []
+    f.push(x as float)
+    f.push(1.5)
+    f.push(2.25 * 2.0)
+    println("${first(f)} ${f[1] * 2.0} ${f.len()}")
+    let mut i: Vec<i32> = []
+    i.push(x as i32)
+    i.push(40)
+    i.push(2147483600)
+    println("${firsti(i)} ${i[1] + 1} ${i.len()}")
+    let mut b: Vec<u8> = []
+    b.push(7 as u8)
+    b.push(200)
+    println("${b[1] + 55} ${b.len()}")
+    let mut s = 0.0
+    let mut k = 0
+    while k < 5 {
+        f[k % 3] = 0.5
+        s += f[k % 3] + f[0]
+        k += 1
+    }
+    println("${s} ${f[0]} ${f[2]}")
+}
