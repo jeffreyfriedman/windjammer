@@ -1216,3 +1216,13 @@ impl<'ast> crate::codegen::rust::generator::CodeGenerator<'ast> {
             || self.infer_expression_type(operand).is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
     }
 }
+
+/// Rewrites each `param.clone()` in `cond` to `&param`, except the one wrapped by `string_to_ffi(..)` (an owned FfiString conversion).
+pub(crate) fn borrow_stale_param_clones(cond: &str, param: &str) -> String {
+    let clone_guard = format!("{param}.clone()");
+    let ffi_wrapped = format!("string_to_ffi({clone_guard})");
+    let ffi_marker = "\u{1}FFI_WRAPPED_CLONE\u{1}";
+    cond.replace(&ffi_wrapped, ffi_marker)
+        .replace(&clone_guard, &format!("&{param}"))
+        .replace(ffi_marker, &ffi_wrapped)
+}

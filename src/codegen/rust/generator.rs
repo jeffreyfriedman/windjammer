@@ -3235,17 +3235,11 @@ impl<'ast> CodeGenerator<'ast> {
             if cond_str.contains(&bare_comma) && !cond_str.contains(&borrowed_comma) {
                 cond_str = cond_str.replace(&bare_comma, &borrowed_comma);
             }
-            let clone_guard = format!("{}.clone()", param.name);
-            let borrowed_id = format!("&{}", param.name);
-            // An extern string argument is already converted to an owned FfiString (`string_to_ffi(p.clone())`):
-            // that clone is the conversion, never a stale borrow to turn into `string_to_ffi(&p)`.
-            let ffi_wrapped = format!("string_to_ffi({clone_guard})");
-            let ffi_marker = "\u{1}FFI_WRAPPED_CLONE\u{1}";
-            cond_str = cond_str.replace(&ffi_wrapped, ffi_marker);
-            if cond_str.contains(&clone_guard) {
-                cond_str = cond_str.replace(&clone_guard, &borrowed_id);
-            }
-            cond_str = cond_str.replace(ffi_marker, &ffi_wrapped);
+            // `param.clone()` in the condition is a stale borrow: turn it into `&param`. The one exception is an
+            // extern string argument, `string_to_ffi(p.clone())`: that clone is the conversion to an owned
+            // FfiString, so it stays (rustc E0308 otherwise). The rewrite lives in `call_site_borrow`, next to its
+            // sibling borrow fix-ups.
+            cond_str = super::call_site_borrow::borrow_stale_param_clones(&cond_str, &param.name);
         }
         cond_str
     }
