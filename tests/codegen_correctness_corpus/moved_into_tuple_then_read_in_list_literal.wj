@@ -1,3 +1,4 @@
+// oracle: check
 // A value moved into a returned tuple and read by a later element (inside a list literal's call argument) is copied
 // for the earlier use: Rust evaluates the elements in order.
 // expect: 3:set
@@ -20,6 +21,7 @@ fn set_flags(state: S, value: string) -> (S, Vec<Ev>) {
     s.flags.push("b")
     s.flags.push("c")
     return (s, [ev("set", "${s.flags.len()}:${value}")])
+//~@5+6 WARN W0009 trailing `return` is redundant
 }
 
 fn main() {

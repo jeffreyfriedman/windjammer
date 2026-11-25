@@ -77,7 +77,7 @@ fn unwrap_or(m: Maybe<i64>, default: i64) -> i64 {
 
 #[inline]
 fn test_option_enum() {
-    println!("[enum_option] found: {}", unwrap_or(Maybe::Some(42), 0_i64));
+    println!("[enum_option] found: {}", unwrap_or(Maybe::Some(42_i64), 0_i64));
     println!("[enum_option] not found: {}", unwrap_or(Maybe::None, 0_i64));
 }
 
@@ -109,7 +109,7 @@ fn extract_nested(r: Result<Maybe<i64>, String>) -> i64 {
 
 #[inline]
 fn test_nested_patterns() {
-    println!("[enum_nested] Ok(Some(42)) -> {}", extract_nested(Result::Ok(Maybe::Some(42))));
+    println!("[enum_nested] Ok(Some(42)) -> {}", extract_nested(Result::Ok(Maybe::Some(42_i64))));
     println!("[enum_nested] Ok(None) -> {}", extract_nested(Result::Ok(Maybe::None)));
     println!("[enum_nested] Err -> {}", extract_nested(Result::Err(String::from("error"))));
 }

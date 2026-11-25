@@ -168,6 +168,8 @@ corpus_tests!(
     enum_payload_copy_some_from_borrowed_scrutinee,
     issue_183_float_arg_arithmetic,
     issue_184_contains_key_borrowed_key,
+    indexed_text_binding_keeps_explicit_borrow_at_map_key,
+    scalar_param_key_keeps_explicit_borrow_at_map_lookup,
     issue_185_trait_impl_keeps_declared_receiver,
     issue_186_while_move_of_text_argument,
     issue_187_vec_literal_tail_of_function,

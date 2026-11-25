@@ -145,14 +145,21 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// `&k` where `k` is an owned local (`let k = "x"` emits `String`): the user's `&` is the only borrow
     /// there is, so call-site rules must not treat it as "already a reference" (`map.get(&k)`).
+    /// A parameter declared as a scalar (`k: int`) is emitted by value whatever the analyzer inferred about its uses
+    /// (a key only passed to a lookup is "inferred borrowed" but still `k: i64`), so it is an owned local too.
     pub(super) fn ref_operand_is_owned_local(&self, operand: &Expression<'ast>) -> bool {
-        matches!(operand, Expression::Identifier { name, .. }
-            if self.local_var_types.contains_key(name.as_str())
-                && !self.emitted_rust_ref_formals.contains(name.as_str())
-                && !self.str_ref_optimized_params.contains(name.as_str())
-                && !self.inferred_borrowed_params.contains(name.as_str())
-                && !self.borrowed_iterator_vars.contains(name)
-                && !self.explicit_ref_let_bindings.contains(name.as_str())
-                && !self.current_function_params.iter().any(|p| p.name == *name))
+        let Expression::Identifier { name, .. } = operand else { return false };
+        let n = name.as_str();
+        if self.emitted_rust_ref_formals.contains(n) || self.str_ref_optimized_params.contains(n) {
+            return false;
+        }
+        if let Some(p) = self.current_function_params.iter().find(|p| p.name == *name) {
+            return !matches!(p.type_, Type::Reference(_) | Type::MutableReference(_))
+                && crate::type_classification::is_copy_pass_by_value_formal(&p.type_);
+        }
+        self.local_var_types.contains_key(n)
+            && !self.inferred_borrowed_params.contains(n)
+            && !self.borrowed_iterator_vars.contains(name)
+            && !self.explicit_ref_let_bindings.contains(n)
     }
 }

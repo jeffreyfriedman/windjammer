@@ -8,7 +8,7 @@ fn main() {
     println!("{}", s.len());
     println!("{}", s.contains(&2_i64));
     println!("{}", s.contains(&9_i64));
-    let other: HashSet<i64> = [3, 4, 5].iter().cloned().collect::<HashSet<i64>>();
+    let other: HashSet<i64> = [3_i64, 4_i64, 5_i64].iter().cloned().collect::<HashSet<i64>>();
     let mut u: Vec<i64> = s.union(other.clone()).cloned().collect::<Vec<i64>>();
     u.sort();
     println!("{:?}", u);

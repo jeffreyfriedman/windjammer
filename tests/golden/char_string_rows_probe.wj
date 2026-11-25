@@ -121,7 +121,7 @@ fn probe_str(s: string, t: string, c: char, n: usize) {
     println("${"ab".repeat(3)}")
     println("${s.to_string()}")
     println("${"lit".to_string()}")
-//~@22+9 ERROR W0006 string literal is forbidden
+//~@22+9 ERROR W0006 string literal `.to_string()` is forbidden
     println("${s.clone()}")
 //~@18+5 WARN W0005 explicit
     println("${s.parse::<i32>().unwrap_or(0)}")

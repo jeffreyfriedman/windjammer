@@ -259,8 +259,6 @@ fn predictions_across_the_corpora() {
         // rustc rejected their build; the width-13 merge (23231c430) fixed the emitted widths, so they are no longer predicted.
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
-        // rustc rejects the build with an E0308 (a width mix): a width bug the program exposes, measured and pinned until fixed
-        "tests/engine_parity/match_arms.wj 1",
         "tests/error_system/test_type_mismatch.wj 1",
         "tests/error_system_e2e/test_type_errors.wj 1",
         "tests/fixtures/library_multipass/postgres_query_vec_params.wj 1",
