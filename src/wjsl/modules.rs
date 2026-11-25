@@ -45,7 +45,7 @@ enum UseKind {
     /// `use crate::brdf`
     Module,
     /// `use crate::brdf::item`
-    Item(String, usize),
+    Item(String, usize, usize),
     /// `use crate::brdf::*`
     Glob,
 }
@@ -187,8 +187,12 @@ fn scan_top_level(source: &str, file: &str) -> Result<Scan> {
     let mut in_block = false;
     let mut text = String::with_capacity(source.len());
     let (mut uses, mut items, mut forbidden) = (Vec::new(), Vec::new(), Vec::new());
-    for (idx, raw) in source.lines().enumerate() {
+    let src_lines: Vec<&str> = source.lines().collect();
+    let mut idx = 0usize;
+    while idx < src_lines.len() {
+        let raw = src_lines[idx];
         let line_no = idx + 1;
+        idx += 1;
         let at_top = depth == 0 && !in_block;
         let mut line = raw.to_string();
         if at_top {
@@ -212,11 +216,23 @@ fn scan_top_level(source: &str, file: &str) -> Result<Scan> {
             }
             if let Some(rest) = trimmed.strip_prefix("use ") {
                 if !rest.trim_start().starts_with('"') {
-                    parse_use(rest, raw, line_no, file, &mut uses)?;
-                    line = String::new();
-                    text.push_str(&line);
-                    text.push('\n');
-                    depth += brace_delta(raw, &mut in_block);
+                    // a `{a,\n b}` list continues until its closing brace
+                    let mut stmt: Vec<(usize, &str)> = vec![(line_no, raw)];
+                    if raw.contains('{') && !raw.contains('}') {
+                        while idx < src_lines.len() {
+                            let l = src_lines[idx];
+                            stmt.push((idx + 1, l));
+                            idx += 1;
+                            if l.contains('}') {
+                                break;
+                            }
+                        }
+                    }
+                    parse_use(&stmt, file, &mut uses)?;
+                    let _ = rest;
+                    for _ in &stmt {
+                        text.push('\n');
+                    }
                     continue;
                 }
             }
@@ -247,11 +263,11 @@ fn scan_top_level(source: &str, file: &str) -> Result<Scan> {
                 ));
             }
             for (pre, what) in [
-                ("@vertex", "entry point"),
-                ("@fragment", "entry point"),
-                ("@compute", "entry point"),
-                ("@group", "binding"),
-                ("var<", "global variable"),
+                ("@vertex", "an entry point"),
+                ("@fragment", "an entry point"),
+                ("@compute", "an entry point"),
+                ("@group", "a binding"),
+                ("var<", "a global variable"),
             ] {
                 if decl.starts_with(pre) {
                     forbidden.push((what, line_no, indent + 1));
@@ -265,15 +281,44 @@ fn scan_top_level(source: &str, file: &str) -> Result<Scan> {
     Ok(Scan { text, uses, items, forbidden })
 }
 
-fn parse_use(rest: &str, raw: &str, line: usize, file: &str, out: &mut Vec<UseDecl>) -> Result<()> {
-    let body = rest.trim().trim_end_matches(';').trim();
-    let col_of = |needle: &str, from: usize| raw[from..].find(needle).map(|p| from + p + 1).unwrap_or(1);
+/// Parse one `use crate::...` statement. `stmt` holds its source lines (1-based number, text): a `{a, b}` list
+/// may continue over several lines.
+fn parse_use(stmt: &[(usize, &str)], file: &str, out: &mut Vec<UseDecl>) -> Result<()> {
+    let first = stmt[0].1.trim_start().strip_prefix("use ").unwrap_or("");
+    let mut joined = first.trim().to_string();
+    for (_, l) in &stmt[1..] {
+        joined.push(' ');
+        joined.push_str(l.trim());
+    }
+    let body = joined.trim().trim_end_matches(';').trim().to_string();
+    let body = body.as_str();
+    // position of the next whole-word occurrence of `needle`, scanning forward from `cursor` (line index, byte)
+    let locate = |needle: &str, cursor: &mut (usize, usize)| -> (usize, usize) {
+        for li in cursor.0..stmt.len() {
+            let text = stmt[li].1;
+            let from = if li == cursor.0 { cursor.1 } else { 0 };
+            let mut at = from;
+            while let Some(p) = text.get(at..).and_then(|t| t.find(needle)) {
+                let pos = at + p;
+                let before = text[..pos].chars().next_back();
+                let after = text[pos + needle.len()..].chars().next();
+                if !before.is_some_and(is_ident_char) && !after.is_some_and(is_ident_char) {
+                    *cursor = (li, pos + needle.len());
+                    return (stmt[li].0, pos + 1);
+                }
+                at = pos + needle.len();
+            }
+        }
+        (stmt[0].0, 1)
+    };
+    let mut cur = (0usize, 0usize);
+    let (line0, col0) = locate("use", &mut cur);
     let bad = |msg: &str| {
         diag(
             "WJ0197",
             file,
-            line,
-            col_of(body, 0),
+            line0,
+            col0,
             msg,
             "write `use crate::module`, `use crate::module::item`, `use crate::module::{a, b}` or `use crate::module::*`",
         )
@@ -286,25 +331,26 @@ fn parse_use(rest: &str, raw: &str, line: usize, file: &str, out: &mut Vec<UseDe
     if module.is_empty() || !module.chars().all(is_ident_char) {
         return Err(bad(&format!("`{module}` is not a module name")));
     }
-    let mcol = col_of(&module, col_of("crate", 0));
+    locate("crate", &mut cur);
+    let (mline, mcol) = locate(&module, &mut cur);
     if segs.len() == 2 {
-        out.push(UseDecl { module, kind: UseKind::Module, line, col: mcol });
+        out.push(UseDecl { module, kind: UseKind::Module, line: mline, col: mcol });
         return Ok(());
     }
     let tail = segs[2].trim();
     if tail == "*" {
-        out.push(UseDecl { module, kind: UseKind::Glob, line, col: mcol });
+        out.push(UseDecl { module, kind: UseKind::Glob, line: mline, col: mcol });
     } else if let Some(inner) = tail.strip_prefix('{').and_then(|t| t.strip_suffix('}')) {
         for name in inner.split(',').map(str::trim).filter(|n| !n.is_empty()) {
             if !name.chars().all(is_ident_char) {
                 return Err(bad(&format!("`{name}` is not an item name")));
             }
-            let icol = col_of(name, mcol);
-            out.push(UseDecl { module: module.clone(), kind: UseKind::Item(name.to_string(), icol), line, col: mcol });
+            let (iline, icol) = locate(name, &mut cur);
+            out.push(UseDecl { module: module.clone(), kind: UseKind::Item(name.to_string(), iline, icol), line: mline, col: mcol });
         }
     } else if tail.chars().all(is_ident_char) && !tail.is_empty() {
-        let icol = col_of(tail, mcol);
-        out.push(UseDecl { module, kind: UseKind::Item(tail.to_string(), icol), line, col: mcol });
+        let (iline, icol) = locate(tail, &mut cur);
+        out.push(UseDecl { module, kind: UseKind::Item(tail.to_string(), iline, icol), line: mline, col: mcol });
     } else {
         return Err(bad(&format!("unsupported import `{body}` (submodules are not supported yet)")));
     }
@@ -329,7 +375,7 @@ fn load_module(dir: &Path, stem: &str, file: &str, source: &str, is_entry: bool)
                 file,
                 *line,
                 *col,
-                &format!("a {what} is not allowed in library module `{stem}`: bindings, globals and entry points belong to the entry file"),
+                &format!("{what} is not allowed in library module `{stem}`: bindings, globals and entry points belong to the entry file"),
                 "move it to the entry file and pass the resource as a parameter",
             ));
         }
@@ -409,12 +455,12 @@ fn resolve_imports(g: &Graph, key: &str) -> Result<Resolution> {
                 aliases.insert(u.module.clone());
             }
             UseKind::Glob => globs.push(u),
-            UseKind::Item(name, col) => {
+            UseKind::Item(name, iline, col) => {
                 let Some(item) = target.scan.items.iter().find(|i| i.name == *name) else {
                     return Err(diag(
                         "WJ0197",
                         &m.file,
-                        u.line,
+                        *iline,
                         *col,
                         &format!("no function, struct or const `{name}` in module `{}`", u.module),
                         "check the spelling or the module's `pub` items",
@@ -429,7 +475,7 @@ fn resolve_imports(g: &Graph, key: &str) -> Result<Resolution> {
                     return Err(diag(
                         "WJ0198",
                         &m.file,
-                        u.line,
+                        *iline,
                         *col,
                         &format!("`{name}` is private to `{}`", u.module),
                         &format!("declare it `pub {kw} {name}` in `{}`", target.file),
@@ -439,7 +485,7 @@ fn resolve_imports(g: &Graph, key: &str) -> Result<Resolution> {
                     return Err(diag(
                         "WJ0197",
                         &m.file,
-                        u.line,
+                        *iline,
                         *col,
                         &format!("`{name}` is imported from `{}` but already declared or imported here", u.module),
                         "rename the local item or import only one of them",
@@ -483,6 +529,15 @@ fn rewrite(text: &str, g: &Graph, key: &str, res: &Resolution) -> Result<String>
     let (mut i, mut line, mut col) = (0usize, 1usize, 1usize);
     let mut out = String::with_capacity(text.len() + 64);
     let n = ch.len();
+    // Binding-aware renaming: WGSL scopes, innermost last. A name bound by a parameter, `let`/`var`/`const`
+    // or `for` variable is that binding, never the module-level or imported item of the same name.
+    let mut scopes: Vec<(HashSet<String>, bool)> = Vec::new(); // (names, is a `for` header scope)
+    let mut in_fn_header = false;
+    let mut paren = 0i32;
+    let mut params: HashSet<String> = HashSet::new();
+    let mut expect_decl = false;
+    let mut pending: Option<String> = None;
+    let mut prev_ident = String::new();
     let step = |c: char, line: &mut usize, col: &mut usize| {
         if c == '\n' {
             *line += 1;
@@ -526,6 +581,32 @@ fn rewrite(text: &str, g: &Graph, key: &str, res: &Resolution) -> Result<String>
             continue;
         }
         if !is_ident_start(c) {
+            match c {
+                '(' if in_fn_header => paren += 1,
+                ')' if in_fn_header => paren -= 1,
+                '{' => {
+                    if in_fn_header && paren == 0 {
+                        scopes.push((std::mem::take(&mut params), false));
+                        in_fn_header = false;
+                    } else {
+                        scopes.push((HashSet::new(), false));
+                    }
+                }
+                '}' => {
+                    scopes.pop();
+                    if scopes.last().is_some_and(|s| s.1) {
+                        scopes.pop(); // the `for` header scope ends with its body
+                    }
+                }
+                ';' => {
+                    if let Some(name) = pending.take() {
+                        if let Some(top) = scopes.last_mut() {
+                            top.0.insert(name);
+                        }
+                    }
+                }
+                _ => {}
+            }
             out.push(c);
             step(c, &mut line, &mut col);
             i += 1;
@@ -556,12 +637,38 @@ fn rewrite(text: &str, g: &Graph, key: &str, res: &Resolution) -> Result<String>
             it.next();
             it.next().copied()
         };
-        let declared_name = next == Some(':') && next2 != Some(':');
+        // `const NAME: T = ..` at module level declares an item: it is renamed even though a `:` follows
+        let item_decl = scopes.is_empty() && !in_fn_header && prev_ident == "const";
+        let declared_name = next == Some(':') && next2 != Some(':') && !item_decl;
+        prev_ident = segs[0].clone();
         if prev == Some('.') || glued_prev == Some('@') {
             out.push_str(&verbatim);
             continue;
         }
         if segs.len() == 1 {
+            let name = segs[0].as_str();
+            if name == "fn" && scopes.is_empty() {
+                in_fn_header = true;
+                paren = 0;
+                params.clear();
+            } else if name == "for" && !scopes.is_empty() {
+                scopes.push((HashSet::new(), true));
+            } else if !scopes.is_empty() && matches!(name, "let" | "var" | "const") {
+                expect_decl = true;
+            } else if expect_decl && matches!(prev, Some('<') | Some(',')) {
+                // `var<private>` / `var<storage, read_write>`: the address space is not the declared name
+            } else if expect_decl {
+                expect_decl = false;
+                pending = Some(name.to_string());
+                out.push_str(&verbatim);
+                continue;
+            } else if in_fn_header && paren == 1 && declared_name {
+                params.insert(name.to_string());
+            }
+            if scopes.iter().any(|(set, _)| set.contains(name)) {
+                out.push_str(&verbatim);
+                continue;
+            }
             match res.map.get(&segs[0]) {
                 Some(q) if !declared_name => out.push_str(q),
                 _ => out.push_str(&verbatim),
