@@ -263,11 +263,11 @@ fn scan_top_level(source: &str, file: &str) -> Result<Scan> {
                 ));
             }
             for (pre, what) in [
-                ("@vertex", "entry point"),
-                ("@fragment", "entry point"),
-                ("@compute", "entry point"),
-                ("@group", "binding"),
-                ("var<", "global variable"),
+                ("@vertex", "an entry point"),
+                ("@fragment", "an entry point"),
+                ("@compute", "an entry point"),
+                ("@group", "a binding"),
+                ("var<", "a global variable"),
             ] {
                 if decl.starts_with(pre) {
                     forbidden.push((what, line_no, indent + 1));
@@ -375,7 +375,7 @@ fn load_module(dir: &Path, stem: &str, file: &str, source: &str, is_entry: bool)
                 file,
                 *line,
                 *col,
-                &format!("a {what} is not allowed in library module `{stem}`: bindings, globals and entry points belong to the entry file"),
+                &format!("{what} is not allowed in library module `{stem}`: bindings, globals and entry points belong to the entry file"),
                 "move it to the entry file and pass the resource as a parameter",
             ));
         }

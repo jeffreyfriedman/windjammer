@@ -462,7 +462,7 @@ fn struct_fields_and_field_accesses_keep_their_spelling_next_to_an_imported_name
 #[test]
 fn library_entry_points_globals_and_stray_pub_are_rejected() {
     let d = tree(&[("lib.wjsl", "@compute @workgroup_size(1)\nfn main() {\n}\npub fn f() -> f32 {\n    return 1.0;\n}\n"), ("e.wjsl", &format!("use crate::lib::f\n{FRAG}"))]);
-    assert!(emit(d.path(), "e.wjsl").unwrap_err().contains("lib.wjsl:1:1: error[WJ0200]: a entry point is not allowed in library module `lib`"));
+    assert!(emit(d.path(), "e.wjsl").unwrap_err().contains("lib.wjsl:1:1: error[WJ0200]: an entry point is not allowed in library module `lib`"));
     let d = tree(&[("lib.wjsl", "var<private> g: f32;\npub fn f() -> f32 {\n    return 1.0;\n}\n"), ("e.wjsl", &format!("use crate::lib::f\n{FRAG}"))]);
     assert!(emit(d.path(), "e.wjsl").unwrap_err().contains("error[WJ0200]: a global variable is not allowed in library module `lib`"));
     let d = tree(&[("lib.wjsl", "pub struct_not_an_item\n"), ("e.wjsl", &format!("use crate::lib::f\n{FRAG}"))]);
