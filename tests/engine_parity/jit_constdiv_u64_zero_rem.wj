@@ -1,0 +1,14 @@
+// The remainder form of the unsigned 64-bit zero divisor (see jit_constdiv_u64_zero.wj).
+fn main() {
+    let mut t: u64 = 0
+    let mut i: u64 = 0
+    while i < 6000 {
+        let a: u64 = i * 5 + 3
+        t += a / 9 + a % 9
+        if i == 4500 {
+            t += a % 0
+        }
+        i += 1
+    }
+    println("${t}")
+}
