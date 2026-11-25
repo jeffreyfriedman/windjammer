@@ -234,3 +234,119 @@ fn s1_import_and_mod_keywords_get_a_message_that_says_what_to_write() {
         "e.wjsl:2:1: error[WJ0197]: WJSL has no `mod`: a module is a file; write `use crate::module::item` to import from `module.wjsl` in the same folder\n  fix: replace the line with a `use` import"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Binding-aware renaming: a parameter or local that shadows a module-level or imported name stays itself.
+// ---------------------------------------------------------------------------
+
+const CONSTS: &str = "\
+pub const roughness: f32 = 0.5;
+pub const n: i32 = 4;
+pub fn f0() -> f32 {
+    return 0.04;
+}
+";
+
+fn shadow_entry(items: &str, body: &str) -> String {
+    format!(
+        "use crate::consts::{{roughness, n, f0}}\n{items}\n@fragment\nfn fs() -> @location(0) vec4<f32> {{\n{body}\n}}\n"
+    )
+}
+
+fn emit_with_consts(entry: &str) -> String {
+    let d = tree(&[("consts.wjsl", CONSTS), ("e.wjsl", entry)]);
+    let out = emit(d.path(), "e.wjsl").unwrap_or_else(|e| panic!("{e}"));
+    naga_validate(&out);
+    out
+}
+
+#[test]
+fn shadow_a_parameter_named_like_an_imported_const_stays_a_parameter() {
+    let e = shadow_entry(
+        "fn shade(roughness: f32) -> f32 {\n    return roughness * 2.0;\n}",
+        "    return vec4<f32>(shade(1.0));",
+    );
+    let out = emit_with_consts(&e);
+    assert!(out.contains("fn shade(roughness: f32) -> f32 {\n    return roughness * 2.0;"), "{out}");
+    assert!(!out.contains("consts__roughness"), "{out}");
+}
+
+#[test]
+fn shadow_a_local_named_like_an_imported_function_stays_a_local() {
+    let e = shadow_entry(
+        "fn g() -> f32 {\n    let f0 = 2.0;\n    return f0;\n}",
+        "    return vec4<f32>(g());",
+    );
+    let out = emit_with_consts(&e);
+    assert!(out.contains("let f0 = 2.0;\n    return f0;"), "{out}");
+    assert!(!out.contains("consts__f0"), "{out}");
+}
+
+#[test]
+fn shadow_initializer_uses_the_outer_name_and_later_uses_the_local() {
+    let e = shadow_entry(
+        "fn g() -> f32 {\n    let roughness = roughness * 2.0;\n    return roughness;\n}",
+        "    return vec4<f32>(g());",
+    );
+    let out = emit_with_consts(&e);
+    assert!(out.contains("let roughness = consts__roughness * 2.0;\n    return roughness;"), "{out}");
+}
+
+#[test]
+fn shadow_in_a_nested_block_ends_with_the_block() {
+    let e = shadow_entry(
+        "fn g(c: bool) -> f32 {\n    var acc = 0.0;\n    if (c) {\n        let roughness = 1.0;\n        acc = acc + roughness;\n    }\n    acc = acc + roughness;\n    return acc;\n}",
+        "    return vec4<f32>(g(true));",
+    );
+    let out = emit_with_consts(&e);
+    assert!(out.contains("let roughness = 1.0;\n        acc = acc + roughness;"), "{out}");
+    assert!(out.contains("    acc = acc + consts__roughness;"), "{out}");
+}
+
+#[test]
+fn shadow_a_for_loop_variable_ends_with_the_loop() {
+    let e = shadow_entry(
+        "fn g() -> f32 {\n    var acc = 0.0;\n    for (var n: i32 = 0; n < 3; n = n + 1) {\n        acc = acc + f32(n);\n    }\n    return acc + f32(n);\n}",
+        "    return vec4<f32>(g());",
+    );
+    let out = emit_with_consts(&e);
+    assert!(out.contains("for (var n: i32 = 0; n < 3; n = n + 1) {\n        acc = acc + f32(n);"), "{out}");
+    assert!(out.contains("return acc + f32(consts__n);"), "{out}");
+}
+
+#[test]
+fn shadow_in_one_function_does_not_stop_the_rename_in_another() {
+    let e = shadow_entry(
+        "fn a(roughness: f32) -> f32 {\n    return roughness;\n}\nfn b() -> f32 {\n    return roughness;\n}",
+        "    return vec4<f32>(a(1.0) + b());",
+    );
+    let out = emit_with_consts(&e);
+    assert!(out.contains("fn a(roughness: f32) -> f32 {\n    return roughness;"), "{out}");
+    assert!(out.contains("fn b() -> f32 {\n    return consts__roughness;"), "{out}");
+}
+
+#[test]
+fn shadow_inside_a_library_module_keeps_its_own_locals() {
+    // a library function whose parameter is named like a module-level item of the same library
+    let lib = "const k: f32 = 2.0;\npub fn scale(k: f32) -> f32 {\n    return k * 3.0;\n}\npub fn other() -> f32 {\n    return k;\n}\n";
+    let e = "use crate::lib::{scale, other}\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(scale(1.0) + other());\n}\n";
+    let d = tree(&[("lib.wjsl", lib), ("e.wjsl", e)]);
+    let out = emit(d.path(), "e.wjsl").unwrap();
+    naga_validate(&out);
+    assert!(out.contains("fn lib__scale(k: f32) -> f32 {\n    return k * 3.0;"), "{out}");
+    assert!(out.contains("fn lib__other() -> f32 {\n    return lib__k;"), "{out}");
+}
+
+#[test]
+fn multi_line_import_lists_are_parsed_with_per_name_positions() {
+    let e = "use crate::consts::{\n    roughness,\n    n,\n    f0\n}\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(roughness + f32(n) + f0());\n}\n";
+    let d = tree(&[("consts.wjsl", CONSTS), ("e.wjsl", e)]);
+    let out = emit(d.path(), "e.wjsl").unwrap();
+    naga_validate(&out);
+    assert!(out.contains("consts__roughness") && out.contains("consts__f0()"), "{out}");
+    // errors inside the list point at the name's own line
+    let bad = "use crate::consts::{\n    roughness,\n    nothing\n}\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0);\n}\n";
+    let d = tree(&[("consts.wjsl", CONSTS), ("e.wjsl", bad)]);
+    let err = emit(d.path(), "e.wjsl").unwrap_err();
+    assert!(err.contains("e.wjsl:3:5: error[WJ0197]: no function, struct or const `nothing`"), "{err}");
+}
