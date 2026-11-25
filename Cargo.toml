@@ -272,6 +272,11 @@ path = "tests/interpreter_http_server_test.rs"
 name = "compiled_agreement"
 path = "tests/interpreter_compiled_agreement_test.rs"
 
+# f32 results bit-identical in every engine and compiled Rust: cargo test --release --test f32_bits
+[[test]]
+name = "f32_bits"
+path = "tests/interpreter_f32_compiled_bits_test.rs"
+
 # The calls a build-slot gate makes, interpreted: cargo test --release --test slot_gate
 [[test]]
 name = "slot_gate"

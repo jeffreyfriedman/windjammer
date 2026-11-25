@@ -102,9 +102,15 @@ mirrors whatever the interpreter does when the unit lands (section 3).
 | L1 | `sin cos tan exp exp2 ln log2 log10 atan atan2 cbrt sinh tanh powf` on f32 | f64 function, rounded | glibc `sinf`-family | P1 |
 | L2 | `powi`, `to_degrees`, `to_radians` on f32 | f64, rounded | f32 operations (square-and-multiply; multiply by an f32 constant) | P2 |
 | L3 | a float or integer literal assigned to an f32 place (`y = 0.1`); `16777217_f32`; integer literal coerced to f32 | **unrounded** f64 kept under the F32 tag (`retag` in `src/interpreter/eval_stmt.rs` and `src/interpreter/resolved/compile.rs`; the `"f32"` suffix in `src/interpreter/eval_expr.rs`; `Int(Lit)` in `coerce`) | rounded at compile time (`0.1_f32`, P5) | P3: `y as f64` prints `0.1` |
-| L4 | `i64`/`u64`/`isize`/`usize` above 2^53 `as f32` | `i -> f64 -> f32`, double rounding | single rounding | P3 (m2): 0x5a800000 vs 0x5a800001 |
 | L5 | `f32::from_bits(sNaN).to_bits()` | quieted (0x7fc00001) | unchanged (0x7f800001) | P4 |
 | L6 | literal-only arithmetic in an f32 context (`let x: f32 = 0.1 * 3.0`) | f64 arithmetic, rounded once at the coercion | f32 arithmetic per operation | argued from `float_binary` (Lit with Lit stays Lit); not probed |
+
+L4 is fixed (row removed): an integer converts to `f32` with one rounding (`i128 as f32`, `u128 as f32`), never through
+`f64` (`cast` in `src/interpreter/coerce.rs`; the `Int(Lit)` coercion and the `f32` suffix round once the same way).
+`tests/f32_parity/f32_int_cast.wj` pins every integer width against compiled Rust. Machine code refuses `as f32` today
+(`lower_expr.rs` `cast` returns `None` for a non-f64 target); the F1 stage must lower an integer to `f32` as one
+`fcvt_from_sint F32` (or `fcvt_from_uint`), NOT `fcvt_from_sint F64` followed by a demote, which is the double rounding.
+The unit-lowering table row for `as f32` from an integer is updated to match.
 
 L3 is the one that matters for the unit's representation. An F32-tagged value can hold an f64 that f32 cannot
 represent, and that is observable: through `as f64`, through `Value` equality and ordering (`value.rs` compares raw
@@ -184,7 +190,7 @@ the F1 measurement shows the carrier's conversions cost more than *assumed*.
 | `signum copysign fract recip rem_euclid mul_add hypot` | partly | `fl(f64 formula)` | F4a helpers calling the shared formula |
 | transcendentals, `powi powf`, `to_degrees to_radians` | no (no Cranelift op) | `fl(f64 fn)` (L1, L2) | F4b call-outs to the **same Rust function** the builtin runs; interpreter-exact, not compiled-Rust-exact |
 | `as f32` from f64 / Lit | yes (`fdemote`+`fpromote` = cvtsd2ss/cvtss2sd, as rustc emits for `as`) | `f as f32 as f64` | `R(a)` |
-| `as f32` from an integer | yes | `i as f64`, then rounded (L4) | `R(fcvt_from_sint/uint F64 (i))`: double rounding mirrored |
+| `as f32` from an integer | yes | one rounding, `i as f32` (L4 fixed) | `fcvt_from_sint/uint F32 (i)` then `fpromote`: single rounding, never via F64 |
 | `as f64` from f32 | (retag) | payload unchanged | `Val` retagged, no instruction |
 | `as iN/uN` from f32 | yes (`fcvt_to_sint_sat`/`uint_sat`: NaN to 0, saturation) | trunc, NaN to 0, clamp, on the payload | the existing f64 cast lowering on the payload; `i128`/`u128` still refused |
 | literal `1.5` in f32 context | | `Lit` f64; rounded where an op meets F32 | `Lit` `f64const`; rounded at the op (folded when constant) |

@@ -1,0 +1,54 @@
+fn show(tag: string, v: f32) {
+    println("${tag} ${v.to_bits():08x}")
+}
+
+fn main() {
+    let a: i64 = 18014399583223809
+    show("i64", a as f32)
+    let b: i64 = -18014399583223809
+    show("i64neg", b as f32)
+    let c: u64 = 18014399583223809
+    show("u64", c as f32)
+    let d: u64 = 18446744073709551615
+    show("u64max", d as f32)
+    let e: usize = 9007199791611905
+    show("usize", e as f32)
+    let f: isize = 9007199791611905
+    show("isize", f as f32)
+    let g: i128 = 18014399583223809
+    show("i128", g as f32)
+    let hh: u64 = 18446744073709551615
+    let h: u128 = (hh as u128) * (hh as u128)
+    show("u128max", h as f32)
+    let h2: u128 = 18014399583223809
+    show("u128", h2 as f32)
+    let i: i32 = 16777217
+    show("i32", i as f32)
+    let j: u32 = 4294967295
+    show("u32max", j as f32)
+    let k: i64 = 9223372036854775807
+    show("i64max", k as f32)
+    let l: i64 = -9223372036854775807
+    show("i64min1", l as f32)
+    let m: u64 = 9007199791611905
+    show("tie_up", m as f32)
+    let n: i64 = 16777219
+    show("n", n as f32)
+    let o: u8 = 255
+    show("u8", o as f32)
+    let p: i16 = -32768
+    show("i16", p as f32)
+    let q: i64 = 18014399583223809
+    let r: f64 = q as f64
+    show("f64tof32", r as f32)
+    show("lit", 18014399583223809 as f32)
+    let mut acc: f32 = 0.0
+    let mut t: i64 = 18014399583223809
+    let mut cnt = 0
+    while cnt < 3 {
+        acc = acc + (t as f32)
+        t += 1073741824
+        cnt += 1
+    }
+    show("loop", acc)
+}
