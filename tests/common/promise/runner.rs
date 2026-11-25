@@ -132,6 +132,21 @@ pub fn run_case(sb: &Sandbox, case: &Case) -> Result<(), String> {
     let tmpdir = w.join(".tmp");
     std::fs::create_dir_all(&tmpdir).unwrap();
     env.push(("TMPDIR", tmpdir.to_string_lossy().into_owned()));
+    // `wj clean` / `wj cache` delete the cache tree (HOME/Library/Caches/windjammer/cargo-target/shared): they get their
+    // own HOME and cache root, so they can never delete the tree the cargo-building cases are compiling into. A case
+    // that names its own `WJ_CARGO_TARGET_ROOT` keeps it (it is already private); the HOME is private either way.
+    if matches!(case.args.first().map(String::as_str), Some("clean" | "cache")) {
+        let home = w.join(".private-home");
+        std::fs::create_dir_all(&home).unwrap();
+        env.push(("HOME", home.to_string_lossy().into_owned()));
+        if !case.env.contains_key("WJ_CARGO_TARGET_ROOT") {
+            let root = w.join(".private-cache");
+            // a small dummy tree for them to delete
+            super::super::installed_sandbox::write(&root.join("cargo-target/shared/debug/dummy"), "x");
+            super::super::installed_sandbox::write(&root.join("cargo-target/verify/debug/dummy"), "x");
+            env.push(("WJ_CARGO_TARGET_ROOT", root.to_string_lossy().into_owned()));
+        }
+    }
     let case_env: Vec<(String, String)> = case.env.iter().map(|(k, v)| (k.clone(), subst(v, &w))).collect();
     let env: Vec<(&str, String)> = env.into_iter().chain(case_env.iter().map(|(k, v)| (k.as_str(), v.clone()))).collect();
     for step in &case.setup {

@@ -182,17 +182,17 @@ fn run_all(sb: &Sandbox, cases: &[(String, Case)]) -> Vec<String> {
             }
         }
     };
-    // The sandbox has one cache tree (HOME/Library/Caches/windjammer/cargo-target/shared). Cases that run cargo build into
-    // it, and `wj clean --all` / `wj cache prune --force` delete it: run concurrently, the cleaner removed the tree under a
-    // running build and cargo failed with `could not write output to .../shared/debug/build/libc/<hash>/out/...: No such
-    // file or directory` (reported as WJ0099 in the verify case, one run in ten). Those cases run one after another
-    // on one thread; the rest run in parallel.
-    let shares_cache = |c: &Case| c.needs.is_some() || matches!(c.args.first().map(String::as_str), Some("clean" | "cache"));
-    let (cargo_cases, plain): (Vec<&(String, Case)>, Vec<&(String, Case)>) = runnable.into_iter().partition(|(_, c)| shares_cache(c));
+    // Cases run in parallel. `wj clean` / `wj cache` cases get a private HOME and cache root (see `run_case`), so
+    // they cannot delete the shared tree under the cargo-building cases; those share one warm cache concurrently
+    // (cargo serializes on the target directory's own lock).
+    let next = std::sync::atomic::AtomicUsize::new(0);
     std::thread::scope(|s| {
-        s.spawn(|| run_chunk(&cargo_cases));
-        for chunk in plain.chunks(plain.len().div_ceil(4).max(1)) {
-            s.spawn(move || run_chunk(chunk));
+        for _ in 0..8 {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let Some(case) = runnable.get(i) else { break };
+                run_chunk(std::slice::from_ref(case));
+            });
         }
     });
     fails.into_inner().unwrap()
