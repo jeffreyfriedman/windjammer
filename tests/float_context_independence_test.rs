@@ -102,6 +102,20 @@ pub fn narrow(x: f64) -> f32 {
 }
 
 #[test]
+fn cast_operand_call_argument_literal_keeps_the_callee_width() {
+    assert_checks_and_keeps_f64(
+        r#"
+pub fn wide(v: f64) -> f64 { v }
+
+pub fn narrow() -> f32 {
+    wide(2.25) as f32
+}
+"#,
+        "2.25",
+    );
+}
+
+#[test]
 fn return_position_literal_still_takes_the_return_type() {
     let output = test_utils::compile_single(
         r#"
@@ -181,4 +195,23 @@ fn imported_consts_keep_their_declared_widths() {
         "a literal beside an imported f32 constant must be f32 under `wj test`:\n{combined}"
     );
     assert!(combined.contains("1 passed"), "expected the test to run and pass:\n{combined}");
+}
+
+/// A library build records its constants' declared types in `metadata.json` (what a dependent's inference reads).
+#[test]
+fn library_build_records_constant_types_in_crate_metadata() {
+    let temp = TempDir::new().unwrap();
+    let src = temp.path().join("src");
+    let out = temp.path().join("out");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join("a.wj"), "pub const GAIN: f32 = 0.5\npub const RATE: u32 = 44100\n").unwrap();
+    fs::write(src.join("b.wj"), "pub fn double(x: f32) -> f32 { x * 2.0 }\n").unwrap();
+    let output = Command::new(test_utils::wj_binary())
+        .args(["build", "--output", out.to_str().unwrap(), src.to_str().unwrap(), "--no-cargo"])
+        .output()
+        .expect("run wj build");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let meta = fs::read_to_string(out.join("metadata.json")).expect("metadata.json");
+    assert!(meta.contains("\"consts\""), "metadata.json lacks `consts`:\n{meta}");
+    assert!(meta.contains("\"GAIN\"") && meta.contains("\"RATE\""), "constants missing:\n{meta}");
 }
