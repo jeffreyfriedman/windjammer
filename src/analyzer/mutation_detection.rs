@@ -459,7 +459,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Resolve the type at the end of a field-access chain rooted at `param_name`.
-    fn resolve_field_chain_type_for_param(
+    pub(super) fn resolve_field_chain_type_for_param(
         &self,
         param_name: &str,
         expr: &Expression,
@@ -1186,6 +1186,6 @@ impl<'ast> Analyzer<'ast> {
     }
 }
 
-fn type_base_for_registry_lookup(ty: &Type) -> Option<String> {
+pub(super) fn type_base_for_registry_lookup(ty: &Type) -> Option<String> {
     crate::type_classification::type_to_registry_base(ty)
 }

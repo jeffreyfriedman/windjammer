@@ -61,6 +61,26 @@ impl SignatureRegistry {
         if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) { bucket.insert(pos, name.to_string()); }
     }
 
+    /// The one key any layer registers as `{Type}::{suffix}` (a bare method name with no receiver type), or `None`
+    /// when there are two. The candidate set is every layer's (this file's, the project's, the std library's), never
+    /// the first layer's alone: a user `push` must not answer for `Vec::push` because the std homonym sits on a lower
+    /// layer, and the answer must not depend on which files were registered first. Fails closed: two keys are two
+    /// candidates even when they may name one function (`ui::Panel::width`, `crate::ui::Panel::width`). Of the std
+    /// library, only the builtin value types count (`Vec`, `String`, maps, `Option`...): a receiver whose type is not
+    /// inferred yet may be one of them (`let mut seen = Vec::new()`), not a runtime module's type (`Timer::reset`).
+    pub fn find_unique_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
+        let std = Self::stdlib();
+        let counts = |key: &str| {
+            let owner = key.rsplit_once("::").map_or("", |(o, _)| o.rsplit("::").next().unwrap_or(o));
+            !std.signatures.contains_key(key)
+                || crate::type_classification::is_stdlib_container(owner)
+                || matches!(owner, "String" | "str" | "string")
+        };
+        let mut candidates = self.signatures_for_method_name(suffix).filter(|(key, _)| counts(key));
+        let (_, only) = candidates.next()?;
+        candidates.next().is_none().then_some(only)
+    }
+
     /// The signature a file registers for its own definition `name` (its analysis, kept by `keep_own_definitions`):
     /// this layer only, never a layer below it, where a same-named function of another module may sit.
     pub fn own_definition(&self, name: &str) -> Option<&FunctionSignature> {
@@ -180,6 +200,20 @@ impl FunctionSignature {
     /// never in what the source declares; a same-named function of another module may differ in both.
     pub fn declares_same_function(&self, other: &FunctionSignature) -> bool {
         self.formal_param_types == other.formal_param_types && self.return_type == other.return_type
+    }
+
+    /// False when `self` and `other` are two functions that share a name: a static fn and a method (`Effect::set_variable`
+    /// and `Realm::set_variable`; their parameter slots do not line up) or the methods of two types (`Column::contains`,
+    /// `Vec::contains`). A refresh of one never updates the other. Unqualified names and module paths stay comparable.
+    pub fn may_be_view_of(&self, other: &FunctionSignature) -> bool {
+        let owner = |s: &FunctionSignature| {
+            let (path, _) = s.name.rsplit_once("::")?;
+            let leaf = path.rsplit("::").next().unwrap_or(path);
+            let leaf = leaf.split('<').next().unwrap_or(leaf);
+            leaf.starts_with(|c: char| c.is_ascii_uppercase()).then(|| leaf.to_string())
+        };
+        let distinct_owners = matches!((owner(self), owner(other)), (Some(a), Some(b)) if a != b && a != "Self" && b != "Self");
+        self.has_self_receiver == other.has_self_receiver && !distinct_owners
     }
 
     /// True when `self` can implement the trait method declared by `trait_sig` (E0053): the same receiver kind and

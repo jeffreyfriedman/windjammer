@@ -310,6 +310,15 @@ impl<'ast> Analyzer<'ast> {
         saw && any_collection_store && !any_borrowed_arg
     }
 
+    /// `self.registry.push(x)` inside an impl: the declared type of the `self` field chain (`Vec<string>` -> `Vec`), so
+    /// the call resolves by its receiver's type, never by the bare method name (a user `CallStack::push` homonym).
+    fn self_field_receiver_base(&self, object: &Expression) -> Option<String> {
+        let ctx = self.self_impl_context.as_ref()?;
+        let self_ty = Type::Custom(ctx.impl_type_base.clone());
+        let ty = self.resolve_field_chain_type_for_param("self", object, Some(&self_ty))?;
+        crate::analyzer::mutation_detection::type_base_for_registry_lookup(&ty)
+    }
+
     fn receiver_type_name_for_storage(object: &Expression) -> Option<String> {
         match object {
             Expression::Identifier { name, .. }
@@ -362,7 +371,7 @@ impl<'ast> Analyzer<'ast> {
                 object,
                 ..
             } => {
-                let receiver_type = Self::receiver_type_name_for_storage(object);
+                let receiver_type = Self::receiver_type_name_for_storage(object).or_else(|| self.self_field_receiver_base(object));
                 arguments.iter().enumerate().any(|(i, (_label, arg))| {
                     let arg_in_payload = Self::method_call_argument_stores_owned_payload(
                         method,

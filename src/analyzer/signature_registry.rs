@@ -1226,31 +1226,6 @@ impl SignatureRegistry {
         out.into_iter()
     }
 
-    /// Like [`Self::find_signature_ending_with`], but only when exactly one
-    /// `{Type}::{suffix}` is registered (locally or via global fallback).
-    pub fn find_unique_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
-        let local = self
-            .method_index
-            .get(suffix)
-            .map(|keys| {
-                let mut seen = std::collections::HashSet::new();
-                keys.iter()
-                    .filter(|k| seen.insert(k.as_str()))
-                    .filter_map(|k| self.signatures.get(k).map(|sig| (k.as_str(), sig)))
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        if local.len() == 1 {
-            return Some(local[0].1);
-        }
-        if !local.is_empty() {
-            return None;
-        }
-        self.global_fallback
-            .as_ref()
-            .and_then(|g| g.find_unique_signature_ending_with(suffix))
-    }
-
     /// Find a signature matching the simple name with a specific argument count.
     /// Uses the method index for fast qualified-name lookup.
     ///
