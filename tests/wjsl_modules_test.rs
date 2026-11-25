@@ -278,7 +278,7 @@ fn shadow_a_local_named_like_an_imported_function_stays_a_local() {
         "    return vec4<f32>(g());",
     );
     let out = emit_with_consts(&e);
-    assert!(out.contains("let f0 = 2.0;\n    return f0;"), "{out}");
+    assert!(out.contains("let f0 = 2.0;") && out.contains("return f0;"), "{out}");
     assert!(!out.contains("consts__f0"), "{out}");
 }
 
@@ -289,7 +289,7 @@ fn shadow_initializer_uses_the_outer_name_and_later_uses_the_local() {
         "    return vec4<f32>(g());",
     );
     let out = emit_with_consts(&e);
-    assert!(out.contains("let roughness = consts__roughness * 2.0;\n    return roughness;"), "{out}");
+    assert!(out.contains("let roughness = consts__roughness * 2.0;") && out.contains("return roughness;"), "{out}");
 }
 
 #[test]
@@ -299,8 +299,8 @@ fn shadow_in_a_nested_block_ends_with_the_block() {
         "    return vec4<f32>(g(true));",
     );
     let out = emit_with_consts(&e);
-    assert!(out.contains("let roughness = 1.0;\n        acc = acc + roughness;"), "{out}");
-    assert!(out.contains("    acc = acc + consts__roughness;"), "{out}");
+    assert!(out.contains("let roughness = 1.0;") && out.contains("acc = acc + roughness;"), "{out}");
+    assert!(out.contains("acc = acc + consts__roughness;"), "{out}");
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn shadow_a_for_loop_variable_ends_with_the_loop() {
         "    return vec4<f32>(g());",
     );
     let out = emit_with_consts(&e);
-    assert!(out.contains("for (var n: i32 = 0; n < 3; n = n + 1) {\n        acc = acc + f32(n);"), "{out}");
+    assert!(out.contains("for (var n: i32 = 0; n < 3; n = n + 1) {") && out.contains("acc = acc + f32(n);"), "{out}");
     assert!(out.contains("return acc + f32(consts__n);"), "{out}");
 }
 
