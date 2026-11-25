@@ -306,8 +306,18 @@ fn applying_a_hint_fix_introduces_no_new_diagnostic() {
         let Some(h) = mismatch(e, f) else { panic!("no hint for {e}/{f}") };
         let Some(fix) = h.fix else { continue };
         let FixAnchor::Expr { prefix, suffix } = fix.anchor else { continue };
-        let src = format!("fn take(v: int) {{\n    println(\"${{v}}\")\n}}\nfn main() {{\n    let x = 3\n    take({prefix}x{suffix})\n}}\n");
-        let before = lint_diags(&src.replace(&format!("{prefix}x{suffix}"), "x"));
+        // A numeric fix converts a value of the FOUND type to the EXPECTED one: declare the parameter as the expected
+        // type and the value as the found type (a cast to `float` applied to an `int` parameter's argument is itself a
+        // WJ0003, and rightly so). The clean program has nothing to report; the fixed one must report nothing either.
+        let numeric = |t: &str| matches!(t, "i32" | "i64" | "usize" | "f32" | "f64");
+        let spell = |t: &str| match t { "i64" => "int", "usize" => "uint", "f64" => "float", o => o }.to_string();
+        let (param, decl, init) = if numeric(e) && numeric(f) {
+            (spell(e), format!(": {}", spell(f)), if f.starts_with('f') { "3.0" } else { "3" })
+        } else {
+            ("int".to_string(), String::new(), "3")
+        };
+        let src = format!("fn take(v: {param}) {{\n    println(\"${{v}}\")\n}}\nfn main() {{\n    let x{decl} = {init}\n    take({prefix}x{suffix})\n}}\n");
+        let before = if numeric(e) && numeric(f) { Vec::new() } else { lint_diags(&src.replace(&format!("{prefix}x{suffix}"), "x")) };
         let after = lint_diags(&src);
         let new: Vec<_> = after.iter().filter(|d| !before.iter().any(|b| b.code == d.code)).collect();
         assert!(new.is_empty(), "{e}/{f}: fix `{prefix}x{suffix}` introduces {:?}", new.iter().map(|d| (&d.code, &d.message)).collect::<Vec<_>>());
