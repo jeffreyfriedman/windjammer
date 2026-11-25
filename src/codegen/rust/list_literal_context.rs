@@ -146,6 +146,29 @@ impl<'ast> CodeGenerator<'ast> {
         Self::list_literal_wanted(value, declared)
     }
 
+    /// `x ?? [a]` / `x.unwrap_or_else(|| [a])` on an `Option<Vec<T>>` / `Result<Vec<T>, E>`: the closure returns the
+    /// payload type, so the list literals in its value position are `Vec`s (never fixed arrays).
+    pub(in crate::codegen::rust) fn record_default_closure_lists(&mut self, method: &str, arg: &Expression<'ast>, recv: Option<&Type>) {
+        if method != "unwrap_or_else" {
+            return;
+        }
+        let Expression::Closure { body, .. } = arg else { return };
+        let payload = match recv {
+            Some(Type::Reference(inner)) => inner.as_ref(),
+            Some(other) => other,
+            None => return,
+        };
+        let payload = match payload {
+            Type::Option(inner) => inner.as_ref(),
+            Type::Result(ok, _) => ok.as_ref(),
+            _ => return,
+        };
+        if Self::holds_list(payload) {
+            let tails = Self::collect_value_position_lists(body, payload);
+            self.idiom.declared_let_list_literals.extend(tails);
+        }
+    }
+
     /// Generate `value` assigned to a place of type `target`: list literals are `Vec`s unless the place is a fixed array.
     pub(in crate::codegen::rust) fn generate_with_list_context(&mut self, value: &Expression<'ast>, target: Option<&Type>) -> String {
         let prev = self.array_literal_as_list;
