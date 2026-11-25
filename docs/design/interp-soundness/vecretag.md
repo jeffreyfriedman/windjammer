@@ -62,6 +62,12 @@ family or the formal's own width.
    body has no element type), so it is retagged once at its first call (one O(n) copy of the packed buffer, no per-call
    work; `vec_shape_a.wj`).
 
+   Companion change (cost only, no semantics): the "does this argument need coercion" test looked at the first element
+   through `Deref` (`t.first()`), which materializes a packed body's whole `Vec<Value>` view (O(n)) and is dropped again by
+   every push; with the packing kept across pushes that made shape D O(n) per call (2.6M Ir per call at 100k elements).
+   `VecBody::first_is` asks the packed scalar directly (`needs_coerce`, and the two `Vec` arms of `coerce`), so a call
+   neither unpacks nor builds the view. Unit test `needs_coerce_does_not_unpack_a_packed_vector` (coerce.rs).
+
 ## Tests
 `tests/engine_parity/vec_shape_{a..g,adopt}.wj` (the downstream shapes: annotated empty vec, two hops, returned vec, push between calls, constructors, element stores, struct field; exact counts in `the_downstream_vector_shapes_retag_at_most_once`), `tests/engine_parity/vec_retag.wj`, `vec_retag_int.wj` (a thousand calls: one retag), `vec_retag_int_range_*.wj` (walker vs resolved; read-only callee with the caller pushing between calls, a mutating
 callee, return, struct store, `f(v, v)`, recursion, method, `Vec<f32>`, nested, closure capture); counter `vecretag` in

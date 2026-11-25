@@ -196,6 +196,21 @@ impl VecBody {
         }
     }
 
+    /// Whether `f` holds of the first element, WITHOUT materializing a packed body's `Vec<Value>` cache (a `first()`
+    /// through `Deref` unpacks the whole body, O(n), again after every push that clears the cache).
+    pub fn first_is(&self, f: impl Fn(&Value) -> bool) -> bool {
+        match self {
+            VecBody::Packed(p, _) => p.get(0).map_or(false, |x| f(&x)),
+            VecBody::Values(v) => v.first().map_or(false, f),
+        }
+    }
+
+    /// Whether the unpacked `Vec<Value>` view has been materialized (a packed body only).
+    #[cfg(test)]
+    pub fn unpacked_cache_built(&self) -> bool {
+        matches!(self, VecBody::Packed(_, c) if c.get().is_some())
+    }
+
     /// The packed scalars, if the body is packed.
     pub fn packed(&self) -> Option<&Packed> {
         match self {
