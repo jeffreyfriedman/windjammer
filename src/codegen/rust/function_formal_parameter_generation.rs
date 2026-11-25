@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::analyzer::*;
 use crate::parser::*;
 
-use super::CodeGenerator;
+use super::{formal_slot::sig_formal_slot, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn compute_unused_formal_parameter_names(
@@ -4003,13 +4003,4 @@ impl<'ast> CodeGenerator<'ast> {
         }
         analyzed.mutated_parameters.contains(param_name)
     }
-}
-
-
-/// Index of declared parameter `param_idx` in a registry signature. An implicit `self` (used, not declared) owns
-/// slot 0 of the signature but is not in `func.parameters`, so every declared formal sits one slot later; reading
-/// slot `param_idx` handed the first formal the receiver's `&mut` (`Option<T>` param emitted as `&mut Option<T>`).
-fn sig_formal_slot(func: &FunctionDecl<'_>, sig: &crate::analyzer::FunctionSignature, param_idx: usize) -> usize {
-    let declares_self = func.parameters.iter().any(|p| p.name == "self");
-    param_idx + usize::from(sig.has_self_receiver_slot() && !declares_self)
 }
