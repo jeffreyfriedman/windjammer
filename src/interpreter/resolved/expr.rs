@@ -188,6 +188,7 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
                 Some(t) => crate::interpreter::compiled_facts::int_literal(*i, t),
                 None => Value::Int(*i as i128, IntTy::Lit),
             },
+            Literal::Float(f) => cx.it.float_literal(cx.module, location.as_ref(), *f),
             _ => cx.it.literal(value),
         } {
             Value::Int(v, t) if small(t) && v as i64 as i128 == v => X::I(I::Const(v as i64), t),

@@ -46,7 +46,7 @@ impl Interpreter {
                 }
                 if let Some(ft) = type_is_float(ty) {
                     if *it == IntTy::Lit {
-                        return Ok(Value::Float(*i as f64, ft));
+                        return Ok(Value::Float(if ft == FloatTy::F32 { *i as f32 as f64 } else { *i as f64 }, ft));
                     }
                 }
                 Ok(v)
