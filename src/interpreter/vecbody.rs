@@ -89,7 +89,8 @@ impl Packed {
                 Ok(n) => at(v, i, n),
                 Err(_) => false,
             },
-            (Packed::Float(v, t), Value::Float(f, u)) if t == u => at(v, i, *f),
+            // an untyped float literal stored into an `f64` packing is an `f64` element (vecretag.md, item 6)
+            (Packed::Float(v, t), Value::Float(f, u)) if t == u || (*t == FloatTy::F64 && *u == FloatTy::Lit) => at(v, i, *f),
             _ => false,
         }
     }

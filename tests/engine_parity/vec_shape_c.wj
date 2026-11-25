@@ -1,0 +1,25 @@
+// Shape C: a vec built inside a function with literal pushes, returned, then passed on to consumers.
+fn build(n: int) -> Vec<float> {
+    let mut v: Vec<float> = []
+    let mut k = 0
+    while k < n {
+        v.push(3.0)
+        k += 1
+    }
+    v
+}
+
+fn consume(v: Vec<float>, i: int) -> float {
+    v[i as usize] + 0.25
+}
+
+fn main() {
+    let v = build(100000)
+    let mut s = 0.0
+    let mut c = 0
+    while c < 20 {
+        s += consume(v, c)
+        c += 1
+    }
+    println("${s}")
+}

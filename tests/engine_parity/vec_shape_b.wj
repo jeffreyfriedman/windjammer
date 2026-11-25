@@ -1,0 +1,24 @@
+// Shape B: the vec passes through two levels of functions; the second hop already carries the formal's tag.
+fn inner(v: Vec<float>, i: int) -> float {
+    v[i as usize] + 1.0
+}
+
+fn outer(heights: Vec<float>, i: int) -> float {
+    inner(heights, i) * 0.5
+}
+
+fn main() {
+    let mut v: Vec<float> = []
+    let mut k = 0
+    while k < 100000 {
+        v.push(2.5)
+        k += 1
+    }
+    let mut s = 0.0
+    let mut c = 0
+    while c < 20 {
+        s += outer(v, c)
+        c += 1
+    }
+    println("${s}")
+}
