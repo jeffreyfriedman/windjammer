@@ -125,6 +125,24 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Does the std declaration make `recv.method(d)` the payload default of an `Option<T>`/`Result<T, E>`: one parameter and a
+    /// result of the payload type `T`? `lazy` asks for a default given as a function returning `T` (`unwrap_or_else`), otherwise
+    /// the default is a `T` itself (`unwrap_or`). Decided by the declared signature, never by the method's name.
+    fn declares_payload_default(&self, recv: Option<&Type>, method: &str, lazy: bool) -> bool {
+        let Some(recv @ (Type::Option(payload) | Type::Result(payload, _))) = recv else { return false };
+        let Some(sig) = self.core_surface().method_signature(recv, method, &[]) else { return false };
+        let [param] = sig.params.as_slice() else { return false };
+        let payload = payload.as_ref();
+        // An unfixed payload (`Type::Infer`) comes back from the surface as the declaration's generic.
+        let is_payload = |t: &Type| t == payload || (matches!(payload, Type::Infer) && matches!(t, Type::Generic(_)));
+        sig.ret.as_ref().is_some_and(is_payload)
+            && if lazy {
+                matches!(param, Type::FunctionPointer { return_type: Some(r), .. } if is_payload(r))
+            } else {
+                is_payload(param)
+            }
+    }
+
     /// `Option<&T>.unwrap_or(default)`: the default has the owned element type. Lookups yield `Option<&T>`; a Copy `T`
     /// is copied out (`.copied()`) when the default is by value, with the literal at `T`'s width, and a string-literal default stays `&str` for
     /// `Option<&String>`/`Option<&str>`. Also: `Ord::cmp`/`partial_cmp` take `&Self`, so the borrow is never stripped.
@@ -140,16 +158,16 @@ impl<'ast> CodeGenerator<'ast> {
             args[0] = format!("&{}", args[0]);
         }
         // `r ?? default` desugars to `unwrap_or_else(|| default)`; a `Result` passes the error to the closure.
-        if method == "unwrap_or_else"
-            && args.len() == 1
+        if args.len() == 1
             && args[0].starts_with("|| ")
             && matches!(recv_ty, Some(Type::Result(..)))
+            && self.declares_payload_default(recv_ty, method, true)
         {
             args[0].replace_range(..2, "|_|");
         }
         // `r.f ?? d` (`unwrap_or_else(|| d)`) consumes the field place as `unwrap_or` does: a field of an owned
         // binding that is read again (the field, or the whole binding) is copied first.
-        if method == "unwrap_or_else" && args.len() == 1 {
+        if args.len() == 1 && self.declares_payload_default(recv_ty, method, true) {
             if let (Expression::FieldAccess { .. }, Some(Type::Option(inner) | Type::Result(inner, _))) = (object, recv_ty) {
                 if !matches!(inner.as_ref(), Type::Reference(_)) && self.field_root_read_again(object) {
                     let base = obj_str.strip_suffix(".as_ref()").unwrap_or(obj_str.as_str()).to_string();
@@ -158,7 +176,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return;
         }
-        if method != "unwrap_or" || args.len() != 1 {
+        // `it.next()` on a synthetic `Vec<&T>` iterator type is `Option<&T>`.
+        let derived = match object {
+            Expression::MethodCall { object: it, method: m, .. }
+                if matches!(m.as_str(), "next" | "last" | "nth" | "next_back") =>
+            {
+                match self.infer_expression_type(it) {
+                    Some(Type::Vec(item)) => Some(Type::Option(item)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        if args.len() != 1 || !self.declares_payload_default(recv_ty.or(derived.as_ref()), method, false) {
             return;
         }
         // `r.name.unwrap_or(d)` with `r` behind a reference: the value of the field is read, never moved out of
@@ -174,18 +204,6 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
         }
-        // `it.next()` on a synthetic `Vec<&T>` iterator type is `Option<&T>`.
-        let derived = match object {
-            Expression::MethodCall { object: it, method: m, .. }
-                if matches!(m.as_str(), "next" | "last" | "nth" | "next_back") =>
-            {
-                match self.infer_expression_type(it) {
-                    Some(Type::Vec(item)) => Some(Type::Option(item)),
-                    _ => None,
-                }
-            }
-            _ => None,
-        };
         let Some(Type::Option(inner)) = recv_ty.or(derived.as_ref()) else { return };
         let Type::Reference(pointee) = inner.as_ref() else { return };
         let is_text = matches!(pointee.as_ref(), Type::String)
