@@ -50,6 +50,9 @@ codes:
   - code: WJ0194
     title: Name is not re-exported
     rust_codes: [E0425, E0433]
+  - code: WJ0195
+    title: Undefined shader function
+    rust_codes: []
   - code: WJ0160
     title: Arena value escapes its arena
     rust_codes: []

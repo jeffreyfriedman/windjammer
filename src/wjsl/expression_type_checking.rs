@@ -526,7 +526,42 @@ impl<'a> BodyParser<'a> {
         })
     }
 
+    /// WJ0195: a call whose name is neither a WGSL builtin, a constructor, a struct
+    /// nor a user function.
+    fn check_callee_defined(&self, name: &str) -> Result<()> {
+        use crate::wjsl::builtins::{is_builtin_function, is_constructor_name};
+        if is_builtin_function(name)
+            || is_constructor_name(name)
+            || self.structs.contains_key(name)
+            || self.fn_names.iter().any(|f| f == name)
+            || self.ast_functions.iter().any(|f| f.0 == name)
+        {
+            return Ok(());
+        }
+        let line = self.body_line + self.lexer.line().saturating_sub(1);
+        let mut best: Option<(u32, &str)> = None;
+        let candidates = crate::wjsl::builtins::WGSL_BUILTINS
+            .iter()
+            .copied()
+            .chain(self.fn_names.iter().map(String::as_str));
+        for c in candidates {
+            let d = crate::wjsl::diagnostics::levenshtein(&name.to_lowercase(), &c.to_lowercase());
+            if d <= 3 && best.is_none_or(|(bd, _)| d < bd) {
+                best = Some((d, c));
+            }
+        }
+        let hint = match best {
+            Some((_, c)) => format!("did you mean `{c}`?"),
+            None => "define it with `fn`, or check the spelling of the WGSL builtin".to_string(),
+        };
+        Err(anyhow!(
+            "error[WJ0195]: undefined function `{name}` (line {line}, in `{}`)\n  hint: {hint}",
+            self.fn_name
+        ))
+    }
+
     pub(crate) fn parse_function_call(&mut self, name: &str) -> Result<Type> {
+        self.check_callee_defined(name)?;
         self.expect(Token::LParen)?;
         let mut arg_types = Vec::new();
         while !matches!(self.current, Token::RParen | Token::Eof) {

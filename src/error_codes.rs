@@ -443,6 +443,16 @@ process::run_with_args("echo", [name])"#.to_string()),
             rust_codes: vec!["E0425".to_string(), "E0433".to_string()],
             maturity: GuaranteeMaturity::HighConfidence,
         });
+        self.register(WjErrorCode {
+            code: "WJ0195".to_string(),
+            title: "Undefined shader function".to_string(),
+            explanation: "A WJSL shader calls a name that is not a WGSL builtin, a value constructor, a struct or a function declared with `fn` in the shader; reported at build time instead of failing later in the WGSL validator.".to_string(),
+            causes: vec!["A misspelled builtin such as `normalise`, or a helper that was never defined".to_string()],
+            solutions: vec!["Correct the spelling (the diagnostic names the closest builtin or user function)".to_string(), "Define the function with `fn` or import the file that defines it".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
     }
 
     /// ADR-0002: explicit `let mut` (WJ0051).

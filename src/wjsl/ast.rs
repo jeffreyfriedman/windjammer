@@ -119,6 +119,8 @@ pub struct EntryPoint {
     pub return_type: Option<ReturnType>,
     /// Raw function body (for Phase 1)
     pub body: String,
+    /// 1-based source line where the body starts (for diagnostics)
+    pub body_line: usize,
 }
 
 /// Helper function (non-entry-point)
@@ -128,6 +130,8 @@ pub struct Function {
     pub params: Vec<Param>,
     pub return_type: Option<Type>, // None = void (no return type in WGSL)
     pub body: String,
+    /// 1-based source line where the body starts (for diagnostics)
+    pub body_line: usize,
 }
 
 /// Function parameter with optional attributes

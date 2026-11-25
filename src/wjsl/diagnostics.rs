@@ -163,7 +163,7 @@ fn storage_binding_name(line: &str) -> Option<&str> {
     rest.split(':').next()?.trim().split_whitespace().next()
 }
 
-fn levenshtein(a: &str, b: &str) -> u32 {
+pub(crate) fn levenshtein(a: &str, b: &str) -> u32 {
     if a == b {
         return 0;
     }

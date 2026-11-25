@@ -490,3 +490,12 @@ name = "clean --generated rejects a path argument"
 polarity = "negative"
 args = ["clean", "--generated", "extra"]
 exit = 2
+
+[[case]]
+name = "build --target wgsl rejects a call to an undefined function (WJ0195) and writes nothing"
+polarity = "negative"
+files = { "s.wjsl" = "@compute @workgroup_size(1, 1, 1)\nfn main() {\n    let a = 1.0;\n    let b = normalise(vec3(a, a, a));\n}\n" }
+args = ["build", "--target", "wgsl", "{w}/s.wjsl", "-o", "{w}/out"]
+exit = 1
+output_has = ["WJ0195", "did you mean `normalize`"]
+absent = ["out/s.wgsl"]
