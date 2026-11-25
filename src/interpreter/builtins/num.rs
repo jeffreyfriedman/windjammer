@@ -31,7 +31,7 @@ fn float_of(v: &Value) -> (f64, FloatTy) {
 }
 
 fn fl(f: f64, t: FloatTy) -> Value {
-    Value::Float(if t == FloatTy::F32 { f as f32 as f64 } else { f }, t)
+    Value::Float(if t == FloatTy::F32 { crate::interpreter::value::round_f32_carrier(f) } else { f }, t)
 }
 
 macro_rules! int_pure {
@@ -395,7 +395,7 @@ fn mask(t: IntTy) -> i128 {
 
 /// The IEEE-754 bytes of a float as a `Vec<u8>`: 4 for `f32`, 8 for `f64`.
 fn float_bytes((x, t): (f64, FloatTy), big_endian: bool) -> Value {
-    let mut bytes = if t == FloatTy::F32 { (x as f32).to_le_bytes().to_vec() } else { x.to_le_bytes().to_vec() };
+    let mut bytes = if t == FloatTy::F32 { crate::interpreter::value::carrier_to_f32_bits(x).to_le_bytes().to_vec() } else { x.to_le_bytes().to_vec() };
     if big_endian {
         bytes.reverse();
     }
@@ -481,7 +481,7 @@ fn register_float(r: &mut Registry) {
     r.pure(Kind::Float, "to_bits", |_, v, _| {
         let (x, t) = float_of(v);
         Ok(if t == FloatTy::F32 {
-            Value::Int((x as f32).to_bits() as i128, IntTy::U32)
+            Value::Int(crate::interpreter::value::carrier_to_f32_bits(x) as i128, IntTy::U32)
         } else {
             Value::Int(x.to_bits() as i128, IntTy::U64)
         })

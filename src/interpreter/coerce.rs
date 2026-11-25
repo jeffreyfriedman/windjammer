@@ -53,7 +53,7 @@ impl Interpreter {
             }
             (Value::Float(f, _), _) => {
                 if let Some(ft) = type_is_float(ty) {
-                    let f = if ft == FloatTy::F32 { *f as f32 as f64 } else { *f };
+                    let f = if ft == FloatTy::F32 { super::value::round_f32_carrier(*f) } else { *f };
                     return Ok(Value::Float(f, ft));
                 }
                 Ok(v)
@@ -171,6 +171,13 @@ impl Interpreter {
             let f = match &v {
                 Value::Int(i, IntTy::U128) => *i as u128 as f64,
                 Value::Int(i, _) => *i as f64,
+                // `f32 as f64` of a NaN quiets it (the hardware widening); `f32 as f32` is the identity
+                Value::Float(f, FloatTy::F32) if f.is_nan() => {
+                    if ft == FloatTy::F32 {
+                        return Ok(v.clone());
+                    }
+                    f64::from_bits(f.to_bits() | (1u64 << 51))
+                }
                 Value::Float(f, _) => *f,
                 other => return Err(unsupported(format!("cast of {} to float", other.type_name()))),
             };

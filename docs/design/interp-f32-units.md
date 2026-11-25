@@ -103,8 +103,17 @@ mirrors whatever the interpreter does when the unit lands (section 3).
 | L2 | `powi`, `to_degrees`, `to_radians` on f32 | f64, rounded | f32 operations (square-and-multiply; multiply by an f32 constant) | P2 |
 | L3 | a float or integer literal assigned to an f32 place (`y = 0.1`); `16777217_f32`; integer literal coerced to f32 | **unrounded** f64 kept under the F32 tag (`retag` in `src/interpreter/eval_stmt.rs` and `src/interpreter/resolved/compile.rs`; the `"f32"` suffix in `src/interpreter/eval_expr.rs`; `Int(Lit)` in `coerce`) | rounded at compile time (`0.1_f32`, P5) | P3: `y as f64` prints `0.1` |
 | L4 | `i64`/`u64`/`isize`/`usize` above 2^53 `as f32` | `i -> f64 -> f32`, double rounding | single rounding | P3 (m2): 0x5a800000 vs 0x5a800001 |
-| L5 | `f32::from_bits(sNaN).to_bits()` | quieted (0x7fc00001) | unchanged (0x7f800001) | P4 |
 | L6 | literal-only arithmetic in an f32 context (`let x: f32 = 0.1 * 3.0`) | f64 arithmetic, rounded once at the coercion | f32 arithmetic per operation | argued from `float_binary` (Lit with Lit stays Lit); not probed |
+
+L5 is fixed (row removed): `f32::from_bits`, `f32::from_le_bytes`, `to_bits` and `to_le_bytes` map a NaN by bits
+(`f32_bits_to_carrier`, `carrier_to_f32_bits` in `src/interpreter/value.rs`): the carrier of a NaN is built as
+sign | exponent | mantissa << 29 with the quiet bit as given, never by an `f32 -> f64` conversion (x86 `cvtss2sd` sets the
+quiet bit). Moves of the carrier (assignment, arguments, fields, vectors, negation, `abs`) keep the bits, and the f32
+rounding of a coerced or method-result value leaves a NaN untouched (`round_f32_carrier`). Known limit: an arithmetic
+operation on a signalling NaN quiets it, as the hardware does for f32 and f64 alike; `as f64` of an f32 NaN sets the
+quiet bit (the interpreter does the same); the payload that compiled Rust shows after arithmetic or a widening can
+depend on the optimizer's constant folding, which the interpreter does not model. `tests/f32_parity/f32_nan_payload.wj`
+pins the moves against compiled Rust.
 
 L3 is the one that matters for the unit's representation. An F32-tagged value can hold an f64 that f32 cannot
 represent, and that is observable: through `as f64`, through `Value` equality and ordering (`value.rs` compares raw
