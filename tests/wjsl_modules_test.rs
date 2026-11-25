@@ -362,7 +362,7 @@ fn qualified_use_of_a_private_item_is_rejected_with_the_call_position() {
     let e = "use crate::brdf\n@fragment\nfn fs() -> @location(0) vec4<f32> {\n    return vec4<f32>(brdf::unused_helper());\n}\n";
     let d = tree(&[("brdf.wjsl", BRDF), ("e.wjsl", e)]);
     let err = emit(d.path(), "e.wjsl").unwrap_err();
-    assert!(err.contains("e.wjsl:4:23: error[WJ0198]: `unused_helper` is private to `brdf`"), "{err}");
+    assert!(err.contains("e.wjsl:4:22: error[WJ0198]: `unused_helper` is private to `brdf`"), "{err}");
 }
 
 #[test]
@@ -408,7 +408,7 @@ fn a_local_item_or_a_second_import_with_an_imported_name_is_a_collision_error() 
     let e = format!("use crate::consts::f0\nfn f0() -> f32 {{\n    return 1.0;\n}}\n{FRAG}");
     let d = tree(&[("consts.wjsl", CONSTS), ("e.wjsl", &e)]);
     let err = emit(d.path(), "e.wjsl").unwrap_err();
-    assert!(err.contains("e.wjsl:1:19: error[WJ0197]: `f0` is imported from `consts` but already declared or imported here"), "{err}");
+    assert!(err.contains("e.wjsl:1:20: error[WJ0197]: `f0` is imported from `consts` but already declared or imported here"), "{err}");
     let other = "pub fn f0() -> f32 {\n    return 3.0;\n}\n";
     let e = format!("use crate::consts::f0\nuse crate::other::f0\n{FRAG}");
     let d = tree(&[("consts.wjsl", CONSTS), ("other.wjsl", other), ("e.wjsl", &e)]);
