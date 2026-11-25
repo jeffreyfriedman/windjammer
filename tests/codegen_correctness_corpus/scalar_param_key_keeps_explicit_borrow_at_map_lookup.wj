@@ -1,0 +1,21 @@
+// expect: 20 0 true
+// `k: int` is passed by value (`k: i64`) even though it is only used as a lookup key; the `&k` the program writes at
+// the lookup is kept (rustc rejects `m.get(k)` with E0308).
+use std::collections::HashMap
+
+fn get_or(m: HashMap<int, int>, k: int, d: int) -> int {
+    match m.get(&k) {
+        Some(v) => *v,
+        None => d,
+    }
+}
+
+fn has(m: HashMap<int, int>, k: int) -> bool {
+    m.contains_key(&k)
+}
+
+fn main() {
+    let mut m: HashMap<int, int> = HashMap::new()
+    m.insert(1, 20)
+    println("${get_or(m, 1, -1)} ${get_or(m, 5, 0)} ${has(m, 1)}")
+}

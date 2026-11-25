@@ -1,0 +1,33 @@
+// HashMap-heavy: counting keys, then lookups.
+use std::collections::HashMap
+use std::time
+
+fn main() {
+    let t0 = time::now_unix_nano()
+    let mut m: HashMap<int, int> = HashMap::new()
+    let mut i = 0
+    while i < @iters@ {
+        let k = (i * 7919) % @keys@
+        let c = match m.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        m.insert(k, c + 1)
+        i += 1
+    }
+    let mut best = 0
+    let mut j = 0
+    while j < @keys@ {
+        match m.get(&j) {
+            Some(v) => {
+                if *v > best {
+                    best = *v
+                }
+            }
+            None => {}
+        }
+        j += 1
+    }
+    eprintln("STEADY_NS ${time::now_unix_nano() - t0}")
+    println("${m.len()} ${best}")
+}
