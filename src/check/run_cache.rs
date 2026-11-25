@@ -56,7 +56,7 @@ pub fn key(path: &Path, lints_block: bool, format: &str) -> Option<String> {
 /// `WINDJAMMER_*` environment. `None` for a build of unknown origin.
 fn context(kind: &str) -> Option<Sha256> {
     let compiler = compiler_identity()?;
-    let cwd = std::env::current_dir().ok()?;
+    let cwd = super::ambient::cwd().ok()?;
     let mut h = Sha256::new();
     part(&mut h, format!("{kind}\n{FORMAT}").as_bytes());
     part(&mut h, compiler.as_bytes());

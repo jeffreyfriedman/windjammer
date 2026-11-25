@@ -1,7 +1,7 @@
 //! `wj check`: the front end of the compiler as a standalone, rustc-free checker.
 //! See `MODULE.md` and `docs/DIAGNOSTICS.md`.
 
-mod ambient;
+pub(crate) mod ambient;
 mod cache;
 mod dep_sources;
 pub mod durable_sites;

@@ -86,17 +86,16 @@ pub fn check() -> bool {
     )
     .unwrap();
 
-    let outcome = windjammer::test_utils::in_dir(temp.path(), || {
-        build_project_ext(
-            Path::new("src"),
-            &build,
-            CompilationTarget::Rust,
-            false,
-            true,
-            &[],
-        )
-    });
-    outcome.expect("multipass build with relative src/");
+    // a child process started in the project directory: the project root really is the relative path `src`
+    // (never a chdir of this test process, which is shared by every concurrent test)
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", "src", "--output"])
+        .arg(&build)
+        .args(["--library", "--no-cargo"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "multipass build with relative src/:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
 
     let usage = fs::read_to_string(build.join("usage.rs")).expect("usage.rs");
     assert!(

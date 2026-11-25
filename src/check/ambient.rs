@@ -37,13 +37,38 @@ pub fn use_depth<'a>(programs: impl IntoIterator<Item = &'a crate::parser::Progr
     UseScope { depth, names: names.into_iter().collect() }
 }
 
+thread_local! {
+    static CWD_OVERRIDE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The working directory the check caches key on: the process's, unless this thread runs [`with_cwd`]. Tests use the
+/// override instead of changing the process-wide directory (which pulls it from under every concurrent test).
+pub fn cwd() -> std::io::Result<std::path::PathBuf> {
+    match CWD_OVERRIDE.with(|c| c.borrow().clone()) {
+        Some(d) => Ok(d),
+        None => std::env::current_dir(),
+    }
+}
+
+/// Run `f` with [`cwd`] answering `dir` on this thread (restored afterwards, also on panic). Never touches the process.
+pub fn with_cwd<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<std::path::PathBuf>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            CWD_OVERRIDE.with(|c| *c.borrow_mut() = self.0.take());
+        }
+    }
+    let _restore = Restore(CWD_OVERRIDE.with(|c| c.borrow_mut().replace(dir.to_path_buf())));
+    f()
+}
+
 /// Digest of every `*.wj.meta` sidecar within `depth` levels of the working directory and of its `.wj-cache/`,
 /// independent of where the working directory is: sidecars are named relative to it, so the same sidecar contents
 /// give the same digest in any checkout. It keys the whole-run cache, the per-project memo and the shared analysis
 /// cache alike. `None` when the working directory is unknown, the walk exceeds its budget, or a sidecar lies outside
 /// the working directory (a path that cannot be named portably): the caller must not cache.
 pub fn fingerprint(scope: &UseScope) -> Option<String> {
-    fingerprint_in(&std::env::current_dir().ok()?, scope)
+    fingerprint_in(&cwd().ok()?, scope)
 }
 
 /// [`fingerprint`] for the working directory `cwd`.

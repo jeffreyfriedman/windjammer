@@ -146,14 +146,11 @@ pub fn hold_cwd() -> CwdGuard {
     CwdGuard(Some(guard))
 }
 
-/// Run `f` with `dir` as the working directory. The working directory is process-wide, so every test that changes
-/// it goes through here (one lock for the whole test binary, however many modules include a helper); the previous
-/// directory is restored even when `f` panics, and falls back to the manifest dir when it was removed meanwhile.
+/// Run `f` with `dir` as the working directory the check caches key on. The process's own working directory is never
+/// changed (it is process-wide: a chdir pulls it from under every concurrent test, and a child process spawned
+/// meanwhile inherits a directory that is deleted a moment later: "Current directory is invalid"). The override is
+/// per thread; the lock still serializes with tests that watch a process-wide store (`hold_cwd`).
 pub fn in_dir<T>(dir: &std::path::Path, f: impl FnOnce() -> T) -> T {
     let _g = hold_cwd();
-    let prev = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    std::env::set_current_dir(dir).unwrap();
-    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-    std::env::set_current_dir(&prev).unwrap_or_else(|_| std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap());
-    r.unwrap_or_else(|e| std::panic::resume_unwind(e))
+    crate::check::ambient::with_cwd(dir, f)
 }
