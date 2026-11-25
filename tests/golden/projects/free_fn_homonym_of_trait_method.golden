@@ -19,7 +19,7 @@ mod usecases;
 mod routes;
 fn main() {
     let deps = usecases::Deps { shelf: shelf::Shelf { items: vec!["a".to_string(), "b".to_string()] }, tag: String::from("t") };
-    println!("{}", routes::handle(deps, String::from("t")));
+    println!("{}", routes::handle(deps, "t".to_string()));
 }
 
 // ==== mod.rs ====

@@ -152,5 +152,5 @@ fn literal_into_free_fn_owned_formal_spelling_is_order_independent() {
         // Caller: every homonym once, plus the builtin `Vec::contains` / `Vec::push` on a late-inferred local.
         ("{M3}.wj", "pub fn drive(ledger: Ledger, probe: Probe, ids: Vec<i64>) -> Counter {\n    ledger.record(\"owned\")\n    let seen_probe = probe.record(\"shared\")\n    let pushed = probe.push(\"frame\") && probe.tag(\"x\", \"y\") && tag(\"p\", \"q\").len() > 1\n    let mut seen = Vec::new()\n    let mut j = 0\n    while j < ids.len() {\n        let id = ids[j]\n        if !seen.contains(id) && ledger.contains(id) {\n            seen.push(id)\n        }\n        j = j + 1\n    }\n    let mut names = Vec::new()\n    names.push(\"n\")\n    if seen_probe && pushed && seen.len() > names.len() {\n        return Counter::record(\"static\")\n    }\n    Counter::record(\"other\")\n}\n"),
     ]);
-    assert_has(&out, "{M3}.rs", "tag(String::from(\"p\"), String::from(\"q\"))");
+    assert_has(&out, "{M3}.rs", "tag(\"p\".to_string(), \"q\".to_string())");
 }

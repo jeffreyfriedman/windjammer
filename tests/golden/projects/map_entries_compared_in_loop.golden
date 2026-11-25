@@ -28,13 +28,13 @@ fn main() {
     let mut q = HashMap::new();
     q.insert(String::from("a"), String::from("1"));
     q.insert(String::from("b"), String::from("2"));
-    let hit: String = match lookup::query_value(&q, String::from("b")) {
+    let hit: String = match lookup::query_value(&q, "b".to_string()) {
         Some(v) => v,
         None => String::from("none"),
     };
     let mut q2 = HashMap::new();
     q2.insert(String::from("a"), String::from("1"));
-    let miss: String = match lookup::query_value(&q2, String::from("z")) {
+    let miss: String = match lookup::query_value(&q2, "z".to_string()) {
         Some(v) => v,
         None => String::from("none"),
     };

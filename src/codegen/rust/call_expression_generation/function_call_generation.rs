@@ -152,14 +152,30 @@ fn apply_owned_string_literal_coercion<'ast>(
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
     args: &mut [String],
 ) {
+    own_string_literal_args(gen, func_name, signature, arguments, args);
+    // A literal an owned formal takes is spelled `"x".to_string()` (the IR call-site encoding) whichever pass owned it: the
+    // literal-generation context (`String::from("x")`) or the call-site coercion. Which one ran depends on the order the
+    // files were analysed in; the output must not.
+    let free_fn_call = func_name.rsplit("::").nth(1).is_none_or(|owner| !owner.starts_with(|c: char| c.is_ascii_uppercase()));
+    for ((_, arg_expr), arg_str) in arguments.iter().zip(args.iter_mut()) {
+        if let (true, Expression::Literal { value: lit @ Literal::String(_), .. }) = (free_fn_call, arg_expr) {
+            if !arg_str.starts_with('&') && crate::codegen::rust::string_utilities::already_owned_string_expr(arg_str) {
+                *arg_str = format!("{}.to_string()", crate::codegen::rust::literals::generate_literal(lit));
+            }
+        }
+    }
+}
+
+fn own_string_literal_args<'ast>(
+    gen: &CodeGenerator<'ast>,
+    func_name: &str,
+    signature: &Option<crate::analyzer::FunctionSignature>,
+    arguments: &[(Option<String>, &'ast Expression<'ast>)],
+    args: &mut [String],
+) {
     // Signature-driven for all callees — including inline `mod` and lowercase
     // `module::fn` paths. Do not blanket-skip by module spelling.
     let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
-    // `f(..)` / `module::f(..)`, not `Type::f(..)` or `Enum::Variant(..)`
-    let free_fn_call = func_name
-        .rsplit("::")
-        .nth(1)
-        .is_none_or(|owner| !owner.starts_with(|c: char| c.is_ascii_uppercase()));
     let allow_simple_fallback = gen.inline_module_qualified_call(func_name)
         || !crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
             func_name,
@@ -237,11 +253,6 @@ fn apply_owned_string_literal_coercion<'ast>(
         ) || arg_str.ends_with(".to_string()")
             || arg_str.contains("string_to_ffi(")
         {
-            // One spelling for an owned literal passed to a free fn (`String::from("x")`, as every other owned
-            // literal slot): which pass owned it must not show in the output (it depends on file order).
-            if let Some(literal) = arg_str.strip_suffix(".to_string()").filter(|l| free_fn_call && l.starts_with('"') && l.ends_with('"')) {
-                *arg_str = crate::codegen::rust::literals::string_literal_to_owned_rust(literal);
-            }
             continue;
         }
         // Prefer defining-module / scanned-runtime `&str` over multipass WJ stubs

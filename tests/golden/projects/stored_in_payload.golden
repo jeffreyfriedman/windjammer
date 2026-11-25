@@ -10,8 +10,8 @@ pub use store::*;
 mod store;
 fn main() {
     let s = store::Session { prepared: Vec::new() };
-    let s = store::parse(s, String::from("a"));
-    let s = store::parse(s, String::from("b"));
+    let s = store::parse(s, "a".to_string());
+    let s = store::parse(s, "b".to_string());
     println!("{} {}", s.prepared.len(), s.prepared[1].name);
 }
 
