@@ -1,0 +1,64 @@
+// Step 2 check A4 (interp-call-unit.md section 10): a `let` that shadows a parameter must get its own
+// slot, never the parameter's (a Ref slot for an inferred &mut Vec parameter, or a scalar slot).
+// Reading: compile.rs `declare` gives every let a fresh slot (nslots += 1) and lower.rs `native` binds the
+// let to `reg.let_slot(s)`. This program pins it behaviourally, in hot caller loops (native-call candidates).
+// Run under both engines; outputs must match. Expected output: "3000 0". The scalar-parameter case is in
+// a4-shadow-scalar.wj (it currently crashes the front end, see that file).
+struct P {
+    x: f64,
+}
+
+fn make(k: int) -> Vec<P> {
+    let mut v: Vec<P> = Vec::new()
+    let mut i = 0
+    while i < k {
+        v.push(P { x: 1.0 })
+        i += 1
+    }
+    v
+}
+
+// the parameter is mutated (a Ref), then shadowed by a fresh vector that is written
+fn f1(ps: Vec<P>, k: int) {
+    let mut i = 0
+    while i < 3 {
+        ps[0].x += 0.5
+        i += 1
+    }
+    let mut ps = make(k)
+    let mut j = 0
+    while j < ps.len() {
+        ps[j].x = 9.0
+        j += 1
+    }
+}
+
+// the parameter is only read before being shadowed; the shadow is written: the caller must not see it
+fn f2(ps: Vec<P>, k: int) {
+    let mut t = 0.0
+    let mut i = 0
+    while i < ps.len() {
+        t += ps[i].x
+        i += 1
+    }
+    let mut ps = make(k)
+    let mut j = 0
+    while j < ps.len() {
+        ps[j].x = t
+        j += 1
+    }
+}
+
+fn main() {
+    let mut a: Vec<P> = Vec::new()
+    a.push(P { x: 0.0 })
+    let mut b: Vec<P> = Vec::new()
+    b.push(P { x: 0.0 })
+    let mut r = 0
+    while r < 2000 {
+        f1(a, 2)
+        f2(b, 2)
+        r += 1
+    }
+    println("${a[0].x as i64} ${b[0].x as i64}")
+}

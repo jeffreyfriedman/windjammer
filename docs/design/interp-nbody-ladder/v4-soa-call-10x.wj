@@ -1,0 +1,109 @@
+// VARIANT v4-soa-call: struct-of-arrays layout with advance as a function (today's function unit, one entry per call, O(1) packed views: emulates step 4 without steps 2/5).
+// n-body (5 bodies) with the bodies stored as seven Vec<f64> columns (struct of arrays).
+use std::time
+
+fn energy(xs: Vec<f64>, ys: Vec<f64>, zs: Vec<f64>, vxs: Vec<f64>, vys: Vec<f64>, vzs: Vec<f64>, ms: Vec<f64>) -> f64 {
+    let mut e = 0.0
+    let n = xs.len()
+    let mut i = 0
+    while i < n {
+        e += 0.5 * ms[i] * (vxs[i] * vxs[i] + vys[i] * vys[i] + vzs[i] * vzs[i])
+        let mut j = i + 1
+        while j < n {
+            let dx = xs[i] - xs[j]
+            let dy = ys[i] - ys[j]
+            let dz = zs[i] - zs[j]
+            e -= ms[i] * ms[j] / (dx * dx + dy * dy + dz * dz).sqrt()
+            j += 1
+        }
+        i += 1
+    }
+    e
+}
+
+fn advance(xs: Vec<f64>, ys: Vec<f64>, zs: Vec<f64>, vxs: Vec<f64>, vys: Vec<f64>, vzs: Vec<f64>, ms: Vec<f64>, dt: f64) {
+    let n = xs.len()
+    let mut i = 0
+    while i < n {
+        let mut j = i + 1
+        while j < n {
+            let dx = xs[i] - xs[j]
+            let dy = ys[i] - ys[j]
+            let dz = zs[i] - zs[j]
+            let d2 = dx * dx + dy * dy + dz * dz
+            let mag = dt / (d2 * d2.sqrt())
+            let mj = ms[j]
+            let mi = ms[i]
+            vxs[i] -= dx * mj * mag
+            vys[i] -= dy * mj * mag
+            vzs[i] -= dz * mj * mag
+            vxs[j] += dx * mi * mag
+            vys[j] += dy * mi * mag
+            vzs[j] += dz * mi * mag
+            j += 1
+        }
+        i += 1
+    }
+    let mut k = 0
+    while k < n {
+        xs[k] += dt * vxs[k]
+        ys[k] += dt * vys[k]
+        zs[k] += dt * vzs[k]
+        k += 1
+    }
+}
+
+fn main() {
+    let mut xs: Vec<f64> = Vec::new()
+    let mut ys: Vec<f64> = Vec::new()
+    let mut zs: Vec<f64> = Vec::new()
+    let mut vxs: Vec<f64> = Vec::new()
+    let mut vys: Vec<f64> = Vec::new()
+    let mut vzs: Vec<f64> = Vec::new()
+    let mut ms: Vec<f64> = Vec::new()
+    xs.push(0.0)
+    ys.push(0.0)
+    zs.push(0.0)
+    vxs.push(0.0)
+    vys.push(0.0)
+    vzs.push(0.0)
+    ms.push(39.47)
+    xs.push(4.84)
+    ys.push(-1.16)
+    zs.push(-0.10)
+    vxs.push(0.60)
+    vys.push(2.81)
+    vzs.push(-0.02)
+    ms.push(0.037)
+    xs.push(8.34)
+    ys.push(4.12)
+    zs.push(-0.40)
+    vxs.push(-1.01)
+    vys.push(1.82)
+    vzs.push(0.008)
+    ms.push(0.011)
+    xs.push(12.89)
+    ys.push(-15.11)
+    zs.push(-0.22)
+    vxs.push(1.08)
+    vys.push(0.86)
+    vzs.push(-0.01)
+    ms.push(0.0017)
+    xs.push(15.37)
+    ys.push(-25.91)
+    zs.push(0.17)
+    vxs.push(0.97)
+    vys.push(0.59)
+    vzs.push(-0.03)
+    ms.push(0.002)
+    let t0 = time::now_unix_nano()
+    let before = energy(xs, ys, zs, vxs, vys, vzs, ms)
+    let mut step = 0
+    while step < 200000 {
+        advance(xs, ys, zs, vxs, vys, vzs, ms, 0.01)
+        step += 1
+    }
+    let after = energy(xs, ys, zs, vxs, vys, vzs, ms)
+    eprintln("STEADY_NS ${time::now_unix_nano() - t0}")
+    println("${(before * 1000000.0) as i64} ${(after * 1000000.0) as i64}")
+}

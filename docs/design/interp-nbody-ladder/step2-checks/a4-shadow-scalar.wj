@@ -1,0 +1,16 @@
+// Step 2 check A4, scalar half: a let that shadows a scalar parameter, read by a loop condition.
+// FOUND 2026-11-24 with wj-rc3head (ff6e39555): `wj check` and `wj run --interpret` (both engines) abort with a
+// Rust stack overflow on this program (front end, before any engine runs). Same program with `let m = n * 2`
+// passes. File it as a front-end bug; the A4 parity check for scalar params waits for the fix. Expected: 6
+fn f3(n: int) {
+    let n = n * 2
+    let mut i = 0
+    while i < n {
+        i += 1
+    }
+    println("${i}")
+}
+
+fn main() {
+    f3(3)
+}

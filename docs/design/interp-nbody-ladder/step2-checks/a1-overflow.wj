@@ -1,0 +1,27 @@
+// Step 2 check A1, overflow half: the same recursion with no bound. Both engines must fail with the
+// message "stack overflow: recursion too deep for the interpreter stack" and a non-zero exit; the
+// depth reached is deliberately NOT printed (it depends on native bytes per level, and no test pins it).
+// Heavy: it recurses to the interpreter's stack budget (up to 4 GiB of main stack). Run only on a quiet box.
+struct P {
+    x: f64,
+}
+
+fn walk(ps: Vec<P>, d: int) {
+    let mut i = 0
+    while i < ps.len() {
+        ps[i].x += 1.0
+        i += 1
+    }
+    walk(ps, d + 1)
+}
+
+fn main() {
+    let mut ps: Vec<P> = Vec::new()
+    ps.push(P { x: 0.0 })
+    let mut r = 0
+    while r < 100 {
+        walk(ps, 0)
+        r += 1
+    }
+    println("unreachable")
+}
