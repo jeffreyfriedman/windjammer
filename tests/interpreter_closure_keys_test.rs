@@ -1,6 +1,6 @@
 //! The resolved engine finds the locals a closure or island names from the source text of its AST (`Debug`). That text
 //! must stay exact (same closures, same environments) and must not carry the source file's path, whose length would
-//! otherwise change the interpreter's cost (see src/source_map.rs `with_elided_paths`).
+//! otherwise change the interpreter's cost (see src/source_map.rs `elided_debug`).
 //!
 //! Closures with identical bodies at different spans capturing different locals, closures in loops, recursion and a second
 //! file are each run from two working directories of very different path lengths under both engines.
@@ -45,11 +45,16 @@ fn identical_closure_bodies_keep_their_own_environments_at_any_path_length() {
 
 #[test]
 fn location_debug_elides_the_path_only_on_request() {
-    use windjammer::source_map::{with_elided_paths, Location};
+    use windjammer::source_map::{elided_debug, Location};
     let l = Location { file: "/very/secret/dir/f.wj".into(), line: 3, column: 4 };
     let full = format!("{:?}", l);
     assert!(full.contains("/very/secret/dir/f.wj") && full.contains("line: 3") && full.contains("column: 4"), "{full}");
-    let elided = with_elided_paths(|| format!("{:?}", l));
+    let elided = elided_debug(&l);
     assert!(!elided.contains("secret") && elided.contains("line: 3") && elided.contains("column: 4"), "{elided}");
-    assert_eq!(format!("{:?}", l), full, "the elision does not leak out of its scope");
+    assert_eq!(format!("{:?}", l), full, "the elision is a property of the call, not of the process");
+    // It reaches Locations nested in containers, next to values whose Debug could be sensitive to the precision.
+    let nested = (vec![Some(l.clone())], true, false, 1.5f64, "s", 7usize);
+    let text = elided_debug(&nested);
+    assert!(!text.contains("secret") && text.contains("true") && text.contains("false") && text.contains("\"s\""), "{text}");
+    assert!(format!("{:?}", nested).contains("secret"));
 }

@@ -168,5 +168,5 @@ pub(super) fn boxed(v: Value) -> Value {
 /// The `Debug` text of an AST node for identifier scanning: source file paths are left out (they are no identifiers,
 /// and printing them made the cost depend on the working directory's length).
 pub(super) fn ast_text(x: &dyn std::fmt::Debug) -> String {
-    crate::source_map::with_elided_paths(|| format!("{:?}", x))
+    crate::source_map::elided_debug(x)
 }
