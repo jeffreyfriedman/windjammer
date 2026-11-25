@@ -39,11 +39,12 @@ impl Parser {
         intr: Intrinsic,
         arguments: Args,
     ) -> &'static Expression<'static> {
-        let function = self.alloc_expr(Expression::Identifier {
+        // The callee name is invented (`stderr.println(..)` has no `eprintln` in its source): no surface form of its own.
+        let function = self.alloc_synthetic(Expression::Identifier {
             name: intr.call_name().to_string(),
             location: self.current_location(),
         });
-        self.alloc_expr(Expression::Call {
+        self.alloc_synthetic(Expression::Call {
             function,
             arguments,
             location: self.current_location(),

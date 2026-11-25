@@ -1,4 +1,4 @@
-// Scaling-set generator (ADR-0020 rung 2): sizes.toml + templates/<kernel>.{wj,mjs,py} -> gen/<label>/<kernel>.<ext>.
+// Scaling-set generator (ADR-0020 rung 2): sizes.toml + templates/<kernel>.{wj.tmpl,mjs,py} (the Windjammer templates carry `@n@` placeholders: not programs, so not `.wj`) -> gen/<label>/<kernel>.<ext>.
 // Deterministic: no clock, no randomness, sections in file order; running it twice writes the same bytes.
 // Usage (from the repository root):
 //   wj run --interpret --allow 'fs.read=bench/interp/scaling/**' --allow 'fs.write=**' \
@@ -84,7 +84,7 @@ fn main() {
         let dir = root + "/gen/" + labels[s]
         fs.create_dir_all(dir)
         for ext in ["wj", "mjs", "py"] {
-            let template = match fs.read_to_string(root + "/templates/" + kernels[s] + "." + ext) {
+            let template = match fs.read_to_string(root + "/templates/" + kernels[s] + "." + ext + (if ext == "wj" { ".tmpl" } else { "" })) {
                 Ok(t) => t,
                 Err(e) => {
                     fail("no template for ${kernels[s]}.${ext}: ${e}")

@@ -1,3 +1,4 @@
+// oracle: check
 // Packed vectors in machine-code loops: the lean `push` (an element appended to the packing without a `Value`) and
 // the inline `v[i]` read through a view (`jit/rt.rs::read_view`, `lower_expr.rs::view_load`). Each case is a way
 // the view must be dropped or never built: growth by push past the capacity, a vector two names reach, a vector
@@ -27,6 +28,8 @@ fn sieve(n: int) -> int {
 }
 
 fn touch(v: &mut Vec<int>, i: int) {
+//~@13+5 ERROR W0001 explicit ownership annotation
+//~@13+5 ERROR W0004 explicit borrow in function
     v[i] = v[i] + 100
 }
 
