@@ -270,7 +270,14 @@ fn copy_checkout_of_length(src: string, chars: int) -> (string, string) {
 
 // `--self-test-cwd WJ_BIN`: agent_loop, cold and warm, costs the same (< 0.5%) from a 28-character and an 87-character
 // path: the interpreter must not format or hash source paths per use (it did: +55K instructions per character).
-fn self_test_cwd(c: string, wj: string, cwd: string, seed: string, runs: int) {
+//
+// Noise floor: two runs of the SAME path length differ by about +-0.3% (1.1M Ir on a cold agent_loop), because every
+// process draws its own random seeds (HashMap RandomState: the iteration order, so the work done, differs a little per
+// run). The 0.5% limit is only meaningful when each side is the minimum of at least 2 runs (the counter's noise only
+// adds), so this test never measures a path length fewer than 2 times, cold and warm, whatever --runs says. A real
+// path dependence (~18K Ir per character cold, 55K warm: 1M+ over the 59 characters of difference) stays far above it.
+fn self_test_cwd(c: string, wj: string, cwd: string, seed: string, runs_arg: int) {
+    let runs = if runs_arg < 2 { 2 } else { runs_arg }
     let expected = fs::read_to_string("${BENCH}/expected/agent_loop.out") ?? ""
     let (short_base, short) = copy_checkout_of_length(cwd, 28)
     let (long_base, long) = copy_checkout_of_length(cwd, 87)
