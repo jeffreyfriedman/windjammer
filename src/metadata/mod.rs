@@ -25,7 +25,7 @@ pub use crate_metadata::{
     collect_string_const_names, collect_variant_payloads, find_project_root, global_meta_cache_dir,
     load_function_signatures_from_metadata,
     load_merged_external_function_signatures, load_merged_external_struct_fields,
-    load_string_const_names, load_struct_field_types_from_file, meta_cache_path, meta_cache_root,
+    load_string_const_names, load_struct_field_types_from_file, meta_cache_path, meta_cache_root, peer_meta_entries,
     resolve_metadata_json_path, CrateMetadata,
 };
 pub use function_metadata::{
@@ -129,10 +129,9 @@ pub fn merge_wj_meta_signatures_from_dir_reaching(
     let prev = PEER_SCOPE.with(|c| c.replace(Some(scope)));
     let mut copy_structs = Vec::new();
     let mut all_struct_fields = HashMap::new();
-    let meta_root = crate_metadata::meta_cache_root(root, cache_root);
-    if meta_root.exists() {
+    for meta in crate_metadata::cache_merge_roots(root, cache_root) {
         merge_wj_meta_signatures_from_dir_inner(
-            &meta_root,
+            &meta,
             Some(cache_root),
             registry,
             &mut copy_structs,
@@ -156,7 +155,7 @@ pub fn merge_wj_meta_signatures_from_dir_reaching(
 /// that look a module's entry up directly. `cache_root` is the shared cache root (given with `source_root`).
 pub fn read_current_cached_meta(source_root: Option<(&Path, &Path)>, candidate: &Path) -> Option<ModuleMetadata> {
     let path = match source_root {
-        Some((root, cache_root)) => crate_metadata::meta_cache_root(root, cache_root).join(candidate),
+        Some((root, cache_root)) => crate_metadata::cached_meta_path(root, candidate, cache_root),
         None => PathBuf::from(".wj-cache").join(candidate),
     };
     let meta: ModuleMetadata = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
@@ -237,10 +236,9 @@ pub fn merge_wj_meta_signatures_and_copy_structs(
 ) {
     let mut copy_structs = Vec::new();
     let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
-    let meta_root = crate_metadata::meta_cache_root(root, cache_root);
-    if meta_root.exists() {
+    for meta in crate_metadata::cache_merge_roots(root, cache_root) {
         merge_wj_meta_signatures_from_dir_inner(
-            &meta_root,
+            &meta,
             Some(cache_root),
             registry,
             &mut copy_structs,

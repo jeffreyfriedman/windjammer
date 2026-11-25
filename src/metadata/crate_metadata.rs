@@ -107,7 +107,7 @@ pub fn global_meta_cache_dir(cache_root: &Path) -> PathBuf {
 /// The module root of a manifest-less tree. Climb out of module directories (a directory holding
 /// `mod.wj`, or one with a sibling `<name>.wj`), but stop at the nearest ancestor named `src` when that
 /// lies at or above the result. Otherwise the file's own directory.
-fn projectless_root(start: &Path) -> PathBuf {
+pub(crate) fn projectless_root(start: &Path) -> PathBuf {
     let dir = if start.is_file() { start.parent().unwrap_or(start) } else { start };
     let abs = dir.canonicalize().unwrap_or_else(|_| {
         if dir.is_absolute() { dir.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(dir) }
@@ -128,7 +128,7 @@ fn projectless_root(start: &Path) -> PathBuf {
     }
 }
 
-fn projectless_cache_root(start: &Path, cache_root: &Path) -> PathBuf {
+pub(crate) fn projectless_cache_root(start: &Path, cache_root: &Path) -> PathBuf {
     global_meta_cache_dir(cache_root).join(super::projectless_key::tree_key(start))
 }
 
@@ -143,11 +143,78 @@ fn projectless_meta_path(source_file: &Path, cache_root: &Path) -> PathBuf {
         if source_file.is_absolute() { source_file.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(source_file) }
     });
     let rel = abs.strip_prefix(&root).map(Path::to_path_buf).unwrap_or_else(|_| PathBuf::from(abs.file_name().unwrap_or_default()));
-    let mut p = projectless_cache_root(source_file, cache_root);
+    // One entry per module file, keyed by what THAT file depends on (never by the program's entry file): a peer's
+    // entry stays where the regeneration of another file looks for it.
+    let mut p = global_meta_cache_dir(cache_root).join(super::projectless_key::file_key(&abs, &root));
     p.push(rel);
     let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
     p.set_file_name(format!("{name}.meta"));
     p
+}
+
+/// The existing cache entries of the modules of the manifest-less program `start` (a file, or a directory) belongs to:
+/// one per module file of its closure, found without listing any directory.
+pub(crate) fn projectless_peer_metas(start: &Path, cache_root: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = super::projectless_key::peer_sources(start)
+        .iter()
+        .map(|src| projectless_meta_path(src, cache_root))
+        .filter(|m| m.is_file())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// The per-module cache entries of the manifest-less program under `start` (none for a project).
+pub fn peer_meta_entries(start: &Path, cache_root: &Path) -> Vec<PathBuf> {
+    if find_project_root(start).is_some() { Vec::new() } else { projectless_peer_metas(start, cache_root) }
+}
+
+/// What a merge reads for a build rooted at `root`: a project's whole cache directory (entries and crate metadata), or
+/// the manifest-less program's per-module entry files.
+pub(crate) fn cache_merge_roots(root: &Path, cache_root: &Path) -> Vec<PathBuf> {
+    if find_project_root(root).is_some() {
+        Some(meta_cache_root(root, cache_root)).filter(|d| d.exists()).into_iter().collect()
+    } else {
+        projectless_peer_metas(root, cache_root)
+    }
+}
+
+/// The cache entries a build rooted at `root` may read as peers: a project's `.wj-cache` entries, or the manifest-less
+/// program's per-module entries.
+pub(crate) fn peer_metas(root: &Path, cache_root: &Path) -> Vec<PathBuf> {
+    if find_project_root(root).is_some() {
+        let mut out = Vec::new();
+        collect_cache_dir(&meta_cache_root(root, cache_root), 0, &mut out);
+        out
+    } else {
+        projectless_peer_metas(root, cache_root)
+    }
+}
+
+fn collect_cache_dir(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+    if depth > 12 {
+        return;
+    }
+    super::scan_stats::dir_listed();
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            collect_cache_dir(&p, depth + 1, out);
+        } else if p.to_string_lossy().ends_with(".wj.meta") {
+            out.push(p);
+        }
+    }
+}
+
+/// The cache entry of the module `candidate` (a path relative to the tree root, `geo/shapes.wj.meta`) of the program
+/// under `root`.
+pub(crate) fn cached_meta_path(root: &Path, candidate: &Path, cache_root: &Path) -> PathBuf {
+    if find_project_root(root).is_some() {
+        return meta_cache_root(root, cache_root).join(candidate);
+    }
+    projectless_meta_path(&peer_source_base(root).join(candidate.with_extension("")), cache_root)
 }
 
 /// True when `path` is inside an analysis cache (a `.wj-cache` directory or the manifest-less meta cache under

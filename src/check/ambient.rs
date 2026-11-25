@@ -57,6 +57,14 @@ fn fingerprint_in(cwd: &Path, scope: &UseScope) -> Option<String> {
     // `wj check` holds no `CompilerConfig`: the process's shared cache root holds manifest-less entries
     let cache_root = crate::compiler_config::shared_cache_root();
     walk(&crate::metadata::meta_cache_root(cwd, &cache_root), names, depth + 1, &mut budget, &mut files)?;
+    // a manifest-less program's entries are per module file: the ones its `use` names count like the tree's
+    for m in crate::metadata::peer_meta_entries(cwd, &cache_root) {
+        let stem = m.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".wj.meta")).unwrap_or("");
+        let module = if stem == "mod" { m.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()).unwrap_or("") } else { stem };
+        if names.iter().any(|n| n == module) {
+            files.push(m);
+        }
+    }
     files.sort();
     files.dedup();
     let mut h = Sha256::new();
