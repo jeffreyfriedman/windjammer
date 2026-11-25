@@ -1079,3 +1079,11 @@ statement = "Verify that wj.lock matches the manifests and dependency contents; 
 [[promise]]
 id = "wj build --locked"
 statement = "Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds)"
+
+[[promise]]
+id = "wj clean --wait"
+statement = "With --all: wait for a running build to release the shared cache instead of refusing"
+
+[[promise]]
+id = "wj cache prune --wait"
+statement = "With --force: wait for a running build to finish instead of refusing"

@@ -430,13 +430,13 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
         Commands::Eject(a) => windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?,
-        Commands::Clean { all, sidecars, tmp, generated, older_than_hours, yes } => {
-            windjammer::cli::clean::execute(all, sidecars, tmp, generated, older_than_hours, yes)?;
+        Commands::Clean { all, sidecars, tmp, generated, older_than_hours, yes, wait } => {
+            windjammer::cli::clean::execute(all, sidecars, tmp, generated, older_than_hours, yes, wait)?;
         }
         Commands::Cache { action } => match action {
             CacheCommand::Path { verify } => windjammer::cli::cache::execute_path(verify)?,
             CacheCommand::Status => windjammer::cli::cache::execute_status()?,
-            CacheCommand::Prune { aggressive, force } => windjammer::cli::cache::execute_prune(aggressive, force)?,
+            CacheCommand::Prune { aggressive, force, wait } => windjammer::cli::cache::execute_prune(aggressive, force, wait)?,
             CacheCommand::Warm => windjammer::cli::cache::execute_warm()?,
             CacheCommand::Setup => windjammer::cli::cache::execute_setup()?,
         },

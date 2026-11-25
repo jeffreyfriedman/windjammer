@@ -508,3 +508,27 @@ args = ["build", "--target", "wgsl", "{w}/s.wjsl", "-o", "{w}/out"]
 exit = 1
 output_has = ["WJ0196", "line 1, column 1", "`//`"]
 absent = ["out/s.wgsl"]
+
+[[case]]
+name = "clean --all --wait succeeds when no build holds the cache"
+polarity = "positive"
+files = { "proj/Cargo.toml" = "[package]\nname = \"x\"\n" }
+cwd = "proj"
+args = ["clean", "--all", "--wait"]
+
+[[case]]
+name = "clean --wait rejects unexpected arguments"
+polarity = "negative"
+args = ["clean", "--all", "--wait", "extra"]
+exit = 2
+
+[[case]]
+name = "cache prune --force --wait succeeds when no build holds the cache"
+polarity = "positive"
+args = ["cache", "prune", "--force", "--wait"]
+
+[[case]]
+name = "cache prune --wait rejects unexpected arguments"
+polarity = "negative"
+args = ["cache", "prune", "--force", "--wait", "extra"]
+exit = 2
