@@ -1,0 +1,35 @@
+// An index past the end on iteration k of a hoisted pair loop: committed iterations stay, the error is the walker's.
+struct Q {
+    x: f64,
+    k: int,
+}
+
+fn step(qs: Vec<Q>, off: int, add: f64) {
+    let n = qs.len()
+    let mut acc = 0
+    let mut i = 0
+    while i < n {
+        let mut j = 0
+        while j < n {
+            qs[i].k += qs[j + off].k % 3 + 1
+            qs[j].x += add
+            acc += qs[i].k
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn main() {
+    let mut qs: Vec<Q> = Vec::new()
+    qs.push(Q { x: 0.0, k: 1 })
+    qs.push(Q { x: 0.5, k: 2 })
+    let mut r = 0
+    while r < 300 {
+        step(qs, 0, 0.0)
+        r += 1
+    }
+    println("${qs[0].k} ${qs[1].k}")
+    step(qs, 1, 0.0)
+    println("not reached ${qs[0].x}")
+}

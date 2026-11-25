@@ -1,0 +1,32 @@
+// An integer overflow on iteration k of a hoisted pair loop (an i64 row field): the walker's error and state.
+struct C {
+    n: int,
+    w: f64,
+}
+
+fn grow(cs: Vec<C>) {
+    let mut acc = 0
+    let mut i = 0
+    while i < cs.len() {
+        let mut j = 0
+        while j < cs.len() {
+            cs[i].w = 1.5
+            cs[j].n = cs[j].n * 3 + cs[i].n % 5
+            acc += cs[i].n % 11
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn main() {
+    let mut cs: Vec<C> = Vec::new()
+    cs.push(C { n: 1, w: 1.0 })
+    cs.push(C { n: 2, w: 2.0 })
+    let mut r = 0
+    while r < 100 {
+        grow(cs)
+        println("${cs[0].n} ${cs[1].w}")
+        r += 1
+    }
+}

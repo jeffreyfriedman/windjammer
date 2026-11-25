@@ -37,7 +37,7 @@ fn icc(op: BinaryOp, signed: bool) -> Option<IntCC> {
 /// A place a statement stores to: a `Vec` element, a field of one, or a field of a struct local.
 enum Target {
     Index(usize, Elem, Val),
-    IndexField(usize, Shape, Val, &'static str),
+    IndexField(usize, Shape, Val, &'static str, Option<(usize, &'static str)>),
     Field(usize, Shape, &'static str),
 }
 
@@ -519,7 +519,14 @@ impl Lo<'_, '_> {
                 let (slot, Class::Vec(Elem::Struct(shape))) = handle(self, object)? else { return None };
                 let i = self.expr(index)?;
                 matches!(i.ty, Ty::Int(_)).then_some(())?;
-                Target::IndexField(slot, shape, i, field.as_str())
+                let var = match index {
+                    Expression::Identifier { name, .. } => match self.lookup(name) {
+                        Some(Bind::Var(id)) => Some((*id, name.as_str())),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                Target::IndexField(slot, shape, i, field.as_str(), var)
             }
             Expression::FieldAccess { object, field, .. } => {
                 let (slot, Class::Struct(shape)) = handle(self, object)? else { return None };
@@ -540,12 +547,12 @@ impl Lo<'_, '_> {
                     _ => (helper(self), *ty),
                 }
             }
-            Target::IndexField(slot, shape, i, f) => {
+            Target::IndexField(slot, shape, i, f, var) => {
                 let (hint, ty) = shape.field(f)?;
                 let id = shape.fields[hint].0.as_ptr() as i64;
                 let a = [*slot as i64, code(i.ty), f.as_ptr() as i64, f.len() as i64, hint as i64, id, code(ty)].map(|c| self.k(c));
                 let helper = |lo: &mut Self| Some(lo.call("index_field_get", rt::index_field_get as *const () as usize, &[a[0], i.v, a[1], a[2], a[3], a[4], a[5], a[6]], false, true));
-                let row = Row { slot: *slot, shape, hint, ty };
+                let row = Row { slot: *slot, shape, hint, ty, index: *var };
                 (if self.row_ok(&row) { self.row_load(&row, i, helper)? } else { helper(self)? }, ty)
             }
             Target::Field(slot, shape, f) => {
@@ -571,14 +578,14 @@ impl Lo<'_, '_> {
                     self.call("index_set", rt::index_set as *const () as usize, &[a[0], i.v, a[1], bits, xt], false, true);
                 }
             },
-            Target::IndexField(slot, shape, i, f) => {
+            Target::IndexField(slot, shape, i, f, var) => {
                 let hint = shape.fields.iter().position(|(n, _)| &**n == *f)?;
                 let id = shape.fields[hint].0.as_ptr() as i64;
                 let a = [*slot as i64, code(i.ty), f.as_ptr() as i64, f.len() as i64, hint as i64, id].map(|c| self.k(c));
                 let helper = |lo: &mut Self| {
                     lo.call("index_field_set", rt::index_field_set as *const () as usize, &[a[0], i.v, a[1], a[2], a[3], a[4], a[5], bits, xt], false, true);
                 };
-                match shape.fields[hint].1.map(|ty| Row { slot: *slot, shape, hint, ty }) {
+                match shape.fields[hint].1.map(|ty| Row { slot: *slot, shape, hint, ty, index: *var }) {
                     Some(row) if self.row_store_ok(&row, x.ty) => self.row_store(&row, i, bits, helper)?,
                     _ => helper(self),
                 }

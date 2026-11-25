@@ -68,7 +68,7 @@ impl Lo<'_, '_> {
             let id = self.new_var(NO_SLOT, t, true);
             let x = self.b.ins().load(types::I64, MemFlags::trusted(), self.buf, (id * 8) as i32);
             let x = self.from_bits(x, t);
-            self.b.def_var(self.vars[id].var, x);
+            self.def(id, x);
             fields.push((n.clone(), id));
         }
         self.vstructs.push(VStruct { name: shape.name.clone(), copy: shape.copy, fields, slot, fresh: false });
@@ -91,7 +91,7 @@ impl Lo<'_, '_> {
         let mut fields = Vec::new();
         for (n, x) in v.fields {
             let id = self.new_var(NO_SLOT, x.ty, true);
-            self.b.def_var(self.vars[id].var, x.v);
+            self.def(id, x.v);
             fields.push((n, id));
         }
         self.vstructs.push(VStruct { name: v.name, copy: v.copy, fields, slot, fresh: true });
@@ -210,7 +210,7 @@ impl Lo<'_, '_> {
             match v {
                 Ok(x) => {
                     let id = self.new_var(NO_SLOT, x.ty, true);
-                    self.b.def_var(self.vars[id].var, x.v);
+                    self.def(id, x.v);
                     self.bind(n, Bind::Var(id));
                 }
                 Err(s) => {
@@ -256,7 +256,7 @@ impl Lo<'_, '_> {
             } else {
                 let v = self.expr(value)?;
                 let id = self.new_var(NO_SLOT, v.ty, true);
-                self.b.def_var(self.vars[id].var, v.v);
+                self.def(id, v.v);
                 self.bind(n.as_str(), Bind::Var(id));
             }
         }

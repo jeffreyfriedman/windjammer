@@ -322,8 +322,8 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         if it.jit_debug {
             let f = it.fast;
             eprintln!(
-                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} rowview {} matchval {} argcopy {} lenfast {} lencmp {} placeargs {} mapjit {} closurecreate {} closurecopy {} scalarpipe {} scalarbail {} mapleanget {} mapleanins {} packedread {} mapleantyped {} fnunit {} callunit {} rowhandoff {} rowpack {}",
-                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.rowview, f.matchval, f.argcopy, f.lenfast, f.lencmp, f.placeargs, f.mapjit, f.closurecreate, f.closurecopy, f.scalarpipe, f.scalarbail, f.mapleanget, f.mapleanins, f.packedread, f.mapleantyped, f.fnunit, f.callunit, f.rowhandoff, f.rowpack
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} rowview {} matchval {} argcopy {} lenfast {} lencmp {} placeargs {} mapjit {} closurecreate {} closurecopy {} scalarpipe {} scalarbail {} mapleanget {} mapleanins {} packedread {} mapleantyped {} fnunit {} callunit {} rowhandoff {} rowpack {} hoisted {} hoistfail {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.rowview, f.matchval, f.argcopy, f.lenfast, f.lencmp, f.placeargs, f.mapjit, f.closurecreate, f.closurecopy, f.scalarpipe, f.scalarbail, f.mapleanget, f.mapleanins, f.packedread, f.mapleantyped, f.fnunit, f.callunit, f.rowhandoff, f.rowpack, f.hoisted, f.hoistfail
             );
             eprintln!("{}", it.fallback.line());
         }

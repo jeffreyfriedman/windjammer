@@ -698,6 +698,9 @@ pub(crate) struct FastHits {
     pub(crate) rowhandoff: u64,
     /// Struct-vector rows packed into a flat table of fields at a unit boundary (step 4).
     pub(crate) rowpack: u64,
+    /// Versioned loops (hoisted row views) entered through the fast copy, and through the slow copy (a view could not be built).
+    pub(crate) hoisted: u64,
+    pub(crate) hoistfail: u64,
 }
 
 /// Counts of the slower paths the resolved engine took (`WJ_JIT_DEBUG`'s `[fallback]` line). Every one is correct,

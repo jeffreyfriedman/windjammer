@@ -311,6 +311,8 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     }
     it.fast.packedstore += ctx.view_stores as u64;
     it.fast.rowview += ctx.row_hits as u64;
+    it.fast.hoisted += ctx.hoisted as u64;
+    it.fast.hoistfail += ctx.hoistfail as u64;
     it.fast.packedread += ctx.view_reads as u64;
     it.fast.mapleanget += ctx.lean_gets as u64;
     it.fast.mapleanins += ctx.lean_inss as u64;

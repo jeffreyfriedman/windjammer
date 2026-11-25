@@ -1,0 +1,159 @@
+// Loops that must NOT run with hoisted views: a push in the loop body, a clone of an element, a statement run by the
+// closure engine mid-loop, a whole-element replacement; and a vec whose element another name shares (the view
+// cannot be built: the slow copy runs). Every result must equal the walker's.
+struct P {
+    a: f64,
+    b: f64,
+    n: int,
+}
+
+fn mk(n: int) -> Vec<P> {
+    let mut v: Vec<P> = Vec::new()
+    let mut i = 0
+    while i < n {
+        v.push(P { a: (i as f64) * 0.5, b: 1.0, n: i })
+        i += 1
+    }
+    v
+}
+
+fn pushing(ps: Vec<P>, cnt: int) {
+    let mut i = 0
+    while i < cnt {
+        let mut j = 0
+        while j < 3 {
+            ps[i].a += ps[j].b
+            if i == 2 && j == 1 {
+                ps.push(P { a: 100.0, b: 2.0, n: 50 })
+            }
+            ps[j].n += 1
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn cloning(ps: Vec<P>) -> f64 {
+    let mut s = 0.0
+    let mut i = 0
+    while i < ps.len() {
+        let mut j = 0
+        while j < ps.len() {
+            let snap = ps[i]
+            ps[i].a += 1.0
+            ps[j].b += snap.a * 0.25
+            s += snap.a
+            j += 1
+        }
+        i += 1
+    }
+    s
+}
+
+fn midstmt(ps: Vec<P>) {
+    let mut i = 0
+    while i < ps.len() {
+        let mut j = 0
+        while j < ps.len() {
+            ps[i].a += ps[j].b
+            if j == 2 && i == 1 {
+                let note = "step"
+                ps[i].n += note.len()
+            }
+            ps[j].b += 0.5
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn replacing(ps: Vec<P>) {
+    let mut i = 0
+    while i < ps.len() {
+        let mut j = 0
+        while j < ps.len() {
+            ps[i].a += ps[j].b
+            if j == 1 {
+                ps[i] = P { a: ps[i].a * 0.5, b: ps[j].b + 1.0, n: ps[i].n + 1 }
+            }
+            ps[j].n += 2
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn plain(ps: Vec<P>) {
+    let mut i = 0
+    while i < ps.len() {
+        let mut j = 0
+        while j < ps.len() {
+            ps[i].a += ps[j].b * 0.5
+            ps[j].n += 1
+            j += 1
+        }
+        i += 1
+    }
+}
+
+fn total(ps: Vec<P>) -> f64 {
+    let mut s = 0.0
+    let mut i = 0
+    while i < ps.len() {
+        s += ps[i].a + ps[i].b + (ps[i].n as f64)
+        i += 1
+    }
+    s
+}
+
+fn main() {
+    let mut r = 0
+    let mut p1 = mk(4)
+    while r < 40 {
+        pushing(p1, 3)
+        r += 1
+    }
+    println("${p1.len()} ${total(p1)}")
+    let mut p2 = mk(5)
+    r = 0
+    let mut s = 0.0
+    while r < 40 {
+        s += cloning(p2)
+        r += 1
+    }
+    println("${s} ${total(p2)}")
+    let mut p3 = mk(4)
+    r = 0
+    while r < 100 {
+        midstmt(p3)
+        r += 1
+    }
+    println("${total(p3)} ${p3[1].n}")
+    let mut p4 = mk(4)
+    r = 0
+    while r < 100 {
+        replacing(p4)
+        r += 1
+    }
+    println("${total(p4)} ${p4[1].n}")
+    // an element shared with another name: the view cannot be built
+    let mut p5 = mk(4)
+    let keep = p5[0]
+    r = 0
+    while r < 100 {
+        plain(p5)
+        r += 1
+    }
+    println("${total(p5)} ${keep.a} ${keep.n}")
+    let mut p6 = mk(4)
+    r = 0
+    while r < 100 {
+        plain(p6)
+        if r == 50 {
+            let k2 = p6[1]
+            p6[1].a = k2.a - 1000.0
+        }
+        r += 1
+    }
+    println("${total(p6)}")
+}
