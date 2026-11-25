@@ -466,7 +466,7 @@ pub fn surface_type_name(receiver: &Type) -> Option<&'static str> {
 }
 
 /// The surface type whose methods are the iterator adapters (`map`, `filter`, ..).
-pub const ITERATOR: &str = "Iterator";
+pub const ITERATOR: &str = crate::type_classification::ITERATOR_TYPE_NAME;
 
 /// The surface types whose one type parameter is an element (`Vec<T>`, `Iterator<T>`, the sets).
 const ELEMENT_CONTAINERS: [&str; 6] = ["Vec", "VecDeque", "HashSet", "BTreeSet", "Iterator", "List"];

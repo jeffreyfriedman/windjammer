@@ -255,6 +255,9 @@ pub fn is_medium_collection(name: &str) -> bool {
 }
 
 /// Map receiver leaf names (stdlib trait classification only — not ownership).
+/// The std surface type whose methods are the iterator adapters (`map`, `filter`, ..): the one spelling of its name.
+pub const ITERATOR_TYPE_NAME: &str = "Iterator";
+
 pub const MAP_TYPE_NAMES: &[&str] = &[
     "HashMap",
     "BTreeMap",

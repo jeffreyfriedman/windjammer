@@ -368,7 +368,7 @@ impl<'a, 'ast> Cx<'a, 'ast> {
                 let stdlib = SignatureRegistry::stdlib();
                 let returns_iterator = |base: &str| {
                     lookup_method_signature(method, Some(base), stdlib)
-                        .is_some_and(|s| s.has_self_receiver && matches!(&s.return_type, Some(Type::Custom(n)) if n == crate::typing::core_surface::ITERATOR))
+                        .is_some_and(|s| s.has_self_receiver && matches!(&s.return_type, Some(Type::Custom(n)) if n == crate::type_classification::ITERATOR_TYPE_NAME))
                 };
                 match path_of(object) {
                     Some(p) => {
