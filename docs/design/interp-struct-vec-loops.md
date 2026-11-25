@@ -84,7 +84,7 @@ step 0 before any code lands).
 |---|---|---|---|
 | F1 | Values are copy-on-write `Rc` trees: `let b = a` is an independent copy, `.clone()` is free, and mutation through a `&mut` place copies only what is shared | verified | `src/interpreter/value.rs` module doc; `docs/INTERPRETER.md` ("Inferred `&mut`") |
 | F2 | So Windjammer has no observable aliasing between two locals. The only sharing is physical (`Rc` strong count above one), and it is invisible to the program except through a store that skips copy-on-write | verified (follows from F1 and the `Place` store path) | `src/interpreter/resolved/jit/rt.rs` (stores follow `Place::with_mut`) |
-| F3 | Whether the compiled build turns `let b = bodies[i]` into a clone or a shared borrow is a compiler decision. Either way the program cannot see a difference: a borrow is immutable for its lifetime, and rustc refuses a conflicting write | assumption: confirm with the compiler's ownership explanation on `energy` | ADR-0030 (ownership is decided in stages) |
+| F3 | In the interpreter, `let b = bodies[i]` is a physical `Rc` clone of the element (verified in step 0a), closure-run (never native), so it clears all views; while `b` holds the clone `rows::fill` fails (`Rc::get_mut` on that element), no view is built and the helper path is used. A failed fill spends no credit, while `row_build` adds credit per call, so each miss rescans the vector up to the element that failed: a perf hazard, not a soundness one. What the compiled build does with the statement is a compiler decision the program cannot observe | verified (interpreter); compiled build irrelevant | `expr.rs`, `eval_expr.rs`, `vecbody.rs`, `rows.rs:82-125`; ADR-0030 |
 | F4 | A parameter the body mutates is passed as `Value::Ref(place)`. `analysis.rs` decides which parameters, syntactically, from the function body | verified | `src/interpreter/analysis.rs` (`analyze`), `src/interpreter/resolved/expr.rs` (module-function call, `place::arg`) |
 | F5 | The interpreter does not consume the compiler's IR or ownership solver. Its static facts are its own AST scans | verified | `docs/INTERPRETER.md` ("Relation to the compiler pipeline") |
 | F6 | A row view is built under `Rc::get_mut` on the vector body and on every element; it checks name, field names, field types (`ty_is`) and `uid == 0` (no destructor) | verified | `src/interpreter/resolved/jit/rows.rs` (`fill`) |
@@ -96,7 +96,7 @@ step 0 before any code lands).
 | F12 | A compiled call already builds a real frame: `fill_frame`, then `enter_compiled`, `bind_params`, `run_body`, `finish_value`, `leave_compiled` | verified | `src/interpreter/resolved/mod.rs` (`run_compiled_at`), `expr.rs` |
 | F13 | Loop machine code is off under `--hot` (`OsrSite::armed` requires `it.hot.is_none()`) | verified | `src/interpreter/resolved/osr.rs` |
 | F14 | No rt helper keeps an `Rc` clone of a vector body or element after it returns. This is what keeps a view valid between helper calls within a run | assumption: audit every helper in `rt.rs`, `lower_struct.rs`, `lower_map.rs` | step 0 |
-| F15 | Each `Interpreter` is single-threaded (`Rc` values, a baton scheduler), so a `Ctx` never crosses threads | assumption: confirm in `sched.rs` | `docs/INTERPRETER.md` (Concurrency) |
+| F15 | One `Interpreter` is shared by several OS threads, one thread at a time under a baton; a `Ctx` is built in `osr::execute` on the calling task's thread and stays on it (task switches happen only inside builtins, reached through `run_stmt`, which clears the views). `Unit::spare` is a `RefCell` taken with `mem::take` for a run and put back after, so a second run of the same unit finds it empty and allocates; keep this take/put-back for `call_unit` | verified (step 0a) | `sched.rs:1-30, 270-282, 422-436`; `rt.rs:644-653` |
 | F16 | `Class::Vec` is decided by the first element only. The row view then validates every element | verified | `src/interpreter/resolved/jit/kinds.rs` (`class_of`, `class_of_is`) |
 
 The consequence that drives the design: **aliasing is a non-issue in the language (F1-F3) and a physical issue in the
@@ -567,9 +567,7 @@ Read in the code at `ff6e395552fa`:
 
 Not verified, and owned by step 0:
 
-- F3 (the compiled build's choice for `let b = bodies[i]`);
 - F14 (no helper keeps an `Rc` clone past its return);
-- F15 (one thread per `Interpreter`);
 - whether the function body has a registered block scope and statement codes at depth 0;
 - whether `place::arg` on a caller handle yields a `Ref` whose `local_cell` resolution equals the caller's;
 - the 1x/10x numbers on the current head (the report measured `wt-rc3-int` 00630c8a1).
