@@ -7,6 +7,7 @@ mod dep_sources;
 pub mod durable_sites;
 pub mod effects;
 pub mod files;
+pub mod scope;
 mod file_cache;
 mod fix;
 pub(crate) mod front;
@@ -50,15 +51,22 @@ impl Default for CheckOptions {
 
 pub struct Checked {
     pub report: Report,
+    /// What the directory walk left out (generated and ignored directories).
+    pub scope: scope::Scope,
     /// Source text of every checked file, for rendering excerpts.
     pub sources: HashMap<String, String>,
 }
 
 /// Check a `.wj` file or a project directory. No cargo, no rustc, no generated code.
 pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
+    check_path_with(path, opts, false)
+}
+
+/// As `check_path`; `no_ignore` also reads generated and git-ignored directories (`wj check --no-ignore`).
+pub fn check_path_with(path: &Path, opts: &CheckOptions, no_ignore: bool) -> Result<Checked> {
     let start = Instant::now();
     crate::debug_env::phase("check-inputs-start");
-    let (sources, keyed) = inputs(path)?;
+    let (sources, keyed, scope) = inputs(path, no_ignore)?;
     crate::debug_env::phase("check-inputs");
     let fp = cache::fingerprint(&cache::relative_inputs(path, &keyed));
     let cached = if opts.use_cache { cache::load(path, &fp) } else { None };
@@ -79,14 +87,15 @@ pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
     report.summary.elapsed_ms = start.elapsed().as_millis() as u64;
     Ok(Checked {
         report,
+        scope,
         sources: sources.into_iter().collect(),
     })
 }
 
 /// The program at `path`: its `.wj` sources, and every input of a check of it (sources, the manifest, the lock
 /// file, dependency sources, Rust crate surfaces), as (path, text) pairs.
-fn inputs(path: &Path) -> Result<(Vec<(String, String)>, Vec<(String, String)>)> {
-    let paths = files::collect(path)?;
+fn inputs(path: &Path, no_ignore: bool) -> Result<(Vec<(String, String)>, Vec<(String, String)>, scope::Scope)> {
+    let (paths, scope) = files::collect_scoped(path, no_ignore)?;
     let mut sources: Vec<(String, String)> = Vec::with_capacity(paths.len());
     for p in &paths {
         sources.push((p.display().to_string(), std::fs::read_to_string(p)?));
@@ -101,13 +110,13 @@ fn inputs(path: &Path) -> Result<(Vec<(String, String)>, Vec<(String, String)>)>
             }
         }
     }
-    Ok((sources, keyed))
+    Ok((sources, keyed, scope))
 }
 
 /// Every input of the program at `path` (see `inputs`) with canonical paths, so that two spellings of one
 /// program (`main.wj`, `./main.wj`, an absolute path) give the same list. Used to key compiled verdicts.
 pub fn program_inputs(path: &Path) -> Result<Vec<(String, String)>> {
-    let (_, keyed) = inputs(path)?;
+    let (_, keyed, _) = inputs(path, false)?;
     let canon = |f: String| std::fs::canonicalize(&f).map(|p| p.display().to_string()).unwrap_or(f);
     let mut out: Vec<(String, String)> = keyed.into_iter().map(|(f, t)| (canon(f), t)).collect();
     out.sort();
@@ -141,49 +150,49 @@ pub fn rust_crate_calls(path: &Path) -> Result<Checked> {
     for s in &crates.surfaces {
         sources.push((s.path.display().to_string(), s.text.clone()));
     }
-    Ok(Checked { report: Report::new("check", finish(out)), sources: sources.into_iter().collect() })
+    Ok(Checked { report: Report::new("check", finish(out)), scope: Default::default(), sources: sources.into_iter().collect() })
 }
 
 /// ADR-0002: the `WJ0051` diagnostics (local bindings changed without `mut`) of the program at `path`, exactly as
 /// `wj check` reports them; `wj build` and `wj run` print these. No cache, no other check.
 pub fn local_mutability(path: &Path) -> Result<Checked> {
-    let (sources, _) = inputs(path)?;
+    let (sources, _, _) = inputs(path, false)?;
     let found = local_mutability_sources(&sources);
-    Ok(Checked { report: Report::new("check", found), sources: sources.into_iter().collect() })
+    Ok(Checked { report: Report::new("check", found), scope: Default::default(), sources: sources.into_iter().collect() })
 }
 
 /// The `WJ0006` diagnostics for bare `use` of a module that does not exist (`use state_model` with no such module
 /// beside the file or in the project, in the standard library or in `wj.toml`), exactly as `wj check` reports them;
 /// `wj build` prints these and stops. No cache, no other check.
 pub fn missing_modules(path: &Path) -> Result<Checked> {
-    let (sources, _) = inputs(path)?;
+    let (sources, _, _) = inputs(path, false)?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let mut sink = Vec::new();
     let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
     let found = project::module_imports_only(path, &parsed);
     std::panic::set_hook(previous);
-    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+    Ok(Checked { report: Report::new("check", finish(found)), scope: Default::default(), sources: sources.into_iter().collect() })
 }
 
 /// The `WJ0035` diagnostics (an iterator used as a list) of the program at `path`, exactly as `wj check` reports them;
 /// `wj build` prints these and stops. No cache, no other check.
 pub fn iterator_as_list(path: &Path) -> Result<Checked> {
-    let (sources, _) = inputs(path)?;
+    let (sources, _, _) = inputs(path, false)?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let mut sink = Vec::new();
     let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
     let found = project::iterator_as_list_only(&parsed);
     std::panic::set_hook(previous);
-    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+    Ok(Checked { report: Report::new("check", finish(found)), scope: Default::default(), sources: sources.into_iter().collect() })
 }
 
 /// The resolver-backed diagnostics `wj build` stops on before generating code, exactly as `wj check` reports them:
 /// `WJ0013` (a call with the wrong number of arguments), `WJ0019` (a private item called, imported or
 /// re-exported outside its module) and `WJ0194` (a name the program reaches through an implicit module re-export).
 pub fn resolver_errors(path: &Path) -> Result<Checked> {
-    let (sources, _) = inputs(path)?;
+    let (sources, _, _) = inputs(path, false)?;
     let mut sink = Vec::new();
     let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
     let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
@@ -191,13 +200,13 @@ pub fn resolver_errors(path: &Path) -> Result<Checked> {
     let mut found = Vec::new();
     project::resolve_phase(path, &refs, &by_file, &mut found);
     found.retain(|d| matches!(d.code.as_str(), "WJ0013" | "WJ0019" | "WJ0194"));
-    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+    Ok(Checked { report: Report::new("check", finish(found)), scope: Default::default(), sources: sources.into_iter().collect() })
 }
 
 /// The `WJ0194` diagnostics (a name used through a module that does not re-export it, ADR-0040) of the program at
 /// `path`, with their `pub use` fixes: the input of `wj fix`.
 pub fn implicit_reexports(path: &Path) -> Result<Checked> {
-    let (sources, _) = inputs(path)?;
+    let (sources, _, _) = inputs(path, false)?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let mut sink = Vec::new();
@@ -208,7 +217,7 @@ pub fn implicit_reexports(path: &Path) -> Result<Checked> {
     project::resolve_phase(path, &refs, &by_file, &mut found);
     std::panic::set_hook(previous);
     found.retain(|d| d.code == "WJ0194");
-    Ok(Checked { report: Report::new("check", finish(found)), sources: sources.into_iter().collect() })
+    Ok(Checked { report: Report::new("check", finish(found)), scope: Default::default(), sources: sources.into_iter().collect() })
 }
 
 /// How this run shares its analysis (`program_analysis`): `WJ_NO_SHARED_ANALYSIS=1` makes every consumer compute for itself
@@ -241,9 +250,9 @@ pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic>
 /// ADR-0009: the `WJ0173` diagnostics (untrusted data reaching a command, a file path or SQL text) of the program at
 /// `path`, exactly as `wj check` reports them; `wj build` and `wj run --compiled` stop on these. No cache, no other check.
 pub fn taint_findings(path: &Path) -> Result<Checked> {
-    let (sources, _) = inputs(path)?;
+    let (sources, _, _) = inputs(path, false)?;
     let found = taint_findings_sources(path, &sources);
-    Ok(Checked { report: Report::new("check", found), sources: sources.into_iter().collect() })
+    Ok(Checked { report: Report::new("check", found), scope: Default::default(), sources: sources.into_iter().collect() })
 }
 
 /// `taint_findings` over in-memory sources; files that do not parse are left out.

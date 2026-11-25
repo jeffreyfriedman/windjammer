@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::check::{self, CheckOptions, Checked};
 use crate::diagnostics::render;
 
-pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool, format: render::Format) -> Result<()> {
+pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool, format: render::Format, no_ignore: bool) -> Result<()> {
     let root = path.unwrap_or_else(|| Path::new("."));
     if let Some(manifest) = check::effects::manifest_path(root) {
         if let Some(dir) = manifest.parent() {
@@ -22,9 +22,9 @@ pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool, format: 
         return cargo_check();
     }
     if watch {
-        return watch_loop(root, json, fix, format);
+        return watch_loop(root, json, fix, format, no_ignore);
     }
-    let ok = run_once(root, json, fix, format)?;
+    let ok = run_once(root, json, fix, format, no_ignore)?;
     if !ok {
         std::process::exit(1);
     }
@@ -105,18 +105,35 @@ impl check::shared_cache::SharedStore for AnalysisDir {
 
 /// The lexer reports bad characters by panicking; the checker catches that and reports a
 /// diagnostic, so the default panic message would only be noise.
-fn check_quietly(root: &Path) -> Result<Checked> {
+fn check_quietly(root: &Path, no_ignore: bool) -> Result<Checked> {
     share_registry_layer();
     share_analysis();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
-    let result = check::check_path(root, &CheckOptions::default());
+    let result = check::check_path_with(root, &CheckOptions::default(), no_ignore);
     std::panic::set_hook(previous);
-    result.map(|c| super::widths_gate::add_to(c, root))
+    result.map(|c| super::widths_gate::add_to(c, root)).map(with_stale_output_warnings)
 }
 
-fn run_once(root: &Path, json: bool, fix: bool, format: render::Format) -> Result<bool> {
-    let mut checked = check_quietly(root)?;
+/// W0018 for each skipped generated directory (`gen/`, `build/`) older than the newest source of this check.
+fn with_stale_output_warnings(mut checked: Checked) -> Checked {
+    let stale = checked.scope.stale_generated_messages();
+    if stale.is_empty() {
+        return checked;
+    }
+    let old = checked.report.summary.clone();
+    let mut all = checked.report.diagnostics.clone();
+    all.extend(stale.into_iter().map(|m| crate::diagnostics::Diagnostic::warning("W0018", m)));
+    let mut report = crate::diagnostics::Report::new(&checked.report.command, all);
+    report.summary.files_checked = old.files_checked;
+    report.summary.files_cached = old.files_cached;
+    report.summary.elapsed_ms = old.elapsed_ms;
+    checked.report = report;
+    checked
+}
+
+fn run_once(root: &Path, json: bool, fix: bool, format: render::Format, no_ignore: bool) -> Result<bool> {
+    let mut checked = check_quietly(root, no_ignore)?;
     if checked.report.summary.files_checked == 0 {
         checked.report = check_path(root);
     }
@@ -124,7 +141,7 @@ fn run_once(root: &Path, json: bool, fix: bool, format: render::Format) -> Resul
     if fix {
         let outcome = check::apply_fixes(&checked.report.diagnostics, &checked.sources, true)?;
         if outcome.files_changed > 0 {
-            checked = check_quietly(root)?;
+            checked = check_quietly(root, no_ignore)?;
         }
         fixed = Some(outcome);
     }
@@ -162,12 +179,15 @@ fn print_human(c: &Checked, format: render::Format) {
         s.elapsed_ms,
         if s.files_cached > 0 { ", cached" } else { "" }
     );
+    if let Some(line) = c.scope.skipped_line() {
+        println!("{line}");
+    }
 }
 
-fn watch_loop(root: &Path, json: bool, fix: bool, format: render::Format) -> Result<()> {
+fn watch_loop(root: &Path, json: bool, fix: bool, format: render::Format, no_ignore: bool) -> Result<()> {
     loop {
         let before = check::watch::snapshot(root);
-        let _ = run_once(root, json, fix, format)?;
+        let _ = run_once(root, json, fix, format, no_ignore)?;
         if !json {
             eprintln!("watching {} for changes (Ctrl-C to stop)...", root.display());
         }
@@ -179,7 +199,7 @@ fn watch_loop(root: &Path, json: bool, fix: bool, format: render::Format) -> Res
 /// Apply the machine-applicable fixes of the front-end check to the sources on disk (`wj run --fix`); returns the
 /// number of edits applied.
 pub fn fix_in_place(path: &Path) -> Result<usize> {
-    let checked = check_quietly(path)?;
+    let checked = check_quietly(path, false)?;
     Ok(check::apply_fixes(&checked.report.diagnostics, &checked.sources, true)?.edits_applied)
 }
 

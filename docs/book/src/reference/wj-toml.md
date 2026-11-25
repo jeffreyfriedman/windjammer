@@ -109,6 +109,18 @@ process = ["git"]
 Per-dependency grants go in `[capabilities.dependencies.NAME]`, and `[policy]` forbids a module from performing certain
 effects at all.
 
+## `[check]`
+
+Which `.wj` files `wj check`, `wj lint`, `wj fmt` and `wj test` read under a project directory. By default they leave out generated output (`gen/`, `build/`, `target/`, `.wj-cache/`, `node_modules/`, `.git/`, and `out/` when it holds a `Cargo.toml` or `package.json`) and everything git ignores, so stale transpiled copies never change a result. `wj check` prints `skipped N ignored/generated files (see --no-ignore)` when it left files out, and `--no-ignore` reads everything.
+
+```toml
+[check]
+exclude = ["legacy", "src/old/one.wj"]   # a directory name anywhere, or a path from this file's directory
+include = ["gen"]                          # keep a path the defaults or git would drop
+```
+
+An entry with a `/` is a path relative to the directory holding `wj.toml` (the file or directory and everything below it); an entry without one names a directory anywhere in the project. `include` wins over `exclude`, the defaults and git. A directory named on the command line is always read. When a skipped `gen/` or `build/` is older than the newest source, `wj check` adds warning W0018; `wj clean --generated` removes both (never one that holds tracked files; a dry run unless `--yes`).
+
 ## Lock files
 
 `wj.lock` pins git dependencies. `.wj-capabilities.lock` records the effects of dependencies you have reviewed

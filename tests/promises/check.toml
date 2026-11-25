@@ -344,3 +344,27 @@ polarity = "positive"
 files = { "m.wj" = "mod adapters {\n    pub mod http {\n        pub fn serve() -> int {\n            1\n        }\n    }\n\n    pub use http::serve\n}\n\nfn main() {\n    println(\"${adapters::serve()}\")\n}\n" }
 args = ["check", "{w}/m.wj"]
 output_has = ["0 error(s)"]
+
+[[case]]
+name = "check leaves out generated directories and says so"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "proj/src/main.wj" = "fn main() {\n    println(\"ok\")\n}\n", "proj/gen/old.wj" = "fn main( {\n" }
+cwd = "proj"
+args = ["check"]
+output_has = ["0 error(s)", "skipped 1 ignored/generated files (see --no-ignore)"]
+
+[[case]]
+name = "check --no-ignore checks the generated directories too"
+polarity = "negative"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "proj/src/main.wj" = "fn main() {\n    println(\"ok\")\n}\n", "proj/gen/old.wj" = "fn main( {\n" }
+cwd = "proj"
+args = ["check", "--no-ignore"]
+exit = 1
+
+[[case]]
+name = "check --no-ignore accepts a project without generated directories"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "proj/src/main.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+cwd = "proj"
+args = ["check", "--no-ignore"]
+output_has = ["0 error(s)"]

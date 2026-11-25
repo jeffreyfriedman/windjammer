@@ -1,10 +1,10 @@
 # Windjammer reference for agents
 
-The 2 KB default sheet is [WINDJAMMER_FOR_AGENTS.md](WINDJAMMER_FOR_AGENTS.md); this is the full material behind it, searchable with `wj docs <terms>`.
+The 2 KB default sheet is [WINDJAMMER_FOR_AGENTS.md](WINDJAMMER_FOR_AGENTS.md); this is the full material, searchable with `wj docs <terms>`.
 
 Windjammer (`.wj`) is a Rust-family language with inferred ownership: you write `fn f(x: Vec<int>)`, the compiler
-decides borrow/move/clone. You have almost certainly seen no Windjammer in training. Do not guess from Rust or
-Python: look things up (`wj docs <terms>`), and check every edit. Every code block below is executed by CI.
+decides borrow/move/clone. You have likely seen no Windjammer in training. Do not guess from Rust or
+Python: look things up (`wj docs <terms>`), and check every edit. CI executes every code block below.
 
 ## The loop
 
@@ -21,8 +21,7 @@ wj fmt FILE                     # formatter; wj lint FILE checks Rust-isms; wj f
 
 Exit status of a program: 0 ok, 101 panic, N for `process::exit(N)`, 2 means "unsupported in the interpreter".
 A failed interpreted run prints the failing source line, the call stack (`0: `f` at file:line:col`) and the values of the failing frame's bindings (`locals in `f``): fix from that output, do not add prints. `wj run --interpret --error-format json FILE` prints the same as one diagnostics-schema line (`stack`, `locals`) on stderr; `--no-locals` leaves the values out. Values named like secrets or equal to an environment variable show `<redacted>`.
-`wj check` passing does not mean `wj run --interpret` passes, and the interpreter accepts more than `wj build`
-(see "Compiled path gaps").
+`wj check` skips `gen/`, `build/`, git-ignored dirs (`--no-ignore` reads all). `wj check` passing does not mean `wj run --interpret` passes, and the interpreter accepts more than `wj build` (see "Compiled path gaps").
 
 ## Core idioms
 
@@ -417,15 +416,15 @@ fn main() {
 
 ## Compiled path gaps (be honest with the user)
 
-`wj run --interpret` is the reference for behaviour. `wj build` additionally runs rustc: today about half of
+`wj run --interpret` is the reference for behaviour. `wj build` additionally runs rustc: about half of
 `examples/verified` compiles and matches (`// rust: ok`); the rest carry a recorded `// rust: gap` reason in the
-header. Known classes: adapter chains on a collection without `.iter()` (emitted as `v.map(..)` on a `Vec`),
+header. Known: adapter chains on a collection without `.iter()` (`v.map(..)` on a `Vec`),
 integer-width inference between `i32` and `i64` in mixed expressions, `HashMap` indexing with `&str` keys,
-inline `mod` plus `use` duplicates. `len()` is a `usize` in the compiled path: write `let n: int = v.len() as int` (and `(i as int)` when comparing an `int` with a length); the interpreter
-accepts the bare form, `wj build` does not. If `wj build` fails on other code the interpreter runs, report it with the smallest repro; do not contort the source.
+inline `mod` plus `use` duplicates. `len()` is a `usize` in the compiled path: write `let n: int = v.len() as int` (`(i as int)` when comparing with a length); the interpreter
+accepts the bare form, `wj build` does not. If `wj build` fails on other code the interpreter runs, report the smallest repro, not a contorted source.
 
 ## Where to look next
 
-`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_*.md`),
+`wj docs <terms>` searches this guide, cheat sheets (`cheatsheet_from_*.md`),
 built-in methods, stdlib signatures and the verified examples (`examples/verified/*.wj`, indexed by tag in
 `manifest.json`). Design decisions: `docs/adr/0014`, `0015`, `docs/design/pipe-operator.md`, `docs/INTERPRETER.md`.

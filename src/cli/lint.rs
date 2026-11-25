@@ -89,15 +89,8 @@ fn collect_wj_files(path: &Path, files: &mut Vec<std::path::PathBuf>) -> Result<
         return Ok(());
     }
     if path.is_dir() {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let p = entry.path();
-            if p.is_dir() {
-                collect_wj_files(&p, files)?;
-            } else if p.extension().is_some_and(|e| e == "wj") {
-                files.push(p);
-            }
-        }
+        // the project's own sources: generated and ignored directories are left out (`check::scope`)
+        files.extend(crate::check::files::collect(path)?);
     }
     Ok(())
 }

@@ -2,7 +2,10 @@ use anyhow::Result;
 use colored::Colorize;
 use std::path::{Path, PathBuf};
 
-pub fn execute(all: bool, sidecars: bool, tmp: bool, older_than_hours: u64, yes: bool) -> Result<()> {
+pub fn execute(all: bool, sidecars: bool, tmp: bool, generated: bool, older_than_hours: u64, yes: bool) -> Result<()> {
+    if generated {
+        return super::clean_generated::run(&std::env::current_dir()?, yes);
+    }
     if tmp {
         return super::tmp_janitor::run(older_than_hours, yes);
     }

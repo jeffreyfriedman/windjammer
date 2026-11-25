@@ -14,7 +14,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const SKIPPED_DIRS: [&str; 4] = ["target", "build", "node_modules", ".git"];
 
 /// A source file that contains tests.
 #[derive(Debug, Clone)]
@@ -93,19 +92,7 @@ pub(crate) fn discover(root: &Path) -> Result<Discovery> {
 }
 
 fn collect_wj_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
-        let name = path.file_name().map(|n| n.to_string_lossy().to_string());
-        let name = name.unwrap_or_default();
-        if path.is_dir() {
-            if name.starts_with('.') || SKIPPED_DIRS.contains(&name.as_str()) {
-                continue;
-            }
-            collect_wj_files(&path, out)?;
-        } else if path.extension().is_some_and(|e| e == "wj") {
-            out.push(path);
-        }
-    }
+    out.extend(crate::check::files::collect(dir)?);
     Ok(())
 }
 

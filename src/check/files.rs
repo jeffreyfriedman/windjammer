@@ -3,10 +3,15 @@
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
-const SKIP_DIRS: [&str; 6] = ["target", "build", ".git", "node_modules", "out", ".wj-cache"];
-
 /// All `.wj` files under `path` (a file or a directory), sorted for deterministic output.
 pub fn collect(path: &Path) -> Result<Vec<PathBuf>> {
+    Ok(collect_scoped(path, false)?.0)
+}
+
+/// As `collect`, with what a directory walk left out (generated and ignored directories, `scope`); `no_ignore`
+/// reads everything.
+pub fn collect_scoped(path: &Path, no_ignore: bool) -> Result<(Vec<PathBuf>, super::scope::Scope)> {
+    let none = super::scope::Scope::default;
     if !path.exists() {
         bail!("Path does not exist: {}", path.display());
     }
@@ -14,7 +19,7 @@ pub fn collect(path: &Path) -> Result<Vec<PathBuf>> {
     // modules it names with `mod`/`use`, as the interpreter and `wj build` load them; unrelated `.wj` files
     // next to it are not part of it.
     if path.is_file() && crate::module_system::project::find_manifest_dir(path).is_none() {
-        return Ok(reachable(path));
+        return Ok((reachable(path), none()));
     }
     // A crate root (`main.wj` / `lib.wj`) is checked as the whole program it starts: its bodiless `mod x`
     // declarations load sibling files, exactly as the interpreter and the compiler see them.
@@ -25,35 +30,13 @@ pub fn collect(path: &Path) -> Result<Vec<PathBuf>> {
             let mut out: Vec<PathBuf> = files.into_iter().map(|f| f.file).collect();
             out.sort();
             out.dedup();
-            return Ok(out);
+            return Ok((out, none()));
         }
     }
-    let mut out = Vec::new();
-    walk(path, &mut out)?;
-    out.sort();
-    Ok(out)
-}
-
-fn walk(path: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     if path.is_file() {
-        if path.extension().is_some_and(|e| e == "wj") {
-            out.push(path.to_path_buf());
-        }
-        return Ok(());
+        return Ok((if path.extension().is_some_and(|e| e == "wj") { vec![path.to_path_buf()] } else { Vec::new() }, none()));
     }
-    for entry in std::fs::read_dir(path)? {
-        let p = entry?.path();
-        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if p.is_dir() {
-            if SKIP_DIRS.contains(&name) || name.starts_with('.') {
-                continue;
-            }
-            walk(&p, out)?;
-        } else if p.extension().is_some_and(|e| e == "wj") {
-            out.push(p);
-        }
-    }
-    Ok(())
+    super::scope::walk(path, no_ignore)
 }
 
 #[cfg(test)]

@@ -465,3 +465,28 @@ args = ["rust-surface", "nosuchcrate", "--write"]
 exit = 1
 output_has = ["is not a [dependencies] entry"]
 absent = ["proj/rust/nosuchcrate.wji"]
+
+[[case]]
+name = "clean --generated lists gen/ and build/ without removing them (dry run)"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "proj/gen/x.rs" = "// stale\n" }
+cwd = "proj"
+args = ["clean", "--generated"]
+creates = ["proj/gen/x.rs"]
+output_has = ["would remove gen/", "dry run: pass --yes to remove"]
+
+[[case]]
+name = "clean --generated --yes removes untracked gen/ and keeps sources"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "proj/gen/x.rs" = "// stale\n", "proj/src/a.wj" = "fn main() {}\n" }
+cwd = "proj"
+args = ["clean", "--generated", "--yes"]
+absent = ["proj/gen/x.rs"]
+creates = ["proj/src/a.wj"]
+output_has = ["removed gen/"]
+
+[[case]]
+name = "clean --generated rejects a path argument"
+polarity = "negative"
+args = ["clean", "--generated", "extra"]
+exit = 2

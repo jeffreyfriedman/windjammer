@@ -334,6 +334,7 @@ Usage: wj check [OPTIONS] [PATH]
 | `--watch` | WATCH |  | Re-check whenever a .wj file changes |
 | `--fix` | FIX |  | Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...) |
 | `--error-format` | FORMAT |  | Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command |
+| `--no-ignore` | NO_IGNORE |  | Check every `.wj` file under the path, including generated (`gen/`, `build/`, ...) and git-ignored directories that `wj check` leaves out by default |
 
 ## `wj add`
 
@@ -616,8 +617,9 @@ Usage: wj clean [OPTIONS]
 | `--all` | ALL |  | Also clean local target/ directories (deep clean) |
 | `--sidecars` | SIDECARS |  | Only remove legacy `*.wj.meta` sidecars next to sources under the current directory |
 | `--tmp` | TMP |  | Remove stale `wj-*` scratch directories from the OS temp dir (dry run unless --yes) |
+| `--generated` | GENERATED |  | Remove the project's generated `gen/` and `build/` directories, never one that holds tracked files (dry run unless --yes) |
 | `--older-than-hours` | OLDER_THAN_HOURS | 6 | With --tmp: only directories older than this many hours |
-| `--yes` | YES |  | With --tmp: actually delete (default is a dry run) |
+| `--yes` | YES |  | With --tmp or --generated: actually delete (default is a dry run) |
 
 ## `wj cache`
 

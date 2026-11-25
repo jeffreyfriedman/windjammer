@@ -69,7 +69,9 @@ pub(crate) fn copy_project_src_tree_into_output(
             if !dest.exists() {
                 fs::copy(&p, &dest)?;
             }
-        } else if p.is_dir() && p.join("mod.rs").exists() {
+        } else if p.is_dir() && !super::path_utilities::is_transpile_output_directory(&p) && p.join("mod.rs").exists() {
+            // `gen/`, `build/`, `generated/` hold the previous build's output, never hand-written modules: copying
+            // one back would put its stale Rust beside the fresh files (and into every prediction read from them)
             copy_dir_merge_shallow(&p, &dest)?;
         }
     }

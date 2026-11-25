@@ -38,7 +38,7 @@ struct Entry {
 
 /// The key of the check of `path` with these flags, or `None` when this run must not be cached.
 pub fn key(path: &Path, lints_block: bool, format: &str) -> Option<String> {
-    let (_, keyed) = super::inputs(path).ok()?;
+    let (_, keyed, _) = super::inputs(path, false).ok()?;
     let mut h = context("wj-run-check")?;
     part(&mut h, &[lints_block as u8]);
     part(&mut h, format.as_bytes());

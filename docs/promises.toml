@@ -997,12 +997,20 @@ id = "wj clean --sidecars"
 statement = "Only remove legacy `*.wj.meta` sidecars next to sources under the current directory"
 
 [[promise]]
+id = "wj clean --generated"
+statement = "Remove the project's generated gen/ and build/ directories, never one that holds tracked files (dry run unless --yes)"
+
+[[promise]]
+id = "wj check --no-ignore"
+statement = "Check every .wj file under the path, including generated and git-ignored directories that wj check leaves out by default"
+
+[[promise]]
 id = "wj clean --tmp"
 statement = "Remove stale `wj-*` scratch directories from the OS temp dir (dry run unless --yes)"
 
 [[promise]]
 id = "wj clean --yes"
-statement = "Actually remove what --tmp lists"
+statement = "Actually remove what --tmp or --generated lists"
 
 [[promise]]
 id = "wj rust-surface"
