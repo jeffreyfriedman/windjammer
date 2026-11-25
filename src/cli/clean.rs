@@ -2,7 +2,7 @@ use anyhow::Result;
 use colored::Colorize;
 use std::path::{Path, PathBuf};
 
-pub fn execute(all: bool, sidecars: bool, tmp: bool, generated: bool, older_than_hours: u64, yes: bool) -> Result<()> {
+pub fn execute(all: bool, sidecars: bool, tmp: bool, generated: bool, older_than_hours: u64, yes: bool, wait: bool) -> Result<()> {
     if generated {
         return super::clean_generated::run(&std::env::current_dir()?, yes);
     }
@@ -12,6 +12,10 @@ pub fn execute(all: bool, sidecars: bool, tmp: bool, generated: bool, older_than
     if sidecars {
         remove_sidecars(&std::env::current_dir()?);
         return Ok(());
+    }
+    if all {
+        // `--all` deletes the shared target trees: never under a running build
+        crate::cargo_cache::require_trees_free(wait).map_err(|e| anyhow::anyhow!(e))?;
     }
     println!("{}", "Cleaning Windjammer build artifacts...".cyan().bold());
     println!();

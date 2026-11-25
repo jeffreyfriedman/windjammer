@@ -227,3 +227,5 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj lock update` | Re-resolve every path and git dependency, in dependency order, and write wj.lock | tested |
 | `wj lock check` | Verify that wj.lock matches the manifests and dependency contents; exit 1 when it does not | tested |
 | `wj build --locked` | Fail when wj.lock is missing or no longer matches the dependencies (CI and release builds) | tested |
+| `wj clean --wait` | With --all: wait for a running build to release the shared cache instead of refusing | tested |
+| `wj cache prune --wait` | With --force: wait for a running build to finish instead of refusing | tested |

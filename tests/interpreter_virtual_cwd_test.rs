@@ -70,11 +70,10 @@ fn a_program_without_chdir_sees_the_process_directory() {
     assert!(out.contains(&format!("cwd={}", home().display())), "{out}");
 }
 
-/// Mutation control: the sampler does see a real chdir, so a regression to `std::env::set_current_dir` in the
-/// interpreter would fail the first test.
+/// `test_utils::in_dir` (the per-thread directory override the check caches key on) never moves the process.
 #[test]
-fn the_sampler_notices_a_real_chdir() {
-    let d = Scratch::new("vcwd-mutant");
+fn in_dir_never_changes_the_process_working_directory() {
+    let d = Scratch::new("vcwd-in-dir");
     let home = {
         let _cwd = windjammer::test_utils::hold_cwd();
         home()
@@ -82,7 +81,16 @@ fn the_sampler_notices_a_real_chdir() {
     let held = cwd_held_during(&home, || {
         windjammer::test_utils::in_dir(d.path(), || std::thread::sleep(std::time::Duration::from_millis(50)));
     });
-    assert!(!held, "the watcher missed a real working-directory change");
+    assert!(held, "in_dir moved the process working directory");
+}
+
+/// Mutation control: the sampler reports a process directory that differs from the one it is told to expect (what a
+/// real chdir would look like), so the checks above cannot pass vacuously. (A real chdir here would be the very hazard
+/// the isolation gate forbids.)
+#[test]
+fn the_sampler_notices_a_directory_that_differs() {
+    let d = Scratch::new("vcwd-mutant");
+    assert!(!cwd_held_during(d.path(), || std::thread::sleep(std::time::Duration::from_millis(20))), "the watcher must flag a cwd that is not the expected one");
 }
 
 /// The source scan: nothing under `src/interpreter` changes the host's working directory.

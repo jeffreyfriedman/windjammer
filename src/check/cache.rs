@@ -133,11 +133,11 @@ pub(super) fn write_atomically(path: &Path, text: &str) {
     }
 }
 
-pub fn load(root: &Path, fp: &str) -> Option<Vec<Diagnostic>> {
+pub fn load(root: &Path, fp: &str, cwd: Option<&Path>) -> Option<Vec<Diagnostic>> {
     let text = unmask_root(root, &std::fs::read_to_string(path_for(root, "run")).ok()?);
     let e: Entry = serde_json::from_str(&text).ok()?;
     let hit = e.format == FORMAT && e.identity == identity() && e.fingerprint == fp;
-    (hit && ambient::fingerprint(&e.use_depth).as_deref() == Some(e.ambient.as_str())).then_some(e.diagnostics)
+    (hit && ambient::fingerprint(&e.use_depth, cwd).as_deref() == Some(e.ambient.as_str())).then_some(e.diagnostics)
 }
 
 /// `ambient` is the digest taken before the checks ran (`None`: not cacheable).

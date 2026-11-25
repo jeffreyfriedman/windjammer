@@ -34,19 +34,28 @@ pub mod widths;
 use crate::diagnostics::{Diagnostic, Report};
 use anyhow::Result;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 pub use fix::{apply_fixes, FixOutcome};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct CheckOptions {
     pub use_cache: bool,
+    /// The working directory the caches key on (`None`: the process's). A test that checks many projects in one
+    /// process names each project's directory here instead of changing the process's.
+    pub cwd: Option<PathBuf>,
+}
+
+impl CheckOptions {
+    pub fn new(use_cache: bool) -> Self {
+        Self { use_cache, cwd: None }
+    }
 }
 
 impl Default for CheckOptions {
     fn default() -> Self {
-        Self { use_cache: true }
+        Self::new(true)
     }
 }
 
@@ -70,12 +79,12 @@ pub fn check_path_with(path: &Path, opts: &CheckOptions, no_ignore: bool) -> Res
     let (sources, keyed, scope) = inputs(path, no_ignore)?;
     crate::debug_env::phase("check-inputs");
     let fp = cache::fingerprint(&cache::relative_inputs(path, &keyed));
-    let cached = if opts.use_cache { cache::load(path, &fp) } else { None };
+    let cached = if opts.use_cache { cache::load(path, &fp, opts.cwd.as_deref()) } else { None };
     let was_cached = cached.is_some();
     let diagnostics = match cached {
         Some(d) => d,
         None => {
-            let r = run_with(path, &sources, opts.use_cache);
+            let r = run_with(path, &sources, opts.use_cache, opts.cwd.as_deref());
             if opts.use_cache {
                 cache::store(path, &fp, r.use_depth, r.ambient.as_deref(), &r.diagnostics);
             }
@@ -288,7 +297,7 @@ pub fn check_sources(root: &Path, sources: &[(String, String)]) -> Vec<Diagnosti
 }
 
 fn run(root: &Path, sources: &[(String, String)]) -> Vec<Diagnostic> {
-    run_with(root, sources, false).diagnostics
+    run_with(root, sources, false, None).diagnostics
 }
 
 struct RunOutput {
@@ -298,7 +307,7 @@ struct RunOutput {
     ambient: Option<String>,
 }
 
-fn run_with(root: &Path, sources: &[(String, String)], use_cache: bool) -> RunOutput {
+fn run_with(root: &Path, sources: &[(String, String)], use_cache: bool, cwd: Option<&Path>) -> RunOutput {
     let mut out = Vec::new();
     let mut parsed = Vec::new();
     for (file, text) in sources {
@@ -309,7 +318,7 @@ fn run_with(root: &Path, sources: &[(String, String)], use_cache: bool) -> RunOu
     }
     crate::debug_env::phase("check-parse");
     let use_depth = ambient::use_depth(parsed.iter().map(|p| &p.program));
-    let ambient = if use_cache { ambient::fingerprint(&use_depth) } else { None };
+    let ambient = if use_cache { ambient::fingerprint(&use_depth, cwd) } else { None };
     let mut memo = ambient.as_deref().map(|a| file_cache::FileMemo::open(root, a));
     project::run(root, &parsed, &mut out, memo.as_mut());
     if let Some(mut m) = memo {

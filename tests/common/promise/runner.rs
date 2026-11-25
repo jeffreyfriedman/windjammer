@@ -51,9 +51,8 @@ pub fn run_wj(sb: &Sandbox, cwd: &Path, args: &[String], stdin: Option<&str>, ex
 }
 
 /// `{w}` scratch dir, `{bin_dir}` directory holding the installed `wj` under test, `{root}` the compiler checkout.
-fn subst(s: &str, w: &Path) -> String {
-    let bin_dir = std::env::var("WJ_PROMISE_BIN_DIR").unwrap_or_default();
-    s.replace("{w}", w.to_str().unwrap()).replace("{bin_dir}", &bin_dir).replace("{root}", env!("CARGO_MANIFEST_DIR"))
+fn subst(s: &str, w: &Path, bin_dir: &Path) -> String {
+    s.replace("{w}", w.to_str().unwrap()).replace("{bin_dir}", bin_dir.to_str().unwrap()).replace("{root}", env!("CARGO_MANIFEST_DIR"))
 }
 
 /// The host toolchain, resolved ONCE from the test process's real environment (the sandbox isolates HOME, so
@@ -121,28 +120,46 @@ fn toolchain_env(case: &Case) -> Vec<(&'static str, String)> {
 
 /// Runs one case; `Err` explains which expectation failed.
 pub fn run_case(sb: &Sandbox, case: &Case) -> Result<(), String> {
-    std::env::set_var("WJ_PROMISE_BIN_DIR", sb.bin.parent().unwrap());
+    let bin_dir = sb.bin.parent().unwrap().to_path_buf();
     let dir = tempfile::TempDir::new().unwrap();
     let w = dir.path().canonicalize().unwrap();
     for (rel, text) in &case.files {
-        super::super::installed_sandbox::write(&w.join(rel), &subst(text, &w));
+        super::super::installed_sandbox::write(&w.join(rel), &subst(text, &w, &bin_dir));
     }
     let mut env = toolchain_env(case);
     // A private temp dir: commands like `wj clean` must never see other processes' temp files.
     let tmpdir = w.join(".tmp");
     std::fs::create_dir_all(&tmpdir).unwrap();
     env.push(("TMPDIR", tmpdir.to_string_lossy().into_owned()));
-    let case_env: Vec<(String, String)> = case.env.iter().map(|(k, v)| (k.clone(), subst(v, &w))).collect();
+    // `wj clean` / `wj cache` delete the cache tree (HOME/Library/Caches/windjammer/cargo-target/shared): they get their
+    // own HOME and cache root, so they can never delete the tree the cargo-building cases are compiling into. A case
+    // that names its own `WJ_CARGO_TARGET_ROOT` keeps it (it is already private); the HOME is private either way.
+    // WJ_PROMISE_MUTANT_SHARED_CACHE=1 is the mutation control: clean/cache cases use the shared sandbox cache again,
+    // and the flake must come back (see private-docs/handoffs/test-hygiene.md)
+    let mutant = std::env::var_os("WJ_PROMISE_MUTANT_SHARED_CACHE").is_some();
+    if !mutant && matches!(case.args.first().map(String::as_str), Some("clean" | "cache")) {
+        let home = w.join(".private-home");
+        std::fs::create_dir_all(&home).unwrap();
+        env.push(("HOME", home.to_string_lossy().into_owned()));
+        if !case.env.contains_key("WJ_CARGO_TARGET_ROOT") {
+            let root = w.join(".private-cache");
+            // a small dummy tree for them to delete
+            super::super::installed_sandbox::write(&root.join("cargo-target/shared/debug/dummy"), "x");
+            super::super::installed_sandbox::write(&root.join("cargo-target/verify/debug/dummy"), "x");
+            env.push(("WJ_CARGO_TARGET_ROOT", root.to_string_lossy().into_owned()));
+        }
+    }
+    let case_env: Vec<(String, String)> = case.env.iter().map(|(k, v)| (k.clone(), subst(v, &w, &bin_dir))).collect();
     let env: Vec<(&str, String)> = env.into_iter().chain(case_env.iter().map(|(k, v)| (k.as_str(), v.clone()))).collect();
     for step in &case.setup {
-        let args: Vec<String> = step.iter().map(|a| subst(a, &w)).collect();
+        let args: Vec<String> = step.iter().map(|a| subst(a, &w, &bin_dir)).collect();
         let r = run_wj(sb, &w, &args, None, &env);
         if r.code != Some(0) {
             return Err(format!("setup `wj {}` exited {:?}\n{}{}", args.join(" "), r.code, r.stdout, r.stderr));
         }
     }
-    let cwd = case.cwd.as_ref().map(|c| w.join(subst(c, &w))).unwrap_or_else(|| w.clone());
-    let args: Vec<String> = case.args.iter().map(|a| subst(a, &w)).collect();
+    let cwd = case.cwd.as_ref().map(|c| w.join(subst(c, &w, &bin_dir))).unwrap_or_else(|| w.clone());
+    let args: Vec<String> = case.args.iter().map(|a| subst(a, &w, &bin_dir)).collect();
     let r = run_wj(sb, &cwd, &args, case.stdin.as_deref(), &env);
     let ctx = || format!("`wj {}` exit {:?}\n--- stdout ---\n{}\n--- stderr ---\n{}", case.args.join(" "), r.code, r.stdout, r.stderr);
     let both = format!("{}\n{}", r.stdout, r.stderr);
@@ -155,13 +172,13 @@ pub fn run_case(sb: &Sandbox, case: &Case) -> Result<(), String> {
     }
     for (hay, needles, label) in [(&r.stdout, &case.stdout_has, "stdout"), (&r.stderr, &case.stderr_has, "stderr"), (&both, &case.output_has, "output")] {
         for n in needles {
-            if !hay.contains(&subst(n, &w)) {
+            if !hay.contains(&subst(n, &w, &bin_dir)) {
                 why.push(format!("{label} lacks {n:?}"));
             }
         }
     }
     for n in &case.output_lacks {
-        if both.contains(&subst(n, &w)) {
+        if both.contains(&subst(n, &w, &bin_dir)) {
             why.push(format!("output must not contain {n:?}"));
         }
     }

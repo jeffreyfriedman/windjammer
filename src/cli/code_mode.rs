@@ -61,7 +61,7 @@ pub fn execute(req: &Request) -> Response {
     // the front end and the interpreter both want a deep stack, and a server's worker threads have a small one
     let resp = with_big_stack(move || {
         // typed errors first: the same front end as `wj check`
-        let checked = match crate::check::check_path(&path, &crate::check::CheckOptions { use_cache: false }) {
+        let checked = match crate::check::check_path(&path, &crate::check::CheckOptions::new(false)) {
             Ok(c) => c,
             Err(e) => return Response { exit: 1, diagnostics: e.to_string(), ..Response::default() },
         };

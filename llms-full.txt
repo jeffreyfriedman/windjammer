@@ -1096,6 +1096,7 @@ Usage: wj clean [OPTIONS]
 | `--generated` | GENERATED |  | Remove the project's generated `gen/` and `build/` directories, never one that holds tracked files (dry run unless --yes) |
 | `--older-than-hours` | OLDER_THAN_HOURS | 6 | With --tmp: only directories older than this many hours |
 | `--yes` | YES |  | With --tmp or --generated: actually delete (default is a dry run) |
+| `--wait` | WAIT |  | With --all: wait for a running build to release the shared cache instead of refusing |
 
 ### `wj cache`
 
@@ -1137,6 +1138,7 @@ Usage: wj cache prune [OPTIONS]
 |---|---|---|---|
 | `--aggressive` | AGGRESSIVE |  | Also clear debug incremental trees when reclaiming |
 | `--force` | FORCE |  | Also delete what a running build holds or wrote within the last hour (normally left alone) |
+| `--wait` | WAIT |  | With --force: wait for a running build to finish instead of refusing |
 
 ### `wj cache warm`
 

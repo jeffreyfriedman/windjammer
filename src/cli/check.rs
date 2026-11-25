@@ -225,7 +225,7 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     crate::debug_env::phase("check-start");
-    let checked = check::check_path(path, &CheckOptions { use_cache });
+    let checked = check::check_path(path, &CheckOptions::new(use_cache));
     std::panic::set_hook(previous);
     crate::debug_env::phase("check-path");
     let checked = checked?;
@@ -288,7 +288,7 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
 /// Programmatic entry used by tools (MCP `check_code`): the shared-schema report for `path`.
 /// A path with no `.wj` files yields a failed report with one error.
 pub fn check_path(path: &Path) -> crate::diagnostics::Report {
-    match check::check_path(path, &CheckOptions { use_cache: false }) {
+    match check::check_path(path, &CheckOptions::new(false)) {
         Ok(c) if c.report.summary.files_checked > 0 => c.report,
         Ok(_) => crate::diagnostics::Report::new(
             "check",
