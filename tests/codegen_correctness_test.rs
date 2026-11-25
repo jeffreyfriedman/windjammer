@@ -127,6 +127,7 @@ macro_rules! corpus_tests {
 }
 
 corpus_tests!(
+    coalesce_field_place_reused,
     shadow_param_scalar_read_by_while,
     shadow_param_scalar_mutated,
     shadow_param_vec_mutated,
