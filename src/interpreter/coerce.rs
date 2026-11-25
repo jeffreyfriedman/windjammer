@@ -168,13 +168,17 @@ impl Interpreter {
             return Ok(Value::Int(target.wrap(n), target));
         }
         if let Some(ft) = type_is_float(ty) {
-            let f = match &v {
-                Value::Int(i, IntTy::U128) => *i as u128 as f64,
-                Value::Int(i, _) => *i as f64,
-                Value::Float(f, _) => *f,
-                other => return Err(unsupported(format!("cast of {} to float", other.type_name()))),
+            // an integer converts to `f32` with ONE rounding (Rust's `as`): never through `f64`, whose 53-bit
+            // mantissa rounds first (`2^54 + 2^30 + 1` as f32 is `0x5a800001`, the double rounding gives `0x5a800000`)
+            let f = match (&v, ft) {
+                (Value::Int(i, IntTy::U128), FloatTy::F32) => *i as u128 as f32 as f64,
+                (Value::Int(i, _), FloatTy::F32) => *i as f32 as f64,
+                (Value::Int(i, IntTy::U128), _) => *i as u128 as f64,
+                (Value::Int(i, _), _) => *i as f64,
+                (Value::Float(f, _), FloatTy::F32) => *f as f32 as f64,
+                (Value::Float(f, _), _) => *f,
+                (other, _) => return Err(unsupported(format!("cast of {} to float", other.type_name()))),
             };
-            let f = if ft == FloatTy::F32 { f as f32 as f64 } else { f };
             return Ok(Value::Float(f, ft));
         }
         match (ty, &v) {
