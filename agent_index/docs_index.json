@@ -2921,6 +2921,69 @@
     "tags": []
   },
   {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0195",
+    "signature": "Undefined shader function",
+    "source": "",
+    "summary": "A WJSL shader calls a name that is not a WGSL builtin, a value constructor, a struct or a function declared with `fn` in the shader; reported at build time inst",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0196",
+    "signature": "Unexpected character in shader source",
+    "source": "",
+    "summary": "A WJSL shader contains a character the lexer cannot tokenize, most often a line starting with `#` (WJSL has no `#` comments); it used to end the token stream si",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0197",
+    "signature": "WJSL import does not resolve",
+    "source": "",
+    "summary": "A `.wjsl` import `use crate::module::item` names a module file that is not in the entry file's folder, an item the module does not declare, a name that is alrea",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0198",
+    "signature": "WJSL item is private to its module",
+    "source": "",
+    "summary": "A `.wjsl` file imports or calls a function, struct or const that its module does not declare `pub`. Items are private unless `pub`, as in Windjammer.",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0199",
+    "signature": "WJSL import cycle",
+    "source": "",
+    "summary": "Two or more `.wjsl` modules import each other, directly or through a chain. WGSL has no recursion and a cycle never buys anything; the message lists the chain.",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0200",
+    "signature": "WJSL module declares something only an entry file may",
+    "source": "",
+    "summary": "A library module (a `.wjsl` file imported by another) declares a binding, a `var<...>` global or an entry point, or `pub` is used on something other than `fn`, ",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0201",
+    "signature": "WJSL identifier contains a double underscore",
+    "source": "",
+    "summary": "A `.wjsl` identifier contains `__`. The double underscore is reserved for module-qualified emitted names such as `brdf__fresnel_schlick`, which keeps those name",
+    "tags": []
+  },
+  {
     "kind": "example",
     "module": "",
     "name": "algo_anagram",
@@ -5276,10 +5339,10 @@
     "name": "Compiled path gaps (be honest with the user)",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_REFERENCE.md",
-    "summary": "`wj run --interpret` is the reference for behaviour. `wj build` additionally runs rustc: today about half of",
+    "summary": "`wj run --interpret` is the reference for behaviour. `wj build` additionally runs rustc: about half of",
     "tags": [
-      "int",
       "build",
+      "int",
       "interpreter",
       "len",
       "runs",
@@ -5293,11 +5356,11 @@
       "between",
       "carry",
       "chains",
-      "classes",
       "code",
       "collection",
       "comparing",
-      "compiled"
+      "compiled",
+      "compiles"
     ]
   },
   {
@@ -5580,23 +5643,23 @@
     "tags": [
       "file",
       "run",
-      "interpret",
-      "cargo",
       "check",
+      "interpret",
+      "build",
+      "cargo",
+      "ignore",
       "json",
       "line",
       "locals",
       "path",
       "prints",
       "values",
-      "build",
       "diagnostics",
       "dir",
       "error",
       "exit",
       "failing",
       "fix",
-      "ignore",
       "interpreter"
     ]
   },
@@ -5636,7 +5699,7 @@
     "name": "Where to look next",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_REFERENCE.md",
-    "summary": "`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_*.md`),",
+    "summary": "`wj docs <terms>` searches this guide, cheat sheets (`cheatsheet_from_*.md`),",
     "tags": [
       "docs",
       "design",
