@@ -23,6 +23,42 @@ pub enum FloatTy {
     Lit,
 }
 
+/// An `f32` value is carried as an `f64` that holds it exactly. A NaN keeps its 23-bit payload shifted left by 29, and
+/// the carrier is built from the bits directly, never by an `f32 -> f64` conversion: that conversion sets the quiet
+/// bit (x86 `cvtss2sd`), so a signalling NaN would come back as the quiet one (`f32::from_bits(0x7f800001).to_bits()`
+/// must stay `0x7f800001`, as in compiled Rust, where both calls are transmutes).
+pub fn f32_bits_to_carrier(bits: u32) -> f64 {
+    if f32::from_bits(bits).is_nan() {
+        f64::from_bits(((bits as u64 >> 31) << 63) | (0x7ffu64 << 52) | ((bits as u64 & 0x007f_ffff) << 29))
+    } else {
+        f32::from_bits(bits) as f64
+    }
+}
+
+/// The inverse of `f32_bits_to_carrier`: the `f32` bits of a carrier. A NaN maps by bits (a signalling NaN stays
+/// signalling); a payload that lives only below the f32 mantissa becomes the default quiet payload (the hardware
+/// narrowing gives a quiet NaN there too, never an infinity).
+pub fn carrier_to_f32_bits(f: f64) -> u32 {
+    if f.is_nan() {
+        let b = f.to_bits();
+        let mant = ((b >> 29) & 0x007f_ffff) as u32;
+        (((b >> 63) as u32) << 31) | 0x7f80_0000 | if mant == 0 { 0x0040_0000 } else { mant }
+    } else {
+        (f as f32).to_bits()
+    }
+}
+
+/// Round a carrier to f32 precision without disturbing a NaN (a move of an f32 value is not an operation: it must
+/// not quiet a signalling NaN).
+#[inline(always)]
+pub fn round_f32_carrier(f: f64) -> f64 {
+    if f.is_nan() {
+        f
+    } else {
+        f as f32 as f64
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct StructVal {
     pub name: Rc<str>,

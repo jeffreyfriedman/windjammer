@@ -480,7 +480,7 @@ pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option
             // `f64::from_bits(u64)` / `f32::from_bits(u32)`: the IEEE bits as the float
             "from_bits" => Some((|| {
                 let n = arg_int(args, 0, "from_bits")?;
-                Ok(if ft == FloatTy::F32 { Value::Float(f32::from_bits(n as u32) as f64, ft) } else { Value::Float(f64::from_bits(n as u64), ft) })
+                Ok(if ft == FloatTy::F32 { Value::Float(crate::interpreter::value::f32_bits_to_carrier(n as u32), ft) } else { Value::Float(f64::from_bits(n as u64), ft) })
             })()),
             "from_le_bytes" | "from_be_bytes" => Some((|| {
                 let mut bytes = byte_args(it, args, method)?;
@@ -488,7 +488,7 @@ pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option
                     bytes.reverse();
                 }
                 match (ft, bytes.len()) {
-                    (FloatTy::F32, 4) => Ok(Value::Float(f32::from_le_bytes(bytes.try_into().expect("4 bytes")) as f64, ft)),
+                    (FloatTy::F32, 4) => Ok(Value::Float(crate::interpreter::value::f32_bits_to_carrier(u32::from_le_bytes(bytes.try_into().expect("4 bytes"))), ft)),
                     (_, 8) if ft != FloatTy::F32 => Ok(Value::Float(f64::from_le_bytes(bytes.try_into().expect("8 bytes")), ft)),
                     (_, n) => Err(semantic(format!("{ty}::{method} takes {} bytes, got {n}", if ft == FloatTy::F32 { 4 } else { 8 }))),
                 }

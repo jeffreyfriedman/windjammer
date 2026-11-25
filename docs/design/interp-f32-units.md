@@ -101,8 +101,6 @@ mirrors whatever the interpreter does when the unit lands (section 3).
 |---|---|---|---|---|
 | L1 | `sin cos tan exp exp2 ln log2 log10 atan atan2 cbrt sinh tanh powf` on f32 | f64 function, rounded | glibc `sinf`-family | P1 |
 | L2 | `powi`, `to_degrees`, `to_radians` on f32 | f64, rounded | f32 operations (square-and-multiply; multiply by an f32 constant) | P2 |
-| L5 | `f32::from_bits(sNaN).to_bits()` | quieted (0x7fc00001) | unchanged (0x7f800001) | P4 |
-
 L3 and L6 are fixed (rows removed): an unsuffixed float literal the compiled program types `f32` is an f32 value from the
 moment it is evaluated (`Interpreter::float_literal`, from the solver's published literal widths, the same facts that type
 integer literals), and the assignment, `+=`, `retag` and integer-literal coercions round with `as f32 as f64`. Literal-only
@@ -116,6 +114,16 @@ L4 is fixed (row removed): an integer converts to `f32` with one rounding (`i128
 (`lower_expr.rs` `cast` returns `None` for a non-f64 target); the F1 stage must lower an integer to `f32` as one
 `fcvt_from_sint F32` (or `fcvt_from_uint`), NOT `fcvt_from_sint F64` followed by a demote, which is the double rounding.
 The unit-lowering table row for `as f32` from an integer is updated to match.
+
+L5 is fixed (row removed): `f32::from_bits`, `f32::from_le_bytes`, `to_bits` and `to_le_bytes` map a NaN by bits
+(`f32_bits_to_carrier`, `carrier_to_f32_bits` in `src/interpreter/value.rs`): the carrier of a NaN is built as
+sign | exponent | mantissa << 29 with the quiet bit as given, never by an `f32 -> f64` conversion (x86 `cvtss2sd` sets the
+quiet bit). Moves of the carrier (assignment, arguments, fields, vectors, negation, `abs`) keep the bits, and the f32
+rounding of a coerced or method-result value leaves a NaN untouched (`round_f32_carrier`). Known limit: an arithmetic
+operation on a signalling NaN quiets it, as the hardware does for f32 and f64 alike; `as f64` of an f32 NaN sets the
+quiet bit (the interpreter does the same); the payload that compiled Rust shows after arithmetic or a widening can
+depend on the optimizer's constant folding, which the interpreter does not model. `tests/f32_parity/f32_nan_payload.wj`
+pins the moves against compiled Rust.
 
 The text below was written while L3 stood; with L3 fixed, F6's precondition holds. L3 was the one that mattered for the unit's representation. An F32-tagged value can hold an f64 that f32 cannot
 represent, and that is observable: through `as f64`, through `Value` equality and ordering (`value.rs` compares raw
