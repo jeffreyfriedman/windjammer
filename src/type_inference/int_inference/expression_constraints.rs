@@ -1,4 +1,14 @@
 impl IntInference {
+    /// A block used as a value (`x += if c { a } else { b }`): its tail is a value of the enclosing
+    /// expression, so it is not the function's implicit return (see `value_block_depth`).
+    fn collect_value_block_constraints<'ast>(&mut self, statements: &[&'ast Statement<'ast>], return_type: Option<&Type>) {
+        self.value_block_depth += 1;
+        for stmt in statements {
+            self.collect_statement_constraints(stmt, return_type);
+        }
+        self.value_block_depth -= 1;
+    }
+
     /// Unannotated `let xs = vec![10, 20]` / `[10, 20]` later passed to `Vec<u64>`
     /// MustBe's the identifier (nested width) and MustMatch's it to the collection
     /// expr — but element literals are separate nodes. Unify each element with the
@@ -440,11 +450,7 @@ impl IntInference {
                     }
                 }
             }
-            Expression::Block { statements, .. } => {
-                for stmt in statements {
-                    self.collect_statement_constraints(stmt, return_type);
-                }
-            }
+            Expression::Block { statements, .. } => self.collect_value_block_constraints(statements, return_type),
             Expression::FieldAccess { object, .. } => {
                 self.collect_expression_constraints(object, return_type);
             }
