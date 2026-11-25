@@ -1,0 +1,15 @@
+// i64::MIN % -1: the same overflow as the walker reports, late in a hot loop.
+fn main() {
+    let mut t: int = 0
+    let mut i = 0
+    let mut x: int = 5
+    while i < 6000 {
+        t += x % -1 + x % 7
+        x += 1
+        if i == 4500 {
+            x = -9223372036854775807 - 1
+        }
+        i += 1
+    }
+    println("${t}")
+}

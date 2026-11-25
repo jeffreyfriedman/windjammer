@@ -1,0 +1,18 @@
+// A loop-invariant variable divisor that is zero at run time is not a constant: it must trap (same iteration).
+fn run(d: int) -> int {
+    let mut t: int = 0
+    let mut i = 0
+    while i < 6000 {
+        t += i % 7
+        if i > 4500 {
+            t += i / d + 1
+        }
+        i += 1
+    }
+    t
+}
+fn main() {
+    println("${run(3)}")
+    let z = 5 - 5
+    println("${run(z)}")
+}

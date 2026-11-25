@@ -249,14 +249,19 @@ impl Lo<'_, '_> {
                     r
                 }
                 BinaryOp::Div | BinaryOp::Mod => {
-                    let z = self.b.ins().icmp_imm(IntCC::Equal, y, 0);
-                    if !mutant(self.it, "divzero") {
-                        self.bail_if(z);
+                    // a divisor known at compile time (`Val.k`: only a literal, or its negation) needs a guard only when it can trap
+                    if b.k.is_none_or(|c| c == 0) {
+                        let z = self.b.ins().icmp_imm(IntCC::Equal, y, 0);
+                        if !mutant(self.it, "divzero") {
+                            self.bail_if(z);
+                        }
                     }
-                    let m = self.b.ins().icmp_imm(IntCC::Equal, x, i64::MIN);
-                    let n = self.b.ins().icmp_imm(IntCC::Equal, y, -1);
-                    let both = self.b.ins().band(m, n);
-                    self.bail_if(both);
+                    if b.k.is_none_or(|c| c == -1) {
+                        let m = self.b.ins().icmp_imm(IntCC::Equal, x, i64::MIN);
+                        let n = self.b.ins().icmp_imm(IntCC::Equal, y, -1);
+                        let both = self.b.ins().band(m, n);
+                        self.bail_if(both);
+                    }
                     if op == BinaryOp::Div {
                         self.b.ins().sdiv(x, y)
                     } else {
@@ -286,8 +291,10 @@ impl Lo<'_, '_> {
                     r
                 }
                 BinaryOp::Div | BinaryOp::Mod => {
-                    let z = self.b.ins().icmp_imm(IntCC::Equal, y, 0);
-                    self.bail_if(z);
+                    if b.k.is_none_or(|c| c == 0) {
+                        let z = self.b.ins().icmp_imm(IntCC::Equal, y, 0);
+                        self.bail_if(z);
+                    }
                     if op == BinaryOp::Div {
                         self.b.ins().udiv(x, y)
                     } else {

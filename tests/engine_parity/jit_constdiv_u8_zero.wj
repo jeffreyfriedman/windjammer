@@ -1,0 +1,14 @@
+// An unsigned dividend with a literal zero divisor late in a hot loop.
+fn main() {
+    let mut t: int = 0
+    let mut i = 0
+    while i < 6000 {
+        let a: u8 = (i % 200) as u8
+        t += (a / 7) as int + (a % 7) as int
+        if i == 4500 {
+            t += (a % 0) as int
+        }
+        i += 1
+    }
+    println("${t}")
+}

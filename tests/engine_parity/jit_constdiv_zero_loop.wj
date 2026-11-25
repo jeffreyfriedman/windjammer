@@ -1,0 +1,13 @@
+// A constant zero divisor reached late in a hot loop: the loop exits to the closure engine, same panic, location and iteration.
+fn main() {
+    let mut t: int = 0
+    let mut i = 0
+    while i < 6000 {
+        t += i % 7 + i / 7
+        if i == 4500 {
+            t += i / 0
+        }
+        i += 1
+    }
+    println("${t}")
+}

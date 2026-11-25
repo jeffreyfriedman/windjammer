@@ -1,0 +1,15 @@
+// i32::MIN / -1 in a hot loop: the result is out of range for i32, same panic as the walker.
+fn main() {
+    let mut t: i32 = 0
+    let mut i = 0
+    let mut x: i32 = 5
+    while i < 6000 {
+        t = (t % 1000) + x / -1 + x % 7
+        x += 1
+        if i == 4500 {
+            x = -2147483647 - 1
+        }
+        i += 1
+    }
+    println("${t}")
+}

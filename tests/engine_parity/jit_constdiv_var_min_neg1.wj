@@ -1,0 +1,15 @@
+// A loop-invariant variable divisor of -1 against i64::MIN: not a constant, the overflow guard stays.
+fn run(d: int, base: int) -> int {
+    let mut t: int = 0
+    let mut i = 0
+    while i < 6000 {
+        let x = if i > 4500 { base } else { i }
+        t += x / d % 1000
+        i += 1
+    }
+    t
+}
+fn main() {
+    println("${run(0 - 1, 7)}")
+    println("${run(0 - 1, -9223372036854775807 - 1)}")
+}

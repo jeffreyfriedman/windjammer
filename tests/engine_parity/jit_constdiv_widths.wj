@@ -1,0 +1,81 @@
+// Constant divisors in hot machine-code loops (the lowering drops the zero and MIN/-1 guards only for a divisor
+// that is a literal other than 0 / -1): 7, -7, 1, -1 for `/` and `%`, negative dividends, int/i32/i8/u8/u64/usize,
+// the extremes of each width, a const item and a loop-invariant variable divisor (keeps its guards).
+const SEVEN: int = 7
+
+fn signed_int(n: int) -> int {
+    let mut t: int = 0
+    let mut i = 0
+    let mut x: int = -9223372036854775807 - 1
+    while i < n {
+        let v = (i - n / 2) * 1000003
+        t = t % 1000003 + v / 7 % 1000 + v % 7 + v / -7 % 1000 + v % -7 + v / 1 % 1000 + v % 1 + v / -1 % 1000 + v % -1
+        t += (x + i) / 7 % 1000 + (x + i) % 7 + (x + i) / -7 % 1000 + (x + i) % -7 + (x + i) / 1 % 1000 + (x + i) % 1
+        t += (9223372036854775807 - i) / 7 % 1000 + (9223372036854775807 - i) % -7
+        if v % 7 == 0 { t += 1 }
+        if (v - 7) % 7 == 0 { t += 3 }
+        t += v / SEVEN % 1000 + v % SEVEN
+        i += 1
+    }
+    t
+}
+
+fn signed_i32(n: int) -> i32 {
+    let mut t: i32 = 0
+    let mut i = 0
+    while i < n {
+        let v: i32 = (i as i32 - 1000) * 2000
+        let m: i32 = -2147483647 - 1 + (i as i32 % 3)
+        t = t % 1000 + v / 7 % 1000 + v % 7 + v / -7 % 1000 + v % -7 + v / 1 % 1000 + v % -1 + v / -1 % 1000 + m / 7 % 1000 + m % -7 + (m + 1) / -1 % 1000
+        i += 1
+    }
+    t
+}
+
+fn signed_i8(n: int) -> i8 {
+    let mut t: i8 = 0
+    let mut i = 0
+    while i < n {
+        let v: i8 = (i % 255 - 127) as i8
+        let m: i8 = -127 - 1 + (i % 3) as i8
+        t = (t % 5) + v / 70 + v % 7 + v / -70 + v % -7 + v / 1 % 10 + v % -1 + v / -1 % 10 + m / 70 + m % -7 + (m + 1) / -1 % 10
+        i += 1
+    }
+    t
+}
+
+fn unsigned(n: int) -> int {
+    let mut t: int = 0
+    let mut i = 0
+    while i < n {
+        let a: u8 = (i % 256) as u8
+        let b: u64 = 18446744073709551615 - i as u64
+        let c: usize = i as usize * 977
+        t += (a / 7) as int + (a % 7) as int + (a / 1) as int + (a % 1) as int
+        t += (b / 7) as int % 1000 + (b % 7) as int + (b / 1) as int % 1000 + (b % 1) as int
+        t += (c / 7) as int + (c % 7) as int + (c / 1) as int + (c % 1) as int
+        i += 1
+    }
+    t
+}
+
+fn variable(n: int, d: int) -> int {
+    let mut t: int = 0
+    let mut i = 0
+    let m = -9223372036854775807 - 1
+    while i < n {
+        t += (i - 100) / d + (i - 100) % d + (m + i + 1) / d % 1000
+        i += 1
+    }
+    t
+}
+
+fn main() {
+    println("${signed_int(3000)}")
+    println("${signed_i32(3000)}")
+    println("${signed_i8(3000)}")
+    println("${unsigned(3000)}")
+    println("${variable(3000, 7)} ${variable(3000, -7)} ${variable(3000, 1)}")
+    let neg = 0 - 1
+    println("${variable(3000, neg)}")
+}

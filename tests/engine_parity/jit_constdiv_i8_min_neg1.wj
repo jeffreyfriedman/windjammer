@@ -1,0 +1,15 @@
+// i8::MIN / -1 in a hot loop: out of range for i8.
+fn main() {
+    let mut t: i8 = 0
+    let mut i = 0
+    let mut x: i8 = 5
+    while i < 6000 {
+        t = (t % 10) + x / -1 + x % 7
+        x = (x % 100) + 1
+        if i == 4500 {
+            x = -127 - 1
+        }
+        i += 1
+    }
+    println("${t}")
+}
