@@ -1,4 +1,5 @@
 // expect: WJ0003
+// oracle: check
 fn half(v: int) -> int {
     v / 2
 }
@@ -6,5 +7,6 @@ fn half(v: int) -> int {
 fn main() {
     let x: f64 = 9.0
     let h = half(x)
+//~@18+1 ERROR WJ0003 mismatched types: expected `int`,
     println("${h}")
 }

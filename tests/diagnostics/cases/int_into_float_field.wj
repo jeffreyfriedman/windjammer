@@ -1,4 +1,5 @@
 // expect: WJ0003
+// oracle: check
 struct Body {
     mass: float,
 }
@@ -6,5 +7,6 @@ struct Body {
 fn main() {
     let n: int = 3
     let b = Body { mass: n }
+//~@26+1 ERROR WJ0003 mismatched types: expected `float`,
     println("${b.mass}")
 }

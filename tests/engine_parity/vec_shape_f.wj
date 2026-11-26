@@ -5,6 +5,7 @@ fn at(v: Vec<float>, i: int) -> float {
 
 fn main() {
     let mut v: Vec<float> = vec![0.0; 100000]
+//~@29+17 WARN W0007 `vec!` is deprecated: use
     let mut s = 0.0
     let mut i = 0
     while i < 20 {

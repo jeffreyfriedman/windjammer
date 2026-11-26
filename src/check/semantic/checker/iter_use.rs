@@ -124,6 +124,39 @@ impl Checker<'_, '_, '_> {
         }
     }
 
+    /// `it[a..b]` / `it[a..]` / `it[..b]` on an iterator: the parser desugars the slice into a synthetic `it.slice(a, b)`
+    /// (the omitted end into a synthetic `it.len()`), neither of which has a surface form. When the text after the
+    /// receiver is `[`, this is that sugar: report it once, as the index use it is, at the receiver, and skip the
+    /// synthetic `len`. A written `it.slice(..)` is a list method and takes the ordinary route.
+    pub(super) fn slice_sugar_of_iterator(&mut self, object: &Expression<'_>, arguments: &[(Option<String>, &Expression<'_>)], loc: &SourceLocation) -> bool {
+        let Some(root) = self.iterator_of(object) else { return false };
+        if !iterators::lists_only("slice", &root) {
+            return false;
+        }
+        let text = self.cx.loc.ix.text();
+        let end = match object {
+            Expression::Identifier { name, location } => {
+                let l = self.effective(location);
+                self.cx.loc.word(&l, name).map(|sp| sp.byte_end)
+            }
+            Expression::MethodCall { method, location, .. } => {
+                let l = self.effective(location);
+                self.cx.loc.word(&l, method).and_then(|sp| chain_end(text, sp.byte_end))
+            }
+            _ => None,
+        };
+        if end.is_none_or(|at| text.as_bytes().get(at) != Some(&b'[')) {
+            return false;
+        }
+        if let Some((_, Expression::MethodCall { method, arguments: a, .. })) = arguments.get(1) {
+            if method == "len" && a.is_empty() {
+                self.skip.insert(arguments[1].1 as *const Expression<'_> as usize);
+            }
+        }
+        self.iterator_as_list(object, Use::Index, loc);
+        true
+    }
+
     /// `parts[0]`, `parts[1..]`, `parts.contains(..)` and the other list uses that need only the object.
     pub(super) fn list_use_in_expr(&mut self, e: &Expression<'_>) {
         match e {

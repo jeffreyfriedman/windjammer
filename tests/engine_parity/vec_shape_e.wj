@@ -5,6 +5,7 @@ fn at(v: Vec<float>, i: int) -> float {
 
 fn main() {
     let mut a: Vec<float> = vec![0.0; 100000]
+//~@29+17 WARN W0007 `vec!` is deprecated: use
     let mut b: Vec<float> = Vec::with_capacity(100000)
     let mut k = 0
     while k < 100000 {
@@ -12,8 +13,10 @@ fn main() {
         k += 1
     }
     let c = vec![7.0; 100000]
+//~@13+17 WARN W0007 `vec!` is deprecated: use
     let d = b.clone()
     let mut e: Vec<float> = vec![1.0, 2.0, 3.0]
+//~@29+19 WARN W0007 `vec!` is deprecated: use
     e = d.clone()
     a.push(8.5)
     let mut s = 0.0

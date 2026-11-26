@@ -1,6 +1,6 @@
 # Ungated Instant::now()/SystemTime::now() reads per file in src/ (tests/wasm_clock_gate_test.rs). wasm32 panics on them.
 # Format: FILE COUNT. Raise a count only for code the browser playground never reaches (native CLI, build, test runner).
-# cargo_cache/mod.rs (size_budget test) and typing/core_surface.rs (parse_cost_report) read the clock in #[cfg(test)] code only: native test binaries, never the wasm library.
+# cargo_cache/mod.rs (size_budget test) and typing/core_surface.rs (parse_cost_report) read the clock in #[cfg(test)] code only: native test binaries, never the wasm library. signature_promotion_tests.rs (a timing assert in a unit test) likewise.
 src/cargo_cache/active.rs 1
 src/cargo_cache/entries.rs 2
 src/cargo_cache/mod.rs 4
@@ -9,7 +9,7 @@ src/check/shared_cache.rs 1
 src/cli/eval.rs 1
 src/cli/tmp_janitor.rs 3
 src/cli/watch.rs 1
-src/codegen/rust/signature_promotion.rs 1
+src/codegen/rust/signature_promotion_tests.rs 1
 src/compiler/library_multipass.rs 19
 src/compiler/multipass_bare_pass_demotion.rs 3
 src/error_statistics.rs 7

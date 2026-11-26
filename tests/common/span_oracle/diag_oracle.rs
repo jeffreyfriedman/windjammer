@@ -183,21 +183,33 @@ pub fn collect_check(file: &str, src: &str) -> Vec<Found> {
         .collect()
 }
 
-/// File modules a program declares with a bodiless `mod name` line: the sibling `name.wj` or `name/mod.wj` next to `file`, when it
-/// exists. The checker needs them to resolve `use name::Item`, as `wj check` loads them from the project.
+/// File modules a program declares with a bodiless `mod name` / `pub mod name` line: the sibling `name.wj` or `name/mod.wj` next to
+/// `file`, when it exists, and the modules those declare in turn (`main.wj` -> `adapters/mod.wj` -> `adapters/http.wj`). The checker
+/// needs them to resolve `use name::Item` (and an item a module re-exports from its own children), as `wj check` loads them from
+/// the project.
 fn sibling_modules(file: &str, src: &str) -> Vec<(String, String)> {
     let dir = std::path::Path::new(file).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
     let mut out = Vec::new();
+    collect_siblings(&dir, src, &mut out);
+    out
+}
+
+fn collect_siblings(dir: &std::path::Path, src: &str, out: &mut Vec<(String, String)>) {
     for line in src.lines() {
+        let line = line.strip_prefix("pub ").unwrap_or(line);
         let Some(name) = line.strip_prefix("mod ").map(str::trim).filter(|n| !n.is_empty() && n.chars().all(|c| c.is_alphanumeric() || c == '_')) else { continue };
-        for cand in [dir.join(format!("{name}.wj")), dir.join(name).join("mod.wj")] {
+        for (cand, children) in [(dir.join(format!("{name}.wj")), dir.join(name)), (dir.join(name).join("mod.wj"), dir.join(name))] {
+            let key = cand.to_string_lossy().replace('\\', "/");
+            if out.iter().any(|(k, _)| *k == key) {
+                break;
+            }
             if let Ok(text) = std::fs::read_to_string(&cand) {
-                out.push((cand.to_string_lossy().replace('\\', "/"), text));
+                out.push((key, text.clone()));
+                collect_siblings(&children, &text, out);
                 break;
             }
         }
     }
-    out
 }
 
 /// The raw diagnostics of `check_sources` (panics inside the checker become one `panic` diagnostic).

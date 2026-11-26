@@ -1,8 +1,10 @@
 // expect: WJ0202
+// oracle: check
 fn main() {
     let mut names = [1, 2, 3]
     for n in &names {
         names.push(*n)
+//~@9+14 ERROR WJ0202 `names.push(..)` changes `names` while
     }
     println("${names.len()}")
 }

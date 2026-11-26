@@ -69,6 +69,7 @@ fn main() {
         k += 1
     }
     println("grow ${a.len()} ${sum_of(a.clone())} ${a[0]} ${a[4999]}")
+//~@41+5 WARN W0005 explicit .clone() call
 
     // the first push onto an empty vector, then a loop
     let mut e: Vec<int> = Vec::new()

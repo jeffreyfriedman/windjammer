@@ -41,15 +41,24 @@ fn quad() -> [i32; 4] {
 fn main() {
     assert_eq((samples(true) ?? []).len() as int, 2)
     println("{}", (samples(true) ?? [1.0]).len() - 2)
+//~@5+49 WARN W0008 `println` with a `{}`
     println("{}", (samples(false) ?? [1.0]).len())
+//~@5+46 WARN W0008 `println` with a `{}`
     println("{}", (wide(false) ?? [1.0, 2.0, 3.0]).len())
+//~@5+53 WARN W0008 `println` with a `{}`
     let a = samples(false) ?? [1.0, 2.0]
     println("{}", a.len())
+//~@5+22 WARN W0008 `println` with a `{}`
     println("{}", (ints(false) ?? [9]).len())
+//~@5+41 WARN W0008 `println` with a `{}`
     println("{}", total(samples(false) ?? [0.5, 0.25]))
+//~@5+51 WARN W0008 `println` with a `{}`
     let n = names(false) ?? ["x"]
     println("{}", n.len())
+//~@5+22 WARN W0008 `println` with a `{}`
     let q = quad()
     println("{}", q.len())
+//~@5+22 WARN W0008 `println` with a `{}`
     println("{}", (names(false) ?? []).len() + 1)
+//~@5+45 WARN W0008 `println` with a `{}`
 }

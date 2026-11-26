@@ -1,7 +1,7 @@
 error[WJ0003]: mismatched types: expected `float`, found `int` in field `mass` of `Body`
-  --> int_into_float_field.wj:8:26
+  --> int_into_float_field.wj:9:26
   |
-8 |     let b = Body { mass: n }
+9 |     let b = Body { mass: n }
   |                          ^ expected `float`, found `int`
   = help: convert explicitly: `n as float`, or declare it `int`
   = explain: wj explain WJ0003

@@ -67,7 +67,6 @@ examples/syntax_tests/24_trait_bounds/main.wj W0001,W0005
 examples/syntax_tests/25_where_clauses/main.wj W0001,W0005
 examples/syntax_tests/28_trait_objects/main.wj W0001,W0004
 examples/syntax_tests/29_advanced_traits/main.wj W0001,W0004,W0005
-examples/syntax_tests/32_testing/main.wj WJ0002
 examples/syntax_tests/34_inferred_trait_bounds/main.wj W0005
 examples/syntax_tests/37_combined_features/main.wj W0005
 examples/syntax_tests/38_named_bound_sets/main.wj W0005
@@ -234,7 +233,6 @@ tests/check_negative/mutants/struct_method_chain_mut__return_wrong_type.wj WJ000
 tests/check_negative/mutants/struct_method_chain_mut__unknown_field.wj WJ0014
 tests/check_negative/mutants/trait_display_to_string__unknown_field.wj WJ0014
 tests/check_negative/mutants/vec_basics__unknown_method.wj WJ0015
-tests/codegen_correctness_corpus/thread_handles.wj WJ0005
 tests/conformance/control_flow/pipe_operator.wj W0007
 tests/conformance_programs/01_arith_i32.wj W0008
 tests/conformance_programs/02_arith_i64.wj W0008
@@ -510,7 +508,6 @@ tests/interpreter_corpus/threads_sync.wj W0008
 tests/interpreter_corpus/xorshift64.wj W0008
 tests/interpreter_projects/bins_args/src/report.wj W0008
 tests/interpreter_projects/path_dep/textkit/src/frame.wj W0008
-tests/interpreter_projects/use_forms/src/geo/mod.wj WJ0006
 tests/interpreter_projects/use_forms/src/text.wj W0008
 tests/let_patterns.wj WJ0011
 tests/operator_precedence.wj W0009
@@ -551,7 +548,6 @@ tests/spec/pipe/SPEC-PIPE-007.wj WJ0011
 tests/spec/statements/SPEC-STMT-002.wj WJ0051
 tests/spec/statements/SPEC-STMT-005.wj W0003
 tests/spec/stdlib/SPEC-STD-001.wj W0002
-tests/spec/stdlib/SPEC-STD-002.wj W0002,W0010
 tests/spec/stdlib/SPEC-STD-003.wj W0003
 tests/spec/trailing-blocks/SPEC-BLOCK-004.wj WJ0011
 tests/spec/types/SPEC-TYP-003.wj W0013

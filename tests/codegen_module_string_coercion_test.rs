@@ -15,11 +15,11 @@ mod test_utils;
 
 #[test]
 fn test_inline_module_qualified_call_guard() {
-    // For inline modules (single-file), the signature registry only has bare names.
-    // Module-qualified calls via inline modules fall through to the simple-name fallback,
-    // and the guard correctly prevents string coercion (since it can't verify the module).
-    // Multi-file compilation (the real game build) adds module-qualified entries, which
-    // the alias resolver can find, bypassing the guard entirely.
+    // An inline module's functions are registered under their bare names, so the call `gpu::f("lit")`
+    // resolves through the simple-name fallback. The literal's spelling must follow the resolved
+    // formal: an owned `String` formal gets `"lit".to_string()` (a bare `&str` would not compile),
+    // while a formal the analyzer demoted to `&str` keeps the bare literal (the coercion must not
+    // own a literal the callee only reads).
     let code = r#"
 mod gpu {
     pub fn load_shader(path: string) -> u32 {
@@ -27,22 +27,26 @@ mod gpu {
         paths.push(path)
         42
     }
+    pub fn peek(path: string) -> u32 {
+        path.len() as u32
+    }
 }
 
 pub fn main() {
     let id = gpu::load_shader("shaders/test.wgsl")
+    let n = gpu::peek("abc")
 }
 "#;
 
     let rs = test_utils::compile_single(code);
-    // In single-file mode, the fallback guard prevents .to_string().
-    // This is conservative but safe. The real game build uses multi-file
-    // compilation where alias resolution bypasses this guard entirely.
     assert!(
-        !rs.contains(r#""shaders/test.wgsl".to_string()"#),
-        "In single-file compilation with inline modules, the guard should \
-         conservatively prevent .to_string() since module origin can't be verified.\n\
-         Generated:\n{}",
+        rs.contains(r#"gpu::load_shader("shaders/test.wgsl".to_string())"#),
+        "owned `String` formal must receive an owned literal.\nGenerated:\n{}",
+        rs
+    );
+    assert!(
+        rs.contains(r#"gpu::peek("abc")"#),
+        "a `&str` formal must keep the bare literal (the coercion must follow the resolved signature, not own every literal).\nGenerated:\n{}",
         rs
     );
 }
