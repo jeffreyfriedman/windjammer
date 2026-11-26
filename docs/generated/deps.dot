@@ -254,7 +254,7 @@ digraph deps {
   "codegen" -> "stdlib_surface" [label="11"];
   "codegen" -> "test_utils" [label="7"];
   "codegen" -> "type_classification" [label="255"];
-  "codegen" -> "type_inference" [label="63"];
+  "codegen" -> "type_inference" [label="69"];
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
   "compilation_error_handling" -> "parser" [label="1"];
