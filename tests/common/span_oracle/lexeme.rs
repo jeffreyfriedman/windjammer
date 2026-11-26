@@ -35,6 +35,10 @@ pub fn check_lexeme(tok: &Token, lexeme: &str, at_eof: bool) -> Result<(), Strin
                 Err(format!("lexeme value {v} != token value {n}"))
             }
         }
+        IntLiteralWide(n) => {
+            let (v, _) = parse_int(lexeme)?;
+            (v as u128 == *n).then_some(()).ok_or_else(|| format!("lexeme value {v} != token value {n}"))
+        }
         IntLiteralSuffixed(n, suffix) => {
             let (v, text_suffix) = parse_int(lexeme)?;
             match text_suffix {

@@ -13,6 +13,27 @@ use crate::parser::*;
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// A declared float slot wins over an integer literal (ADR-0015: literals are untyped, a non-literal integer
+    /// is a WJ0003 diagnostic and never reaches codegen): `w = 3` stores `3.0_f32`.
+    fn generate_assigned_value(&mut self, value: &Expression<'ast>, target: Option<&Type>) -> String {
+        let generated = self.generate_with_list_context(value, target);
+        self.float_literal_for_declared_slot(value, target).unwrap_or(generated)
+    }
+
+    fn float_literal_for_declared_slot(&self, value: &Expression<'ast>, target: Option<&Type>) -> Option<String> {
+        let Expression::Literal { value: Literal::Int(i), .. } = value else {
+            return None;
+        };
+        let scalar_float = matches!(target, Some(Type::Float))
+            || matches!(target, Some(Type::Custom(n)) if n == "f32" || n == "f64");
+        let suffix = self
+            .assignment_float_target_type
+            .as_ref()
+            .filter(|_| scalar_float)
+            .and_then(super::float_type_utilities::float_literal_suffix_from_assignment_lhs)?;
+        Some(format!("{i}.0_{suffix}"))
+    }
+
     /// Generate code for an assignment statement
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn generate_assignment_statement(
@@ -489,7 +510,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         self.set_assignment_int_target_from_compound_target(target);
-        let mut value_str = self.generate_with_list_context(value, tgt_ty.as_ref());
+        let mut value_str = self.generate_assigned_value(value, tgt_ty.as_ref());
         self.assignment_float_target_type = prev_assign_ty;
         self.assignment_int_target_type = prev_assign_int;
         if matches!(value, Expression::Literal { value: Literal::String(_), .. })

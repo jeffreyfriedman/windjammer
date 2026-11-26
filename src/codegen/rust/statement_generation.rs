@@ -347,7 +347,7 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Int | Type::Int32 | Type::Uint => true,
             Type::Custom(n) => matches!(
                 n.as_str(),
-                "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
+                "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16" | "i128" | "u128"
             ),
             _ => false,
         }

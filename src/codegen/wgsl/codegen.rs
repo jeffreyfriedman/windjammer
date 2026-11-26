@@ -396,6 +396,7 @@ impl WgslBackend {
 
             Expression::Literal { value, .. } => match value {
                 Literal::Int(n) | Literal::IntSuffixed(n, _) => Ok(n.to_string()),
+                Literal::Wide(n) => Ok(n.to_string()),
                 Literal::Float(f) => Ok(f.to_string()),
                 Literal::Bool(b) => Ok(b.to_string()),
                 Literal::String(s) => Ok(format!("\"{}\"", s)),

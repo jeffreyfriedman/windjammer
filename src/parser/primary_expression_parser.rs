@@ -25,6 +25,19 @@ impl Parser {
         r
     }
 
+    /// The integer literal token under the cursor as a literal expression (plain, suffixed, or wider than 64 bits).
+    fn parse_integer_literal_token(&mut self) -> &'static Expression<'static> {
+        let value = match self.current_token().clone() {
+            Token::IntLiteral(n) => Literal::Int(n),
+            Token::IntLiteralWide(n) => Literal::Wide(n),
+            Token::IntLiteralSuffixed(n, suffix) => Literal::IntSuffixed(n, suffix),
+            _ => unreachable!("caller matched an integer literal token"),
+        };
+        let loc = self.current_location();
+        self.advance();
+        self.alloc_expr(Expression::Literal { value, location: loc })
+    }
+
     fn parse_primary_expression_inner(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
@@ -101,24 +114,8 @@ impl Parser {
                 })
             }
             Token::Self_ => self.parse_self_value_or_path(),
-            Token::IntLiteral(n) => {
-                let n = *n;
-                let loc = self.current_location();
-                self.advance();
-                self.alloc_expr(Expression::Literal {
-                    value: Literal::Int(n),
-                    location: loc,
-                })
-            }
-            Token::IntLiteralSuffixed(n, ref suffix) => {
-                let n = *n;
-                let suffix = suffix.clone();
-                let loc = self.current_location();
-                self.advance();
-                self.alloc_expr(Expression::Literal {
-                    value: Literal::IntSuffixed(n, suffix),
-                    location: loc,
-                })
+            Token::IntLiteral(_) | Token::IntLiteralWide(_) | Token::IntLiteralSuffixed(..) => {
+                self.parse_integer_literal_token()
             }
             Token::FloatLiteral(f) => {
                 let f = *f;

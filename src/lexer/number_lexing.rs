@@ -10,13 +10,16 @@ use super::{Lexer, Token};
 /// * no suffix, exactly 2^63: the `i64::MIN` bit pattern (pinned by `hex_literal_u64_test`).
 /// * no suffix, `<= u64::MAX`: `u64`-suffixed (an unsuffixed constant that does not fit `i64`
 ///   can only be a `u64`; this is what FNV-1a / xorshift constants need).
-/// * anything wider than 64 bits: `Token::Invalid` with a diagnostic, never a panic.
-///   (128-bit literals need a wider `Literal` payload; see docs/design/lexical-grammar.md.)
+/// * anything wider than 64 bits: `IntLiteralWide` (128-bit payload; u128/i128 by context, an
+///   explicit narrower suffix is `Token::Invalid`, never a panic).
 pub(in crate::lexer) fn int_token(value: u128, suffix: Option<String>) -> Token {
     if value > u64::MAX as u128 {
-        return Token::Invalid(format!(
-            "integer literal `{value}` does not fit in 64 bits (128-bit integer literals are not supported yet)"
-        ));
+        // Wider than 64 bits: the payload keeps all 128 bits and the type (u128 or i128) comes from the
+        // declared-width context; a `u128`/`i128` suffix is the only suffix that can hold it.
+        return match suffix.as_deref() {
+            None | Some("u128") | Some("i128") => Token::IntLiteralWide(value),
+            Some(s) => Token::Invalid(format!("integer literal `{value}` is out of range for `{s}`")),
+        };
     }
     match suffix {
         Some(s) => {

@@ -118,6 +118,7 @@ impl<'e> Lowerer<'e> {
                 None if suffix == "f32" => PExpr::new(Ty::F32, PK::Float(*n as f64)),
                 None => return self.err(format!("numeric literal suffix `{suffix}`")),
             },
+            Literal::Wide(_) => return self.err("128-bit integer literal".to_string()),
             Literal::Float(f) => match want {
                 Some(Ty::F32) => PExpr::new(Ty::F32, PK::Float(*f)),
                 Some(Ty::F64) => PExpr::new(Ty::F64, PK::Float(*f)),

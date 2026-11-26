@@ -347,6 +347,7 @@ pub(super) fn literal_to_base_type(lit: &Literal) -> BaseType {
     match lit {
         // Unsuffixed integers in patterns: `int` (ADR-0015). Expressions use a soft class instead.
         Literal::Int(_) => BaseType::I64,
+        Literal::Wide(_) => BaseType::U128,
         Literal::IntSuffixed(_, suffix) => match suffix.as_str() {
             "i8" => BaseType::I8,
             "i16" => BaseType::I16,

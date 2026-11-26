@@ -971,6 +971,17 @@ impl<'ast> CodeGenerator<'ast> {
                     base
                 }
             }
+            Literal::Wide(_) | Literal::IntSuffixed(..) | Literal::Int(_)
+                if self
+                    .declared_wide_literal_width()
+                    .and_then(|w| crate::codegen::rust::literals::literal_for_declared_width(lit, w))
+                    .is_some() =>
+            {
+                let w = self.declared_wide_literal_width().expect("checked above");
+                crate::codegen::rust::literals::literal_for_declared_width(lit, w)
+                    .expect("checked above")
+            }
+            Literal::Wide(v) => v.to_string(),
             Literal::IntSuffixed(i, suffix) => {
                 crate::codegen::rust::literals::int_suffixed_literal(*i, suffix)
             }

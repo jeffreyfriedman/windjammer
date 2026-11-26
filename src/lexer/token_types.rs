@@ -55,6 +55,7 @@ pub enum Token {
     // Literals
     IntLiteral(i64),                 // No suffix: 42
     IntLiteralSuffixed(i64, String), // With suffix: 42u32, 0usize
+    IntLiteralWide(u128),            // Above u64::MAX: its type (u128/i128) comes from context
     FloatLiteral(f64),
     StringLiteral(String),
     InterpolatedString(Vec<StringPart>), // For strings with ${expr}
@@ -150,6 +151,7 @@ impl fmt::Display for Token {
             Token::Ident(s) => write!(f, "Ident({})", s),
             Token::IntLiteral(n) => write!(f, "Int({})", n),
             Token::IntLiteralSuffixed(n, ref s) => write!(f, "Int({}{})", n, s),
+            Token::IntLiteralWide(n) => write!(f, "Int({})", n),
             Token::StringLiteral(s) => write!(f, "String(\"{}\")", s),
             Token::Invalid(m) => write!(f, "invalid token ({})", m),
             _ => write!(f, "{:?}", self),
@@ -166,6 +168,7 @@ impl std::hash::Hash for Token {
         std::mem::discriminant(self).hash(state);
         match self {
             Token::IntLiteral(n) => n.hash(state),
+            Token::IntLiteralWide(n) => n.hash(state),
             Token::IntLiteralSuffixed(n, ref s) => {
                 n.hash(state);
                 s.hash(state);

@@ -233,7 +233,9 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
                 return None;
             }
             // the written literal -9223372036854775808 is the walker's (see eval_expr.rs)
-            if matches!(op, UnaryOp::Neg) && matches!(operand, Expression::Literal { value: Literal::Int(i64::MIN), .. }) {
+            if matches!(op, UnaryOp::Neg)
+                && matches!(operand, Expression::Literal { value: Literal::Int(i64::MIN) | Literal::Wide(170141183460469231731687303715884105728), .. })
+            {
                 return None;
             }
             let v = expr_eval(cx, operand)?;

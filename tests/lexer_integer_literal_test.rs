@@ -127,14 +127,12 @@ fn too_wide_or_malformed_literals_are_diagnostics_not_panics() {
         let toks = Lexer::new(src).tokenize();
         assert!(
             toks.iter().any(|t| matches!(t, Token::Invalid(_)))
-                || matches!(toks[0], Token::IntLiteral(_) | Token::FloatLiteral(_)),
+                || matches!(toks[0], Token::IntLiteral(_) | Token::IntLiteralWide(_) | Token::FloatLiteral(_)),
             "{src}: {toks:?}"
         );
     }
     // The ones that must be Invalid (not silently wrapped):
     for src in [
-        "18446744073709551616",
-        "340282366920938463463374607431768211455",
         "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
         "0x",
         "9223372036854775808i64",
@@ -142,6 +140,21 @@ fn too_wide_or_malformed_literals_are_diagnostics_not_panics() {
         let toks = Lexer::new(src).tokenize();
         assert!(matches!(toks[0], Token::Invalid(_)), "{src}: {toks:?}");
     }
+}
+
+/// A literal above u64::MAX keeps all 128 bits in every radix; its type (u128/i128) comes from context. A narrower
+/// suffix cannot hold it.
+#[test]
+fn literals_above_u64_max_keep_128_bits() {
+    for (src, want) in [
+        ("18446744073709551616", 1u128 << 64),
+        ("340282366920938463463374607431768211455", u128::MAX),
+        ("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", u128::MAX),
+        ("170141183460469231731687303715884105728u128", 1u128 << 127),
+    ] {
+        assert_eq!(lex1(src), Token::IntLiteralWide(want), "{src}");
+    }
+    assert!(matches!(lex1("18446744073709551616u64"), Token::Invalid(_)));
 }
 
 #[test]

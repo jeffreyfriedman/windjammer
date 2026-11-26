@@ -183,6 +183,7 @@ fn render_expr(e: Expr) -> Option<String> {
         Expression::Identifier { name, .. } => name.clone(),
         Expression::Literal { value, .. } => match value {
             Literal::Int(i) => i.to_string(),
+            Literal::Wide(v) => v.to_string(),
             Literal::IntSuffixed(i, s) => format!("{}{}", i, s),
             Literal::Float(f) => {
                 let s = format!("{:?}", f);

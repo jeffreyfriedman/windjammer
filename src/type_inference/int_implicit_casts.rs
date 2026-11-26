@@ -4,61 +4,33 @@
 /// where the conversion is lossless or contextually obvious.
 ///
 /// Design principle: "Compiler does the hard work, not the user"
+use super::int_conversion_table::{is_implicit, IntWidth};
 use super::int_inference::IntType;
 
-/// Check if we can safely cast from_ty to to_ty without explicit cast
-pub fn is_safe_implicit_cast(from_ty: IntType, to_ty: IntType) -> bool {
+/// The `IntType` as a table width (`Unknown` has none).
+pub fn int_type_width(t: IntType) -> Option<IntWidth> {
     use IntType::*;
+    Some(match t {
+        I8 => IntWidth::I8,
+        I16 => IntWidth::I16,
+        I32 => IntWidth::I32,
+        I64 => IntWidth::I64,
+        Isize => IntWidth::Isize,
+        U8 => IntWidth::U8,
+        U16 => IntWidth::U16,
+        U32 => IntWidth::U32,
+        U64 => IntWidth::U64,
+        Usize => IntWidth::Usize,
+        Unknown => return None,
+    })
+}
 
-    if from_ty == to_ty {
-        return true;
-    }
-
-    match (from_ty, to_ty) {
-        // ALWAYS SAFE: Widening conversions (no data loss)
-        (I8, I16 | I32 | I64 | Isize) => true,
-        (I16, I32 | I64 | Isize) => true,
-        (I32, I64 | U64) => true, // I32 → I64/U64 (positive values fit)
-
-        (U8, U16 | U32 | U64 | Usize | I16 | I32 | I64) => true, // U8 fits in signed types >= I16
-        (U16, U32 | U64 | Usize | I32 | I64) => true,            // U16 fits in signed types >= I32
-        (U32, U64 | I64) => true,                                // U32 fits in I64
-        // usize → i64: same ergonomics as `return items.len()` for `-> int` (Rust: `as i64`)
-        (Usize, I64) => true,
-
-        // Small signed → small unsigned (when contextually safe)
-        (I32, U8) => true, // Common: literal 0-255 range in practice
-        (I16, U8) => true,
-
-        // CONTEXTUAL: Common Rust patterns that Windjammer should handle ergonomically
-
-        // Array indexing: i32 ↔ usize (common source of type errors)
-        // Rationale: Array indices are typically small positive numbers
-        (I32, Usize) | (Usize, I32) => true,
-
-        // u32 ↔ usize (common for buffer indices, counts, etc.)
-        // Rationale: Both represent non-negative counts/indices
-        (U32, Usize) | (Usize, U32) => true,
-
-        // i32 ↔ u32 (common for coordinates, counts)
-        // Rationale: Signed/unsigned mixing in arithmetic contexts
-        (I32, U32) | (U32, I32) => true,
-
-        // For loop ranges: i64 -> i32
-        (I64, I32) => true,
-
-        // i64 ↔ u64 (common for IDs, handles, large counts)
-        // Rationale: Large integer types mixing signed/unsigned
-        (I64, U64) | (U64, I64) => true,
-
-        // i64 (Windjammer `int`) → usize: `Vec::with_capacity(x)` uses `x as usize` in codegen
-        (I64, Usize) => true,
-
-        // Unknown defaults to i32
-        (Unknown, _) => true,
-        (_, Unknown) => true,
-
-        _ => false,
+/// Check if we can safely cast from_ty to to_ty without explicit cast.
+/// Decided by the one table (`int_conversion_table`); `Unknown` converts to anything.
+pub fn is_safe_implicit_cast(from_ty: IntType, to_ty: IntType) -> bool {
+    match (int_type_width(from_ty), int_type_width(to_ty)) {
+        (Some(f), Some(t)) => is_implicit(f, t),
+        _ => true,
     }
 }
 

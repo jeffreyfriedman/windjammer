@@ -429,14 +429,52 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
-    /// Name of a declared signed integer type as `maybe_cast_usize_to_int_target` expects it.
+    /// Name of a declared integer type as `maybe_cast_usize_to_int_target` expects it. The set of
+    /// widths is the conversion table's (`int_conversion_table`), not a site-local list.
     pub(in crate::codegen::rust) fn declared_int_target_name(t: &Type) -> Option<&'static str> {
-        match t {
-            Type::Int => Some("int"),
-            Type::Int32 => Some("i32"),
-            Type::Custom(n) if n == "int" || n == "i64" => Some("int"),
-            Type::Custom(n) if n == "i32" => Some("i32"),
-            _ => None,
+        use crate::type_inference::int_conversion_table::IntWidth;
+        let name = match t {
+            Type::Int => "int",
+            Type::Int32 => "i32",
+            Type::Uint => "u32",
+            Type::Custom(n) => n.as_str(),
+            _ => return None,
+        };
+        if name == "int" {
+            return Some("int");
+        }
+        IntWidth::from_name(name).map(IntWidth::rust_name)
+    }
+
+    /// A 128-bit declared width in force for the literal being emitted (annotated binding, assignment
+    /// target, declared parameter or struct field), from the conversion table's width set.
+    pub(in crate::codegen::rust) fn declared_wide_literal_width(
+        &self,
+    ) -> Option<crate::type_inference::int_conversion_table::IntWidth> {
+        let ctx = self
+            .assignment_int_target_type
+            .as_ref()
+            .or(self.call_arg_expected_type.as_ref())
+            .or_else(|| {
+                let (s, f) = (
+                    self.current_struct_literal_name.as_ref()?,
+                    self.current_struct_field_name.as_ref()?,
+                );
+                self.in_struct_literal_field
+                    .then(|| self.lookup_struct_field_types(s).and_then(|m| m.get(f)))
+                    .flatten()
+            })?;
+        let name = Self::declared_int_target_name(Self::peel_option_result_payload(ctx))?;
+        crate::type_inference::int_conversion_table::IntWidth::from_name(name).filter(|w| w.bits() == 128)
+    }
+
+    /// Cast suffix (` as T`) for a `usize` value stored at declared width `target`, from the table.
+    fn usize_store_cast_suffix(target: &str) -> Option<String> {
+        use crate::type_inference::int_conversion_table::{conversion, Conversion, IntWidth};
+        let w = IntWidth::from_name(target)?;
+        match conversion(IntWidth::Usize, w) {
+            Conversion::Widen | Conversion::LossyAs => Some(format!(" as {}", w.rust_name())),
+            Conversion::Same | Conversion::Error => None,
         }
     }
 
@@ -469,8 +507,10 @@ impl<'ast> CodeGenerator<'ast> {
         if expr_str.contains(".map(|wj_pos| wj_pos as ") || !self.expression_is_option_usize(expr) {
             return;
         }
-        let cast = if target == "i32" { "i32" } else { "i64" };
-        *expr_str = format!("{expr_str}.map(|wj_pos| wj_pos as {cast})");
+        let Some(suffix) = Self::usize_store_cast_suffix(target) else {
+            return;
+        };
+        *expr_str = format!("{expr_str}.map(|wj_pos| wj_pos{suffix})");
     }
 
     /// The expression is an `Option<usize>`: a surface/inferred index result, or the iterator `position` adapter
@@ -500,7 +540,7 @@ impl<'ast> CodeGenerator<'ast> {
         target_type: Option<&str>,
     ) {
         if let Some(t) = target_type {
-            if matches!(t, "int" | "i64" | "i32") {
+            if Self::usize_store_cast_suffix(t).is_some() {
                 if let Expression::Call {
                     function,
                     arguments,
@@ -527,7 +567,8 @@ impl<'ast> CodeGenerator<'ast> {
                             let inner_is_usize = self.expression_produces_usize(inner)
                                 || self.infer_expression_type_is_usize(inner);
                             if inner_is_usize {
-                                let cast_suffix = if t == "i32" { " as i32" } else { " as i64" };
+                                let cast_suffix = Self::usize_store_cast_suffix(t).unwrap_or_default();
+                                let cast_suffix = cast_suffix.as_str();
                                 let bare_prefix = format!("{ctor}(");
                                 if expr_str.starts_with(&bare_prefix) && expr_str.ends_with(')') {
                                     let inner_part = expr_str
@@ -564,12 +605,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let cast_suffix = match target_type {
-            Some("usize") => return,
-            Some("i32") => " as i32",
-            Some("int") | Some("i64") => " as i64",
-            _ => return,
+        let Some(cast_suffix) = target_type.and_then(Self::usize_store_cast_suffix) else {
+            return;
         };
+        let cast_suffix = cast_suffix.as_str();
 
         let rhs_is_usize = self.expression_produces_usize(expr)
             || self.method_call_rust_emits_usize(expr)
@@ -582,7 +621,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // `usize_variables` once recorded as a literal-init counter.
                         || self.literal_init_wj_int_loop_counters.contains(name.as_str())
             );
-        if rhs_is_usize && !expr_str.contains(" as i64") && !expr_str.contains(" as i32") {
+        if rhs_is_usize && !expr_str.contains(" as i64") && !expr_str.contains(" as i32") && !expr_str.contains(cast_suffix) {
             // Copy usize may have a stale `.clone()` from auto-clone; drop it before the width cast.
             let base = expr_str
                 .strip_suffix(".clone()")

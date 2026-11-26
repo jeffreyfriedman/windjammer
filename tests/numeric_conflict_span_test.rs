@@ -7,10 +7,10 @@ use assert_cmd::Command;
 fn conflict_in_interpolation_reports_the_source_column() {
     let dir = tempfile::tempdir().unwrap();
     let f = dir.path().join("t.wj");
-    std::fs::write(&f, "fn main() {\n    let sorted: Vec<i32> = [1, 3, 5, 7]\n    let wide: u64 = sorted.len()\n    println(\"${wide}\")\n}\n").unwrap();
+    std::fs::write(&f, "fn main() {\n    let sorted: u64 = 7\n    let wide: u32 = sorted\n    println(\"${wide}\")\n}\n").unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_wj")).arg("build").arg(&f).arg("--output").arg(dir.path().join("o")).arg("--no-cargo").output().unwrap();
     let text = String::from_utf8_lossy(&out.stderr).to_string() + &String::from_utf8_lossy(&out.stdout);
-    assert!(text.contains("Type conflict: must be U64"), "the conflict is reported:\n{text}");
+    assert!(text.contains("Type conflict: must be U32"), "the conflict is reported:\n{text}");
     for line in text.lines().filter(|l| l.contains("Type conflict")) {
         let loc = line.split(": Type conflict").next().unwrap();
         let mut parts = loc.rsplit(':');
@@ -46,7 +46,7 @@ fn pipe_error_inside_interpolation_is_at_the_true_position() {
 
 #[test]
 fn conflict_position_is_exact_in_a_second_interpolation() {
-    let src = "fn main() {\n    let v: Vec<i32> = [1]\n    let wide: u64 = v.len()\n    println(\"a ${wide} b ${wide}\")\n}\n";
+    let src = "fn main() {\n    let v: u64 = 1\n    let wide: u32 = v\n    println(\"a ${wide} b ${wide}\")\n}\n";
     let (l, c) = first_position(src, "identifier wide type");
     assert_eq!((l, c), (4, 19), "first `wide` inside the string");
 }

@@ -129,7 +129,7 @@ pub fn display_kind(k: Kind) -> &'static str {
 
 pub fn literal_kind(l: &Literal) -> Option<Kind> {
     match l {
-        Literal::Int(_) | Literal::IntSuffixed(..) => Some(Kind::Int),
+        Literal::Int(_) | Literal::IntSuffixed(..) | Literal::Wide(_) => Some(Kind::Int),
         Literal::Float(_) => Some(Kind::Float),
         Literal::String(_) => Some(Kind::Str),
         Literal::Bool(_) => Some(Kind::Bool),
