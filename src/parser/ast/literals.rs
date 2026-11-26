@@ -4,6 +4,7 @@
 pub enum Literal {
     Int(i64),
     IntSuffixed(i64, std::string::String), // 0u32, 100_000usize
+    Wide(u128),                            // above u64::MAX; u128 or i128 by declared-width context
     Float(f64),
     String(String),
     Char(char),

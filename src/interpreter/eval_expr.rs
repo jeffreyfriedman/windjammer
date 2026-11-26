@@ -105,6 +105,9 @@ impl Interpreter {
     pub(crate) fn literal(&self, l: &Literal) -> Value {
         match l {
             Literal::Int(i) => Value::Int(*i as i128, IntTy::Lit),
+            // Above u64::MAX: a `u128` above i128::MAX keeps its bit pattern (see `u128ops`).
+            Literal::Wide(v) if *v <= i128::MAX as u128 => Value::Int(*v as i128, IntTy::Lit),
+            Literal::Wide(v) => Value::Int(*v as i128, IntTy::U128),
             Literal::IntSuffixed(i, suf) => match suf.as_str() {
                 "f64" => Value::Float(*i as f64, FloatTy::F64),
                 "f32" => Value::Float(*i as f32 as f64, FloatTy::F32),
@@ -189,6 +192,10 @@ impl Interpreter {
                 // the literal's negation is that same value; only the written literal, never a computed one (SPEC-NUM-017)
                 UnaryOp::Neg if matches!(operand, Expression::Literal { value: Literal::Int(i64::MIN), .. }) => {
                     Ok(Value::Int(i64::MIN as i128, IntTy::Lit))
+                }
+                // `-170141183460469231731687303715884105728`: the written literal 2^127 is `i128::MIN` negated
+                UnaryOp::Neg if matches!(operand, Expression::Literal { value: Literal::Wide(w), .. } if *w == 1u128 << 127) => {
+                    Ok(Value::Int(i128::MIN, IntTy::Lit))
                 }
                 UnaryOp::Neg => {
                     let v = self.eval(operand)?;

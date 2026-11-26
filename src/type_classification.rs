@@ -77,7 +77,7 @@ pub fn is_copy_pass_by_value_formal(ty: &crate::parser::ast::types::Type) -> boo
 pub fn is_numeric_suffix(name: &str) -> bool {
     matches!(
         name,
-        "u64" | "i64" | "u32" | "i32" | "u16" | "i16" | "u8" | "i8" | "usize" | "isize"
+        "u128" | "i128" | "u64" | "i64" | "u32" | "i32" | "u16" | "i16" | "u8" | "i8" | "usize" | "isize"
     )
 }
 

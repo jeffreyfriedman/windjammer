@@ -1,0 +1,39 @@
+// The declared width wins at every declared-width site (docs/design/int-conversion-table.md):
+// a `usize` length into int/i32/u64/u128, an integer literal into an f32 slot, 128-bit literals.
+struct Rec {
+    count: u64,
+}
+
+fn takes_u64(n: u64) -> u64 {
+    n
+}
+
+fn len_u64(v: Vec<int>) -> u64 {
+    v.len()
+}
+
+fn main() {
+    let v: Vec<int> = [1, 2, 3]
+    let size: int = v.len()
+    let small: i32 = v.len()
+    let wide: u64 = v.len()
+    let huge: u128 = v.len()
+    println("${size} ${small} ${wide} ${huge}")
+    println("${takes_u64(v.len())} ${len_u64(v)}")
+    let rec = Rec { count: v.len() }
+    println("${rec.count}")
+    let mut w: f32 = 1.5
+    w = 3
+    println("${w}")
+    let mut r: f32 = 0.0
+    r = 16777217
+    println("${r}")
+    let h: u128 = 340282366920938463463374607431768211455
+    println("${h}")
+    let m: u128 = 18446744073709551615
+    println("${m}")
+    let i: i128 = 170141183460469231731687303715884105727
+    println("${i}")
+    let n: i128 = -170141183460469231731687303715884105728
+    println("${n}")
+}

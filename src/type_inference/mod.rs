@@ -10,6 +10,7 @@
 /// 5. Assign final types (each literal gets f32 or f64)
 pub mod const_table;
 pub mod float_inference;
+pub mod int_conversion_table;
 pub mod int_implicit_casts;
 pub mod int_inference;
 pub mod sig_table;

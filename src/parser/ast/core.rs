@@ -473,6 +473,10 @@ impl std::hash::Hash for Literal {
                 0u8.hash(state);
                 i.hash(state);
             }
+            Literal::Wide(v) => {
+                6u8.hash(state);
+                v.hash(state);
+            }
             Literal::IntSuffixed(i, suffix) => {
                 5u8.hash(state);
                 i.hash(state);

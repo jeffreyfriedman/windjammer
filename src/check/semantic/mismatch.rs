@@ -25,7 +25,7 @@ fn kind_name(k: Kind) -> &'static str {
 
 fn literal_kind(l: &Literal) -> Kind {
     match l {
-        Literal::Int(_) | Literal::IntSuffixed(..) => Kind::Int,
+        Literal::Int(_) | Literal::IntSuffixed(..) | Literal::Wide(_) => Kind::Int,
         Literal::Float(_) => Kind::Float,
         Literal::Bool(_) => Kind::Bool,
         Literal::String(_) => Kind::Str,

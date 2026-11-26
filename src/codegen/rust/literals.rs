@@ -15,10 +15,43 @@ pub fn int_suffixed_literal(i: i64, suffix: &str) -> String {
     }
 }
 
+/// A literal at a declared 128-bit width (`let h: u128 = 18446744073709551615`): the declared width wins,
+/// decided by the one conversion table. `None` when the literal does not convert there (or `to` is
+/// narrower than 128 bits, which the width-suffix machinery already handles).
+pub fn literal_for_declared_width(
+    lit: &Literal,
+    to: crate::type_inference::int_conversion_table::IntWidth,
+) -> Option<String> {
+    use crate::type_inference::int_conversion_table::{conversion, Conversion, IntWidth};
+    if to.bits() != 128 {
+        return None;
+    }
+    let name = to.rust_name();
+    match lit {
+        Literal::Int(i) => (*i >= 0 || to.is_signed()).then(|| format!("{i}_{name}")),
+        Literal::IntSuffixed(i, suf) => {
+            let from = IntWidth::from_name(suf)?;
+            if conversion(from, to) == Conversion::Error {
+                return None;
+            }
+            // `u64`/`usize` payloads above i64::MAX are stored as their bit pattern.
+            let v = if from.is_signed() { *i as i128 } else { *i as u64 as i128 };
+            (v >= 0 || to.is_signed()).then(|| format!("{v}_{name}"))
+        }
+        Literal::Wide(v) => match to {
+            IntWidth::U128 => Some(format!("{v}_u128")),
+            _ if *v <= i128::MAX as u128 => Some(format!("{v}_{name}")),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// Convert a Windjammer literal to Rust source code
 pub fn generate_literal(lit: &Literal) -> String {
     match lit {
         Literal::Int(i) => i.to_string(),
+        Literal::Wide(v) => v.to_string(),
         Literal::IntSuffixed(i, suffix) => int_suffixed_literal(*i, suffix),
         Literal::Float(f) => {
             let s = f.to_string();

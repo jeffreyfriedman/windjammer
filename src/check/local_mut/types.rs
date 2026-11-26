@@ -53,6 +53,7 @@ pub fn type_of(facts: &Facts, env: &dyn Env, e: &Expression<'_>) -> Option<Type>
         Expression::Literal { value, .. } => match value {
             Literal::String(_) => Some(Type::String),
             Literal::Int(_) => Some(Type::Int),
+            Literal::Wide(_) => Some(Type::Custom("u128".to_string())),
             Literal::IntSuffixed(_, s) => Some(Type::Custom(s.clone())),
             Literal::Float(_) => Some(Type::Float),
             Literal::Bool(_) => Some(Type::Bool),

@@ -365,7 +365,17 @@ impl Parser {
         };
 
         self.expect(Token::Assign)?;
+        let value_pos = self.pos_desc();
         let value = self.parse_expression()?;
+        // A literal above u64::MAX takes its type from a declared u128/i128 slot; a binding with no
+        // annotation has none, so the literal is an error here.
+        if type_.is_none() {
+            if let Expression::Literal { value: Literal::Wide(v), .. } = value {
+                return Err(format!(
+                    "Lexical error: integer literal `{v}` does not fit in 64 bits (declare the binding `u128` or `i128`) (at {value_pos})"
+                ));
+            }
+        }
 
         // Check for `else` block (required for refutable patterns)
         let else_block = if self.current_token() == &Token::Else {

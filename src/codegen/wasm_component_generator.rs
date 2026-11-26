@@ -320,6 +320,7 @@ impl WasmComponentGenerator {
     fn literal_to_rust(&self, lit: &Literal) -> String {
         match lit {
             Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
+            Literal::Wide(n) => n.to_string(),
             Literal::Float(f) => f.to_string(),
             Literal::String(s) => format!("\"{}\"", s),
             Literal::Bool(b) => b.to_string(),
