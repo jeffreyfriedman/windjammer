@@ -1,5 +1,7 @@
+// oracle: check
 mod mathx
 use mathx::helper
+//~@12+6 ERROR WJ0019 function `mathx::helper` is private
 
 fn main() {
     println("${helper(2)}")

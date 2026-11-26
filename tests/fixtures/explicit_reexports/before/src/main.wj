@@ -1,8 +1,11 @@
+// oracle: check
 mod adapters
 
 use adapters::Server
+//~@15+6 ERROR WJ0194 `Server` is not re-exported
 
 fn main() {
     let s = Server::new(8080)
     println("${s.port} ${adapters::serve()} ${adapters::encode(2)}")
+//~@36+5 ERROR WJ0194 `serve` is not re-exported
 }

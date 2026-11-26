@@ -1,11 +1,11 @@
 error[WJ0202]: `names.push(..)` changes `names` while the loop over `names` is running
-  --> for_in_mutation.wj:5:9
+  --> for_in_mutation.wj:6:9
   |
-5 |         names.push(*n)
+6 |         names.push(*n)
   |         ^^^^^^^^^^^^^^ changes `names` inside its own loop
-  :::  for_in_mutation.wj:4:14
+  :::  for_in_mutation.wj:5:14
   |
-4 |     for n in &names {
+5 |     for n in &names {
   |              ------ `names` is iterated here
   = help: collect the changes while looping (a new list, or the indexes to change) and apply them to `names` after the loop
   = help: loop over a fixed range with `for i in 0..names.len()` and use `names[i]` when the body has to change `names` itself, or write `for item in names.clone()` when the loop should see a snapshot

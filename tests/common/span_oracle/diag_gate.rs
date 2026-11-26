@@ -78,7 +78,11 @@ fn repo_wide_check_diagnostics_are_annotated_or_ratcheted() {
         }
         let diags = check_diagnostics(&name, &src);
         let report = serde_json::to_value(windjammer::diagnostics::Report::new("check", diags.clone())).unwrap();
-        for v in windjammer::error::span_check::validate_report_spans(&report, &|_| Some(src.clone())) {
+        // A fix may edit another file of the project (WJ0194 inserts a `pub use` into the re-exporting module): that file is
+        // named relative to this file's directory, as `check_diagnostics` roots the project there.
+        let dir = p.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let text_of = |f: &str| if f == name { Some(src.clone()) } else { std::fs::read_to_string(dir.join(f)).ok() };
+        for v in windjammer::error::span_check::validate_report_spans(&report, &text_of) {
             invalid_spans.insert(format!("{name}: {v}"));
         }
         let found = collect_check(&name, &src);

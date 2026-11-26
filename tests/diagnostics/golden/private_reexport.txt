@@ -1,7 +1,7 @@
 error[WJ0019]: function `super::mesh::generate` is private
-  --> private_reexport.wj:9:26
-  |
-9 |     pub use super::mesh::generate;
-  |                          ^^^^^^^^ re-exports a private function
+  --> private_reexport.wj:10:26
+   |
+10 |     pub use super::mesh::generate;
+   |                          ^^^^^^^^ re-exports a private function
   = help: declare it `pub fn generate` in private_reexport.wj
   = explain: wj explain WJ0019

@@ -29,7 +29,6 @@ fn sieve(n: int) -> int {
 
 fn touch(v: &mut Vec<int>, i: int) {
 //~@13+5 ERROR W0001 explicit ownership annotation
-//~@13+5 ERROR W0004 explicit borrow in function
     v[i] = v[i] + 100
 }
 
@@ -84,6 +83,7 @@ fn main() {
     while r < 50 {
         sum += shared[r]
         touch(&mut shared, r)
+//~@15+1 ERROR W0004 explicit borrow in function
         sum += shared[r]
         r += 1
     }

@@ -1170,8 +1170,12 @@ impl Visitor for Checker<'_, '_, '_> {
                 self.display_args(args);
                 self.debug_of_iterator(args);
             }
+            Expression::MethodCall { .. } if self.skip.contains(&(e as *const Expression<'_> as usize)) => {}
             Expression::MethodCall { object, method, arguments, location, .. } => {
                 let loc = self.effective(location);
+                if method == "slice" && self.slice_sugar_of_iterator(object, arguments, &loc) {
+                    return;
+                }
                 self.method_call(object, method, &loc);
                 self.numeric_arguments(Callee::Method(object, method), arguments);
             }

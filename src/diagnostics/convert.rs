@@ -179,7 +179,11 @@ fn lint_span(code: &str, d: &LintDiagnostic, ix: &SourceIndex) -> super::model::
     let near = markers
         .iter()
         .filter_map(|m| {
-            text[lo..offset.min(text.len())]
+            // `offset` is the start of the offending node (its true span), so a marker that starts exactly there counts:
+            // `fill(&mut rt, 0)` must find its own `&mut `, not the `&mut ` of an earlier parameter type.
+            let upto = offset.saturating_add(m.len()).min(text.len());
+            let upto = (offset.min(upto)..=upto).rev().find(|&i| text.is_char_boundary(i)).unwrap_or(offset);
+            text[lo..upto]
                 .match_indices(m)
                 .map(|(i, _)| lo + i)
                 .filter(|&i| ends_at_word_boundary(text, i + m.len()))

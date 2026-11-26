@@ -37,7 +37,6 @@ fn main() {
     let mut j = 0
     while j < 120 {
         match m.get(&j) {
-//~@21+1 ERROR W0004 explicit borrow in function
             Some(v) => {
                 if *v > best {
                     best = *v
@@ -54,6 +53,7 @@ fn main() {
     bump(&mut shared, 500)
 //~@10+1 ERROR W0004 explicit borrow in function
     bump(&mut shared, 500)
+//~@10+1 ERROR W0004 explicit borrow in function
     let mut tot = 0
     let mut q = 0
     while q < 17 {

@@ -1,4 +1,5 @@
 // expect: WJ0019
+// oracle: check
 mod mesh {
     fn generate() -> int {
         1
@@ -7,6 +8,7 @@ mod mesh {
 
 mod render {
     pub use super::mesh::generate;
+//~@26+8 ERROR WJ0019 function `super::mesh::generate` is private
 }
 
 fn main() {

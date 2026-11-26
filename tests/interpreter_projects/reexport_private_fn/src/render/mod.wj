@@ -1,3 +1,5 @@
+// oracle: check
 pub mod mesh_generator
 
 pub use mesh_generator::build_mesh
+//~@25+10 ERROR WJ0019 is private
